@@ -1,0 +1,4 @@
+# Requirements for Peloton-LED emulator, display, and Peloton API helpers
+requests>=2.32.3
+RGBMatrixEmulator>=0.13.3
+pytz>=2023.3

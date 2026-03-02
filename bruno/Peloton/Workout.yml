@@ -1,0 +1,30 @@
+info:
+  name: Workout
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: https://api.onepeloton.com/api/user/{{userID}}/workouts?joins=ride,ride.instructor&limit=1&page=51
+  params:
+    - name: joins
+      value: ride,ride.instructor
+      type: query
+    - name: limit
+      value: "1"
+      type: query
+    - name: page
+      value: "51"
+      type: query
+  auth: inherit
+
+runtime:
+  variables:
+    - name: userID
+      value: a0be2993b5bc4a2ab9a8538794141c3d
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

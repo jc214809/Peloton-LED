@@ -1,0 +1,4 @@
+name: testing
+variables:
+  - secret: true
+    name: cookie

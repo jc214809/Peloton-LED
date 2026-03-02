@@ -1,0 +1,41 @@
+info:
+  name: Live Classes
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: https://api.onepeloton.com/api/v3/ride/live?exclude_complete=true&ignore_class_language_preferences=true&limit=10&browse_category=cycling
+  params:
+    - name: exclude_complete
+      value: "true"
+      type: query
+    - name: ignore_class_language_preferences
+      value: "true"
+      type: query
+    - name: start
+      value: ""
+      type: query
+      disabled: true
+    - name: end
+      value: ""
+      type: query
+      disabled: true
+    - name: limit
+      value: "10"
+      type: query
+    - name: browse_category
+      value: cycling
+      type: query
+  auth: inherit
+
+runtime:
+  variables:
+    - name: rideID
+      value: c7f8c6e6cc9c41c8bf81a4026b684fd5
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
