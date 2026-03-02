@@ -6,7 +6,7 @@ from models import GeneralWorkout, get_model_for_discipline
 
 
 def _align_cells(columns: List[Tuple[str, str]]) -> List[str]:
-    align_left = {"date_time", "tz", "discipline", "title", "instructor"}
+    align_left = {"date_time", "discipline", "title", "instructor"}
     return [" --- " if key in align_left else " ---: " for key, _ in columns]
 
 

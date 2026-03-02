@@ -1,6 +1,6 @@
 """Core workout model plus discipline registry."""
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, List, Optional, Set, Tuple, Type
 
 _REGISTRY: Dict[str, Type["GeneralWorkout"]] = {}
 
@@ -42,6 +42,7 @@ class GeneralWorkout:
     avg_output_w: Optional[float] = None
     hr_avg: Optional[float] = None
     hr_max: Optional[float] = None
+    is_pr: bool = False
 
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -61,6 +62,7 @@ class GeneralWorkout:
         "avg_output_w",
         "hr_avg",
         "hr_max",
+        "is_pr",
     )
 
     @classmethod
@@ -81,11 +83,22 @@ class GeneralWorkout:
         return cls(**data)
 
     @classmethod
+    def perf_slugs(cls) -> Set[str]:
+        return {
+            "distance",
+            "calories",
+            "total_output",
+            "avg_output",
+            "hr_avg",
+            "hr_max",
+        }
+
+    @classmethod
     def columns(cls) -> List[Tuple[str, str]]:
         return [
             ("date_time", "Date/Time"),
-            ("tz", "TZ"),
             ("discipline", "Discipline"),
+            ("is_pr", "PR"),
             ("title", "Title"),
             ("instructor", "Instr."),
             ("duration_min", "Dur (m)"),
@@ -110,6 +123,8 @@ class GeneralWorkout:
             return _stringify(getattr(self, key))
         if key == "duration_min":
             return _stringify(self.duration_min)
+        if key == "is_pr":
+            return "Yes" if self.is_pr else ""
         attr = getattr(self, key, None)
         if attr is not None:
             return str(attr)

@@ -28,9 +28,10 @@ class RunningWorkout(GeneralWorkout):
     max_speed_unit: Optional[str] = None
     avg_pace: Optional[float] = None
     avg_pace_unit: Optional[str] = None
-    row_split_sec_per_500m: Optional[float] = None
     avg_incline: Optional[float] = None
     avg_incline_unit: Optional[str] = None
+    max_incline: Optional[float] = None
+    max_incline_unit: Optional[str] = None
     elevation: Optional[float] = None
     elevation_unit: Optional[str] = None
 
@@ -40,10 +41,21 @@ class RunningWorkout(GeneralWorkout):
             ("avg_speed", "Avg Speed"),
             ("max_speed", "Max Speed"),
             ("avg_pace", "Avg Pace"),
-            ("row_split_sec_per_500m", "Avg Split"),
             ("avg_incline", "Avg Incline"),
+            ("max_incline", "Max Incline"),
             ("elevation", "Elev"),
         ]
+
+    @classmethod
+    def perf_slugs(cls):
+        return super().perf_slugs() | {
+            "avg_speed",
+            "max_speed",
+            "avg_pace",
+            "avg_incline",
+            "max_incline",
+            "elevation",
+        }
 
     @classmethod
     def _specific_fields(cls, row: Dict[str, Any]) -> Dict[str, Any]:
@@ -54,9 +66,10 @@ class RunningWorkout(GeneralWorkout):
             "max_speed_unit": row.get("max_speed_unit"),
             "avg_pace": row.get("avg_pace"),
             "avg_pace_unit": row.get("avg_pace_unit"),
-            "row_split_sec_per_500m": row.get("row_split_sec_per_500m"),
             "avg_incline": row.get("avg_incline"),
             "avg_incline_unit": row.get("avg_incline_unit"),
+            "max_incline": row.get("max_incline"),
+            "max_incline_unit": row.get("max_incline_unit"),
             "elevation": row.get("elevation"),
             "elevation_unit": row.get("elevation_unit"),
         }
@@ -68,10 +81,10 @@ class RunningWorkout(GeneralWorkout):
             return format_decimal_with_unit(self.max_speed, self.max_speed_unit, 1)
         if key == "avg_pace":
             return format_decimal_with_unit(self.avg_pace, self.avg_pace_unit, 2)
-        if key == "row_split_sec_per_500m":
-            return _format_split_sec(self.row_split_sec_per_500m)
         if key == "avg_incline":
             return format_decimal_with_unit(self.avg_incline, self.avg_incline_unit, 1)
+        if key == "max_incline":
+            return format_decimal_with_unit(self.max_incline, self.max_incline_unit, 1)
         if key == "elevation":
             return format_decimal_with_unit(self.elevation, self.elevation_unit, 0)
         return super().format_value(key)

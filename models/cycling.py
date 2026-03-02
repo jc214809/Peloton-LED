@@ -27,6 +27,15 @@ class CyclingWorkout(GeneralWorkout):
         ]
 
     @classmethod
+    def perf_slugs(cls):
+        return super().perf_slugs() | {
+            "avg_speed",
+            "max_speed",
+            "avg_cadence",
+            "avg_resistance",
+        }
+
+    @classmethod
     def _specific_fields(cls, row: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "avg_speed": row.get("avg_speed"),

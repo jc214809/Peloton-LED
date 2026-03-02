@@ -16,3 +16,7 @@ class StrengthWorkout(GeneralWorkout):
     def _specific_fields(cls, row: Dict[str, Any]) -> Dict[str, Any]:
         # Strength uses only general metrics for now
         return {}
+
+    @classmethod
+    def perf_slugs(cls):
+        return super().perf_slugs()
