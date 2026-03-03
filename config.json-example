@@ -1,0 +1,20 @@
+{
+  "trip_countdown": {
+    "enabled": true,
+    "trip_dates": [
+      "2026-02-15",
+      "2026-06-17"
+    ]
+  },
+  "weather": {
+    "apikey": "<API_KEY_HERE>"
+  },
+  "debug": false,
+  "display": {
+    "username": "<your_username>",
+    "font": "ride",
+    "color": "white",
+    "duration": 30,
+    "overview_duration": 8
+  }
+}

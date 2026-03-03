@@ -65,6 +65,13 @@ class PelotonClient:
         except Exception:
             return None
 
+    def get_overview(self, user_id: str) -> Dict[str, Any]:
+        resp = self._session.get(f"{BASE}/api/user/{user_id}/overview", timeout=20)
+        resp.raise_for_status()
+        # print(resp.json())
+        return resp.json()
+
+
     @staticmethod
     def _normalize_ts(value: Any) -> Optional[float]:
         if value is None:
