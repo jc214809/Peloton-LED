@@ -139,16 +139,6 @@ def args():
         "--drop-privileges", action="store_true", help="Force the matrix driver to drop root privileges after setup."
     )
     parser.add_argument(
-        "--fireworks",
-        action="store_true",
-        help="Play a short fireworks animation before continuing with the display."
-    )
-    parser.add_argument(
-        "--castle-demo",
-        action="store_true",
-        help="Show the pixel castle on the matrix and exit."
-    )
-    parser.add_argument(
         "--username",
         action="store",
         help="Override the username displayed on the board.",

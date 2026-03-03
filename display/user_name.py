@@ -1,7 +1,7 @@
 """Simple renderer that writes a single username to the LED board."""
 
 from driver import graphics
-from display.display import color_dict, get_text_width, loaded_fonts
+from display.display import loaded_fonts, color_dict, get_text_width
 from utils import debug
 
 
@@ -24,12 +24,5 @@ def render_username(matrix, username, font_key, color_key):
     start_x = max((matrix.width - text_width) // 2, 0)
     start_y = max((matrix.height - text_height) // 2, 0)
     graphics.DrawText(matrix, font, start_x, start_y, color, text)
-
-    # swap = getattr(matrix, "SwapOnVSync", None)
-    # if callable(swap):
-    #     try:
-    #         swap(matrix)
-    #     except TypeError:
-    #         pass
 
     return True
