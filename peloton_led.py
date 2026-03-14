@@ -11,7 +11,7 @@ from driver import RGBMatrix, __version__
 from display.discipline_totals import render_discipline_page
 from display.display import initialize_fonts
 from display.ui.username import UsernameScreen
-from display.pr_display import render_pr_star
+from display.ui.pr_star import PrStarScreen
 from peloton.api import PelotonClient, make_session
 from utils import debug
 from utils.utils import args, led_matrix_options
@@ -329,6 +329,8 @@ def main() -> None:
 
     # instantiate UsernameScreen to render the username card
     username_screen = UsernameScreen(font_key=font_key, color_key=color_key)
+    # instantiate PR star screen
+    pr_screen = PrStarScreen(color_key=color_key)
 
     last_day_workouts = []
     try:
@@ -367,7 +369,7 @@ def main() -> None:
 
             # If a recent PR was detected at startup, show the PR star once.
             if pr_shown:
-                render_pr_star(matrix)
+                pr_screen.render(matrix)
                 if overview_duration > 0:
                     time.sleep(overview_duration)
 
