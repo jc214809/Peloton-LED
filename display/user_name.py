@@ -1,28 +1,7 @@
-"""Simple renderer that writes a single username to the LED board."""
+"""Compatibility wrapper: username is now one word.
 
-from driver import graphics
-from display.display import loaded_fonts, color_dict, get_text_width
-from utils import debug
+This module kept to avoid breaking imports that still reference
+`display.user_name`. New code should import from `display.username`.
+"""
 
-
-def render_username(matrix, username, font_key, color_key):
-    """Draw the username centered on the board."""
-
-    text = (username or "").strip() or "Peloton Member"
-    font = loaded_fonts.get(font_key)
-    if font is None:
-        debug.error("Font %s is not loaded; call initialize_fonts() first.", font_key)
-        return False
-
-    color = color_dict.get(color_key) or color_dict.get("white")
-
-    matrix.Clear()
-    text_width = get_text_width(font, text)
-    text_height = getattr(font, "height", None)
-    if text_height is None:
-        text_height = 8
-    start_x = max((matrix.width - text_width) // 2, 0)
-    start_y = max((matrix.height - text_height) // 2, 0)
-    graphics.DrawText(matrix, font, start_x, start_y, color, text)
-
-    return True
+from display.username import render_username  # re-export for backward compatibility

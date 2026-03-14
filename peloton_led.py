@@ -10,7 +10,7 @@ from typing import Any, Dict, Iterable, Optional, Set, Tuple
 from driver import RGBMatrix, __version__
 from display.discipline_totals import render_discipline_page
 from display.display import initialize_fonts
-from display.user_name import render_username
+from display.ui.username import UsernameScreen
 from display.pr_display import render_pr_star
 from peloton.api import PelotonClient, make_session
 from utils import debug
@@ -206,8 +206,6 @@ def get_last_day_workouts(client: PelotonClient, user_id: str, limit: int = 50, 
     return workouts_by_date[last_date]
 
 
-def render_username_card(matrix, username: str, font_key: str, color_key: str) -> None:
-    render_username(matrix, username, font_key=font_key, color_key=color_key)
 
 
 def render_last_day_workouts(
@@ -329,6 +327,9 @@ def main() -> None:
     overview_duration = display_config.get("overview_duration", 4)
     per_workout_duration = display_config.get("per_workout_duration", 4)
 
+    # instantiate UsernameScreen to render the username card
+    username_screen = UsernameScreen(font_key=font_key, color_key=color_key)
+
     last_day_workouts = []
     try:
         # Make a single set of API calls before entering the main loop. The
@@ -371,7 +372,7 @@ def main() -> None:
                     time.sleep(overview_duration)
 
             # Then render the username card as usual
-            render_username_card(matrix, username, font_key, color_key)
+            username_screen.render(matrix, state=username)
             if duration > 0:
                 time.sleep(duration)
 
