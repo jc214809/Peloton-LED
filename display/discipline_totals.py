@@ -45,7 +45,7 @@ def render_discipline_page(matrix, discipline_name: str, count: Optional[int],
 
     debug.info("Discipline '%s' wrapped into %d line(s): %s", discipline_text, len(title_lines), title_lines)
 
-    top_padding = 15
+    top_padding = 20
     line_spacing = 2
     current_y = top_padding
     for line in title_lines:

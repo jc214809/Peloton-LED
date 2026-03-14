@@ -1,0 +1,10 @@
+{
+	"debug": true,
+	"display": {
+		"username": "peloton_user",
+		"font": "ride",
+		"color": "gold",
+		"duration": 4,
+		"overview_duration": 8
+	}
+}

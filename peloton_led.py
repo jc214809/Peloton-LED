@@ -11,6 +11,7 @@ from driver import RGBMatrix, __version__
 from display.discipline_totals import render_discipline_page
 from display.display import initialize_fonts
 from display.user_name import render_username
+from display.pr_display import render_pr_star
 from peloton.api import PelotonClient, make_session
 from utils import debug
 from utils.utils import args, led_matrix_options
@@ -65,13 +66,6 @@ def extract_discipline_totals(overview: Dict[str, Any]) -> Dict[str, int]:
     seen: Set[str] = set()
 
     def add_entry(display_label: str, count_value: Any) -> None:
-        """Normalize and add a discipline/count pair to totals.
-
-        display_label: the human-facing label for the discipline (may contain
-        whitespace/case that will be preserved in the totals keys).
-        count_value: the raw count value from the overview which may be a string
-        or number and needs to be converted to int.
-        """
         if not display_label or count_value is None:
             return
         try:
@@ -101,14 +95,16 @@ def extract_discipline_totals(overview: Dict[str, Any]) -> Dict[str, int]:
         add_entry(label or "", count)
 
     def handle_mapping(mapping: Dict[str, Any]) -> None:
+        def _label_from_key(key: str) -> str:
+            return key.replace("_", " ").title()
+
+        def _extract_count_from_dict(d: Dict[str, Any]) -> Any:
+            return d.get("count") or d.get("workout_count") or d.get("total_workouts")
+
         for key, value in mapping.items():
-            display_name = key.replace("_", " ").title()
+            display_name = _label_from_key(key)
             if isinstance(value, dict):
-                count = (
-                    value.get("count")
-                    or value.get("workout_count")
-                    or value.get("total_workouts")
-                )
+                count = _extract_count_from_dict(value)
                 add_entry(display_name, count)
                 for nested in _iterate_entries(value):
                     handle_entry(nested)
@@ -137,8 +133,152 @@ def extract_discipline_totals(overview: Dict[str, Any]) -> Dict[str, int]:
     return totals
 
 
+def is_pr_workout(workout: Dict[str, Any]) -> bool:
+    """Return True if the given workout appears to be a personal record.
+
+    Checks common fields returned by the Peloton API: explicit PR flags and
+    achievement templates with the 'output_pr' slug.
+    """
+    if not workout:
+        return False
+    if bool(workout.get("is_total_work_personal_record")):
+        return True
+    if bool(workout.get("is_splits_personal_record")):
+        return True
+    for template in (workout.get("achievement_templates") or []):
+        if (template.get("slug") or "").strip().lower() == "output_pr":
+            return True
+    return False
+
+
+def get_last_day_workouts(client: PelotonClient, user_id: str, limit: int = 50, days: int = 30):
+    """Return the workouts that occurred on the user's most recent workout date.
+
+    This fetches a batch of recent workouts and groups them by date (YYYY-MM-DD
+    taken from ISO-style timestamps). The workouts for the latest date are
+    returned. The function is defensive about missing timestamp fields.
+    """
+    try:
+        recent = client.get_recent_workouts(user_id, limit=limit, days=days) or []
+    except Exception as exc:  # pragma: no cover - external call
+        logger.warning("Could not fetch recent workouts for last-day lookup: %s", exc)
+        return []
+
+    if not recent:
+        return []
+
+    def _timestamp_str(w: Dict[str, Any]) -> str:
+        # Try common timestamp fields in order of likelihood.
+        for key in (
+            "created_at",
+            "start_time",
+            "start_date",
+            "start_time_iso8601",
+            "start_date_local",
+        ):
+            val = w.get(key)
+            if isinstance(val, str) and val:
+                return val
+        return ""
+
+    def _date_part(ts: str) -> str:
+        if not ts:
+            return ""
+        if "T" in ts:
+            return ts.split("T", 1)[0]
+        if " " in ts:
+            return ts.split(" ", 1)[0]
+        return ts
+
+    workouts_by_date = {}
+    for w in recent:
+        ts = _timestamp_str(w)
+        d = _date_part(ts)
+        if not d:
+            continue
+        workouts_by_date.setdefault(d, []).append(w)
+
+    if not workouts_by_date:
+        return []
+
+    last_date = max(workouts_by_date.keys())
+    logger.info("Found last workout date %s with %d workouts", last_date, len(workouts_by_date[last_date]))
+    return workouts_by_date[last_date]
+
+
 def render_username_card(matrix, username: str, font_key: str, color_key: str) -> None:
     render_username(matrix, username, font_key=font_key, color_key=color_key)
+
+
+def render_last_day_workouts(
+    matrix,
+    workouts: Iterable[Dict[str, Any]],
+    color_key: str,
+    per_workout_duration: int = 4,
+) -> None:
+    """Render each workout from the last-day workouts on the matrix.
+
+    For each workout this function determines a human-friendly discipline label
+    (using peloton.summaries.summarize_workout when available) and shows the
+    discipline page for that workout. The most recent workout is shown first.
+    """
+    if not workouts:
+        return
+
+    try:
+        # summarize_workout contains the discipline logic used elsewhere in the
+        # project; import lazily to avoid circular imports at module import time.
+        from peloton.summaries import summarize_workout
+    except Exception:
+        summarize_workout = None
+
+    def _ts_key(w: Dict[str, Any]) -> str:
+        for k in (
+            "created_at",
+            "start_time",
+            "start_date",
+            "start_time_iso8601",
+            "start_date_local",
+        ):
+            v = w.get(k)
+            if isinstance(v, str) and v:
+                return v
+        return ""
+
+    # Sort newest first so the latest workouts are displayed earlier.
+    items = sorted(workouts, key=_ts_key, reverse=True)
+    logger.info("Rendering %d workouts from last day", len(items))
+
+    for w in items:
+        disc_label = None
+        if summarize_workout:
+            try:
+                disc_label = summarize_workout(w, None).get("discipline")
+            except Exception:
+                disc_label = None
+
+        if not disc_label:
+            # Fallback extraction from common fields if summarizer isn't available
+            ride = w.get("ride") or {}
+            disc_label = (
+                (ride.get("fitness_discipline_display_name") or w.get("fitness_discipline_display_name"))
+                or (ride.get("fitness_discipline") or w.get("fitness_discipline"))
+                or w.get("discipline")
+                or ride.get("title")
+            )
+            if isinstance(disc_label, dict):
+                disc_label = disc_label.get("name") or disc_label.get("display_name") or ""
+
+        disc_label = (disc_label or "Workout").strip()
+        logger.info("Rendering workout of discipline '%s'", disc_label)
+        # Use count 1 for per-workout discipline page
+        try:
+            render_discipline_page(matrix, disc_label, 1, color_key=color_key)
+        except Exception as exc:  # pragma: no cover - drawing errors depend on hardware
+            logger.warning("Failed to render workout discipline page for %s: %s", disc_label, exc)
+
+        if per_workout_duration > 0:
+            time.sleep(per_workout_duration)
 
 
 def cycle_discipline_totals(
@@ -187,24 +327,60 @@ def main() -> None:
         else display_config.get("duration", 4)
     )
     overview_duration = display_config.get("overview_duration", 4)
+    per_workout_duration = display_config.get("per_workout_duration", 4)
 
+    last_day_workouts = []
     try:
-        overview = client.get_overview(me["id"]) or {}
+        # Make a single set of API calls before entering the main loop. The
+        # runtime loop should not perform network I/O — updates will be
+        # handled asynchronously in the future.
+        overview: Dict[str, Any] = {}
+        pr_shown = False
+        if client and me and me.get("id"):
+            try:
+                overview = client.get_overview(me["id"]) or {}
+            except Exception as exc:  # pragma: no cover - external call
+                logger.warning("Could not fetch overview: %s", exc)
+            try:
+                # Fetch all workouts that occurred on the user's most recent workout day.
+                last_day_workouts = get_last_day_workouts(client, me["id"], limit=50, days=30)
+                if last_day_workouts:
+                    # Pick the most recent workout from that day (by available timestamp)
+                    def _ts_key(w: Dict[str, Any]) -> str:
+                        for k in ("created_at", "start_time", "start_date", "start_time_iso8601", "start_date_local"):
+                            v = w.get(k)
+                            if isinstance(v, str) and v:
+                                return v
+                        return ""
+
+                    latest = max(last_day_workouts, key=_ts_key)
+                    pr_shown = is_pr_workout(latest)
+            except Exception as exc:  # pragma: no cover - external call
+                logger.warning("Could not fetch recent workouts for PR check: %s", exc)
+        else:
+            logger.debug("Skipping initial API fetch; client or user data missing")
+
         while True:
+
+
+
+            # If a recent PR was detected at startup, show the PR star once.
+            if pr_shown:
+                render_pr_star(matrix)
+                if overview_duration > 0:
+                    time.sleep(overview_duration)
+
+            # Then render the username card as usual
             render_username_card(matrix, username, font_key, color_key)
             if duration > 0:
                 time.sleep(duration)
 
-            discipline_totals: Dict[str, int] = {}
-            if client and me and me.get("id"):
-                try:
-                    discipline_totals = extract_discipline_totals(overview)
-                    if not discipline_totals:
-                        logger.info("No discipline totals found in overview response")
-                except Exception as exc:  # pragma: no cover - external call
-                    logger.warning("Could not fetch overview: %s", exc)
-            else:
-                logger.debug("Skipping overview fetch; client or user data missing")
+            # Show each workout from the user's last workout day (prefetched at startup)
+            if client and me and me.get("id") and last_day_workouts:
+                render_last_day_workouts(matrix, last_day_workouts, color_key, per_workout_duration=per_workout_duration)
+
+            # Use the pre-fetched overview data to show discipline totals.
+            discipline_totals: Dict[str, int] = extract_discipline_totals(overview)
 
             if discipline_totals:
                 cycle_discipline_totals(
