@@ -18,10 +18,10 @@ class UsernameScreen(Screen):
             debug.error("Font %s is not loaded", self.font_key)
             return False
         color = color_dict.get(self.color_key, color_dict["white"])
-        matrix.Clear()
         w = get_text_width(font, text)
         h = getattr(font, "height", 8)
         start_x = max((matrix.width - w) // 2, 0)
         start_y = max((matrix.height - h) // 2, 0)
         graphics.DrawText(matrix, font, start_x, start_y, color, text)
         return True
+

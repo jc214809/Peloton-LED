@@ -101,3 +101,11 @@ def wrap_text(font, text, max_width, padding):
         lines.append(current_line)
     lines = [line for line in lines if line.strip()]
     return lines
+
+def draw_centered_text(matrix, font, text, y, color):
+    """Draw text horizontally centered on the matrix using provided font."""
+    if font is None:
+        return
+    width = get_text_width(font, text)
+    x = max((matrix.width - width) // 2, 0)
+    graphics.DrawText(matrix, font, x, y, color, text)

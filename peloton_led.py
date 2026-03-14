@@ -8,8 +8,12 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Set, Tuple
 
 from driver import RGBMatrix, __version__
-from display.discipline_totals import render_discipline_page
+from display.ui.discipline_page import DisciplinePageScreen
 from display.display import initialize_fonts
+from display.ui.manager import ScreenManager
+
+# module-level discipline page screen (used by helper functions)
+discipline_screen = DisciplinePageScreen()
 from display.ui.username import UsernameScreen
 from display.ui.pr_star import PrStarScreen
 from peloton.api import PelotonClient, make_session
@@ -207,14 +211,35 @@ def get_last_day_workouts(client: PelotonClient, user_id: str, limit: int = 50, 
 
 
 
+def show_and_wait(manager: ScreenManager, name: str, state: Optional[Any], duration: float, tick_interval: float = 0.05) -> None:
+    """Switch to a screen via manager.show and render it.
+
+    By default this performs a single render (one manager.tick) then sleeps
+    for `duration` seconds. If you need continuous animation/update during the
+    duration, set up a dedicated tick loop elsewhere or call manager.tick
+    repeatedly with an appropriate interval.
+    """
+    manager.show(name, state)
+    # Render once immediately so the screen is drawn.
+    try:
+        manager.tick(state)
+    except Exception:
+        # manager.tick will log exceptions
+        pass
+
+    if duration > 0:
+        # Keep the image on-screen for the requested duration without
+        # repeatedly re-rendering (avoids repeated log spam from render()).
+        time.sleep(duration)
+
 
 def render_last_day_workouts(
-    matrix,
+    manager: ScreenManager,
     workouts: Iterable[Dict[str, Any]],
     color_key: str,
     per_workout_duration: int = 4,
 ) -> None:
-    """Render each workout from the last-day workouts on the matrix.
+    """Render each workout from the last-day workouts using the ScreenManager.
 
     For each workout this function determines a human-friendly discipline label
     (using peloton.summaries.summarize_workout when available) and shows the
@@ -271,16 +296,13 @@ def render_last_day_workouts(
         logger.info("Rendering workout of discipline '%s'", disc_label)
         # Use count 1 for per-workout discipline page
         try:
-            render_discipline_page(matrix, disc_label, 1, color_key=color_key)
+            show_and_wait(manager, "discipline", {"discipline": disc_label, "count": 1, "color_key": color_key}, per_workout_duration)
         except Exception as exc:  # pragma: no cover - drawing errors depend on hardware
             logger.warning("Failed to render workout discipline page for %s: %s", disc_label, exc)
 
-        if per_workout_duration > 0:
-            time.sleep(per_workout_duration)
-
 
 def cycle_discipline_totals(
-    matrix,
+    manager: ScreenManager,
     discipline_totals: Dict[str, int],
     color_key: str,
     overview_duration: int,
@@ -290,9 +312,11 @@ def cycle_discipline_totals(
     logger.info("Cycling through disciplines (%d entries)", len(discipline_totals))
     for discipline, count in discipline_totals.items():
         logger.info("Rendering discipline '%s' (%d workouts)", discipline, count)
-        render_discipline_page(matrix, discipline, count, color_key=color_key)
-        if overview_duration > 0:
-            time.sleep(overview_duration)
+        try:
+            show_and_wait(manager, "discipline", {"discipline": discipline, "count": count, "color_key": color_key}, overview_duration)
+        except Exception as exc:
+            logger.warning("Failed to render discipline page for %s: %s", discipline, exc)
+
 
 
 def main() -> None:
@@ -332,6 +356,12 @@ def main() -> None:
     # instantiate PR star screen
     pr_screen = PrStarScreen(color_key=color_key)
 
+    # Create ScreenManager and register screens
+    manager = ScreenManager(matrix, initial=username_screen)
+    manager.register("username", username_screen)
+    manager.register("pr", pr_screen)
+    manager.register("discipline", discipline_screen)
+
     last_day_workouts = []
     try:
         # Make a single set of API calls before entering the main loop. The
@@ -365,29 +395,23 @@ def main() -> None:
 
         while True:
 
-
-
             # If a recent PR was detected at startup, show the PR star once.
             if pr_shown:
-                pr_screen.render(matrix)
-                if overview_duration > 0:
-                    time.sleep(overview_duration)
+                show_and_wait(manager, "pr", None, overview_duration)
 
             # Then render the username card as usual
-            username_screen.render(matrix, state=username)
-            if duration > 0:
-                time.sleep(duration)
+            show_and_wait(manager, "username", username, duration)
 
             # Show each workout from the user's last workout day (prefetched at startup)
             if client and me and me.get("id") and last_day_workouts:
-                render_last_day_workouts(matrix, last_day_workouts, color_key, per_workout_duration=per_workout_duration)
+                render_last_day_workouts(manager, last_day_workouts, color_key, per_workout_duration=per_workout_duration)
 
             # Use the pre-fetched overview data to show discipline totals.
             discipline_totals: Dict[str, int] = extract_discipline_totals(overview)
 
             if discipline_totals:
                 cycle_discipline_totals(
-                    matrix, discipline_totals, color_key, overview_duration
+                    manager, discipline_totals, color_key, overview_duration
                 )
             elif overview_duration > 0:
                 time.sleep(overview_duration)
@@ -397,3 +421,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
