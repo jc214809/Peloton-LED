@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 class Screen(ABC):
     """Abstract screen interface for all renderers."""
+
     @abstractmethod
     def render(self, matrix, state: Optional[Any] = None) -> bool:
         """Draw current view to matrix. `state` can be any context (user/workout)."""
@@ -17,31 +18,7 @@ class Screen(ABC):
     def handle_event(self, event: Any) -> Optional[str]:
         """Optional input handler; can return a navigation command or None."""
         return None
-    def on_enter(self, matrix, state: Optional[Any] = None) -> None:
-        """Called when this screen becomes active. Default no-op.
 
-        Override to perform setup. Matrix is provided for convenience.
-        """
-        return
-
-# python file: display/ui/screen.py
-
-from abc import ABC, abstractmethod
-from typing import Any, Optional
-
-class Screen(ABC):
-    """Abstract screen interface for all renderers."""
-    @abstractmethod
-    def render(self, matrix, state: Optional[Any] = None) -> bool:
-        """Draw current view to matrix. `state` can be any context (user/workout)."""
-        pass
-    def update(self, dt: float) -> None:
-        """Optional animation update called on tick; dt is seconds since last call."""
-        return
-
-    def handle_event(self, event: Any) -> Optional[str]:
-        """Optional input handler; can return a navigation command or None."""
-        return None
     def on_enter(self, matrix, state: Optional[Any] = None) -> None:
         """Called when this screen becomes active. Default no-op.
 
@@ -56,10 +33,10 @@ class Screen(ABC):
         ensure the previous screen doesn't leave artifacts on the display.
         """
         import logging
-        logging.getLogger(__name__)  # ensure logger exists
+        logger = logging.getLogger(__name__)
 
         # Quick sanity log so you know this ran
-        logging.debug("on_exit called for screen %s, matrix=%r", getattr(self, "__class__", None), matrix)
+        logger.debug("on_exit called for screen %s, matrix=%r", getattr(self, "__class__", None), matrix)
 
         try:
             # Prefer canonical Clear if present
@@ -97,6 +74,6 @@ class Screen(ABC):
                     pass
 
         except Exception:
-            logging.exception("Failed to clear/update matrix in on_exit")
+            logger.exception("Failed to clear/update matrix in on_exit")
             # In development you might want to re-raise so you notice the problem:
             # raise

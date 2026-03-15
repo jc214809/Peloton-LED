@@ -14,6 +14,7 @@ from display.ui.manager import ScreenManager
 
 from display.ui.username import UsernameScreen
 from display.ui.pr_star import PrStarScreen
+from display.ui.logo_screen import LogoScreen
 from peloton.api import PelotonClient, make_session
 from api.peloton_api import PelotonAPI
 from api.pr import pr_from_last_day_workouts
@@ -339,12 +340,29 @@ def main() -> None:
     )
 
     # Instantiate screens and manager
-    manager = ScreenManager(matrix, initial=None)
+    manager = ScreenManager(matrix, initial="logo")
+    # Logo screen (optional) - path and duration come from display config
+    logo_path = display_config.get("logo_path", "prepared_logos/prepared_64x64_posterize6.png")
+    logo_duration = display_config.get("logo_duration", 3)
     manager.register("username", UsernameScreen(font_key=font_key, color_key=color_key))
     manager.register("pr", PrStarScreen(color_key=color_key))
     manager.register("discipline", DisciplinePageScreen())
+    # Register logo screen last so it can be shown before the username screen
+    try:
+        manager.register("logo", LogoScreen(image_path=logo_path))
+    except Exception:
+        logger.warning("Could not register LogoScreen; continuing without it")
 
-    # Show the initial username screen now that it's registered
+    # Show the optional logo screen once at startup (if present), then the username
+    try:
+        if Path(logo_path).exists():
+            show_and_wait(manager, "logo", None, logo_duration)
+        else:
+            logger.debug("Logo image %s not found; skipping logo screen", logo_path)
+    except Exception as exc:
+        logger.warning("Failed to display logo screen: %s", exc)
+
+    # Now show the initial username screen
     manager.show("username", username)
 
     # Prefetch data once before entering the display loop
