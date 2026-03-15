@@ -12,13 +12,15 @@ from display.ui.discipline_page import DisciplinePageScreen
 from display.display import initialize_fonts
 from display.ui.manager import ScreenManager
 
-# module-level discipline page screen (used by helper functions)
-discipline_screen = DisciplinePageScreen()
 from display.ui.username import UsernameScreen
 from display.ui.pr_star import PrStarScreen
 from peloton.api import PelotonClient, make_session
+from api.peloton_api import PelotonAPI
+from api.pr import pr_from_last_day_workouts
 from utils import debug
 from utils.utils import args, led_matrix_options
+from utils.username import resolve_display_username
+from api.get_last_active_days_workouts import get_last_active_days_workouts
 
 logger = logging.getLogger("peloton-led")
 
@@ -48,21 +50,20 @@ def configure_logging(config: Dict[str, Any]) -> None:
     debug.logger.setLevel(level)
 
 
-def build_peloton_context(
+def build_peloton_client(
     cookies_file: str,
-) -> Tuple[Optional[PelotonClient], Optional[Dict[str, Any]]]:
+) -> Optional[PelotonClient]:
     path = Path(cookies_file)
     if not path.exists():
         logger.debug("Peloton cookies file %s missing; skipping API calls", path)
-        return None, None
+        return None
     try:
         session = make_session(path)
         client = PelotonClient(session)
-        me = client.get_me()
-        return client, me
+        return client
     except Exception as exc:  # pragma: no cover - external call
         logger.warning("Could not build Peloton client: %s", exc)
-    return None, None
+    return None
 
 
 def extract_discipline_totals(overview: Dict[str, Any]) -> Dict[str, int]:
@@ -84,17 +85,17 @@ def extract_discipline_totals(overview: Dict[str, Any]) -> Dict[str, int]:
 
     def handle_entry(entry: Dict[str, Any]) -> None:
         label = (
-            entry.get("discipline_display_name")
-            or entry.get("discipline_name")
-            or entry.get("name")
-            or entry.get("title")
-            or entry.get("discipline")
+                entry.get("discipline_display_name")
+                or entry.get("discipline_name")
+                or entry.get("name")
+                or entry.get("title")
+                or entry.get("discipline")
         )
         count = (
-            entry.get("workout_count")
-            or entry.get("total_workouts")
-            or entry.get("count")
-            or entry.get("workouts")
+                entry.get("workout_count")
+                or entry.get("total_workouts")
+                or entry.get("count")
+                or entry.get("workouts")
         )
         add_entry(label or "", count)
 
@@ -136,81 +137,6 @@ def extract_discipline_totals(overview: Dict[str, Any]) -> Dict[str, int]:
 
     return totals
 
-
-def is_pr_workout(workout: Dict[str, Any]) -> bool:
-    """Return True if the given workout appears to be a personal record.
-
-    Checks common fields returned by the Peloton API: explicit PR flags and
-    achievement templates with the 'output_pr' slug.
-    """
-    if not workout:
-        return False
-    if bool(workout.get("is_total_work_personal_record")):
-        return True
-    if bool(workout.get("is_splits_personal_record")):
-        return True
-    for template in (workout.get("achievement_templates") or []):
-        if (template.get("slug") or "").strip().lower() == "output_pr":
-            return True
-    return False
-
-
-def get_last_day_workouts(client: PelotonClient, user_id: str, limit: int = 50, days: int = 30):
-    """Return the workouts that occurred on the user's most recent workout date.
-
-    This fetches a batch of recent workouts and groups them by date (YYYY-MM-DD
-    taken from ISO-style timestamps). The workouts for the latest date are
-    returned. The function is defensive about missing timestamp fields.
-    """
-    try:
-        recent = client.get_recent_workouts(user_id, limit=limit, days=days) or []
-    except Exception as exc:  # pragma: no cover - external call
-        logger.warning("Could not fetch recent workouts for last-day lookup: %s", exc)
-        return []
-
-    if not recent:
-        return []
-
-    def _timestamp_str(w: Dict[str, Any]) -> str:
-        # Try common timestamp fields in order of likelihood.
-        for key in (
-            "created_at",
-            "start_time",
-            "start_date",
-            "start_time_iso8601",
-            "start_date_local",
-        ):
-            val = w.get(key)
-            if isinstance(val, str) and val:
-                return val
-        return ""
-
-    def _date_part(ts: str) -> str:
-        if not ts:
-            return ""
-        if "T" in ts:
-            return ts.split("T", 1)[0]
-        if " " in ts:
-            return ts.split(" ", 1)[0]
-        return ts
-
-    workouts_by_date = {}
-    for w in recent:
-        ts = _timestamp_str(w)
-        d = _date_part(ts)
-        if not d:
-            continue
-        workouts_by_date.setdefault(d, []).append(w)
-
-    if not workouts_by_date:
-        return []
-
-    last_date = max(workouts_by_date.keys())
-    logger.info("Found last workout date %s with %d workouts", last_date, len(workouts_by_date[last_date]))
-    return workouts_by_date[last_date]
-
-
-
 def show_and_wait(manager: ScreenManager, name: str, state: Optional[Any], duration: float, tick_interval: float = 0.05) -> None:
     """Switch to a screen via manager.show and render it.
 
@@ -238,22 +164,16 @@ def render_last_day_workouts(
     workouts: Iterable[Dict[str, Any]],
     color_key: str,
     per_workout_duration: int = 4,
+    peloton_api: Optional[PelotonAPI] = None,
 ) -> None:
     """Render each workout from the last-day workouts using the ScreenManager.
 
     For each workout this function determines a human-friendly discipline label
-    (using peloton.summaries.summarize_workout when available) and shows the
+    (using PelotonAPI.get_workout_discipline_label when available) and shows the
     discipline page for that workout. The most recent workout is shown first.
     """
     if not workouts:
         return
-
-    try:
-        # summarize_workout contains the discipline logic used elsewhere in the
-        # project; import lazily to avoid circular imports at module import time.
-        from peloton.summaries import summarize_workout
-    except Exception:
-        summarize_workout = None
 
     def _ts_key(w: Dict[str, Any]) -> str:
         for k in (
@@ -274,11 +194,28 @@ def render_last_day_workouts(
 
     for w in items:
         disc_label = None
-        if summarize_workout:
+
+        # Prefer using the convenience helper on PelotonAPI when available so
+        # the discipline extraction logic lives next to other Peloton-related
+        # helpers and can be tested/maintained there.
+        if peloton_api:
             try:
-                disc_label = summarize_workout(w, None).get("discipline")
+                disc_label = peloton_api.get_workout_discipline_label(w)
             except Exception:
                 disc_label = None
+        else:
+            try:
+                # summarize_workout contains the discipline logic used elsewhere in the
+                # project; import lazily to avoid circular imports at module import time.
+                from peloton.summaries import summarize_workout
+            except Exception:
+                summarize_workout = None
+
+            if summarize_workout:
+                try:
+                    disc_label = summarize_workout(w, None).get("discipline")
+                except Exception:
+                    disc_label = None
 
         if not disc_label:
             # Fallback extraction from common fields if summarizer isn't available
@@ -319,6 +256,49 @@ def cycle_discipline_totals(
 
 
 
+def run_display_loop(
+    manager: ScreenManager,
+    client: Optional[PelotonClient],
+    api: Optional[PelotonAPI],
+    me: Optional[Dict[str, Any]],
+    overview: Dict[str, Any],
+    last_day_workouts: Iterable[Dict[str, Any]],
+    username: str,
+    duration: float,
+    overview_duration: int,
+    per_workout_duration: int,
+    color_key: str,
+    pr_shown: bool,
+) -> None:
+    """Main display loop extracted for clarity.
+
+    This computes discipline totals once from the provided overview and then
+    cycles through the usual screens. The loop is intentionally free of
+    network I/O; refreshes should be done outside and a new loop invocation
+    used if live updates are added later.
+    """
+    # Compute once from the (prefetched) overview
+    discipline_totals = extract_discipline_totals(overview)
+
+    try:
+        while True:
+            if pr_shown:
+                show_and_wait(manager, "pr", None, overview_duration)
+                # pr_shown = False
+
+            show_and_wait(manager, "username", username, duration)
+
+            if client and me and me.get("id") and last_day_workouts:
+                render_last_day_workouts(manager, last_day_workouts, color_key, per_workout_duration=per_workout_duration, peloton_api=api)
+
+            if discipline_totals:
+                cycle_discipline_totals(manager, discipline_totals, color_key, overview_duration)
+            elif overview_duration > 0:
+                time.sleep(overview_duration)
+    except KeyboardInterrupt:
+        logger.info("Interrupted, shutting down Peloton LED display")
+
+
 def main() -> None:
     command_line_args = args()
     config = load_config(command_line_args.config)
@@ -327,96 +307,77 @@ def main() -> None:
     logger.info("Starting Peloton LED display (driver version %s)", __version__)
 
     display_config = config.get("display", {})
-    client, me = build_peloton_context(command_line_args.cookies)
+    font_key = display_config.get("font", "ride")
+    color_key = display_config.get("color", "white")
+    overview_duration = display_config.get("overview_duration", 4)
+    per_workout_duration = display_config.get("per_workout_duration", 4)
+
+    client = build_peloton_client(command_line_args.cookies)
+    api = PelotonAPI(client)
+
+    # Fetch /api/me once (separate from building the client) so callers can
+    # choose whether they need the user object. This avoids duplicate network
+    # calls if another part of the program already requested the user.
+    me: Optional[Dict[str, Any]] = None
+    if client:
+        try:
+            me = client.get_me()
+        except Exception as exc:  # pragma: no cover - external call
+            logger.warning("Could not fetch /api/me: %s", exc)
 
     matrix_options = led_matrix_options(command_line_args)
     matrix = RGBMatrix(options=matrix_options)
     initialize_fonts(matrix.height)
 
-    username = command_line_args.username
-    if not username and me:
-        username = me.get("username") or me.get("id")
-        if username:
-            logger.info("Using Peloton username %s from /api/me", username)
-    if not username:
-        username = display_config.get("username") or "Peloton Member"
+    # Resolve a display username early and log when obtained from the API
+    username = resolve_display_username(command_line_args.username, me, display_config)
 
-    font_key = display_config.get("font", "ride")
-    color_key = display_config.get("color", "white")
     duration = (
         command_line_args.display_duration
         if command_line_args.display_duration is not None
         else display_config.get("duration", 4)
     )
-    overview_duration = display_config.get("overview_duration", 4)
-    per_workout_duration = display_config.get("per_workout_duration", 4)
 
-    # instantiate UsernameScreen to render the username card
-    username_screen = UsernameScreen(font_key=font_key, color_key=color_key)
-    # instantiate PR star screen
-    pr_screen = PrStarScreen(color_key=color_key)
+    # Instantiate screens and manager
+    manager = ScreenManager(matrix, initial=None)
+    manager.register("username", UsernameScreen(font_key=font_key, color_key=color_key))
+    manager.register("pr", PrStarScreen(color_key=color_key))
+    manager.register("discipline", DisciplinePageScreen())
 
-    # Create ScreenManager and register screens
-    manager = ScreenManager(matrix, initial=username_screen)
-    manager.register("username", username_screen)
-    manager.register("pr", pr_screen)
-    manager.register("discipline", discipline_screen)
+    # Show the initial username screen now that it's registered
+    manager.show("username", username)
 
+    # Prefetch data once before entering the display loop
+    overview: Dict[str, Any] = {}
     last_day_workouts = []
-    try:
-        # Make a single set of API calls before entering the main loop. The
-        # runtime loop should not perform network I/O — updates will be
-        # handled asynchronously in the future.
-        overview: Dict[str, Any] = {}
-        pr_shown = False
-        if client and me and me.get("id"):
-            try:
-                overview = client.get_overview(me["id"]) or {}
-            except Exception as exc:  # pragma: no cover - external call
-                logger.warning("Could not fetch overview: %s", exc)
-            try:
-                # Fetch all workouts that occurred on the user's most recent workout day.
-                last_day_workouts = get_last_day_workouts(client, me["id"], limit=50, days=30)
-                if last_day_workouts:
-                    # Pick the most recent workout from that day (by available timestamp)
-                    def _ts_key(w: Dict[str, Any]) -> str:
-                        for k in ("created_at", "start_time", "start_date", "start_time_iso8601", "start_date_local"):
-                            v = w.get(k)
-                            if isinstance(v, str) and v:
-                                return v
-                        return ""
+    pr_shown = False
+    if client and me and me.get("id"):
+        overview = api.get_overview(me.get("id"))
+        try:
+            last_day_workouts = get_last_active_days_workouts(client, me["id"], limit=50, days=30)
+        except Exception as exc:  # pragma: no cover - external call
+            logger.warning("Could not fetch recent workouts for PR check: %s", exc)
+        if last_day_workouts:
+             pr_shown = pr_from_last_day_workouts(last_day_workouts)
+    else:
+        logger.debug("Skipping initial API fetch; client or user data missing")
 
-                    latest = max(last_day_workouts, key=_ts_key)
-                    pr_shown = is_pr_workout(latest)
-            except Exception as exc:  # pragma: no cover - external call
-                logger.warning("Could not fetch recent workouts for PR check: %s", exc)
-        else:
-            logger.debug("Skipping initial API fetch; client or user data missing")
+    # Run the extracted loop
+    run_display_loop(
+        manager=manager,
+        client=client,
+        api=api,
+        me=me,
+        overview=overview,
+        last_day_workouts=last_day_workouts,
+        username=username,
+        duration=duration,
+        overview_duration=overview_duration,
+        per_workout_duration=per_workout_duration,
+        color_key=color_key,
+        pr_shown=pr_shown,
+    )
 
-        while True:
-
-            # If a recent PR was detected at startup, show the PR star once.
-            if pr_shown:
-                show_and_wait(manager, "pr", None, overview_duration)
-
-            # Then render the username card as usual
-            show_and_wait(manager, "username", username, duration)
-
-            # Show each workout from the user's last workout day (prefetched at startup)
-            if client and me and me.get("id") and last_day_workouts:
-                render_last_day_workouts(manager, last_day_workouts, color_key, per_workout_duration=per_workout_duration)
-
-            # Use the pre-fetched overview data to show discipline totals.
-            discipline_totals: Dict[str, int] = extract_discipline_totals(overview)
-
-            if discipline_totals:
-                cycle_discipline_totals(
-                    manager, discipline_totals, color_key, overview_duration
-                )
-            elif overview_duration > 0:
-                time.sleep(overview_duration)
-    except KeyboardInterrupt:
-        logger.info("Interrupted, shutting down Peloton LED display")
 
 
 if __name__ == "__main__":
