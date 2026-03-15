@@ -6,9 +6,9 @@ from .screen import Screen
 from utils import debug
 
 class ScreenManager:
-    def __init__(self, matrix, initial: Screen):
+    def __init__(self, matrix, initial: Optional[Screen] = None):
         self.matrix = matrix
-        self.current: Screen = initial
+        self.current: Optional[Screen] = initial
         self.current_name: Optional[str] = None
         self.screens: Dict[str, Screen] = {}
         self.last_tick = time.time()

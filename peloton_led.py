@@ -198,13 +198,11 @@ def render_last_day_workouts(
         # Prefer using the convenience helper on PelotonAPI when available so
         # the discipline extraction logic lives next to other Peloton-related
         # helpers and can be tested/maintained there.
-    if peloton_api:
-        getter = getattr(peloton_api, "get_workout_discipline_label", None)
-    if callable(getter):
-        try:
-            disc_label = getter(w)
-        except Exception:
-            disc_label = None
+        if peloton_api:
+            try:
+                disc_label = peloton_api.get_workout_discipline_label(w)
+            except Exception:
+                disc_label = None
         else:
             try:
                 # summarize_workout contains the discipline logic used elsewhere in the
@@ -341,10 +339,13 @@ def main() -> None:
     )
 
     # Instantiate screens and manager
-    manager = ScreenManager(matrix, initial=username)
+    manager = ScreenManager(matrix, initial=None)
     manager.register("username", UsernameScreen(font_key=font_key, color_key=color_key))
     manager.register("pr", PrStarScreen(color_key=color_key))
     manager.register("discipline", DisciplinePageScreen())
+
+    # Show the initial username screen now that it's registered
+    manager.show("username", username)
 
     # Prefetch data once before entering the display loop
     overview: Dict[str, Any] = {}
