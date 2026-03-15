@@ -12,8 +12,6 @@ from display.ui.discipline_page import DisciplinePageScreen
 from display.display import initialize_fonts
 from display.ui.manager import ScreenManager
 
-# module-level discipline page screen (used by helper functions)
-discipline_screen = DisciplinePageScreen()
 from display.ui.username import UsernameScreen
 from display.ui.pr_star import PrStarScreen
 from peloton.api import PelotonClient, make_session
@@ -331,13 +329,11 @@ def main() -> None:
     )
 
     # Instantiate screens and manager
-    username_screen = UsernameScreen(font_key=font_key, color_key=color_key)
-    pr_screen = PrStarScreen(color_key=color_key)
 
     manager = ScreenManager(matrix, initial=username_screen)
-    manager.register("username", username_screen)
-    manager.register("pr", pr_screen)
-    manager.register("discipline", discipline_screen)
+    manager.register("username", UsernameScreen(font_key=font_key, color_key=color_key))
+    manager.register("pr", PrStarScreen(color_key=color_key))
+    manager.register("discipline", DisciplinePageScreen())
 
     # Prefetch data once before entering the display loop
     overview: Dict[str, Any] = {}
