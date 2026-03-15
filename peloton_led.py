@@ -50,21 +50,20 @@ def configure_logging(config: Dict[str, Any]) -> None:
     debug.logger.setLevel(level)
 
 
-def build_peloton_context(
+def build_peloton_client(
     cookies_file: str,
-) -> Tuple[Optional[PelotonClient], Optional[Dict[str, Any]]]:
+) -> Optional[PelotonClient]:
     path = Path(cookies_file)
     if not path.exists():
         logger.debug("Peloton cookies file %s missing; skipping API calls", path)
-        return None, None
+        return None
     try:
         session = make_session(path)
         client = PelotonClient(session)
-        me = client.get_me()
-        return client, me
+        return client
     except Exception as exc:  # pragma: no cover - external call
         logger.warning("Could not build Peloton client: %s", exc)
-    return None, None
+    return None
 
 
 def extract_discipline_totals(overview: Dict[str, Any]) -> Dict[str, int]:
@@ -140,60 +139,7 @@ def extract_discipline_totals(overview: Dict[str, Any]) -> Dict[str, int]:
 
 
 
-def get_last_day_workouts(client: PelotonClient, user_id: str, limit: int = 50, days: int = 30):
-    """Return the workouts that occurred on the user's most recent workout date.
-
-    This fetches a batch of recent workouts and groups them by date (YYYY-MM-DD
-    taken from ISO-style timestamps). The workouts for the latest date are
-    returned. The function is defensive about missing timestamp fields.
-    """
-    try:
-        recent = client.get_recent_workouts(user_id, limit=limit, days=days) or []
-    except Exception as exc:  # pragma: no cover - external call
-        logger.warning("Could not fetch recent workouts for last-day lookup: %s", exc)
-        return []
-
-    if not recent:
-        return []
-
-    def _timestamp_str(w: Dict[str, Any]) -> str:
-        # Try common timestamp fields in order of likelihood.
-        for key in (
-            "created_at",
-            "start_time",
-            "start_date",
-            "start_time_iso8601",
-            "start_date_local",
-        ):
-            val = w.get(key)
-            if isinstance(val, str) and val:
-                return val
-        return ""
-
-    def _date_part(ts: str) -> str:
-        if not ts:
-            return ""
-        if "T" in ts:
-            return ts.split("T", 1)[0]
-        if " " in ts:
-            return ts.split(" ", 1)[0]
-        return ts
-
-    workouts_by_date = {}
-    for w in recent:
-        ts = _timestamp_str(w)
-        d = _date_part(ts)
-        if not d:
-            continue
-        workouts_by_date.setdefault(d, []).append(w)
-
-    if not workouts_by_date:
-        return []
-
-    last_date = max(workouts_by_date.keys())
-    logger.info("Found last workout date %s with %d workouts", last_date, len(workouts_by_date[last_date]))
-    return workouts_by_date[last_date]
-
+from api.get_last_active_days_workouts import get_last_active_days_workouts
 
 
 def show_and_wait(manager: ScreenManager, name: str, state: Optional[Any], duration: float, tick_interval: float = 0.05) -> None:
@@ -358,7 +304,18 @@ def main() -> None:
     color_key = display_config.get("color", "white")
     overview_duration = display_config.get("overview_duration", 4)
     per_workout_duration = display_config.get("per_workout_duration", 4)
-    client, me = build_peloton_context(command_line_args.cookies)
+
+    client = build_peloton_client(command_line_args.cookies)
+
+    # Fetch /api/me once (separate from building the client) so callers can
+    # choose whether they need the user object. This avoids duplicate network
+    # calls if another part of the program already requested the user.
+    me: Optional[Dict[str, Any]] = None
+    if client:
+        try:
+            me = client.get_me()
+        except Exception as exc:  # pragma: no cover - external call
+            logger.warning("Could not fetch /api/me: %s", exc)
 
     matrix_options = led_matrix_options(command_line_args)
     matrix = RGBMatrix(options=matrix_options)
@@ -392,7 +349,7 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover - external call
             logger.warning("Could not fetch overview: %s", exc)
         try:
-            last_day_workouts = get_last_day_workouts(client, me["id"], limit=50, days=30)
+            last_day_workouts = get_last_active_days_workouts(client, me["id"], limit=50, days=30)
             if last_day_workouts:
                 pr_shown = pr_from_last_day_workouts(last_day_workouts)
 

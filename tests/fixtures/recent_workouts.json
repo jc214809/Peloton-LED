@@ -1,0 +1,6 @@
+[
+  {"id": "1", "created_at": "2026-03-14T10:00:00Z", "ride": {"title": "Morning Ride"}},
+  {"id": "2", "created_at": "2026-03-14T11:00:00Z", "ride": {"title": "Midday Ride"}},
+  {"id": "3", "created_at": "2026-03-13T09:00:00Z", "ride": {"title": "Older Ride"}},
+  {"id": "4", "start_date": "2026-03-14 08:00:00", "ride": {"title": "Space Format Ride"}}
+]
