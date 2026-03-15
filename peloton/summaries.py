@@ -173,18 +173,6 @@ def summarize_workout(workout: Dict[str, Any], perf: Optional[Dict[str, Any]]) -
     total_work = workout.get("total_work")
     total_kj = int(round(float(total_work) / 1000.0)) if isinstance(total_work, (int, float)) else None
 
-    achievement_pr = any(
-        (
-            (template.get("slug") or "").strip().lower() == "output_pr"
-            for template in workout.get("achievement_templates") or []
-        )
-    )
-    is_pr = (
-        # achievement_pr or
-        bool(workout.get("is_total_work_personal_record"))
-        # or bool(workout.get("is_splits_personal_record"))
-    )
-
     return {
         "workout_id": workout.get("id"),
         "date_time": start_str,
@@ -210,7 +198,7 @@ def summarize_workout(workout: Dict[str, Any], perf: Optional[Dict[str, Any]]) -
         "avg_incline_unit": metrics.get("avg_incline__unit"),
         "max_incline": metrics.get("max_incline"),
         "max_incline_unit": metrics.get("max_incline__unit"),
-        "is_pr": is_pr,
+        "is_pr": bool(workout.get("is_total_work_personal_record")),
         "elevation": metrics.get("elevation"),
         "elevation_unit": metrics.get("elevation__unit"),
         "avg_cadence": metrics.get("avg_cadence"),
