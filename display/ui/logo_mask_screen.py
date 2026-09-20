@@ -1,5 +1,5 @@
 """Startup logo drawn straight from a pixel mask, with no image decoding."""
-from .logo_art import LOGO_ROWS
+from .logo_art import LOGO_ROWS, LOGO_ROWS_32
 from .screen import Screen
 
 
@@ -8,12 +8,22 @@ class LogoMaskScreen(Screen):
     animated = False
     atomic_frames = True
 
-    def __init__(self, rows=LOGO_ROWS, color=(255, 255, 255)):
+    def __init__(self, rows=None, color=(255, 255, 255)):
         self.rows = rows
         self.color = color
 
+    def _rows_for(self, matrix):
+        if self.rows is not None:
+            return self.rows
+        # Prefer the tallest hand-drawn mask that fits, so a short panel uses
+        # art drawn for it rather than a downsample of the 64-row version.
+        for candidate in (LOGO_ROWS, LOGO_ROWS_32):
+            if len(candidate) <= matrix.height:
+                return candidate
+        return LOGO_ROWS_32
+
     def render(self, matrix, state=None):
-        rows = self.rows
+        rows = self._rows_for(matrix)
         if not rows:
             return False
         art_h = len(rows)
