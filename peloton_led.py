@@ -1,403 +1,301 @@
 #!/usr/bin/env python3
-"""Peloton LED main entrypoint."""
-
-import json
+"""Peloton LED dashboard: network-free screen rotation over background snapshots."""
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Set, Tuple
+from zoneinfo import ZoneInfo
 
-from driver import RGBMatrix, __version__
-from display.ui.discipline_page import DisciplinePageScreen
-from display.display import initialize_fonts
-from display.ui.manager import ScreenManager
-
-from display.ui.username import UsernameScreen
-from display.ui.pr_star import PrStarScreen
-from display.ui.logo_screen import LogoScreen
-from peloton.api import PelotonClient, make_session
-from api.peloton_api import PelotonAPI
-from api.pr import pr_from_last_day_workouts
-from utils import debug
+from peloton.config import load_config, default_token_path, load_dotenv
+from peloton.dashboard import Dashboard
+from peloton.instructors import top_instructors
+from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
 from utils.utils import args, led_matrix_options
 from utils.username import resolve_display_username
-from api.get_last_active_days_workouts import get_last_active_days_workouts
 
-logger = logging.getLogger("peloton-led")
-
-RANGE_KEYS = [
-    "discipline_totals",
-    "workouts",
-    "workouts_per_discipline",
-    "workout_counts",
-    "workout_counts_by_discipline",
-    "discipline_counts",
-]
+logger = logging.getLogger('peloton-led')
+ROOT = Path(__file__).resolve().parent
+DEFAULT_ROTATION = ('latest_workouts', 'username', 'total_workouts', 'lifetime',
+                    'milestones', 'goals')
 
 
-def load_config(path: str = "config") -> Dict[str, Any]:
-    config_path = Path(path)
-    if config_path.suffix != ".json":
-        config_path = config_path.with_suffix(".json")
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config not found at {config_path}")
-    with config_path.open(encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def configure_logging(config: Dict[str, Any]) -> None:
-    level = logging.DEBUG if config.get("debug") else logging.INFO
-    logger.setLevel(level)
-    debug.logger.setLevel(level)
-
-
-def build_peloton_client(
-    cookies_file: str,
-) -> Optional[PelotonClient]:
-    path = Path(cookies_file)
-    if not path.exists():
-        logger.debug("Peloton cookies file %s missing; skipping API calls", path)
+def scheduled_brightness(display, now=None, timezone_name=None):
+    """Return scheduled brightness, or None when scheduling is disabled."""
+    schedule = display.get('brightness_schedule')
+    if not schedule:
         return None
-    try:
-        session = make_session(path)
-        client = PelotonClient(session)
-        return client
-    except Exception as exc:  # pragma: no cover - external call
-        logger.warning("Could not build Peloton client: %s", exc)
-    return None
-
-
-def extract_discipline_totals(overview: Dict[str, Any]) -> Dict[str, int]:
-    totals: Dict[str, int] = {}
-    seen: Set[str] = set()
-
-    def add_entry(display_label: str, count_value: Any) -> None:
-        if not display_label or count_value is None:
-            return
-        try:
-            count_int = int(float(count_value))
-        except (ValueError, TypeError):
-            return
-        normalized_label = display_label.strip().lower()
-        if not normalized_label or normalized_label in seen:
-            return
-        seen.add(normalized_label)
-        totals[display_label.strip()] = count_int
-
-    def handle_entry(entry: Dict[str, Any]) -> None:
-        label = (
-                entry.get("discipline_display_name")
-                or entry.get("discipline_name")
-                or entry.get("name")
-                or entry.get("title")
-                or entry.get("discipline")
-        )
-        count = (
-                entry.get("workout_count")
-                or entry.get("total_workouts")
-                or entry.get("count")
-                or entry.get("workouts")
-        )
-        add_entry(label or "", count)
-
-    def handle_mapping(mapping: Dict[str, Any]) -> None:
-        def _label_from_key(key: str) -> str:
-            return key.replace("_", " ").title()
-
-        def _extract_count_from_dict(d: Dict[str, Any]) -> Any:
-            return d.get("count") or d.get("workout_count") or d.get("total_workouts")
-
-        for key, value in mapping.items():
-            display_name = _label_from_key(key)
-            if isinstance(value, dict):
-                count = _extract_count_from_dict(value)
-                add_entry(display_name, count)
-                for nested in _iterate_entries(value):
-                    handle_entry(nested)
-            elif isinstance(value, list):
-                for entry in value:
-                    if isinstance(entry, dict):
-                        handle_entry(entry)
-            else:
-                add_entry(display_name, value)
-
-    def _iterate_entries(container: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
-        for field in ("workouts", "items", "disciplines", "workout_counts"):
-            nested = container.get(field)
-            if isinstance(nested, list):
-                yield from nested
-
-    for key in RANGE_KEYS:
-        data = overview.get(key)
-        if isinstance(data, dict):
-            handle_mapping(data)
-        elif isinstance(data, list):
-            for entry in data:
-                if isinstance(entry, dict):
-                    handle_entry(entry)
-
-    return totals
-
-def show_and_wait(manager: ScreenManager, name: str, state: Optional[Any], duration: float, tick_interval: float = 0.05) -> None:
-    """Switch to a screen via manager.show and render it.
-
-    By default this performs a single render (one manager.tick) then sleeps
-    for `duration` seconds. If you need continuous animation/update during the
-    duration, set up a dedicated tick loop elsewhere or call manager.tick
-    repeatedly with an appropriate interval.
-    """
-    manager.show(name, state)
-    # Render once immediately so the screen is drawn.
-    try:
-        manager.tick(state)
-    except Exception:
-        # manager.tick will log exceptions
-        pass
-
-    if duration > 0:
-        # Keep the image on-screen for the requested duration without
-        # repeatedly re-rendering (avoids repeated log spam from render()).
-        time.sleep(duration)
-
-
-def render_last_day_workouts(
-    manager: ScreenManager,
-    workouts: Iterable[Dict[str, Any]],
-    color_key: str,
-    per_workout_duration: int = 4,
-    peloton_api: Optional[PelotonAPI] = None,
-) -> None:
-    """Render each workout from the last-day workouts using the ScreenManager.
-
-    For each workout this function determines a human-friendly discipline label
-    (using PelotonAPI.get_workout_discipline_label when available) and shows the
-    discipline page for that workout. The most recent workout is shown first.
-    """
-    if not workouts:
-        return
-
-    def _ts_key(w: Dict[str, Any]) -> str:
-        for k in (
-            "created_at",
-            "start_time",
-            "start_date",
-            "start_time_iso8601",
-            "start_date_local",
-        ):
-            v = w.get(k)
-            if isinstance(v, str) and v:
-                return v
-        return ""
-
-    # Sort newest first so the latest workouts are displayed earlier.
-    items = sorted(workouts, key=_ts_key, reverse=True)
-    logger.info("Rendering %d workouts from last day", len(items))
-
-    for w in items:
-        disc_label = None
-
-        # Prefer using the convenience helper on PelotonAPI when available so
-        # the discipline extraction logic lives next to other Peloton-related
-        # helpers and can be tested/maintained there.
-        if peloton_api:
-            try:
-                disc_label = peloton_api.get_workout_discipline_label(w)
-            except Exception:
-                disc_label = None
-        else:
-            try:
-                # summarize_workout contains the discipline logic used elsewhere in the
-                # project; import lazily to avoid circular imports at module import time.
-                from peloton.summaries import summarize_workout
-            except Exception:
-                summarize_workout = None
-
-            if summarize_workout:
-                try:
-                    disc_label = summarize_workout(w, None).get("discipline")
-                except Exception:
-                    disc_label = None
-
-        if not disc_label:
-            # Fallback extraction from common fields if summarizer isn't available
-            ride = w.get("ride") or {}
-            disc_label = (
-                (ride.get("fitness_discipline_display_name") or w.get("fitness_discipline_display_name"))
-                or (ride.get("fitness_discipline") or w.get("fitness_discipline"))
-                or w.get("discipline")
-                or ride.get("title")
-            )
-            if isinstance(disc_label, dict):
-                disc_label = disc_label.get("name") or disc_label.get("display_name") or ""
-
-        disc_label = (disc_label or "Workout").strip()
-        logger.info("Rendering workout of discipline '%s'", disc_label)
-        # Use count 1 for per-workout discipline page
-        try:
-            show_and_wait(manager, "discipline", {"discipline": disc_label, "count": 1, "color_key": color_key}, per_workout_duration)
-        except Exception as exc:  # pragma: no cover - drawing errors depend on hardware
-            logger.warning("Failed to render workout discipline page for %s: %s", disc_label, exc)
-
-
-def cycle_discipline_totals(
-    manager: ScreenManager,
-    discipline_totals: Dict[str, int],
-    color_key: str,
-    overview_duration: int,
-) -> None:
-    if not discipline_totals:
-        return
-    logger.info("Cycling through disciplines (%d entries)", len(discipline_totals))
-    for discipline, count in discipline_totals.items():
-        logger.info("Rendering discipline '%s' (%d workouts)", discipline, count)
-        try:
-            show_and_wait(manager, "discipline", {"discipline": discipline, "count": count, "color_key": color_key}, overview_duration)
-        except Exception as exc:
-            logger.warning("Failed to render discipline page for %s: %s", discipline, exc)
-
-
-
-def run_display_loop(
-    manager: ScreenManager,
-    client: Optional[PelotonClient],
-    api: Optional[PelotonAPI],
-    me: Optional[Dict[str, Any]],
-    overview: Dict[str, Any],
-    last_day_workouts: Iterable[Dict[str, Any]],
-    username: str,
-    duration: float,
-    overview_duration: int,
-    per_workout_duration: int,
-    color_key: str,
-    pr_shown: bool,
-) -> None:
-    """Main display loop extracted for clarity.
-
-    This computes discipline totals once from the provided overview and then
-    cycles through the usual screens. The loop is intentionally free of
-    network I/O; refreshes should be done outside and a new loop invocation
-    used if live updates are added later.
-    """
-    # Compute once from the (prefetched) overview
-    discipline_totals = extract_discipline_totals(overview)
-
-    try:
-        while True:
-            if pr_shown:
-                show_and_wait(manager, "pr", None, overview_duration)
-                # pr_shown = False
-
-            show_and_wait(manager, "username", username, duration)
-
-            if client and me and me.get("id") and last_day_workouts:
-                render_last_day_workouts(manager, last_day_workouts, color_key, per_workout_duration=per_workout_duration, peloton_api=api)
-
-            if discipline_totals:
-                cycle_discipline_totals(manager, discipline_totals, color_key, overview_duration)
-            elif overview_duration > 0:
-                time.sleep(overview_duration)
-    except KeyboardInterrupt:
-        logger.info("Interrupted, shutting down Peloton LED display")
-
-
-def main() -> None:
-    command_line_args = args()
-    config = load_config(command_line_args.config)
-    configure_logging(config)
-
-    logger.info("Starting Peloton LED display (driver version %s)", __version__)
-
-    display_config = config.get("display", {})
-    font_key = display_config.get("font", "ride")
-    color_key = display_config.get("color", "white")
-    overview_duration = display_config.get("overview_duration", 4)
-    per_workout_duration = display_config.get("per_workout_duration", 4)
-
-    client = build_peloton_client(command_line_args.cookies)
-    api = PelotonAPI(client)
-
-    # Fetch /api/me once (separate from building the client) so callers can
-    # choose whether they need the user object. This avoids duplicate network
-    # calls if another part of the program already requested the user.
-    me: Optional[Dict[str, Any]] = None
-    if client:
-        try:
-            me = client.get_me()
-        except Exception as exc:  # pragma: no cover - external call
-            logger.warning("Could not fetch /api/me: %s", exc)
-
-    matrix_options = led_matrix_options(command_line_args)
-    matrix = RGBMatrix(options=matrix_options)
-    initialize_fonts(matrix.height)
-
-    # Resolve a display username early and log when obtained from the API
-    username = resolve_display_username(command_line_args.username, me, display_config)
-
-    duration = (
-        command_line_args.display_duration
-        if command_line_args.display_duration is not None
-        else display_config.get("duration", 4)
-    )
-
-    # Instantiate screens and manager
-    manager = ScreenManager(matrix, initial="logo")
-    # Logo screen (optional) - path and duration come from display config
-    logo_path = display_config.get("logo_path", "prepared_logos/prepared_64x64_posterize6.png")
-    logo_duration = display_config.get("logo_duration", 3)
-    manager.register("username", UsernameScreen(font_key=font_key, color_key=color_key))
-    manager.register("pr", PrStarScreen(color_key=color_key))
-    manager.register("discipline", DisciplinePageScreen())
-    # Register logo screen last so it can be shown before the username screen
-    try:
-        manager.register("logo", LogoScreen(image_path=logo_path))
-    except Exception:
-        logger.warning("Could not register LogoScreen; continuing without it")
-
-    # Show the optional logo screen once at startup (if present), then the username
-    try:
-        if Path(logo_path).exists():
-            show_and_wait(manager, "logo", None, logo_duration)
-        else:
-            logger.debug("Logo image %s not found; skipping logo screen", logo_path)
-    except Exception as exc:
-        logger.warning("Failed to display logo screen: %s", exc)
-
-    # Now show the initial username screen
-    manager.show("username", username)
-
-    # Prefetch data once before entering the display loop
-    overview: Dict[str, Any] = {}
-    last_day_workouts = []
-    pr_shown = False
-    if client and me and me.get("id"):
-        overview = api.get_overview(me.get("id"))
-        try:
-            last_day_workouts = get_last_active_days_workouts(client, me["id"], limit=50, days=30)
-        except Exception as exc:  # pragma: no cover - external call
-            logger.warning("Could not fetch recent workouts for PR check: %s", exc)
-        if last_day_workouts:
-             pr_shown = pr_from_last_day_workouts(last_day_workouts)
+    zone_name = display.get('timezone') or timezone_name
+    zone = ZoneInfo(zone_name) if zone_name else None
+    current = now or datetime.now(zone)
+    minute = current.hour * 60 + current.minute
+    day_hour, day_minute = map(int, schedule['day_start'].split(':'))
+    night_hour, night_minute = map(int, schedule['night_start'].split(':'))
+    day_start = day_hour * 60 + day_minute
+    night_start = night_hour * 60 + night_minute
+    if day_start <= night_start:
+        daytime = day_start <= minute < night_start
     else:
-        logger.debug("Skipping initial API fetch; client or user data missing")
-
-    # Run the extracted loop
-    run_display_loop(
-        manager=manager,
-        client=client,
-        api=api,
-        me=me,
-        overview=overview,
-        last_day_workouts=last_day_workouts,
-        username=username,
-        duration=duration,
-        overview_duration=overview_duration,
-        per_workout_duration=per_workout_duration,
-        color_key=color_key,
-        pr_shown=pr_shown,
-    )
+        daytime = minute >= day_start or minute < night_start
+    return schedule['day' if daytime else 'night']
 
 
+def apply_scheduled_brightness(matrix, display, now=None, timezone_name=None):
+    brightness = scheduled_brightness(display, now, timezone_name)
+    if brightness is not None and getattr(matrix, 'brightness', None) != brightness:
+        matrix.brightness = brightness
 
-if __name__ == "__main__":
+
+def _duration(display, section, fallback):
+    return display.get('screen_durations', {}).get(section, fallback)
+
+
+def build_rotation_pages(snapshot, dashboard, display, username, matrix_height):
+    """Build one rotation from configured named sections."""
+    rotation = display.get('rotation', DEFAULT_ROTATION)
+    groups = {name: [] for name in rotation}
+    workout_duration = _duration(display, 'latest_workouts', display['last_workout_duration'])
+    if 'latest_workouts' in groups:
+        if snapshot['summaries']:
+            for summary in snapshot['summaries']:
+                states = [summary]
+                if matrix_height < 64 and display.get('compact_workout_pages'):
+                    states = [{**summary, 'compact_page': page} for page in (0, 1)]
+                for state in states:
+                    groups['latest_workouts'].append(('last_workout', state, workout_duration))
+                if dashboard.should_celebrate_pr(summary):
+                    groups['latest_workouts'].append(
+                        ('pr', summary.get('workout_id'), _duration(display, 'milestones', display['overview_duration'])))
+        else:
+            status = snapshot['status'] if snapshot['status'] != 'ready' else 'empty'
+            groups['latest_workouts'].append(
+                ('status', status, min(workout_duration, 2)))
+    if 'username' in groups:
+        totals = snapshot.get('totals', {})
+        total = total_workout_count(totals)
+        progress = snapshot.get('weekly_progress', {})
+        disciplines = [(label, count) for label, count in totals.items()
+                       if label != 'Total Workouts' and isinstance(count, int)]
+        favorite = max(disciplines, key=lambda item: item[1], default=None)
+        details = []
+        if total is not None:
+            details.append({'label': 'TOTAL WORKOUTS', 'value': f'{total:,}',
+                            'lines': [f'{total:,}']})
+        weekly_workouts = progress.get('workouts', 0)
+        weekly_minutes = progress.get('minutes', 0)
+        details.append({'label': 'THIS WEEK',
+                        'value': f'{weekly_workouts} WORKOUTS / {weekly_minutes} MIN',
+                        'lines': [f'{weekly_workouts} WORKOUTS', f'{weekly_minutes} MINUTES']})
+        if favorite:
+            details.append({'label': 'TOP DISCIPLINE',
+                            'value': f'{favorite[0]} / {favorite[1]:,}',
+                            'lines': [favorite[0].upper(), f'{favorite[1]:,} WORKOUTS']})
+        instructor_ranks = top_instructors(snapshot.get('instructor_counts', {}), limit=3)
+        rank_labels = ('TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR')
+        for rank_label, (name, count) in zip(rank_labels, instructor_ranks):
+            details.append({'label': rank_label, 'value': f'{name} / {count:,}',
+                            'lines': [name.upper(), f'{count:,} CLASSES']})
+        username_duration = _duration(display, 'username', display['duration'])
+        if username_duration > 0 and details:
+            from display.ui.username import DETAIL_INTERVAL_SECONDS
+            username_duration = max(
+                username_duration, len(details) * DETAIL_INTERVAL_SECONDS)
+        groups['username'].append(('username', {'username': username, 'details': details},
+                                   username_duration))
+
+    overview_pages = lifetime_overview_pages(snapshot['totals'])
+    discipline_duration = _duration(display, 'lifetime', display['overview_duration'])
+    if discipline_duration > 0:
+        discipline_duration = max(discipline_duration, 5.0)
+    total = total_workout_count(snapshot['totals'])
+    if 'total_workouts' in groups and total is not None:
+        groups['total_workouts'].append(('discipline', {
+            'discipline': 'Total Workouts', 'count': total,
+            'color_key': display['color']}, discipline_duration))
+    if 'lifetime' in groups:
+        if matrix_height >= 64:
+            for index, items in enumerate(overview_pages):
+                groups['lifetime'].append(('lifetime', {
+                    'items': items, 'page': index + 1, 'pages': len(overview_pages)},
+                    discipline_duration))
+        else:
+            for discipline, count in snapshot['totals'].items():
+                if discipline != 'Total Workouts':
+                    groups['lifetime'].append(('discipline', {
+                        'discipline': discipline, 'count': count,
+                        'color_key': display['color']}, discipline_duration))
+
+    goal_duration = _duration(display, 'goals', display['overview_duration'])
+    if 'goals' in groups:
+        progress = snapshot.get('weekly_progress', {})
+        for key, target in display.get('weekly_goals', {}).items():
+            if target > 0:
+                groups['goals'].append(('goal', {
+                    'title': 'Weekly Goal', 'current': progress.get(key, 0),
+                    'target': target, 'unit': key}, goal_duration))
+    if 'milestones' in groups and display.get('milestones'):
+        for milestone in dashboard.pending_milestones(snapshot):
+            groups['milestones'].append(('goal', {
+                'title': 'Milestone', 'current': milestone, 'target': milestone,
+                'unit': 'Total Workouts', 'milestone': True},
+                _duration(display, 'milestones', display['overview_duration'])))
+    return [page for section in rotation for page in groups[section]]
+
+
+def show_and_wait(manager, name, state, duration, dashboard=None):
+    manager.show(name, state)
+    manager.tick(state)
+    deadline = time.monotonic() + duration
+    previous = dashboard.login_required if dashboard else None
+    while time.monotonic() < deadline:
+        time.sleep(min(0.2, max(0, deadline - time.monotonic())))
+        if dashboard and dashboard.login_required != previous:
+            # Repaint when authentication changes, even during a long screen.
+            previous = dashboard.login_required
+            manager.matrix.Clear()
+            manager.tick(state)
+        elif getattr(getattr(manager, 'current', None), 'animated', False) is True:
+            manager.tick(state)
+
+
+def run_display_loop(manager, dashboard, display, username_override=None, cycles=0):
+    completed = 0
+    while not cycles or completed < cycles:
+        snapshot = dashboard.snapshot()
+        username = resolve_display_username(username_override, snapshot['me'], display)
+        matrix_height = getattr(getattr(manager, 'matrix', None), 'height', 64)
+        if not isinstance(matrix_height, (int, float)):
+            matrix_height = 64
+        profile = snapshot.get('me') or {}
+        apply_scheduled_brightness(manager.matrix, display,
+                                   timezone_name=profile.get('timezone'))
+        pages = build_rotation_pages(snapshot, dashboard, display, username, matrix_height)
+        for name, state, duration in pages:
+            show_and_wait(manager, name, state, duration, dashboard)
+            if name == 'pr':
+                dashboard.acknowledge_pr(state)
+            elif name == 'goal' and state.get('milestone'):
+                dashboard.acknowledge_milestone(state['target'])
+        completed += 1
+        if not any(page[2] for page in pages):
+            time.sleep(0.05)  # Avoid a busy loop when all durations are zero.
+
+
+def run_multi_user_loop(manager, profiles, display, active, cycles=0):
+    """Show one complete rotation per user, in configured order."""
+    completed = 0
+    while not cycles or completed < cycles:
+        for profile in profiles:
+            active['dashboard'] = profile['dashboard']
+            run_display_loop(manager, profile['dashboard'], display,
+                             profile.get('username'), cycles=1)
+        completed += 1
+
+
+def configured_profiles(config, options):
+    """Build dashboard/profile records with isolated token and cache paths."""
+    display = config['display']
+    users = config.get('users')
+    if not users:
+        return [{'name': 'default', 'username': options.username,
+                 'dashboard': Dashboard(options.cookies, display, demo=options.demo,
+                     demo_login_needed=options.demo_login_needed)}]
+    config_dir = Path(options.config).with_suffix('.json').expanduser().resolve().parent
+    profiles = []
+    for user in users:
+        token_path = Path(user.get('token_path') or default_token_path(user['name'])).expanduser()
+        if not token_path.is_absolute():
+            token_path = config_dir / token_path
+        user_display = dict(display)
+        if 'weekly_goals' in user:
+            user_display['weekly_goals'] = user['weekly_goals']
+        if 'milestones' in user:
+            user_display['milestones'] = user['milestones']
+        if user.get('cache_path'):
+            cache_path = Path(user['cache_path']).expanduser()
+            if not cache_path.is_absolute():
+                cache_path = config_dir / cache_path
+            user_display['cache_path'] = str(cache_path)
+        else:
+            user_display['cache_path'] = str(token_path.with_name(
+                f'{token_path.stem}-dashboard-cache.json'))
+        profiles.append({'name': user['name'], 'username': user.get('username'),
+                         'dashboard': Dashboard(token_path, user_display,
+                             demo=options.demo, demo_login_needed=options.demo_login_needed)})
+    return profiles
+
+
+def main():
+    load_dotenv()
+    options = args()
+    try:
+        config = load_config(options.config, allow_missing=options.demo)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    display = config['display']
+    if options.display_duration is not None:
+        display['duration'] = options.display_duration
+    if options.refresh_interval is not None:
+        display['refresh_interval'] = options.refresh_interval
+    logger.setLevel(logging.DEBUG if config.get('debug') else logging.INFO)
+
+    # Delay driver imports until configuration has been checked.
+    from driver import RGBMatrix
+    from display.display import initialize_fonts
+    from display.ui.manager import ScreenManager
+    from display.ui.username import UsernameScreen
+    from display.ui.discipline_page import DisciplinePageScreen
+    from display.ui.lifetime_overview import LifetimeOverviewScreen
+    from display.ui.logo_screen import LogoScreen
+    from display.ui.last_workout_screen import LastWorkoutScreen
+    from display.ui.pr_star import PrStarScreen
+    from display.ui.status_screen import StatusScreen
+    from display.ui.goal_screen import GoalScreen
+
+    matrix = RGBMatrix(options=led_matrix_options(options))
+    try:
+        matrix.Clear()
+    except Exception as exc:
+        raise SystemExit(f'Could not initialize the matrix: {exc}') from exc
+    initialize_fonts(matrix.height)
+    if matrix.height < 64:
+        logger.warning('Detailed workout view is simplified on 32-row panels')
+    profiles = configured_profiles(config, options)
+    active = {'dashboard': profiles[0]['dashboard']}
+    manager = ScreenManager(matrix,
+        login_required=lambda: active['dashboard'].login_required,
+        stale_data=lambda: active['dashboard'].stale_indicator_required)
+    manager.register('username', UsernameScreen(font_key=display['font'], color_key=display['color']))
+    manager.register('discipline', DisciplinePageScreen())
+    manager.register('lifetime', LifetimeOverviewScreen())
+    manager.register('last_workout', LastWorkoutScreen())
+    manager.register('pr', PrStarScreen(color_key='gold'))
+    manager.register('status', StatusScreen())
+    manager.register('goal', GoalScreen())
+    logo = Path(display.get('logo_path') or ROOT / 'prepared_logos' / f'peloton_64x{matrix.height}_auto.png')
+    for profile in profiles:
+        profile['dashboard'].start()
+    try:
+        if logo.exists():
+            manager.register('logo', LogoScreen(str(logo)))
+            show_and_wait(manager, 'logo', None, display['logo_duration'], active['dashboard'])
+        if options.cycles and not options.demo:
+            # A finite real-data smoke run should wait for the initial request.
+            deadline = time.monotonic() + 60
+            for profile in profiles:
+                active['dashboard'] = profile['dashboard']
+                while (profile['dashboard'].snapshot()['status'] == 'loading'
+                       and time.monotonic() < deadline):
+                    show_and_wait(manager, 'status', 'loading', 0.2, profile['dashboard'])
+        run_multi_user_loop(manager, profiles, display, active, options.cycles)
+    except KeyboardInterrupt:
+        logger.info('Stopping Peloton display')
+    finally:
+        for profile in profiles:
+            if not profile['dashboard'].stop():
+                logger.warning('Refresh worker for %s did not stop before its request timeout',
+                               profile['name'])
+        matrix.Clear()
+
+
+if __name__ == '__main__':
     main()
-

@@ -1,0 +1,27 @@
+[Unit]
+Description=Peloton LED matrix dashboard
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=peloton-led
+Group=peloton-led
+WorkingDirectory=/opt/peloton-led
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/peloton-led/venv/bin/python /opt/peloton-led/peloton_led.py --config /etc/peloton-led/config.json --cookies /var/lib/peloton-led/cookies.txt --led-gpio-mapping adafruit-hat
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+NoNewPrivileges=true
+AmbientCapabilities=CAP_SYS_RAWIO CAP_SYS_NICE CAP_IPC_LOCK
+CapabilityBoundingSet=CAP_SYS_RAWIO CAP_SYS_NICE CAP_IPC_LOCK
+LimitRTPRIO=99
+LimitMEMLOCK=infinity
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/peloton-led
+
+[Install]
+WantedBy=multi-user.target

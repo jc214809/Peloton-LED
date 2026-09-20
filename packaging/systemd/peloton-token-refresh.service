@@ -1,0 +1,20 @@
+[Unit]
+Description=Verify and refresh the Peloton access token
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=peloton-led
+Group=peloton-led
+WorkingDirectory=/opt/peloton-led
+Environment=HOME=/var/lib/peloton-led
+Environment=PLAYWRIGHT_BROWSERS_PATH=/var/lib/peloton-led/ms-playwright
+Environment=PELOTON_CHROMIUM_EXECUTABLE=/usr/bin/chromium
+EnvironmentFile=/etc/peloton-led/auth.env
+ExecStart=/opt/peloton-led/venv/bin/python /opt/peloton-led/scripts/refresh_cookies.py --ensure --all-users --renew-before-hours 12 --cookies /var/lib/peloton-led/cookies.txt --config /etc/peloton-led/config.json
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/peloton-led
