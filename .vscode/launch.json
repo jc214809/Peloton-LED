@@ -1,0 +1,73 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Peloton LED Emulator (64x64)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/peloton_led.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--emulated",
+        "--led-cols=64",
+        "--led-rows=64"
+      ],
+      "justMyCode": true
+    },
+    {
+      "name": "Peloton LED Emulator (32x64)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/peloton_led.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--emulated",
+        "--led-cols=64",
+        "--led-rows=32"
+      ],
+      "justMyCode": true
+    },
+    {
+      "name": "Peloton LED (Hardware)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/peloton_led.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Generate README with Metrics",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/generate_readme_with_metrics.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--days",
+        "59",
+        "--limit",
+        "200",
+        "--out",
+        "README.md",
+        "--dump-perf-dir",
+        "perf_graphs"
+      ],
+      "justMyCode": true
+    },
+    {
+      "name": "Dump Performance Graphs",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/dump_perf_graphs.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Grouped README Wrapper",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/grouped_readme_wrapper.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
