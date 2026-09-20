@@ -50,6 +50,24 @@ label{display:flex;align-items:center;gap:6px;color:var(--muted)}input[type=numb
       <canvas id="preview"></canvas>
     </section>
     <section class="panel section">
+      <h2>Image to pixels</h2>
+      <div class="toolbar"><input id="file" type="file" accept="image/*"></div>
+      <div class="toolbar">
+        <label>Fit <select id="imgFit"><option value="contain">Contain</option><option value="cover">Cover / crop</option><option value="stretch">Stretch</option></select></label>
+        <label>Source <select id="imgSource"><option value="alpha">Alpha then luma</option><option value="luma">Brightness</option></select></label>
+      </div>
+      <div class="toolbar">
+        <label>Threshold <input id="imgThreshold" type="range" min="1" max="99" value="50"></label>
+        <span id="imgThresholdOut" class="hint">50%</span>
+      </div>
+      <div class="toolbar">
+        <label><input id="imgInvert" type="checkbox"> Invert</label>
+        <label><input id="imgDither" type="checkbox"> Dither</label>
+        <button id="imgApply">Apply to canvas</button>
+      </div>
+      <p id="imgStatus" class="hint">Choose an image; it is resampled to the current canvas size. Nothing is uploaded.</p>
+    </section>
+    <section class="panel section">
       <h2>Import / export</h2>
       <div class="toolbar"><select id="format"><option value="python">Python mask</option><option value="plain">Plain . and #</option><option value="json">JSON</option></select><button id="export">Export</button><button id="copy">Copy</button><button id="download">Download</button></div>
       <textarea id="text" spellcheck="false" placeholder="Paste a Python mask, JSON rows, or lines made of . and #, then choose Import."></textarea>
@@ -61,28 +79,137 @@ label{display:flex;align-items:center;gap:6px;color:var(--muted)}input[type=numb
 <script>
 const BUILT_INS = {"cycling":["..........................","..........................","..........................","............###...........","............#.#...........","............###...........","...........#.........##...",".........####.......##....",".........#..##.....##.....","........##...#....##......","........#....###..#.......","........##.......##.......","......#..##...............","......##...#....#.........","........#..#..####........","........##.#..#...#.......",".......##..#.##...#.......","........#..#..#..##.......",".......##..#...###........","......##.........##.......","......#...........#.......","..........................","..........................",".........................."],"bike_bootcamp":["..........................","..........................","..........................","....##.###.##.............","....##.#.#.##..........#..","....#..###..#.........##..","....#...#...#........##...","....#########.......##....",".......###........###.....","........#.........#.......","........#.........#.......","........#..###....##......","........#....#...##.......",".......###...##.###.......",".......###...##.#.####....","......##.##...##..#..##...","......#...#...##..#...#...","......#...#..##...##.##...","......#...#.##.....###....","......#...#...............",".....##...##..............","..........................","..........................",".........................."],"running":["..........................","..........................","..........................",".............###..........",".............#.#..........",".............###.....#....","............##......##....",".........#######...##.....",".........#..##....##......","............#..####.......","............#.#####.......","............##.#..........","..........##.#.##.........",".......####..##.#.........","..............#.##........","..............#..##.......","..............#...#.......","..............#...##......","....##################....","....#................#....","....##################....","..........................","..........................",".........................."],"tread_bootcamp":["..........................","..........................","..........................","...##.###.##..............","...##.#.#.##..............","...#..###..#...........#..","...#...#...#..........##..","...#########.........##...","......###...........##....",".......#.........####.....",".......#.........##.......",".......#..........#.......",".......#..........##......","......###..........#......",".....#####.........##.....",".....##.##..........##....",".....#...##############...",".....#...#............#...",".....#...##############...",".....#...#................","....##...##...............","..........................","..........................",".........................."],"walking":["..........................","..........................","...........##.............","..........#.##............","..........####....##......","...........#......#.......",".........###.....##.......","........####.....###......","........#.##.....##.......","........#.##.######.......","..........##.##...........","...........##.#...........",".........##.#.##..........",".........##.#..#..........",".........#..#..##.........",".........#..##..#.........",".................#........","...#################......","..##...............##.....","..###################.....","....###############.......","..........................","..........................",".........................."],"rowing":["..........................","..........................","..........................","..........................","..........###.............","..........#.#......#......","..........###.....##......",".........##......##.......",".........####...##........","........##..##..#.........","........#......####.......","........#.####.#...#......","........###..###...#......",".........##...##...#......","....###############.......","....##...........##.......","....#.............#.......","..........................","..........................","..........................","..........................","..........................","..........................",".........................."],"row_bootcamp":["..........................","..........................","..........................","..........................","....##.###.##.............","....##.#.#.##......#......","....#..###..#.....##......","....#########....##.......","........#.......##........","........#.......#.........","........#......###........","........#.....#...#.......",".......###....#...#.......","......#########...#.......","......#..#########........","......#..#.......##.......","......#..#........#.......",".....##..##...............","..........................","..........................","..........................","..........................","..........................",".........................."],"strength":["..........................","..........................","..........................","..........................","............###...........","............#.#...........","............###.##........",".............#..##........","............##....#.......","............###..#.##.....","............#.####.##.....","............#.............","............#.............","............#.............","............###...........","...........#######........","...........#.....#........","...........#.....#........","........####.....#........",".....#####.......#........","..........................","..........................","..........................",".........................."],"cardio":["..........................","..........................","..........................",".....###..................",".....#.#..................",".....###..................",".......#######............",".......##.........##......","......####......###.......","......#..########.........","......#...###.............",".......#...#..............","........#..#..............","...........#..............","...........#..............","...........#..............","...........#..............","...........#..............","...........#..............","...........#..............","...........#..............","..........................","..........................",".........................."],"yoga":["..........................","..........................","..........................","..........................",".............###..........",".............#.#..........",".............###..........",".........###########......",".............#............",".............#............",".............#............",".............#............",".............###..........","............#..##.........","...........#....#.........","..........#.....#.........","....##################....","....#...##......##...#....","....#................#....","....##################....","..........................","..........................","..........................",".........................."],"meditation":["..........................","..........................","..........................","..........................","..........................","............##............","...........#..#...........","...........#..#...........","............##............","............##............","...........#####..........","..........#.##.#..........","..........#.##.#..........",".........##.##.##.........","........##..##..##........",".........########.........","......##.########.####....",".....##...##..##.....#....","....##....#....#.....#....","....##################....",".....#################....","..........................","..........................",".........................."],"stretching":["..........................","..........................","..........................","...............###........",".............###..........","............##............","...........##.##..........","..........##.####.........","..........##.####.........",".........##.####..........",".........#...#............","........##...##...........","........##....##..........","........##..####..........","........####..............","........####..............","........#..##.............","........#...#.............","........#...#.............","........#...##............","........#....#............","........#....#............","..........................",".........................."]};
 const $=id=>document.getElementById(id), grid=$('grid'), ctx=grid.getContext('2d'), preview=$('preview'), pctx=preview.getContext('2d');
-let w=26,h=24,pixels=[],mode='toggle',drag=false,dragValue=true,history=[],future=[];
+let w=26,h=24,pixels=[],mode='toggle',drag=false,dragValue=true,history=[],future=[],pending=null;
 const clonePixels=()=>pixels.map(r=>r.slice()), snapshot=()=>({w,h,pixels:clonePixels()});
 function blank(W,H){return Array.from({length:H},()=>Array(W).fill(false))}
 function save(){history.push(snapshot());if(history.length>100)history.shift();future=[]}
-function restore(state){w=state.w;h=state.h;pixels=state.pixels.map(r=>r.slice());$('width').value=w;$('height').value=h;render()}
-function setRows(rows){h=rows.length;w=Math.max(...rows.map(r=>r.length));pixels=blank(w,h);rows.forEach((r,y)=>[...r].forEach((c,x)=>pixels[y][x]=c==='#'||c==='1'||c===true));$('width').value=w;$('height').value=h;history=[];future=[];render()}
+function restore(state){w=state.w;h=state.h;pixels=state.pixels.map(r=>r.slice());$('width').value=w;$('height').value=h;pending=null;render()}
+function setRows(rows){h=rows.length;w=Math.max(...rows.map(r=>r.length));pixels=blank(w,h);rows.forEach((r,y)=>[...r].forEach((c,x)=>pixels[y][x]=c==='#'||c==='1'||c===true));$('width').value=w;$('height').value=h;history=[];future=[];pending=null;render()}
 function layout(){const wrap=$('gridWrap'),gap=2;const cell=Math.max(8,Math.min(24,Math.floor(Math.min((wrap.clientWidth-24)/w,(Math.max(360,wrap.clientHeight)-24)/h))));grid.width=w*cell;grid.height=h*cell;grid.dataset.cell=cell}
 function render(){layout();const cell=+grid.dataset.cell;ctx.clearRect(0,0,grid.width,grid.height);ctx.fillStyle='#090b0e';ctx.fillRect(0,0,grid.width,grid.height);for(let y=0;y<h;y++)for(let x=0;x<w;x++){ctx.beginPath();ctx.arc(x*cell+cell/2,y*cell+cell/2,Math.max(2,cell*.38),0,Math.PI*2);ctx.fillStyle=pixels[y][x]?$('color').value:'#29303a';ctx.fill();ctx.strokeStyle=pixels[y][x]?'#ffd2c8':'#46505e';ctx.lineWidth=1;ctx.stroke()}renderPreview();$('dimensions').textContent=`${w} × ${h}`;$('count').textContent=`${pixels.flat().filter(Boolean).length} pixels`;const ok=w<=+$('maxWidth').value&&h<=+$('maxHeight').value;$('limit').className='hint '+(ok?'ok':'warning');$('limit').textContent=ok?'Within the configured icon limit.':`Too large: limit is ${$('maxWidth').value} × ${$('maxHeight').value}.`}
-function renderPreview(){const z=+$('zoom').value;preview.width=w*z;preview.height=h*z;pctx.fillStyle='#000';pctx.fillRect(0,0,preview.width,preview.height);pctx.fillStyle=$('color').value;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(pixels[y][x])pctx.fillRect(x*z,y*z,z,z)}
+function renderPreview(){const src=pending||pixels,z=+$('zoom').value;preview.width=w*z;preview.height=h*z;pctx.fillStyle='#000';pctx.fillRect(0,0,preview.width,preview.height);pctx.fillStyle=$('color').value;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(src[y]&&src[y][x])pctx.fillRect(x*z,y*z,z,z)}
 function point(e){const r=grid.getBoundingClientRect(),cell=+grid.dataset.cell;return [Math.floor((e.clientX-r.left)*grid.width/r.width/cell),Math.floor((e.clientY-r.top)*grid.height/r.height/cell)]}
-function paint(e,first=false){const [x,y]=point(e);if(x<0||x>=w||y<0||y>=h)return;if(first){save();dragValue=e.button===2?false:e.shiftKey?true:mode==='add'?true:mode==='erase'?false:!pixels[y][x]}pixels[y][x]=dragValue;render()}
+function paint(e,first=false){const [x,y]=point(e);if(x<0||x>=w||y<0||y>=h)return;if(first){save();pending=null;dragValue=e.button===2?false:e.shiftKey?true:mode==='add'?true:mode==='erase'?false:!pixels[y][x]}pixels[y][x]=dragValue;render()}
 grid.addEventListener('contextmenu',e=>e.preventDefault());grid.addEventListener('pointerdown',e=>{drag=true;grid.setPointerCapture(e.pointerId);paint(e,true)});grid.addEventListener('pointermove',e=>{if(drag)paint(e)});grid.addEventListener('pointerup',()=>drag=false);grid.addEventListener('pointercancel',()=>drag=false);
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b))});
 function loadIcon(){const rows=BUILT_INS[$('icons').value];setRows(rows)}
-$('load').onclick=loadIcon;$('clear').onclick=()=>{save();pixels=blank(w,h);render()};
+$('load').onclick=loadIcon;$('clear').onclick=()=>{save();pixels=blank(w,h);pending=null;render()};
 $('undo').onclick=()=>{if(history.length){future.push(snapshot());restore(history.pop())}};$('redo').onclick=()=>{if(future.length){history.push(snapshot());restore(future.pop())}};
-$('resize').onclick=()=>{const nw=+$('width').value,nh=+$('height').value;if(!nw||!nh)return;save();const old=clonePixels(),ow=w,oh=h,next=blank(nw,nh);for(let y=0;y<nh;y++)for(let x=0;x<nw;x++){const sx=$('resizeMode').value==='scale'?Math.min(ow-1,Math.floor(x*ow/nw)):x,sy=$('resizeMode').value==='scale'?Math.min(oh-1,Math.floor(y*oh/nh)):y;if(sx<ow&&sy<oh)next[y][x]=old[sy][sx]}w=nw;h=nh;pixels=next;render()};
+$('resize').onclick=()=>{const nw=+$('width').value,nh=+$('height').value;if(!nw||!nh)return;save();const old=clonePixels(),ow=w,oh=h,next=blank(nw,nh);for(let y=0;y<nh;y++)for(let x=0;x<nw;x++){const sx=$('resizeMode').value==='scale'?Math.min(ow-1,Math.floor(x*ow/nw)):x,sy=$('resizeMode').value==='scale'?Math.min(oh-1,Math.floor(y*oh/nh)):y;if(sx<ow&&sy<oh)next[y][x]=old[sy][sx]}w=nw;h=nh;pixels=next;render();if(sourceImage)previewImage()};
 function rows(){return pixels.map(r=>r.map(v=>v?'#':'.').join(''))}
 function exported(){const r=rows(),f=$('format').value;if(f==='plain')return r.join('\n');if(f==='json')return JSON.stringify({width:w,height:h,rows:r},null,2);return "(\n"+r.map(x=>"    '"+x+"',").join('\n')+"\n)"}
 $('export').onclick=()=>$('text').value=exported();$('copy').onclick=async()=>{if(!$('text').value)$('text').value=exported();await navigator.clipboard.writeText($('text').value)};
 $('download').onclick=()=>{const blob=new Blob([exported()],{type:'text/plain'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=($('icons').value||'pixel-art')+'.txt';a.click();URL.revokeObjectURL(a.href)};
 $('import').onclick=()=>{let t=$('text').value.trim(),r=[];try{const j=JSON.parse(t);r=Array.isArray(j)?j:j.rows||[]}catch{r=t.split(/\r?\n/).map(x=>(x.match(/[.#01]+/)||[])[0]).filter(Boolean)}if(r.length)setRows(r);else alert('No pixel rows found. Use . and #, a Python tuple, or JSON rows.')};
+let sourceImage=null,usedAlpha=false;
+function sampleImage(){
+  if(!sourceImage)return null;
+  // Draw the image into an off-screen buffer the exact size of the grid so
+  // every canvas pixel maps to one averaged block of the original.
+  const buf=document.createElement('canvas');buf.width=w;buf.height=h;
+  const bx=buf.getContext('2d',{willReadFrequently:true});
+  bx.imageSmoothingEnabled=true;bx.imageSmoothingQuality='high';
+  bx.clearRect(0,0,w,h);
+  const iw=sourceImage.naturalWidth,ih=sourceImage.naturalHeight,fit=$('imgFit').value;
+  let dw=w,dh=h,dx=0,dy=0;
+  if(fit!=='stretch'){
+    const scale=fit==='cover'?Math.max(w/iw,h/ih):Math.min(w/iw,h/ih);
+    dw=iw*scale;dh=ih*scale;dx=(w-dw)/2;dy=(h-dh)/2;
+  }
+  bx.drawImage(sourceImage,dx,dy,dw,dh);
+  const data=bx.getImageData(0,0,w,h).data;
+  // "Alpha then luma" only uses alpha when the source image itself has
+  // transparency. Probe the original at small scale rather than this buffer,
+  // whose contain/cover letterbox margins are transparent for every image.
+  const probe=document.createElement('canvas');probe.width=probe.height=24;
+  const px=probe.getContext('2d',{willReadFrequently:true});
+  px.clearRect(0,0,24,24);px.drawImage(sourceImage,0,0,24,24);
+  const pd=px.getImageData(0,0,24,24).data;
+  let clear=0;
+  for(let i=3;i<pd.length;i+=4)if(pd[i]<250)clear++;
+  const useAlpha=$('imgSource').value==='alpha'&&clear>24*24*0.02;
+  usedAlpha=useAlpha;
+  const level=[];
+  for(let y=0;y<h;y++){
+    const row=[];
+    for(let x=0;x<w;x++){
+      const i=(y*w+x)*4,a=data[i+3]/255;
+      const luma=(0.2126*data[i]+0.7152*data[i+1]+0.0722*data[i+2])/255;
+      // null marks "no image here" (letterbox margin or transparent source);
+      // it stays off even when inverted, unlike a genuinely dark pixel.
+      row.push(a<0.02?null:useAlpha?a:luma);
+    }
+    level.push(row);
+  }
+  return level;
+}
+function levelsToPixels(level){
+  const t=+$('imgThreshold').value/100,invert=$('imgInvert').checked,out=blank(w,h);
+  if(!$('imgDither').checked){
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)out[y][x]=level[y][x]===null?false:(level[y][x]>=t)!==invert;
+    return out;
+  }
+  // Floyd–Steinberg, biased by the threshold so the slider still shifts coverage.
+  const buf=level.map(r=>r.map(v=>v===null?null:v+(0.5-t)));
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    if(buf[y][x]===null){out[y][x]=false;continue}
+    const old=buf[y][x],on=old>=0.5,err=old-(on?1:0);
+    out[y][x]=on!==invert;
+    if(x+1<w&&buf[y][x+1]!==null)buf[y][x+1]+=err*7/16;
+    if(y+1<h){
+      if(x&&buf[y+1][x-1]!==null)buf[y+1][x-1]+=err*3/16;
+      if(buf[y+1][x]!==null)buf[y+1][x]+=err*5/16;
+      if(x+1<w&&buf[y+1][x+1]!==null)buf[y+1][x+1]+=err*1/16;
+    }
+  }
+  return out;
+}
+function previewImage(){
+  $('imgThresholdOut').textContent=$('imgThreshold').value+'%';
+  const level=sampleImage();
+  if(!level)return;
+  pending=levelsToPixels(level);
+  const z=+$('zoom').value;preview.width=w*z;preview.height=h*z;
+  pctx.fillStyle='#000';pctx.fillRect(0,0,preview.width,preview.height);
+  pctx.fillStyle=$('color').value;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(pending[y][x])pctx.fillRect(x*z,y*z,z,z);
+  const on=pending.flat().filter(Boolean).length,total=w*h,share=on/total;
+  $('imgStatus').className='hint '+(share>0.92||share<0.02?'warning':'ok');
+  $('imgStatus').textContent=share>0.92
+    ?`Nearly every pixel is on (${on}/${total}) — try Invert, or lower the threshold.`
+    :share<0.02
+      ?`Almost nothing is on (${on}/${total}) — try Invert, or raise the threshold.`
+      :`Previewing ${on} pixels — press Apply to commit.`;
+}
+$('file').onchange=e=>{
+  const f=e.target.files&&e.target.files[0];if(!f)return;
+  const url=URL.createObjectURL(f),img=new Image();
+  img.onload=()=>{
+    URL.revokeObjectURL(url);sourceImage=img;
+    // Guess the polarity: if the plain threshold would light up most of the
+    // canvas the subject is dark on a light background, so start inverted.
+    // Guess the polarity for brightness images: if most of the drawn area is
+    // bright the subject is dark on a light background, so start inverted.
+    // Alpha images need no guess, high alpha already means "this is subject".
+    $('imgInvert').checked=false;
+    const level=sampleImage();
+    if(level&&!usedAlpha){
+      const t=+$('imgThreshold').value/100;
+      const drawn=level.flat().filter(v=>v!==null);
+      const on=drawn.filter(v=>v>=t).length;
+      $('imgInvert').checked=drawn.length>0&&on>drawn.length*0.6;
+    }
+    previewImage();
+  };
+  img.onerror=()=>{URL.revokeObjectURL(url);sourceImage=null;pending=null;$('imgStatus').className='hint warning';$('imgStatus').textContent='Could not read that image file.'};
+  img.src=url;
+};
+['imgFit','imgSource','imgThreshold','imgInvert','imgDither'].forEach(id=>$(id).addEventListener('input',previewImage));
+$('imgApply').onclick=()=>{
+  if(!pending){$('imgStatus').className='hint warning';$('imgStatus').textContent='Load an image first.';return}
+  save();pixels=pending.map(r=>r.slice());pending=null;render();
+  $('imgStatus').className='hint ok';$('imgStatus').textContent='Applied. Undo restores the previous artwork.';
+};
 ['zoom','color','maxWidth','maxHeight'].forEach(id=>$(id).oninput=render);window.onresize=render;
 Object.keys(BUILT_INS).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());$('icons').append(o)});loadIcon();
 </script>
