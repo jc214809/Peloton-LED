@@ -339,6 +339,14 @@ def test_caesar_bootcamp_normalizes_to_row_bootcamp():
     assert normalize_discipline('caesar_bootcamp') == 'row_bootcamp'
 
 
+def test_circuit_normalizes_to_tread_bootcamp():
+    # Peloton's raw fitness_discipline for its tread bootcamp classes
+    # (including walking-bootcamp variants) is "circuit"; Peloton's own
+    # fitness_discipline_display_name for these is "Tread Bootcamp", so it
+    # must resolve there rather than falling back to "Circuit".
+    assert normalize_discipline('circuit') == 'tread_bootcamp'
+
+
 @pytest.mark.parametrize('discipline,family', [
     ('Cycling', 'cycling'), ('Bike Bootcamp', 'cycling'),
     ('Running', 'running'), ('Walking', 'running'), ('Outdoor Run', 'running'),

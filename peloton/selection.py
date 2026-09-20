@@ -5,7 +5,7 @@ from .timestamps import workout_timestamp, workout_date
 
 logger = logging.getLogger('peloton-led.selection')
 ALIASES = {'bike': 'cycling', 'ride': 'cycling', 'caesar': 'rowing',
-           'caesar_bootcamp': 'row_bootcamp',
+           'caesar_bootcamp': 'row_bootcamp', 'circuit': 'tread_bootcamp',
            'outdoor_run': 'running_outdoor', 'outdoor_running': 'running_outdoor',
            'outdoor_walk': 'walking_outdoor', 'outdoor_walking': 'walking_outdoor'}
 
