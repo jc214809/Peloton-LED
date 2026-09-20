@@ -1,2 +1,14 @@
 /.idea/
 config.json
+config.old.json
+.env
+cookies.txt
+cookies-*.txt
+dashboard-cache*.json
+dashboard-cache.json
+__pycache__/
+*.pyc
+*.pyo
+config.json
+cookies-joel-dashboard-cache.json
+cookies-jen-dashboard-cache.json

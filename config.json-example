@@ -1,20 +1,42 @@
 {
-  "trip_countdown": {
-    "enabled": true,
-    "trip_dates": [
-      "2026-02-15",
-      "2026-06-17"
-    ]
-  },
-  "weather": {
-    "apikey": "<API_KEY_HERE>"
-  },
   "debug": false,
   "display": {
-    "username": "<your_username>",
-    "font": "ride",
+    "username": "Peloton Member",
+    "font": "stats",
     "color": "white",
-    "duration": 30,
-    "overview_duration": 8
+    "duration": 4,
+    "overview_duration": 4,
+    "last_workout_duration": 30,
+    "logo_duration": 3,
+    "timezone": "America/New_York",
+    "refresh_interval": 300,
+    "history_days": 90,
+    "history_limit": 200,
+    "history_page_size": 50,
+    "history_max_pages": 10,
+    "performance_cache_size": 32,
+    "cache_path": "dashboard-cache.json",
+    "rotation": [
+      "latest_workouts",
+      "username",
+      "total_workouts",
+      "lifetime",
+      "milestones",
+      "goals"
+    ],
+    "screen_durations": {
+      "latest_workouts": 15,
+      "username": 4,
+      "lifetime": 5,
+      "milestones": 4,
+      "goals": 4
+    },
+    "weekly_goals": {
+      "workouts": 0,
+      "minutes": 0
+    },
+    "milestones": [],
+    "brightness_schedule": null,
+    "compact_workout_pages": false
   }
 }
