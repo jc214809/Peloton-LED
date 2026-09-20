@@ -246,6 +246,7 @@ def main():
     from display.ui.discipline_page import DisciplinePageScreen
     from display.ui.lifetime_overview import LifetimeOverviewScreen
     from display.ui.logo_screen import LogoScreen
+    from display.ui.logo_mask_screen import LogoMaskScreen
     from display.ui.last_workout_screen import LastWorkoutScreen
     from display.ui.pr_star import PrStarScreen
     from display.ui.status_screen import StatusScreen
@@ -271,12 +272,18 @@ def main():
     manager.register('pr', PrStarScreen(color_key='gold'))
     manager.register('status', StatusScreen())
     manager.register('goal', GoalScreen())
-    logo = Path(display.get('logo_path') or ROOT / 'prepared_logos' / f'peloton_64x{matrix.height}_auto.png')
+    configured_logo = display.get('logo_path')
+    logo = Path(configured_logo) if configured_logo else None
     for profile in profiles:
         profile['dashboard'].start()
     try:
-        if logo.exists():
+        # The built-in pixel mask needs no image decoding; display.logo_path
+        # still overrides it with an image file when one is configured.
+        if logo is not None and logo.exists():
             manager.register('logo', LogoScreen(str(logo)))
+        else:
+            manager.register('logo', LogoMaskScreen())
+        if display['logo_duration'] > 0:
             show_and_wait(manager, 'logo', None, display['logo_duration'], active['dashboard'])
         if options.cycles and not options.demo:
             # A finite real-data smoke run should wait for the initial request.

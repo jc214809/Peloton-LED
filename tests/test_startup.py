@@ -129,6 +129,26 @@ def test_long_discipline_name_with_max_stat_rows_does_not_collide():
     assert any(gap > 1 for gap in gaps), 'title and stats rows have no separating gap'
 
 
+@pytest.mark.parametrize('height', [32, 64])
+def test_startup_logo_mask_renders_centered_within_panel(height):
+    from display.ui.logo_art import LOGO_ROWS
+    from display.ui.logo_mask_screen import LogoMaskScreen
+
+    matrix = ImageMatrix(height=height)
+    assert LogoMaskScreen().render(matrix)
+    pixels = matrix.image
+    lit = [(x, y) for y in range(height) for x in range(64)
+           if pixels.getpixel((x, y)) != (0, 0, 0)]
+    assert lit, 'logo drew nothing'
+    # Everything stays on the panel, and a 64-row mask downsamples rather
+    # than overflowing a 32-row board.
+    assert all(0 <= x < 64 and 0 <= y < height for x, y in lit)
+    if height == 64:
+        expected = {(x, y) for y, row in enumerate(LOGO_ROWS)
+                    for x, ch in enumerate(row) if ch == '#'}
+        assert set(lit) == expected
+
+
 def test_rotation_places_pr_after_its_workout():
     from peloton_led import run_display_loop
 
