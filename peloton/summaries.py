@@ -1,212 +1,143 @@
-"""Workout summarization helpers."""
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set, Tuple
-
+"""Normalize API metrics for screens and reports without inventing missing values."""
+from math import isfinite
 from models import get_model_for_discipline
-
-try:
-    from zoneinfo import ZoneInfo  # Python 3.9+
-except Exception:  # pragma: no cover
-    ZoneInfo = None
+from .timestamps import parse_timestamp, display_timezone, workout_timestamp
+from .selection import discipline_of
+from .records import pr_types
 
 
-def ts_to_local_str(ts: Any, tzname: Optional[str] = None, fmt: str = "%b %d, %Y %I:%M %p %Z") -> str:
-    if ts is None:
-        return ""
-    t = float(ts)
-    if t > 1e12:
-        t = t / 1000.0
-    dt_utc = datetime.fromtimestamp(t, tz=timezone.utc)
-    if tzname and ZoneInfo:
-        try:
-            return dt_utc.astimezone(ZoneInfo(tzname)).strftime(fmt)
-        except Exception:
-            pass
-    return dt_utc.astimezone().strftime(fmt)
+def number(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        result = float(value)
+        return result if isfinite(result) and result >= 0 else None
+    except (ValueError, TypeError, OverflowError):
+        return None
 
 
-def extract_summary_from_perf(perf: Dict[str, Any], allowed_slugs: Set[str]) -> Dict[str, Any]:
-    out: Dict[str, Any] = {}
+def unit(value):
+    key = str(value or '').strip().lower()
+    return {'miles': 'mi', 'mile': 'mi', 'kilometers': 'km', 'kilometres': 'km',
+            'meters': 'm', 'metres': 'm', 'meter': 'm', 'kph': 'km/h', 'km/hr': 'km/h',
+            'watts': 'w', 'watt': 'w', 'joules': 'j', 'kilojoules': 'kj',
+            'minutes/mile': 'min/mi', 'minutes/km': 'min/km'}.get(key, key) or None
 
-    def _set_value(slug: str, value: Any, unit: Optional[str] = None) -> None:
-        if slug not in allowed_slugs:
-            return
-        out[slug] = value
-        if unit is not None:
-            out[f"{slug}__unit"] = unit
 
-    summary_map: Dict[str, Tuple[Any, Optional[str]]] = {}
-    for arr_name in ("average_summaries", "summaries"):
-        for entry in (perf.get(arr_name) or []):
-            slug = entry.get("slug")
-            if slug and slug in allowed_slugs:
-                summary_map[slug] = (entry.get("value"), entry.get("display_unit"))
+def ts_to_local_str(ts, tzname=None, fmt='%b %d, %Y %I:%M %p %Z'):
+    stamp = parse_timestamp(ts, tzname)
+    return stamp.astimezone(display_timezone(tzname)).strftime(fmt) if stamp else ''
 
-    for slug, (value, unit) in summary_map.items():
-        _set_value(slug, value, unit)
 
-    metrics_map: Dict[str, Dict[str, Any]] = {}
-    for metric in (perf.get("metrics") or []):
-        slug = (metric.get("slug") or "").strip().lower()
-        if not slug:
+def extract_summary_from_perf(perf, allowed_slugs):
+    result = {}
+
+    def put(slug, value, units=None):
+        parsed = number(value)
+        if slug in allowed_slugs and parsed is not None and slug not in result:
+            result[slug] = parsed
+            result[slug + '__unit'] = unit(units)
+
+    for field in ('summaries', 'average_summaries'):
+        for entry in perf.get(field) or []:
+            if isinstance(entry, dict):
+                put(entry.get('slug'), entry.get('value'), entry.get('display_unit'))
+    aliases = {'heart_rate': ('hr_avg', 'hr_max', 'bpm'),
+               'cadence': ('avg_cadence', None, 'rpm'),
+               'resistance': ('avg_resistance', None, '%'),
+               'incline': ('avg_incline', 'max_incline', '%'),
+               'speed': ('avg_speed', 'max_speed', None),
+               'pace': ('avg_pace', None, None),
+               'output': ('avg_output', None, 'w'),
+               'split_pace': ('avg_split_pace', None, None),
+               'stroke_rate': ('avg_stroke_rate', None, 'spm')}
+    for metric in perf.get('metrics') or []:
+        if not isinstance(metric, dict):
             continue
-        metrics_map[slug] = {
-            "average": metric.get("average_value"),
-            "max": metric.get("max_value"),
-            "unit": metric.get("display_unit"),
-        }
-
-    if "heart_rate" in metrics_map:
-        hr = metrics_map["heart_rate"]
-        _set_value("hr_avg", hr.get("average"))
-        _set_value("hr_max", hr.get("max"))
-
-    if "cadence" in metrics_map:
-        cadence = metrics_map["cadence"]
-        _set_value("avg_cadence", cadence.get("average"), cadence.get("unit") or "rpm")
-
-    if "resistance" in metrics_map:
-        resistance = metrics_map["resistance"]
-        _set_value("avg_resistance", resistance.get("average"), resistance.get("unit") or "%")
-
-    if "incline" in metrics_map:
-        incline = metrics_map["incline"]
-        if isinstance(incline.get("average"), (int, float)):
-            _set_value("avg_incline", incline.get("average"), incline.get("unit") or "%")
-        if isinstance(incline.get("max"), (int, float)):
-            _set_value("max_incline", incline.get("max"), incline.get("unit") or "%")
-
-    if "speed" in metrics_map:
-        speed = metrics_map["speed"]
-        if speed.get("average") is not None:
-            _set_value("avg_speed", speed.get("average"), speed.get("unit") or out.get("avg_speed__unit"))
-        if isinstance(speed.get("max"), (int, float)):
-            _set_value("max_speed", speed.get("max"), out.get("avg_speed__unit") or speed.get("unit") or "mph")
-
-    if "stroke_rate" in metrics_map:
-        stroke = metrics_map["stroke_rate"]
-        _set_value("avg_stroke_rate", stroke.get("average"), stroke.get("unit") or "spm")
-
-    if "elevation" in metrics_map:
-        elevation = metrics_map["elevation"]
-        if isinstance(elevation.get("average"), (int, float)):
-            _set_value("elevation", elevation.get("average"), elevation.get("unit") or "ft")
-
-    return out
+        mapping = aliases.get(str(metric.get('slug', '')).lower())
+        if mapping:
+            avg, maximum, fallback = mapping
+            units = metric.get('display_unit') or fallback
+            put(avg, metric.get('average_value'), units)
+            if maximum:
+                put(maximum, metric.get('max_value'), units)
+    return result
 
 
-def _display_discipline(workout: Dict[str, Any], ride: Dict[str, Any]) -> str:
-    for src in (ride, workout):
-        display = (src or {}).get("fitness_discipline_display_name")
-        if isinstance(display, str) and display.strip():
-            return display.strip()
-    slug = (ride.get("fitness_discipline") or workout.get("fitness_discipline") or "").strip().lower()
-    mapping = {
-        "cycling": "Cycling",
-        "bike_bootcamp": "Bike Bootcamp",
-        "tread_bootcamp": "Tread Bootcamp",
-        "bootcamp": "Bootcamp",
-        "running": "Running",
-        "walking": "Walking",
-        "walking_outdoor": "Outdoor Walk",
-        "running_outdoor": "Outdoor Run",
-        "strength": "Strength",
-        "cardio": "Cardio",
-        "yoga": "Yoga",
-        "meditation": "Meditation",
-        "stretching": "Stretching",
-        "pilates": "Pilates",
-        "barre": "Barre",
-        "rowing": "Rowing",
-        "caesar": "Rowing",
+def _display_discipline(workout, ride=None):
+    key = discipline_of(workout)
+    return {'running_outdoor': 'Outdoor Run', 'walking_outdoor': 'Outdoor Walk'}.get(
+        key, key.replace('_', ' ').title())
+
+
+def summarize_workout(workout, perf=None):
+    perf = perf or {}
+    ride = workout.get('ride') or {}
+    discipline = _display_discipline(workout)
+    metrics = extract_summary_from_perf(perf, get_model_for_discipline(discipline).perf_slugs())
+    # Prefer recorded workout duration over the class's scheduled duration.
+    duration = next((v for v in (number(perf.get('duration')), number(workout.get('duration')),
+                               number(ride.get('duration'))) if v is not None and v > 0), None)
+    distance, distance_unit = metrics.get('distance'), metrics.get('distance__unit')
+    factor = {'m': 1, 'km': 1000, 'mi': 1609.344}.get(distance_unit)
+    metres = distance * factor if distance is not None and factor else None
+    speed, speed_unit = metrics.get('avg_speed'), metrics.get('avg_speed__unit')
+    pace, pace_unit = metrics.get('avg_pace'), metrics.get('avg_pace__unit')
+    if pace is not None and pace_unit in ('sec/mi', 's/mi', 'sec/km', 's/km'):
+        pace /= 60
+        pace_unit = 'min/' + pace_unit.split('/')[1]
+    if duration and metres is not None and metres > 0:
+        metric = distance_unit in ('km', 'm')
+        base_distance = metres / (1000 if metric else 1609.344)
+        if speed is None:
+            speed = base_distance / (duration / 3600)
+            speed_unit = 'km/h' if metric else 'mph'
+        if pace is None:
+            pace = duration / 60 / base_distance
+            pace_unit = 'min/km' if metric else 'min/mi'
+    split = metrics.get('avg_split_pace')
+    split_unit = metrics.get('avg_split_pace__unit')
+    if split is not None and split_unit == 'min/500m':
+        split *= 60
+    elif split_unit not in ('s/500m', 'sec/500m'):
+        split = None
+    if split is None and duration and metres and metres > 0:
+        split = duration / (metres / 500)
+    total_output = metrics.get('total_output')
+    output_unit = metrics.get('total_output__unit')
+    if output_unit == 'j' and total_output is not None:
+        total_output /= 1000
+    elif output_unit not in ('kj', None):
+        total_output = None
+    if total_output is None:
+        joules = number(workout.get('total_work'))
+        total_output = joules / 1000 if joules is not None else None
+    avg_output = metrics.get('avg_output')
+    avg_unit = metrics.get('avg_output__unit')
+    if avg_output is not None and avg_unit == 'kw':
+        avg_output *= 1000
+    elif avg_unit not in ('w', None):
+        avg_output = None
+    kinds = pr_types(workout)
+    stamp = workout_timestamp(workout)
+    instructor = ride.get('instructor') or {}
+    result = {
+        'workout_id': workout.get('id'),
+        'date_time': ts_to_local_str(stamp.timestamp(), workout.get('timezone')) if stamp else '',
+        'tz': workout.get('timezone') or '', 'discipline': discipline,
+        'title': ride.get('title') or workout.get('title') or workout.get('name') or 'Workout',
+        'instructor': instructor.get('name') or instructor.get('display_name') or '',
+        'duration_min': round(duration / 60) if duration else None,
+        'distance': distance, 'distance_unit': distance_unit,
+        'avg_speed': speed, 'avg_speed_unit': speed_unit,
+        'avg_pace': pace, 'avg_pace_unit': pace_unit,
+        'row_split_sec_per_500m': split,
+        'total_output_kj': total_output, 'avg_output_w': avg_output,
+        'is_pr': bool(kinds), 'is_output_pr': 'output' in kinds, 'is_splits_pr': 'splits' in kinds,
+        'strive_score': number((perf.get('effort_zones') or {}).get('total_effort_points')),
     }
-    if slug in mapping:
-        return mapping[slug]
-    return slug.capitalize() if slug else ""
-
-
-def summarize_workout(workout: Dict[str, Any], perf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    ride = workout.get("ride") or {}
-    tz = workout.get("timezone") or ""
-    title = ride.get("title") or workout.get("title") or workout.get("name") or "<no title>"
-    instructor = (ride.get("instructor") or {}).get("name") or (ride.get("instructor") or {}).get("display_name") or ""
-    discipline = _display_discipline(workout, ride)
-    model_cls = get_model_for_discipline(discipline)
-    start_str = ts_to_local_str(workout.get("start_time"), tz)
-    duration = ride.get("duration")
-    duration_min = int(round(duration / 60)) if isinstance(duration, (int, float)) else None
-
-    metrics = extract_summary_from_perf(perf or {}, model_cls.perf_slugs()) if perf else {}
-    duration_sec = float(duration) if isinstance(duration, (int, float)) and duration > 0 else None
-    if duration_sec is None and perf and isinstance(perf.get("duration"), (int, float)):
-        duration_sec = float(perf.get("duration"))
-
-    dist_val = metrics.get("distance")
-    dist_unit = metrics.get("distance__unit")
-    dist_m = None
-    if isinstance(dist_val, (int, float)) and dist_val > 0:
-        if dist_unit in ("m", "meter", "meters"):
-            dist_m = float(dist_val)
-        elif dist_unit in ("km", "kilometer", "kilometers"):
-            dist_m = float(dist_val) * 1000.0
-        elif dist_unit in ("mi", "mile", "miles"):
-            dist_m = float(dist_val) * 1609.344
-
-    avg_speed = metrics.get("avg_speed")
-    avg_speed_unit = metrics.get("avg_speed__unit")
-    avg_pace = metrics.get("avg_pace")
-    avg_pace_unit = metrics.get("avg_pace__unit")
-    row_split_sec = None
-
-    if duration_sec and dist_m and (avg_speed is None or avg_pace is None):
-        miles = dist_m / 1609.344
-        if miles > 0:
-            if avg_speed is None:
-                avg_speed = miles / (duration_sec / 3600.0)
-                avg_speed_unit = "mph"
-            if avg_pace is None:
-                avg_pace = (duration_sec / 60.0) / miles
-                avg_pace_unit = "min/mi"
-        if dist_m > 0:
-            row_split_sec = duration_sec / (dist_m / 500.0)
-
-    total_work = workout.get("total_work")
-    total_kj = int(round(float(total_work) / 1000.0)) if isinstance(total_work, (int, float)) else None
-
-    return {
-        "workout_id": workout.get("id"),
-        "date_time": start_str,
-        "tz": tz,
-        "discipline": discipline,
-        "title": title,
-        "instructor": instructor,
-        "duration_min": duration_min,
-        "distance": metrics.get("distance"),
-        "distance_unit": metrics.get("distance__unit"),
-        "avg_speed": avg_speed,
-        "avg_speed_unit": avg_speed_unit,
-        "max_speed": metrics.get("max_speed"),
-        "max_speed_unit": metrics.get("max_speed__unit"),
-        "avg_pace": avg_pace,
-        "avg_pace_unit": avg_pace_unit,
-        "row_split_sec_per_500m": row_split_sec,
-        "calories": metrics.get("calories"),
-        "calories_unit": metrics.get("calories__unit"),
-        "total_output_kj": metrics.get("total_output"),
-        "avg_output_w": metrics.get("avg_output"),
-        "avg_incline": metrics.get("avg_incline"),
-        "avg_incline_unit": metrics.get("avg_incline__unit"),
-        "max_incline": metrics.get("max_incline"),
-        "max_incline_unit": metrics.get("max_incline__unit"),
-        "is_pr": bool(workout.get("is_total_work_personal_record")),
-        "elevation": metrics.get("elevation"),
-        "elevation_unit": metrics.get("elevation__unit"),
-        "avg_cadence": metrics.get("avg_cadence"),
-        "avg_cadence_unit": metrics.get("avg_cadence__unit"),
-        "avg_resistance": metrics.get("avg_resistance"),
-        "avg_resistance_unit": metrics.get("avg_resistance__unit"),
-        "avg_stroke_rate": metrics.get("avg_stroke_rate"),
-        "avg_stroke_rate_unit": metrics.get("avg_stroke_rate__unit"),
-        "hr_avg": metrics.get("hr_avg"),
-        "hr_max": metrics.get("hr_max"),
-    }
+    for key in ('calories', 'max_speed', 'avg_incline', 'max_incline', 'elevation',
+                'avg_cadence', 'avg_resistance', 'avg_stroke_rate', 'hr_avg', 'hr_max'):
+        result[key] = metrics.get(key)
+        result[key + '_unit'] = metrics.get(key + '__unit')
+    return result

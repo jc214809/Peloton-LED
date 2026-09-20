@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .core import GeneralWorkout, format_decimal_with_unit, register_discipline
 
 
-@register_discipline("Cycling", "cycling", "bike_bootcamp")
+@register_discipline("Cycling", "cycling", "bike_bootcamp", "Bike Bootcamp")
 @dataclass
 class CyclingWorkout(GeneralWorkout):
     avg_speed: Optional[float] = None

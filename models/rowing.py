@@ -13,7 +13,7 @@ def _format_split_sec(sec: Optional[float]) -> str:
     return f"{minutes}:{seconds:02d} s/500m"
 
 
-@register_discipline("Rowing", "rowing", "caesar")
+@register_discipline("Rowing", "rowing", "caesar", "Row Bootcamp", "row_bootcamp")
 @dataclass
 class RowingWorkout(GeneralWorkout):
     avg_speed: Optional[float] = None
@@ -39,6 +39,7 @@ class RowingWorkout(GeneralWorkout):
             "avg_speed",
             "avg_pace",
             "avg_stroke_rate",
+            "avg_split_pace",
         }
 
     @classmethod

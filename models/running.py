@@ -18,7 +18,8 @@ def _format_split_sec(sec: Optional[float]) -> str:
     "running",
     "running_outdoor",
     "Outdoor Run",
-    "Tread Bootcamp",
+    "Tread Bootcamp", "Walking", "walking_outdoor", "Outdoor Walk",
+    "Hiking", "hiking",
 )
 @dataclass
 class RunningWorkout(GeneralWorkout):

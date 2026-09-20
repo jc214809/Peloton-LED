@@ -5,7 +5,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from .core import GeneralWorkout, register_discipline
 
 
-@register_discipline("Strength", "strength", "cardio", "bootcamp")
+@register_discipline(
+    "Strength", "strength", "Cardio", "cardio", "bootcamp",
+    "Yoga", "yoga", "Meditation", "meditation", "Stretching", "stretching",
+    "Pilates", "pilates", "Barre", "barre", "Boxing", "boxing",
+    "Dance Cardio", "dance_cardio", "Mobility", "mobility",
+)
 @dataclass
 class StrengthWorkout(GeneralWorkout):
     @classmethod
