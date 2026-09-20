@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from driver import graphics
 from utils import debug
@@ -10,17 +11,17 @@ def fonts():
     """Define font paths for different board sizes."""
     return {
         32: {
-            "park": "assets/fonts/patched/5x8.bdf",
+            "discipline": "assets/fonts/patched/5x8.bdf",
             "info": "assets/fonts/patched/4x6-legacy.bdf",
-            "waittime": "assets/fonts/patched/4x6-legacy.bdf",
-            "ride": "assets/fonts/patched/4x6-legacy.bdf",
+            "titles": "assets/fonts/patched/4x6-legacy.bdf",
+            "stats":"assets/fonts/patched/4x6-legacy.bdf",
             "countdown": "assets/fonts/patched/6x9.bdf"
         },
         64: {
-            "park": "assets/fonts/patched/6x13.bdf",
+            "discipline": "assets/fonts/patched/6x13.bdf",
             "info": "assets/fonts/patched/4x6-legacy.bdf",
-            "waittime": "assets/fonts/patched/5x8.bdf",
-            "ride": "assets/fonts/patched/5x8.bdf",
+            "titles": "assets/fonts/patched/5x8.bdf",
+            "stats":"assets/fonts/patched/tom-thumb.bdf",
             "countdown": "assets/fonts/patched/7x13.bdf"
         }
     }
@@ -29,6 +30,7 @@ def fonts():
 def initialize_fonts(matrix_height):
     """Load and return all fonts based on the board height."""
     global loaded_fonts
+    loaded_fonts.clear()
     # loaded_fonts = {}  # Reset the loaded_fonts dictionary
 
     # Log font paths for clarity
@@ -42,7 +44,7 @@ def initialize_fonts(matrix_height):
     # Load each font and log the process
     for name, path in font_dict.items():
         font = graphics.Font()
-        absolute_path = os.path.abspath(path)
+        absolute_path = str(Path(__file__).resolve().parents[1] / path)
         try:
             font.LoadFont(absolute_path)  # Attempt to load the font
             loaded_fonts[name] = font  # Cache the loaded font
@@ -51,7 +53,9 @@ def initialize_fonts(matrix_height):
             debug.error(f"Error loading font from path {absolute_path}: {e}")
 
     debug.info(f"Loaded fonts: {list(loaded_fonts.keys())}")  # Show successfully loaded fonts
-    return loaded_fonts  # Return the loaded fonts dictionary
+    if len(loaded_fonts) != len(font_dict):
+        raise RuntimeError('Required display fonts could not be loaded')
+    return loaded_fonts
 
 def colors():
     # Return a dictionary of colors

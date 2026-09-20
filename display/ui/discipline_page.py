@@ -10,7 +10,7 @@ from utils import debug
 
 class DisciplinePageScreen(Screen):
     def __init__(self,
-                 title_font_key: str = "park",
+                 title_font_key: str = "discipline",
                  number_font_key: str = "countdown",
                  color_key: str = "red"):
         self.title_font_key = title_font_key
@@ -50,17 +50,21 @@ class DisciplinePageScreen(Screen):
 
         debug.info("Discipline '%s' wrapped into %d line(s): %s", discipline_name, len(title_lines), title_lines)
 
-        top_padding = 20
-        line_spacing = 2
-        current_y = top_padding
+        title_lines = title_lines[:2]
+        current_y = 12 if matrix.height < 64 else 18
         for line in title_lines:
-            draw_centered_text(matrix, title_font, line, current_y, graphics.Color(242, 5, 5))
-            current_y += getattr(title_font, "height", 9) + line_spacing
-
-        remaining_top = current_y + line_spacing
-        bottom_padding = max(6, line_spacing)
-        remaining_height = max(matrix.height - remaining_top - bottom_padding, getattr(number_font, "height", 8))
-        center_y = remaining_top + remaining_height // 2
-        draw_centered_text(matrix, number_font, count_text, center_y, graphics.Color(242, 5, 5))
+            while line and get_text_width(title_font, line) > matrix.width - 4:
+                line = line[:-1]
+            draw_centered_text(matrix, title_font, line, current_y, color)
+            current_y += getattr(title_font, 'height', 9) + 1
+        if matrix.height < 64 and len(title_lines) > 1:
+            # Keep the count within the panel even for wrapped names.
+            current_y = 20
+        while count_text and get_text_width(number_font, count_text) > matrix.width - 4:
+            number_font = loaded_fonts['info']
+            if get_text_width(number_font, count_text) > matrix.width - 4:
+                count_text = count_text[:-1]
+        baseline = min(matrix.height - 3, max(current_y + 9, matrix.height - 12))
+        draw_centered_text(matrix, number_font, count_text, baseline, color)
 
         return True

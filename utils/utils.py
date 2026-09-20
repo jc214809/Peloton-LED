@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 from collections.abc import Mapping
 from datetime import datetime
 
@@ -21,19 +22,19 @@ def split_string(string, num_chars):
     return [(string[i : i + num_chars]).strip() for i in range(0, len(string), num_chars)]  # noqa: E203
 
 
-def args():
+def args(argv=None):
     parser = argparse.ArgumentParser()
 
     # Options for the rpi-rgb-led-matrix library
     parser.add_argument(
         "--led-rows",
         action="store",
-        help="Display rows. 16 for 16x32, 32 for 32x32. (Default: 32)",
-        default=32,
+        help="Panel height, 32 or 64. (Default: 64)",
+        default=64,
         type=int,
     )
     parser.add_argument(
-        "--led-cols", action="store", help="Panel columns. Typically 32 or 64. (Default: 32)", default=32, type=int
+        "--led-cols", action="store", help="Panel columns. Typically 32 or 64. (Default: 64)", default=64, type=int
     )
     parser.add_argument("--led-chain", action="store", help="Daisy-chained boards. (Default: 1)", default=1, type=int)
     parser.add_argument(
@@ -148,18 +149,35 @@ def args():
     parser.add_argument(
         "--display-duration",
         action="store",
-        help="How many seconds to keep the username on-screen before exiting (0 means no sleep).",
-        default=30,
-        type=int,
+        help="Seconds per username screen; defaults to display.duration.",
+        default=None,
+        type=float,
     )
     parser.add_argument(
         "--cookies",
         action="store",
-        help="Path to the Peloton cookies file for API calls (defaults to cookies.txt).",
+        help="Path to the Peloton bearer-token file (default: cookies.txt).",
         default="cookies.txt",
         type=str,
     )
-    return parser.parse_args()
+    parser.add_argument('--demo', action='store_true', help='Use synthetic data without network or credentials.')
+    parser.add_argument('--demo-login-needed', action='store_true', help='Preview login indicator (requires --demo).')
+    parser.add_argument('--cycles', type=int, default=0, help='Stop after N rotations; 0 runs continuously.')
+    parser.add_argument('--refresh-interval', type=int, help='Data refresh interval in seconds (default: 300).')
+    parsed = parser.parse_args(argv)
+    if parsed.demo_login_needed and not parsed.demo:
+        parser.error('--demo-login-needed requires --demo')
+    if parsed.cycles < 0:
+        parser.error('--cycles cannot be negative')
+    if parsed.display_duration is not None and (not math.isfinite(parsed.display_duration) or parsed.display_duration < 0):
+        parser.error('--display-duration must be a non-negative number')
+    if parsed.refresh_interval is not None and parsed.refresh_interval <= 0:
+        parser.error('--refresh-interval must be positive')
+    if parsed.led_rows not in (32, 64):
+        parser.error('--led-rows must be 32 or 64')
+    if min(parsed.led_cols, parsed.led_chain, parsed.led_parallel) <= 0:
+        parser.error('Panel dimensions and chain counts must be positive')
+    return parsed
 
 
 def led_matrix_options(args):
