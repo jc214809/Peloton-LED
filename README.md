@@ -4,9 +4,11 @@ A Python dashboard for a Raspberry Pi RGB LED matrix, with a desktop browser emu
 
 ## Setup
 
-Python 3.10+ is the intended baseline; the current development and clean-install checks use Python 3.14 on macOS. Native Raspberry Pi bindings are installed separately from the emulator dependencies. RGBMatrixEmulator is pinned to the verified 0.15.2 release; 0.19.0 failed canvas initialization during clean-install testing.
+Quick start for local development:
 
 ```bash
+git clone https://github.com/jc214809/Peloton-LED.git
+cd Peloton-LED
 python3 -m venv venv
 source venv/bin/activate
 python -m pip install -r requirements.txt
@@ -16,35 +18,11 @@ python peloton_led.py --emulated
 
 Run commands from the project directory. The default panel is 64×64. The browser emulator is available at http://localhost:8888 while running; its settings are in `emulator_config.json`.
 
-For a Raspberry Pi production installation, run from the project checkout:
-
-```bash
-sudo ./peloton-install.sh
-```
-
-Add `--auto-token` to install optional hourly token verification and headless renewal within 12 hours of expiry or after HTTP 401. The installer prompts for Peloton credentials only when it first creates the protected login environment. Run the same command after updating the checkout to upgrade application code while preserving configuration, tokens, credentials, cached display data, and PR state.
-
-```bash
-sudo ./peloton-install.sh --auto-token
-```
-
-Use `--skip-matrix` when the native matrix library is already installed or the Pi is being prepared without a panel. Use `--no-start` to install and enable the services without starting them during the installation.
+For every install option — the full `peloton_led.py` flag reference, getting a Peloton access token, the Raspberry Pi managed installation (`peloton-install.sh` and its flags, directory layout, automatic token renewal), upgrading, uninstalling, and troubleshooting — see the **[Installation Guide](docs/install.md)**.
 
 ## Authentication
 
-Despite its name, `cookies.txt` contains a bearer access token, not a cookie export. Install the optional login helper dependencies once:
-
-```bash
-python -m pip install -r requirements-auth.txt
-python -m playwright install chromium
-python scripts/refresh_cookies.py --no-headless
-```
-
-The helper reads `PELOTON_EMAIL` / `PELOTON_PASSWORD`, then optional `auth.email` / `auth.password` configuration, or prompts interactively. It verifies a new token before atomically replacing the existing file, with owner-only file permissions. Tokens are not printed.
-
-```bash
-python scripts/refresh_cookies.py --verify-only
-```
+Despite its name, `cookies.txt` contains a bearer access token, not a cookie export. See the [Installation Guide](docs/install.md#getting-a-peloton-token) for how to generate one.
 
 An **amber padlock in the bottom-right** means the token is missing, empty, unreadable, or rejected with HTTP 401. Refresh the token file and the running display automatically reloads it. It checks for file changes approximately once per second between requests. Network errors alone do not trigger the padlock.
 
@@ -187,43 +165,7 @@ See [implementation status and validation evidence](docs/phase-1-2-status.md).
 
 ## Raspberry Pi managed installation
 
-The installer provisions a dedicated `peloton-led` account and keeps application code, configuration, credentials, and runtime state separate:
-
-The installer should provision a dedicated `peloton-led` service account and keep code, configuration, credentials, and runtime state separate:
-
-| Purpose | Path |
-|---|---|
-| Application | `/opt/peloton-led` |
-| Configuration | `/etc/peloton-led/config.json` |
-| Login environment | `/etc/peloton-led/auth.env` |
-| Access token | `/var/lib/peloton-led/cookies.txt` |
-| Persistent cache | `/var/lib/peloton-led/dashboard-cache.json` |
-
-The display runs as `peloton-led.service`, starts at boot, restarts after failures, and receives the GPIO-related capabilities required by the matrix driver. The installer verifies configuration and systemd units before enabling the service. Existing configuration and state files are never replaced during an upgrade.
-
-With `--auto-token`, the installer adds a root-readable `0600` login environment, installs the Pi distribution’s Chromium build, and enables `peloton-token-refresh.timer`. The timer runs about hourly with a randomized delay. Its `--ensure` operation:
-
-1. Verify the existing token with `/api/me`.
-2. Read the verified JWT expiry and exit without opening a browser while more than 12 hours remain.
-3. Start a headless login within the final 12 hours or immediately after HTTP 401.
-4. Never start a browser for DNS failures, timeouts, rate limits, or Peloton server errors.
-5. Verify the replacement before atomically replacing the existing token.
-6. Return a nonzero exit code on failure while leaving the previous token untouched.
-
-The existing token is verified during installation when present. A successful replacement is verified before the token file is atomically changed. The running dashboard notices the file replacement and resumes without a service restart. Credentials in `/etc/peloton-led/auth.env` are accessible to root, so automatic maintenance remains opt-in.
-
-Useful diagnostic commands:
-
-```bash
-sudo systemctl status peloton-led.service
-journalctl -u peloton-led.service -n 100
-systemctl list-timers peloton-token-refresh.timer
-sudo systemctl start peloton-token-refresh.service
-sudo systemctl status peloton-token-refresh.service
-journalctl -u peloton-token-refresh.service -n 100
-```
-
-If Peloton introduces CAPTCHA, MFA, or another interactive login step, the service must fail safely, retain the existing token, and allow the dashboard's amber padlock to signal that manual login is needed.
+`sudo ./peloton-install.sh` installs Peloton LED as a managed systemd service under a dedicated, unprivileged account, and is also how you upgrade an existing install. See the **[Installation Guide](docs/install.md#raspberry-pi-managed-install)** for the full walkthrough: directory layout, every installer flag, automatic token renewal (`--auto-token`), upgrading, uninstalling, and diagnostic commands.
 
 ## Two users on one board
 
