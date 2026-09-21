@@ -3,8 +3,8 @@ import time
 from unittest.mock import MagicMock, patch
 import pytest
 import requests
-from scripts.refresh_cookies import (browser_login, ensure_all_tokens, ensure_token,
-                                     save_verified_token, token_expiration)
+from scripts.refresh_cookies import (_dump_failure_diagnostics, browser_login, ensure_all_tokens,
+                                     ensure_token, save_verified_token, token_expiration)
 
 
 def test_failed_verification_preserves_old_token(tmp_path):
@@ -29,6 +29,25 @@ def test_successful_save_is_private_and_verified_before_replacement(tmp_path):
     assert token.read_text() == 'new-synthetic'
     assert stat.S_IMODE(token.stat().st_mode) == 0o600
     assert list(tmp_path.iterdir()) == [token]
+
+
+def test_dump_failure_diagnostics_writes_screenshot_and_html(tmp_path):
+    token_path = tmp_path / 'cookies-joel.txt'
+    page = MagicMock()
+    page.content.return_value = '<html>stuck here</html>'
+    message = _dump_failure_diagnostics(page, token_path)
+    screenshot = tmp_path / 'cookies-joel-login-failure.png'
+    html = tmp_path / 'cookies-joel-login-failure.html'
+    assert html.read_text() == '<html>stuck here</html>'
+    assert page.screenshot.call_args.kwargs['path'] == str(screenshot)
+    assert str(screenshot) in message
+    assert str(html) in message
+
+
+def test_dump_failure_diagnostics_never_raises_on_its_own_failure(tmp_path):
+    page = MagicMock()
+    page.screenshot.side_effect = RuntimeError('browser already closed')
+    assert _dump_failure_diagnostics(page, tmp_path / 'token') == ''
 
 
 def test_browser_login_wraps_timeout_reaching_login_form(tmp_path):

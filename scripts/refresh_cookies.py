@@ -39,6 +39,20 @@ from peloton.config import default_token_path, load_dotenv
 LOGIN_URL = "https://www.onepeloton.com/login"
 
 
+def _dump_failure_diagnostics(page, token_path: Path) -> str:
+    """Best-effort screenshot + HTML dump next to the token file, for debugging
+    a headless login failure with no way to watch the browser directly. Never
+    raises — a failed dump must not hide the real login error."""
+    try:
+        screenshot_path = token_path.with_name(f'{token_path.stem}-login-failure.png')
+        html_path = token_path.with_name(f'{token_path.stem}-login-failure.html')
+        page.screenshot(path=str(screenshot_path), full_page=True)
+        html_path.write_text(page.content(), encoding='utf-8')
+        return f' Diagnostics saved to {screenshot_path} and {html_path}.'
+    except Exception:
+        return ''
+
+
 def browser_login(email: str, password: str, token_path: Path, headless: bool = True) -> str:
     """Drive a browser through Peloton login and save the Auth0 access token."""
     from playwright.sync_api import sync_playwright
@@ -60,10 +74,11 @@ def browser_login(email: str, password: str, token_path: Path, headless: bool = 
             page.locator("[data-test-id='loginButton']").click(timeout=30_000)
         except Exception as exc:
             location = urlsplit(page.url)
+            diagnostics = _dump_failure_diagnostics(page, token_path)
             browser.close()
             raise RuntimeError(
                 "Could not reach or fill in the login form; browser was at "
-                f"{location.hostname}{location.path}: {exc}"
+                f"{location.hostname}{location.path}: {exc}.{diagnostics}"
             ) from exc
 
         try:
@@ -86,9 +101,10 @@ def browser_login(email: str, password: str, token_path: Path, headless: bool = 
             access_token = token_handle.json_value()
         except Exception as exc:
             location = urlsplit(page.url)
+            diagnostics = _dump_failure_diagnostics(page, token_path)
             raise RuntimeError(
                 "No access token found after login; browser reached "
-                f"{location.hostname}{location.path}. The existing token was not changed."
+                f"{location.hostname}{location.path}. The existing token was not changed.{diagnostics}"
             ) from exc
         finally:
             browser.close()

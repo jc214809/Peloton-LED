@@ -366,6 +366,19 @@ and create each rider's token with
   `sudo cat /etc/peloton-led/config.json` to see what's actually deployed
   (compare against what you expect), and `sudo ./peloton-install.sh
   --reconfigure` to redo the rider prompt and replace both files.
+- **`git pull` doesn't fix a bug you just pulled** — the systemd services run
+  code copied into `/opt/peloton-led`, not your `~/Peloton-LED` checkout.
+  `git pull` only updates the checkout; re-run `sudo ./peloton-install.sh`
+  (with whatever flags you originally used) to sync the fix into the
+  deployed copy the services actually execute.
+- **A specific rider's login times out waiting for the login form** — if
+  `journalctl` shows `Could not reach or fill in the login form` or `No
+  access token found after login`, `refresh_cookies.py` saves a screenshot
+  and the page's HTML next to that rider's token file (e.g.
+  `/var/lib/peloton-led/cookies-joel-login-failure.png` and `.html`) so you
+  can see what the headless browser was actually looking at — a cookie
+  banner, a CAPTCHA, a bot-detection challenge, or Peloton having changed
+  the login page. Check that file rather than guessing from the log alone.
 - **Diagnostic commands:**
   ```bash
   sudo systemctl status peloton-led.service
