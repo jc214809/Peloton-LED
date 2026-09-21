@@ -155,6 +155,10 @@ def ensure_token(token_path: Path, config_path: Path, headless: bool = True,
     except requests.HTTPError as exc:
         if exc.response is None or exc.response.status_code != 401:
             raise
+    except (FileNotFoundError, ValueError):
+        # No token file yet (first run) or an empty one: treat like a
+        # rejected token and log in fresh, rather than crashing.
+        pass
     else:
         expiry = token_expiration(token_path)
         if expiry is None or expiry - time.time() > renew_before_seconds:

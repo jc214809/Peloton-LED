@@ -101,6 +101,17 @@ def test_ensure_refreshes_after_401(tmp_path, monkeypatch):
     login.assert_called_once_with('rider@example.com', 'secret', token, headless=True)
 
 
+def test_ensure_logs_in_when_token_file_does_not_exist_yet(tmp_path, monkeypatch):
+    token = tmp_path / 'token'  # never created
+    config = tmp_path / 'config.json'
+    config.write_text('{}')
+    monkeypatch.setenv('PELOTON_EMAIL', 'rider@example.com')
+    monkeypatch.setenv('PELOTON_PASSWORD', 'secret')
+    with patch('scripts.refresh_cookies.browser_login', return_value='demo') as login:
+        assert ensure_token(token, config) == ('demo', True)
+    login.assert_called_once_with('rider@example.com', 'secret', token, headless=True)
+
+
 def test_ensure_rejected_token_requires_unattended_credentials(tmp_path, monkeypatch):
     monkeypatch.delenv('PELOTON_EMAIL', raising=False)
     monkeypatch.delenv('PELOTON_PASSWORD', raising=False)
