@@ -106,7 +106,7 @@ python -m pytest tests/ -q
 
 ## Configuration
 
-Settings live under `display` in `config.json`. Invalid values produce a startup error before hardware or network initialization.
+Settings live under `display` in `config.json`. Invalid values produce a startup error before hardware or network initialization. Every setting below is optional — an absent key falls back to its default, so a minimal `{"display": {}}` (or even `{}`) is a valid config.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -136,13 +136,71 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 
 `rotation` accepts any subset of `latest_workouts`, `username`, `total_workouts`, `lifetime`, `milestones`, `goals`, each at most once. `screen_durations` keys are `latest_workouts`, `username`, `lifetime`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
 
-Two Peloton accounts on one board (`config.dual-users-example.json`) add a top-level `users` array; see the [dual-user guide](docs/dual-users.md) for its per-rider settings (`name`, `token_path`, `cache_path`, `email_env`, `password_env`, `username`, and per-rider `weekly_goals`/`milestones` overrides).
-
 Legacy `ride` and `park` font names map to `discipline`. `per_workout_duration` is accepted for older configs but is not used in the current rotation.
 
 History fetches stop on the date cutoff, end of results, repeated pages, or configured limits. A warning is logged when a limit prevents a complete search. Explicit incomplete workouts are excluded; older payloads without a status remain usable. If no workout matches the selected discipline, the latest completed workout is shown and the fallback is logged.
 
 Timestamps accept Unix seconds/milliseconds and ISO dates with offsets. Date-only values can be grouped into days but never establish which workout occurred last. Explicit API metrics take precedence over derived averages, including rowing split values supplied in minutes per 500 m. Missing metrics remain blank; zero is preserved. Output PRs and splits PRs share a badge, but only output PRs receive the output star.
+
+### Full example: every option set explicitly
+
+`config.json-example` and `config.dual-users-example.json` are intentionally minimal — anything left out just uses its default. The example below sets every `display` option and every per-user option at once, purely as a reference for what exists; it isn't meant to be used verbatim. It matches [`config.dual-users-example.json`](config.dual-users-example.json).
+
+```json
+{
+  "debug": false,
+  "users": [
+    {
+      "name": "Joel",
+      "email_env": "PELOTON_EMAIL_RIDER_ONE",
+      "password_env": "PELOTON_PASSWORD_RIDER_ONE",
+      "token_path": "cookies-joel.txt",
+      "cache_path": "dashboard-cache-joel.json",
+      "username": "Joel",
+      "weekly_goals": { "workouts": 5, "minutes": 0 },
+      "milestones": [100, 250, 500]
+    }
+  ],
+  "display": {
+    "font": "stats",
+    "color": "white",
+    "duration": 9,
+    "overview_duration": 4,
+    "last_workout_duration": 15,
+    "logo_duration": 3,
+    "logo_path": null,
+    "timezone": "America/New_York",
+    "refresh_interval": 300,
+    "history_days": 90,
+    "history_limit": 200,
+    "history_page_size": 50,
+    "history_max_pages": 10,
+    "instructor_tally_max_pages": 200,
+    "performance_cache_size": 32,
+    "rotation": ["username", "latest_workouts", "total_workouts", "lifetime", "milestones", "goals"],
+    "screen_durations": { "latest_workouts": 15, "username": 9, "lifetime": 5, "milestones": 4, "goals": 4 },
+    "brightness_schedule": null,
+    "compact_workout_pages": false
+  }
+}
+```
+
+Top-level and per-user fields, and whether each is required:
+
+| Field | Required? | Notes |
+|---|---|---|
+| `debug` | No (default `false`) | Verbose logging |
+| `users` | No | Omit entirely for single-user mode (`config.json-example`); see [dual-user guide](docs/dual-users.md) |
+| `users[].name` | **Yes**, once `users` is present | Must be unique (case-insensitive) across all users |
+| `users[].token_path` | No | Defaults to `cookies-<slug of name>.txt` beside the config file |
+| `users[].cache_path` | No | Defaults to `<token file stem>-dashboard-cache.json` |
+| `users[].username` | No | Defaults to the account's real Peloton username |
+| `users[].email_env` | No | Only used for unattended token renewal (`refresh_cookies.py --ensure`) |
+| `users[].password_env` | No | Only used for unattended token renewal |
+| `users[].weekly_goals` | No | Falls back to `display.weekly_goals` when omitted |
+| `users[].milestones` | No | Falls back to `display.milestones` when omitted |
+| `display` | No | Omit entirely to use every default in the table above |
+| every `display.*` key | No | See the configuration table above for each default |
 
 ## Display support and remaining work
 
