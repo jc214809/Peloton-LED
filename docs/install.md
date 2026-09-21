@@ -171,22 +171,48 @@ sudo ./peloton-install.sh
 
 This is safe to re-run — it's also how you [upgrade](#upgrading) later.
 
-What it does, in order:
+**On first install**, since there's no `/etc/peloton-led/config.json` yet,
+the installer stops and asks you interactively who's using the board:
 
-1. Installs required `apt` packages (`python3`, build tools, `libopenjp2-7`,
-   and `chromium` if `--auto-token` is set). Skippable with `--skip-packages`
-   if you manage packages yourself.
+```
+Let's set up who's using this board.
+Rider name (leave blank to finish, at least one required): Joel
+  Peloton email for Joel: joel@example.com
+  Peloton password for Joel: ********
+Rider name (leave blank to finish): Jen
+  Peloton email for Jen: jen@example.com
+  Peloton password for Jen: ********
+Rider name (leave blank to finish):
+Configured 2 rider(s): Joel, Jen
+```
+
+Answer with just one rider for a single-user board, or two or more for
+riders sharing one panel — there's no separate "dual-user mode" to opt into,
+it's simply how many names you give it. This single prompt writes both
+`/etc/peloton-led/config.json` (with a `users` array only if you added more
+than one rider) and `/etc/peloton-led/auth.env` (the credentials, used for
+[automatic token renewal](#automatic-token-renewal---auto-token)), so
+there's nothing left to configure by hand afterward. This step needs a real
+terminal (SSH is fine; a non-interactive script is not) — the installer
+exits with an error rather than hanging if it can't prompt you.
+
+What the full run does, in order:
+
+1. Installs required `apt` packages (`python3`, build tools, `cmake`,
+   `libopenjp2-7`, and `chromium` if `--auto-token` is set). Skippable with
+   `--skip-packages` if you manage packages yourself.
 2. Creates a dedicated, unprivileged `peloton-led` system account (home
    `/var/lib/peloton-led`, shell `/usr/sbin/nologin`), and adds it to the
    `gpio` and `video` groups if they exist.
 3. Copies the application into `/opt/peloton-led`, owned by `root` so the
    service account can't modify its own code.
-4. Migrates or creates `/etc/peloton-led/config.json` from your local
-   `config.json` — **an existing file at that path is never overwritten**,
-   so re-running the installer after a `git pull` won't clobber your
-   settings.
+4. Prompts for riders and writes `/etc/peloton-led/config.json` +
+   `/etc/peloton-led/auth.env` as described above — **only if neither file
+   exists yet, or `--reconfigure` was passed**. Otherwise both are left
+   untouched, so re-running the installer after a `git pull` won't clobber
+   your settings.
 5. Copies any existing local `cookies.txt` / `cookies-*.txt` token files
-   into `/var/lib/peloton-led/`, but again, never overwrites a token that's
+   into `/var/lib/peloton-led/`, but never overwrites a token that's
    already there.
 6. Creates a Python virtualenv under `/opt/peloton-led/venv` and installs
    `requirements.txt` into it.
@@ -198,6 +224,21 @@ What it does, in order:
 8. Installs and enables `peloton-led.service` (and, with `--auto-token`,
    `peloton-token-refresh.timer` / `.service`), starting them immediately
    unless `--no-start` is given.
+
+### Changing riders later (`--reconfigure`)
+
+```bash
+sudo ./peloton-install.sh --reconfigure
+```
+
+Re-runs the interactive rider prompt from scratch and overwrites both
+`/etc/peloton-led/config.json` and `/etc/peloton-led/auth.env` with your new
+answers — for example, to add a second rider to a single-user board, remove
+a rider, or fix a mistyped password. Everything else (tokens already on
+disk, cached history, PR/milestone state) is untouched, though a renamed or
+removed rider's old token/cache files are simply orphaned on disk rather
+than deleted — safe to remove by hand from `/var/lib/peloton-led/` if you
+want to reclaim the space.
 
 ### Directory layout
 
@@ -225,9 +266,10 @@ Add this if you want the Pi to keep your Peloton token fresh without you
 manually re-running the login helper. It:
 
 - Installs the Pi distribution's Chromium build (needed for headless login).
-- Prompts for Peloton credentials the *first* time it creates
-  `/etc/peloton-led/auth.env` (root-readable, mode `0600`); it's left alone
-  on subsequent runs.
+- Uses the credentials already written to `/etc/peloton-led/auth.env`
+  (root-readable, mode `0600`) during the rider setup prompt above. If that
+  file is somehow missing, the installer warns and tells you to re-run with
+  `--reconfigure` rather than silently doing nothing.
 - Enables `peloton-token-refresh.timer`, which runs roughly hourly with a
   randomized delay and invokes `refresh_cookies.py --ensure`, which:
   1. Verifies the existing token against `/api/me`.
@@ -255,6 +297,7 @@ sudo ./peloton-install.sh [options]
 | Option | Effect |
 |---|---|
 | `--auto-token` | Install Chromium and enable hourly headless token verification/renewal (see above) |
+| `--reconfigure` | Re-run the interactive rider setup, overwriting `config.json` and `auth.env` (see [above](#changing-riders-later---reconfigure)) |
 | `--skip-matrix` | Skip building/installing the native `rpi-rgb-led-matrix` bindings — use when they're already installed, or when preparing a Pi with no panel attached yet |
 | `--skip-packages` | Skip the `apt-get install` step — use when you manage system packages yourself or they're already present |
 | `--driver REF` | Git branch, tag, or commit of `rpi-rgb-led-matrix` to build (default: `master`) |
@@ -293,11 +336,12 @@ you might reinstall later — that's your settings, tokens, and history cache.
 
 ## Two users on one board
 
-Two Peloton accounts (e.g. two riders sharing one panel) are supported and
-documented separately in the
-[dual-user setup and operations guide](dual-users.md). The short version:
-copy `config.dual-users-example.json`, list each rider with a unique token
-path, and create each rider's token with
+Two Peloton accounts (e.g. two riders sharing one panel) are supported. **On
+the Pi**, just answer the installer's rider prompt with more than one name
+(see above) — that's the entire setup. **For local desktop development**,
+see the [dual-user setup and operations guide](dual-users.md): copy
+`config.dual-users-example.json`, list each rider with a unique token path,
+and create each rider's token with
 `python scripts/refresh_cookies.py --cookies cookies-<name>.txt`.
 
 ## Troubleshooting
@@ -316,6 +360,12 @@ path, and create each rider's token with
   `journalctl -u peloton-led.service -n 100` for the actual error;
   configuration is validated at startup, so a bad `config.json` value will
   show up there before the display initializes.
+- **Wrong number of riders / stuck on an old config** — `config.json` and
+  `auth.env` are only written once, on first install; every later run
+  preserves them untouched, even after `git pull`. Run
+  `sudo cat /etc/peloton-led/config.json` to see what's actually deployed
+  (compare against what you expect), and `sudo ./peloton-install.sh
+  --reconfigure` to redo the rider prompt and replace both files.
 - **Diagnostic commands:**
   ```bash
   sudo systemctl status peloton-led.service

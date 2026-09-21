@@ -3,7 +3,6 @@ import subprocess
 from pathlib import Path
 
 from peloton.config import load_config
-from scripts.migrate_pi_config import migrate_config
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,9 +12,8 @@ def test_installer_shell_syntax_and_upgrade_preservation_contract():
     installer = ROOT / 'peloton-install.sh'
     subprocess.run(['bash', '-n', str(installer)], check=True)
     text = installer.read_text()
-    assert 'if [[ ! -f "$CONFIG_DIR/config.json" ]]' in text
+    assert 'if [[ ! -f "$CONFIG_DIR/config.json" || "$RECONFIGURE" == true ]]' in text
     assert 'if [[ ! -f "$STATE_DIR/cookies.txt"' in text
-    assert 'if [[ ! -f "$CONFIG_DIR/auth.env" ]]' in text
     assert 'rm -rf "$APP_DIR/$directory"' in text
     assert 'rm -rf "$CONFIG_DIR' not in text
     assert 'rm -rf "$STATE_DIR' not in text
@@ -26,56 +24,22 @@ def test_installer_shell_syntax_and_upgrade_preservation_contract():
     assert 'pip install "$driver_dir"' in text
 
 
+def test_installer_uses_interactive_setup_script_not_silent_migration():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    # Config creation/rider setup must be one interactive step (config.json +
+    # auth.env together), not the old silent migrate_pi_config.py call that
+    # left auth.env creation as a separate, easy-to-miss --auto-token path.
+    assert 'scripts/setup_config.py' in text
+    assert 'scripts/migrate_pi_config.py' not in text
+    assert '--reconfigure' in text
+    assert '[[ -t 0 ]]' in text
+
+
 def test_pi_config_uses_writable_state_cache():
     path = ROOT / 'packaging' / 'config.pi.json'
     parsed = load_config(path)
     assert parsed['display']['cache_path'] == '/var/lib/peloton-led/dashboard-cache.json'
     assert json.loads(path.read_text())['debug'] is False
-
-
-def test_first_install_migrates_display_settings_without_credentials(tmp_path):
-    source = tmp_path / 'config.json'
-    source.write_text(json.dumps({
-        'debug': True,
-        'auth': {'email': 'private@example.com', 'password': 'secret'},
-        'display': {'color': 'gold', 'duration': 9},
-    }))
-    destination = tmp_path / 'etc' / 'config.json'
-    migrate_config(source, ROOT / 'packaging' / 'config.pi.json', destination)
-    migrated = json.loads(destination.read_text())
-    assert 'auth' not in migrated
-    assert migrated['debug'] is True
-    assert migrated['display']['color'] == 'gold'
-    assert migrated['display']['duration'] == 9
-    assert migrated['display']['cache_path'] == '/var/lib/peloton-led/dashboard-cache.json'
-
-
-def test_pi_migration_preserves_users_with_isolated_state_paths(tmp_path):
-    source = tmp_path / 'config.json'
-    source.write_text(json.dumps({'users': [
-        {'name': 'One', 'token_path': 'cookies-one.txt', 'cache_path': 'one-cache.json',
-         'email_env': 'ONE_EMAIL', 'password_env': 'ONE_PASSWORD'},
-        {'name': 'Two', 'token_path': 'cookies-two.txt'},
-    ], 'display': {}}))
-    destination = tmp_path / 'etc' / 'config.json'
-    migrate_config(source, ROOT / 'packaging' / 'config.pi.json', destination)
-    users = json.loads(destination.read_text())['users']
-    assert users[0]['token_path'] == '/var/lib/peloton-led/cookies-one.txt'
-    assert users[0]['cache_path'] == '/var/lib/peloton-led/one-cache.json'
-    assert users[1]['token_path'] == '/var/lib/peloton-led/cookies-two.txt'
-    assert users[1]['cache_path'] == '/var/lib/peloton-led/dashboard-cache-user-2.json'
-
-
-def test_pi_migration_derives_token_path_from_name_when_omitted(tmp_path):
-    source = tmp_path / 'config.json'
-    source.write_text(json.dumps({'users': [
-        {'name': 'Joel'}, {'name': 'Jen'},
-    ], 'display': {}}))
-    destination = tmp_path / 'etc' / 'config.json'
-    migrate_config(source, ROOT / 'packaging' / 'config.pi.json', destination)
-    users = json.loads(destination.read_text())['users']
-    assert users[0]['token_path'] == '/var/lib/peloton-led/cookies-joel.txt'
-    assert users[1]['token_path'] == '/var/lib/peloton-led/cookies-jen.txt'
 
 
 def test_systemd_units_have_managed_runtime_and_token_safety():

@@ -12,6 +12,7 @@ AUTO_TOKEN=false
 SKIP_MATRIX=false
 SKIP_PACKAGES=false
 NO_START=false
+RECONFIGURE=false
 
 usage() {
     cat <<'USAGE'
@@ -20,8 +21,13 @@ Usage: sudo ./peloton-install.sh [options]
 Install or upgrade Peloton LED as managed Raspberry Pi services. Existing
 configuration, token, login environment, cache, and PR state are preserved.
 
+On first install (no /etc/peloton-led/config.json yet), you'll be prompted
+to add one rider for a single-user board, or two or more for a shared board.
+
 Options:
   --auto-token          Verify hourly; renew within 12 hours of expiry or after 401
+  --reconfigure         Re-prompt for riders, replacing the existing config and
+                         auth.env (e.g. to switch between single- and dual-user)
   --skip-matrix         Skip the native rpi-rgb-led-matrix build
   --skip-packages       Skip apt package installation
   --driver REF          Matrix driver branch, tag, or commit (default: master)
@@ -33,6 +39,7 @@ USAGE
 while (($#)); do
     case "$1" in
         --auto-token) AUTO_TOKEN=true; shift ;;
+        --reconfigure) RECONFIGURE=true; shift ;;
         --skip-matrix) SKIP_MATRIX=true; shift ;;
         --skip-packages) SKIP_PACKAGES=true; shift ;;
         --driver)
@@ -82,13 +89,18 @@ done
 chmod 0755 "$APP_DIR/peloton_led.py" "$APP_DIR/scripts/refresh_cookies.py"
 chown -R root:root "$APP_DIR"
 
-if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
-    python3 "$SOURCE_DIR/scripts/migrate_pi_config.py" \
-        "$SOURCE_DIR/config.json" "$SOURCE_DIR/packaging/config.pi.json" "$CONFIG_DIR/config.json"
+if [[ ! -f "$CONFIG_DIR/config.json" || "$RECONFIGURE" == true ]]; then
+    [[ -t 0 ]] || { echo "Run this in an interactive terminal to set up riders (or copy an existing config.json + auth.env into place manually)." >&2; exit 1; }
+    umask 077
+    python3 "$SOURCE_DIR/scripts/setup_config.py" \
+        "$SOURCE_DIR/packaging/config.pi.json" "$CONFIG_DIR/config.json" "$CONFIG_DIR/auth.env"
     chown root:"$APP_USER" "$CONFIG_DIR/config.json"
     chmod 0640 "$CONFIG_DIR/config.json"
+    chown root:root "$CONFIG_DIR/auth.env"
+    chmod 0600 "$CONFIG_DIR/auth.env"
 else
-    echo "Preserving existing $CONFIG_DIR/config.json"
+    echo "Preserving existing $CONFIG_DIR/config.json and $CONFIG_DIR/auth.env"
+    echo "(pass --reconfigure to change riders, e.g. switching single- vs. multi-user)"
 fi
 if [[ ! -f "$STATE_DIR/cookies.txt" && -f "$SOURCE_DIR/cookies.txt" ]]; then
     install -m 0600 -o "$APP_USER" -g "$APP_USER" "$SOURCE_DIR/cookies.txt" "$STATE_DIR/cookies.txt"
@@ -119,50 +131,11 @@ if [[ "$SKIP_MATRIX" == false ]]; then
     "$APP_DIR/venv/bin/python" -m pip install "$driver_dir"
 fi
 
-write_auth_environment() {
-    local profile email_var password_var email password escaped_email escaped_password
-    local -a auth_profiles
-    mapfile -t auth_profiles < <("$APP_DIR/venv/bin/python" - "$CONFIG_DIR/config.json" <<'PY'
-import json, re, sys
-config = json.load(open(sys.argv[1], encoding='utf-8'))
-users = config.get('users') or []
-if not users:
-    print('default\tPELOTON_EMAIL\tPELOTON_PASSWORD')
-for user in users:
-    suffix = re.sub(r'[^A-Z0-9]+', '_', user['name'].upper()).strip('_') or 'USER'
-    print('\t'.join((user['name'], user.get('email_env', f'PELOTON_EMAIL_{suffix}'),
-                    user.get('password_env', f'PELOTON_PASSWORD_{suffix}'))))
-PY
-)
-    umask 077
-    : > "$CONFIG_DIR/auth.env"
-    for row in "${auth_profiles[@]}"; do
-        IFS=$'\t' read -r profile email_var password_var <<< "$row"
-        email="${!email_var:-}"; password="${!password_var:-}"
-        if [[ -z "$email" ]]; then
-            [[ -t 0 ]] || { echo "$email_var is required for --auto-token." >&2; return 1; }
-            read -r -p "Peloton email for $profile: " email
-        fi
-        if [[ -z "$password" ]]; then
-            [[ -t 0 ]] || { echo "$password_var is required for --auto-token." >&2; return 1; }
-            read -r -s -p "Peloton password for $profile: " password
-            echo
-        fi
-        escaped_email="${email//\\/\\\\}"; escaped_email="${escaped_email//\"/\\\"}"
-        escaped_password="${password//\\/\\\\}"; escaped_password="${escaped_password//\"/\\\"}"
-        printf '%s="%s"\n' "$email_var" "$escaped_email" >> "$CONFIG_DIR/auth.env"
-        printf '%s="%s"\n' "$password_var" "$escaped_password" >> "$CONFIG_DIR/auth.env"
-    done
-    chown root:root "$CONFIG_DIR/auth.env"
-    chmod 0600 "$CONFIG_DIR/auth.env"
-}
-
 if [[ "$AUTO_TOKEN" == true ]]; then
     "$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements-auth.txt"
     if [[ ! -f "$CONFIG_DIR/auth.env" ]]; then
-        write_auth_environment
-    else
-        echo "Preserving existing $CONFIG_DIR/auth.env"
+        echo "Warning: $CONFIG_DIR/auth.env is missing; unattended token renewal needs it." >&2
+        echo "Re-run with --reconfigure to set up rider credentials." >&2
     fi
 fi
 
@@ -207,6 +180,18 @@ PY
     fi
 fi
 
+rider_summary="$("$APP_DIR/venv/bin/python" - "$CONFIG_DIR/config.json" <<'PY'
+import json, sys
+config = json.load(open(sys.argv[1], encoding='utf-8'))
+users = config.get('users') or []
+if not users:
+    print('single-user (/var/lib/peloton-led/cookies.txt)')
+else:
+    names = ', '.join(f"{u['name']} ({u['token_path']})" for u in users)
+    print(f'{len(users)} riders: {names}')
+PY
+)"
+
 cat <<EOF
 
 Peloton LED installation complete.
@@ -214,7 +199,7 @@ Peloton LED installation complete.
   Display:  systemctl status peloton-led.service
   Logs:     journalctl -u peloton-led.service -n 100
   Config:   $CONFIG_DIR/config.json
-  Token:    $STATE_DIR/cookies.txt
+  Riders:   $rider_summary
 EOF
 if [[ "$AUTO_TOKEN" == true ]]; then
     cat <<EOF
