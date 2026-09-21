@@ -53,7 +53,7 @@ echo "Installing Peloton LED from $SOURCE_DIR"
 
 if [[ "$SKIP_PACKAGES" == false ]]; then
     apt-get update
-    packages=(python3 python3-dev python3-pip python3-venv cython3 git make gcc g++ libopenjp2-7)
+    packages=(python3 python3-dev python3-pip python3-venv cython3 git make gcc g++ cmake libopenjp2-7)
     if [[ "$AUTO_TOKEN" == true ]]; then
         packages+=(chromium)
     fi
@@ -113,8 +113,10 @@ if [[ "$SKIP_MATRIX" == false ]]; then
     fi
     git -C "$driver_dir" fetch --tags origin
     git -C "$driver_dir" checkout "$DRIVER_REF"
-    make -C "$driver_dir" build-python PYTHON="$APP_DIR/venv/bin/python" CYTHON=cython3
-    make -C "$driver_dir" install-python PYTHON="$APP_DIR/venv/bin/python"
+    # Upstream builds the Python bindings via scikit-build-core/cmake now
+    # (pyproject.toml at the repo root); the old make-based targets for this
+    # no longer exist on current master.
+    "$APP_DIR/venv/bin/python" -m pip install "$driver_dir"
 fi
 
 write_auth_environment() {

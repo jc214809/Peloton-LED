@@ -19,6 +19,11 @@ def test_installer_shell_syntax_and_upgrade_preservation_contract():
     assert 'rm -rf "$APP_DIR/$directory"' in text
     assert 'rm -rf "$CONFIG_DIR' not in text
     assert 'rm -rf "$STATE_DIR' not in text
+    # Upstream rpi-rgb-led-matrix dropped its old make-based Python bindings
+    # build in favor of a scikit-build-core/cmake pip install from the repo
+    # root; guard against regressing back to the removed make targets.
+    assert 'make -C "$driver_dir"' not in text
+    assert 'pip install "$driver_dir"' in text
 
 
 def test_pi_config_uses_writable_state_cache():
