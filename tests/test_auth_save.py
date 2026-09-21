@@ -31,6 +31,29 @@ def test_successful_save_is_private_and_verified_before_replacement(tmp_path):
     assert list(tmp_path.iterdir()) == [token]
 
 
+def test_browser_login_uses_a_realistic_desktop_context(tmp_path):
+    # A bare new_context() (no viewport/locale/timezone) is an easy bot-
+    # detection signal; guard against silently regressing back to that.
+    import playwright.sync_api
+
+    page = MagicMock()
+    page.url = 'https://www.onepeloton.com/login'
+    page.goto.side_effect = playwright.sync_api.TimeoutError('stop after context creation')
+    browser = MagicMock()
+    browser.new_context.return_value.new_page.return_value = page
+    playwright_cm = MagicMock()
+    playwright_cm.__enter__.return_value.chromium.launch.return_value = browser
+
+    with patch('playwright.sync_api.sync_playwright', return_value=playwright_cm):
+        with pytest.raises(RuntimeError):
+            browser_login('rider@example.com', 'secret', tmp_path / 'token')
+
+    context_kwargs = browser.new_context.call_args.kwargs
+    assert context_kwargs['viewport'] == {'width': 1920, 'height': 1080}
+    assert context_kwargs['locale'] == 'en-US'
+    assert context_kwargs['timezone_id']
+
+
 def test_dump_failure_diagnostics_writes_screenshot_and_html(tmp_path):
     token_path = tmp_path / 'cookies-joel.txt'
     page = MagicMock()

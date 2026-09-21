@@ -63,7 +63,15 @@ def browser_login(email: str, password: str, token_path: Path, headless: bool = 
         if executable:
             launch_options['executable_path'] = executable
         browser = p.chromium.launch(**launch_options)
-        context = browser.new_context()
+        # A bare new_context() has no viewport/locale/timezone at all, which
+        # looks nothing like a real desktop visit and is an easy bot-detection
+        # signal; a plausible desktop context reduces false positives without
+        # pretending to be a specific Chrome version (which just goes stale).
+        context = browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            locale='en-US',
+            timezone_id='America/New_York',
+        )
         page = context.new_page()
 
         print(f"Opening {LOGIN_URL}...")
