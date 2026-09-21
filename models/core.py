@@ -8,7 +8,7 @@ _REGISTRY: Dict[str, Type["GeneralWorkout"]] = {}
 def register_discipline(*aliases: str):
     """Decorator to map discipline aliases to a subclass."""
 
-    def decorator(cls: Type[GeneralWorkout]) -> Type[GeneralWorkout]:
+    def decorator(cls: "Type[GeneralWorkout]") -> "Type[GeneralWorkout]":
         for alias in aliases:
             _REGISTRY[alias.strip().lower()] = cls
         return cls
