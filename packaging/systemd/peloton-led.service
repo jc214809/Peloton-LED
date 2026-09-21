@@ -9,6 +9,7 @@ User=peloton-led
 Group=peloton-led
 WorkingDirectory=/opt/peloton-led
 Environment=PYTHONUNBUFFERED=1
+Environment=PELOTON_LOG_DIR=/var/lib/peloton-led/logs
 ExecStart=/opt/peloton-led/venv/bin/python /opt/peloton-led/peloton_led.py --config /etc/peloton-led/config.json --cookies /var/lib/peloton-led/cookies.txt --led-gpio-mapping adafruit-hat
 Restart=on-failure
 RestartSec=5

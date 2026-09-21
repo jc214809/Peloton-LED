@@ -51,6 +51,10 @@ def test_systemd_units_have_managed_runtime_and_token_safety():
     assert 'Restart=on-failure' in display
     assert '--cookies /var/lib/peloton-led/cookies.txt' in display
     assert 'ReadWritePaths=/var/lib/peloton-led' in display
+    # ProtectSystem=strict makes /opt/peloton-led read-only, so utils/debug.py's
+    # default log location (next to the code) must be redirected somewhere
+    # writable, or the app crashes on startup trying to create it.
+    assert 'PELOTON_LOG_DIR=/var/lib/peloton-led/logs' in display
     assert 'EnvironmentFile=/etc/peloton-led/auth.env' in refresh
     assert 'PELOTON_CHROMIUM_EXECUTABLE=/usr/bin/chromium' in refresh
     assert ' --ensure ' in refresh
