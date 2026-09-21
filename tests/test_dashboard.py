@@ -268,7 +268,7 @@ def test_refresh_summarizes_every_workout_on_latest_active_day(tmp_path):
     client.get_perf_graph.return_value = {'duration': 1200}
     dashboard.refresh()
     snapshot = dashboard.snapshot()
-    assert [summary['workout_id'] for summary in snapshot['summaries']] == ['evening', 'morning']
+    assert [summary['workout_id'] for summary in snapshot['summaries']] == ['morning', 'evening']
     assert snapshot['active_day_count'] == 2
     assert {call.args[0] for call in client.get_perf_graph.call_args_list} == {'evening', 'morning'}
 

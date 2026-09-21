@@ -52,6 +52,15 @@ def test_latest_completed_deduplicated_and_discipline_alias():
     assert select_latest(rows, 'rowing')['id'] == 2
 
 
+def test_last_active_day_is_chronological_not_latest_first():
+    # Taken in this order: tread bootcamp, core, strength. The dashboard
+    # should show them in the order they were actually taken.
+    rows = [{'id': 1, 'start_time': 1773496800, 'fitness_discipline': 'tread_bootcamp'},
+            {'id': 2, 'start_time': 1773497800, 'fitness_discipline': 'stretching'},
+            {'id': 3, 'start_time': 1773498800, 'fitness_discipline': 'strength'}]
+    assert [w['id'] for w in last_active_day(rows)] == [1, 2, 3]
+
+
 def metric_perf(distance=5, units='km', duration=1800):
     return {'duration': duration, 'summaries': [{'slug': 'distance', 'value': distance, 'display_unit': units}]}
 

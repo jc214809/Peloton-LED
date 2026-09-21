@@ -59,7 +59,10 @@ def last_active_day(workouts, tzname=None):
     if not ordered:
         return []
     day = max(workout_date(w, tzname) for w in ordered)
-    return [w for w in ordered if workout_date(w, tzname) == day]
+    day_workouts = [w for w in ordered if workout_date(w, tzname) == day]
+    # ordered_workouts is newest-first; the display wants the day's workouts
+    # in the order they were actually taken (first workout shown first).
+    return list(reversed(day_workouts))
 
 
 def select_latest(workouts, discipline=None, tzname=None):
