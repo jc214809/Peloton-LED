@@ -144,7 +144,7 @@ Timestamps accept Unix seconds/milliseconds and ISO dates with offsets. Date-onl
 
 ### Full example: every option set explicitly
 
-`config.json-example` and `config.dual-users-example.json` are intentionally minimal — anything left out just uses its default. The example below sets every `display` option and every per-user option at once, purely as a reference for what exists; it isn't meant to be used verbatim. It matches [`config.dual-users-example.json`](config.dual-users-example.json).
+[`config.json-example`](config.json-example) and [`config.dual-users-example.json`](config.dual-users-example.json) are intentionally minimal — anything left out just uses its default. The example below sets every `display` option and every per-user option at once, purely as a reference for what exists; it isn't meant to be used verbatim or copied as a starting point.
 
 ```json
 {

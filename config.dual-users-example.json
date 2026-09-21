@@ -5,9 +5,6 @@
       "name": "Joel",
       "email_env": "PELOTON_EMAIL_RIDER_ONE",
       "password_env": "PELOTON_PASSWORD_RIDER_ONE",
-      "token_path": "cookies-joel.txt",
-      "cache_path": "dashboard-cache-joel.json",
-      "username": "Joel",
       "weekly_goals": {
         "workouts": 5,
         "minutes": 0
@@ -22,9 +19,6 @@
       "name": "Jen",
       "email_env": "PELOTON_EMAIL_RIDER_TWO",
       "password_env": "PELOTON_PASSWORD_RIDER_TWO",
-      "token_path": "cookies-jen.txt",
-      "cache_path": "dashboard-cache-jen.json",
-      "username": "Jen",
       "weekly_goals": {
         "workouts": 3,
         "minutes": 0
@@ -37,21 +31,7 @@
     }
   ],
   "display": {
-    "font": "stats",
-    "color": "white",
-    "duration": 9,
-    "overview_duration": 4,
-    "last_workout_duration": 15,
-    "logo_duration": 3,
-    "logo_path": null,
     "timezone": "America/New_York",
-    "refresh_interval": 300,
-    "history_days": 90,
-    "history_limit": 200,
-    "history_page_size": 50,
-    "history_max_pages": 10,
-    "instructor_tally_max_pages": 200,
-    "performance_cache_size": 32,
     "rotation": [
       "username",
       "latest_workouts",
@@ -66,8 +46,6 @@
       "lifetime": 5,
       "milestones": 4,
       "goals": 4
-    },
-    "brightness_schedule": null,
-    "compact_workout_pages": false
+    }
   }
 }
