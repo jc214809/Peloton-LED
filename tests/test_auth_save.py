@@ -1,10 +1,10 @@
 import stat
 import time
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import pytest
 import requests
-from scripts.refresh_cookies import (ensure_all_tokens, ensure_token, save_verified_token,
-                                     token_expiration)
+from scripts.refresh_cookies import (browser_login, ensure_all_tokens, ensure_token,
+                                     save_verified_token, token_expiration)
 
 
 def test_failed_verification_preserves_old_token(tmp_path):
@@ -29,6 +29,23 @@ def test_successful_save_is_private_and_verified_before_replacement(tmp_path):
     assert token.read_text() == 'new-synthetic'
     assert stat.S_IMODE(token.stat().st_mode) == 0o600
     assert list(tmp_path.iterdir()) == [token]
+
+
+def test_browser_login_wraps_timeout_reaching_login_form(tmp_path):
+    import playwright.sync_api
+
+    page = MagicMock()
+    page.url = 'https://www.onepeloton.com/login'
+    page.goto.side_effect = playwright.sync_api.TimeoutError('Timeout 30000ms exceeded')
+    browser = MagicMock()
+    browser.new_context.return_value.new_page.return_value = page
+    playwright_cm = MagicMock()
+    playwright_cm.__enter__.return_value.chromium.launch.return_value = browser
+
+    with patch('playwright.sync_api.sync_playwright', return_value=playwright_cm):
+        with pytest.raises(RuntimeError, match='Could not reach or fill in the login form'):
+            browser_login('rider@example.com', 'secret', tmp_path / 'token')
+    browser.close.assert_called_once()
 
 
 def test_ensure_does_not_open_browser_for_valid_token(tmp_path):

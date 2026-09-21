@@ -53,10 +53,18 @@ def browser_login(email: str, password: str, token_path: Path, headless: bool = 
         page = context.new_page()
 
         print(f"Opening {LOGIN_URL}...")
-        page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
-        page.locator("#usernameOrEmail").fill(email)
-        page.locator("#password").fill(password)
-        page.locator("[data-test-id='loginButton']").click()
+        try:
+            page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+            page.locator("#usernameOrEmail").fill(email, timeout=30_000)
+            page.locator("#password").fill(password, timeout=30_000)
+            page.locator("[data-test-id='loginButton']").click(timeout=30_000)
+        except Exception as exc:
+            location = urlsplit(page.url)
+            browser.close()
+            raise RuntimeError(
+                "Could not reach or fill in the login form; browser was at "
+                f"{location.hostname}{location.path}: {exc}"
+            ) from exc
 
         try:
             # Successful login can land on pages other than /home. Wait for
