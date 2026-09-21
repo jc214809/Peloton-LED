@@ -200,9 +200,9 @@ def ensure_all_tokens(config_path: Path, renew_before_seconds: float = 12 * 60 *
                 load_credentials=False)
             results.append((user['name'], username, refreshed))
         except Exception as exc:
-            failures.append(f"{user['name']}: {type(exc).__name__}")
+            failures.append(f"{user['name']}: {exc}")
     if failures:
-        raise RuntimeError('Token maintenance failed for ' + ', '.join(failures))
+        raise RuntimeError('Token maintenance failed for ' + '; '.join(failures))
     return results
 
 

@@ -174,3 +174,14 @@ def test_all_user_renewal_attempts_later_profiles_after_one_failure(tmp_path):
         with pytest.raises(RuntimeError, match='One'):
             ensure_all_tokens(config)
     assert ensure.call_count == 2
+
+
+def test_all_user_renewal_failure_message_is_not_just_the_exception_type(tmp_path):
+    import json
+    config = tmp_path / 'config.json'
+    config.write_text(json.dumps({'users': [{'name': 'Joel', 'token_path': 'joel.token'}]}))
+    with patch('scripts.refresh_cookies.ensure_token',
+               side_effect=RuntimeError('No access token found after login; browser reached '
+                                        'www.onepeloton.com/login. The existing token was not changed.')):
+        with pytest.raises(RuntimeError, match='browser reached www.onepeloton.com/login'):
+            ensure_all_tokens(config)
