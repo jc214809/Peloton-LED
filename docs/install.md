@@ -41,6 +41,7 @@ python3 -m venv venv
 source venv/bin/activate
 python -m pip install -r requirements.txt
 cp config.json-example config.json
+# Runs in the foreground at http://localhost:8888 — Ctrl+C to stop
 python peloton_led.py --emulated
 ```
 
