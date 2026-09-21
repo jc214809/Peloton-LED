@@ -124,8 +124,19 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `history_limit` | 200 | Maximum recent workouts returned |
 | `history_page_size` | 50 | Workouts requested per API page |
 | `history_max_pages` | 10 | Page safety limit |
+| `instructor_tally_max_pages` | 200 | Page safety limit for the one-time full-history instructor tally |
 | `performance_cache_size` | 32 | Maximum in-memory performance records |
 | `cache_path` | Beside token | Optional persistent snapshot and PR-state file |
+| `rotation` | See below | Screen sections to show, and their order |
+| `screen_durations` | `{}` | Per-section seconds, overriding the individual duration settings above |
+| `weekly_goals` | `{"workouts": 0, "minutes": 0}` | Weekly workout/minute targets; `0` disables that goal. See [Phase 6 customization](#phase-6-customization) |
+| `milestones` | `[]` | Lifetime Total Workouts thresholds that celebrate once each, e.g. `[100, 250, 500]` |
+| `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
+| `compact_workout_pages` | `false` | On 32-row panels, add a second compact stats page after each workout |
+
+`rotation` accepts any subset of `latest_workouts`, `username`, `total_workouts`, `lifetime`, `milestones`, `goals`, each at most once. `screen_durations` keys are `latest_workouts`, `username`, `lifetime`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
+
+Two Peloton accounts on one board (`config.dual-users-example.json`) add a top-level `users` array; see the [dual-user guide](docs/dual-users.md) for its per-rider settings (`name`, `token_path`, `cache_path`, `email_env`, `password_env`, `username`, and per-rider `weekly_goals`/`milestones` overrides).
 
 Legacy `ride` and `park` font names map to `discipline`. `per_workout_duration` is accepted for older configs but is not used in the current rotation.
 
