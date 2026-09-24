@@ -328,11 +328,14 @@ class LastWorkoutScreen(Screen):
 
     state should be the dict returned by peloton.summaries.summarize_workout().
 
-    The discipline/title/duration header and the bottom HR/calories bar stay
-    fixed for the whole screen. The middle shows one stat at a time, large,
-    cycling through them on the same "hold, then rise into place" pattern as
-    UsernameScreen's details, instead of bundling every stat into small rows
-    at once.
+    The bottom HR/calories bar stays fixed for the whole screen. Everything
+    above it goes through two phases:
+      1. Intro (first DETAIL_INTERVAL_SECONDS): discipline/duration/title,
+         plus the instructor's name underneath if there is one.
+      2. Stats: the header clears and one stat at a time, large, cycles
+         through the full freed-up space, on the same "hold, then rise into
+         place" pattern as UsernameScreen's details, instead of bundling
+         every stat into small rows at once alongside a permanent header.
     """
 
     animated = True
@@ -390,81 +393,71 @@ class LastWorkoutScreen(Screen):
                 graphics.DrawText(matrix, text_font, 2, y, color, text)
             return True
 
-        # ── Line 1: discipline ────────────────────────────────────────────
-        disc_text = discipline.upper()
-        disc_font = title_font
-        # Bike Bootcamp is clearer as two 5x8 lines than one tiny 4x6 line.
-        # Starting the two-line header higher recovers the added vertical
-        # space and keeps the title plus all three cycling stat rows legible.
-        if discipline.lower() == 'bike bootcamp' and titles_font:
-            disc_font = titles_font
-        elif get_text_width(disc_font, disc_text) > w - 2 and text_font and (
-                get_text_width(text_font, disc_text) <= w - 2):
-            disc_font = text_font
-        disc_lines = _wrap_two_lines(disc_font, disc_text, w - 2)[:2] or [""]
-        disc_font_h = getattr(disc_font, "height", 9)
-        disc_y = 8 if len(disc_lines) > 1 else 12
-        for i, line in enumerate(disc_lines):
-            dx = max((w - get_text_width(disc_font, line)) // 2, 1)
-            graphics.DrawText(matrix, disc_font, dx, disc_y + i * disc_font_h,
-                              _disc_color(discipline), line)
-        block_y = disc_y + (len(disc_lines) - 1) * disc_font_h
-
-        # ── Line 2: duration (centered) ───────────────────────────────────
-        dur_min = summary.get("duration_min")
-        # Tighten the gap when the discipline wraps to 2 lines, to leave room for stats below.
-        dur_y = block_y + (7 if len(disc_lines) > 1 else 10)
-        if isinstance(dur_min, (int, float)):
-            dur_val = str(int(dur_min))
-            dur_label = "min"
-            dur_val_w = _text_width(text_font, dur_val)
-            dur_label_w = _text_width(text_font, dur_label)
-            dur_total_w = dur_val_w + 1 + dur_label_w
-            dur_x = max((w - dur_total_w) // 2, 2)
-            _draw_text(matrix, text_font, dur_x, dur_y, _BLUE, dur_val)
-            _draw_text(matrix, text_font, dur_x + dur_val_w + 1, dur_y, _BLUE, dur_label)
-
-        # ── Lines 3–4: title below the duration with a visible gap ────────
-        title = (summary.get("title") or "").strip()
-        title_stripped = re.sub(r'^\d+\s*min\s*', '', title, flags=re.IGNORECASE).strip() or title
-        title_lines = _wrap_two_lines(text_font, title_stripped, w - 4)
-        for i, line in enumerate(title_lines[:2]):
-            tx = max((w - _text_width(text_font, line)) // 2, 2)
-            _draw_text(matrix, text_font, tx, dur_y + 7 + i * 7, _WHITE, line)
-        header_bottom = dur_y + 7 + max(len(title_lines[:2]) - 1, 0) * 7
-
-        # ── Middle: one stat at a time, large, cycling ─────────────────────
-        # Header and HR/cal stay fixed; only this middle detail rotates.
         _BOTTOM_Y = 61
         _STAT_STEP = 6
         last_row_y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below.
-        available_top = header_bottom + _STAT_STEP
-        available_bottom = last_row_y
 
-        details = _stat_details(summary)
-        if details:
-            interval = DETAIL_INTERVAL_SECONDS
-            index = int(self.elapsed / interval) % len(details)
-            phase_seconds = self.elapsed % interval
-            detail = details[index]
-            # Each new detail rises into place during its first 0.3 seconds.
-            offset = max(0, round(3 * (1 - min(1, phase_seconds / 0.3))))
-            is_instructor = detail['label'] == 'instructor'
-            mid_y = available_top + (available_bottom - available_top) // 2 - 3
-            # Shifting the block up must never crowd the title above; the
-            # topmost line always keeps at least a 5px gap below header_bottom.
-            min_top = header_bottom + 5
+        all_details = _stat_details(summary)
+        stat_details = [d for d in all_details if d['label'] != 'instructor']
+        instructor_detail = next((d for d in all_details if d['label'] == 'instructor'), None)
+        in_intro = self.elapsed < DETAIL_INTERVAL_SECONDS
 
-            if is_instructor:
+        if in_intro:
+            # ── Line 1: discipline ──────────────────────────────────────────
+            disc_text = discipline.upper()
+            disc_font = title_font
+            # Bike Bootcamp is clearer as two 5x8 lines than one tiny 4x6 line.
+            # Starting the two-line header higher recovers the added vertical
+            # space and keeps the title plus all three cycling stat rows legible.
+            if discipline.lower() == 'bike bootcamp' and titles_font:
+                disc_font = titles_font
+            elif get_text_width(disc_font, disc_text) > w - 2 and text_font and (
+                    get_text_width(text_font, disc_text) <= w - 2):
+                disc_font = text_font
+            disc_lines = _wrap_two_lines(disc_font, disc_text, w - 2)[:2] or [""]
+            disc_font_h = getattr(disc_font, "height", 9)
+            disc_y = 8 if len(disc_lines) > 1 else 12
+            for i, line in enumerate(disc_lines):
+                dx = max((w - get_text_width(disc_font, line)) // 2, 1)
+                graphics.DrawText(matrix, disc_font, dx, disc_y + i * disc_font_h,
+                                  _disc_color(discipline), line)
+            block_y = disc_y + (len(disc_lines) - 1) * disc_font_h
+
+            # ── Line 2: duration (centered) ─────────────────────────────────
+            dur_min = summary.get("duration_min")
+            # Tighten the gap when the discipline wraps to 2 lines, to leave room for the title below.
+            dur_y = block_y + (7 if len(disc_lines) > 1 else 10)
+            if isinstance(dur_min, (int, float)):
+                dur_val = str(int(dur_min))
+                dur_label = "min"
+                dur_val_w = _text_width(text_font, dur_val)
+                dur_label_w = _text_width(text_font, dur_label)
+                dur_total_w = dur_val_w + 1 + dur_label_w
+                dur_x = max((w - dur_total_w) // 2, 2)
+                _draw_text(matrix, text_font, dur_x, dur_y, _BLUE, dur_val)
+                _draw_text(matrix, text_font, dur_x + dur_val_w + 1, dur_y, _BLUE, dur_label)
+
+            # ── Lines 3–4: title below the duration with a visible gap ──────
+            title = (summary.get("title") or "").strip()
+            title_stripped = re.sub(r'^\d+\s*min\s*', '', title, flags=re.IGNORECASE).strip() or title
+            title_lines = _wrap_two_lines(text_font, title_stripped, w - 4)
+            for i, line in enumerate(title_lines[:2]):
+                tx = max((w - _text_width(text_font, line)) // 2, 2)
+                _draw_text(matrix, text_font, tx, dur_y + 7 + i * 7, _WHITE, line)
+            header_bottom = dur_y + 7 + max(len(title_lines[:2]) - 1, 0) * 7
+
+            # ── Instructor, if any, underneath the title ────────────────────
+            if instructor_detail:
+                offset = max(0, round(3 * (1 - min(1, self.elapsed / 0.3))))
+                available_top = header_bottom + _STAT_STEP
+                available_bottom = last_row_y
+                min_top = header_bottom + 5
                 value_font = text_font
-                value_lines = _wrap_two_lines(value_font, detail['value'].upper(), w - 4)[:2]
-                # A single-line name keeps its "INSTRUCTOR" caption; a name
-                # long enough to wrap drops it so both lines have room
-                # without crowding the header above or HR/cal bar below.
+                value_lines = _wrap_two_lines(value_font, instructor_detail['value'].upper(), w - 4)[:2]
+                mid_y = available_top + (available_bottom - available_top) // 2 - 3
                 show_label = len(value_lines) == 1
                 block_lines = (1 if show_label else 0) + len(value_lines)
-                start_y = max(mid_y - 3 * (block_lines - 1), min_top)
-                y = start_y
+                y = max(mid_y - 3 * (block_lines - 1), min_top)
                 if show_label:
                     label_text = _truncate(stat_font, "INSTRUCTOR", w - 4)
                     lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
@@ -474,23 +467,32 @@ class LastWorkoutScreen(Screen):
                     vx = max((w - _text_width(value_font, line)) // 2, 2)
                     _draw_text(matrix, value_font, vx, y + offset, _WHITE, line)
                     y += 7
-            else:
-                value_font = (title_font if get_text_width(title_font, detail['value'].upper()) <= w - 4
-                              else text_font)
-                label_y = max(mid_y - 3, min_top)
-                value_y = label_y + 12
-                label_text = _truncate(stat_font, detail['label'].upper(), w - 4)
-                lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
-                _draw_text(matrix, stat_font, lx, label_y + offset, graphics.Color(145, 165, 190), label_text)
+        elif stat_details:
+            # ── Stats phase: header is gone, stats use the full board ───────
+            interval = DETAIL_INTERVAL_SECONDS
+            stats_elapsed = self.elapsed - DETAIL_INTERVAL_SECONDS
+            index = int(stats_elapsed / interval) % len(stat_details)
+            phase_seconds = stats_elapsed % interval
+            detail = stat_details[index]
+            # Each new detail rises into place during its first 0.3 seconds.
+            offset = max(0, round(3 * (1 - min(1, phase_seconds / 0.3))))
+            mid_y = (2 + last_row_y) // 2
+            value_font = (title_font if get_text_width(title_font, detail['value'].upper()) <= w - 4
+                          else text_font)
+            label_y = mid_y - 6
+            value_y = label_y + 15
+            label_text = _truncate(stat_font, detail['label'].upper(), w - 4)
+            lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
+            _draw_text(matrix, stat_font, lx, label_y + offset, graphics.Color(145, 165, 190), label_text)
 
-                value_text = _truncate(value_font, detail['value'].upper(), w - 4)
-                vx = max((w - get_text_width(value_font, value_text)) // 2, 2)
-                star = bool(summary.get("is_output_pr")) and detail['label'] == 'total output'
-                graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value_text)
-                if star:
-                    star_x = vx + get_text_width(value_font, value_text) + 2
-                    star_top = value_y + offset - _STAR_H
-                    _draw_star(matrix, star_x, star_top)
+            value_text = _truncate(value_font, detail['value'].upper(), w - 4)
+            vx = max((w - get_text_width(value_font, value_text)) // 2, 2)
+            star = bool(summary.get("is_output_pr")) and detail['label'] == 'total output'
+            graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value_text)
+            if star:
+                star_x = vx + get_text_width(value_font, value_text) + 2
+                star_top = value_y + offset - _STAR_H
+                _draw_star(matrix, star_x, star_top)
 
         # ── Bottom left: ♥ HR ─────────────────────────────────────────────
         hr_val = summary.get("hr_avg")

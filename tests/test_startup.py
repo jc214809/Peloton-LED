@@ -129,26 +129,30 @@ def test_long_discipline_name_with_max_stat_rows_does_not_collide():
     assert any(gap > 1 for gap in gaps), 'title and stats rows have no separating gap'
 
 
-def test_last_workout_screen_with_single_stat_never_changes_after_rise_in():
-    # Only one detail available (only strive_score, no hr_max/instructor here)
-    # -> nothing to rotate to, so once the initial 0.3s rise-in settles, the
-    # frame must stay identical as elapsed time advances.
+def test_last_workout_screen_intro_shows_header_then_clears_for_stats():
+    from display.ui.last_workout_screen import DETAIL_INTERVAL_SECONDS
+
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
     summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
                'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
     screen = LastWorkoutScreen()
     screen.on_enter(matrix, summary)
+
+    # During the intro, the discipline header is drawn (its color pixels appear).
     screen.update(0.5)
     assert screen.render(matrix, summary)
-    first = list(matrix.image.getdata())
-    screen.update(30.0)
+    disc_color = (255, 140, 0)  # Strength's discipline color
+    assert any(p == disc_color for p in matrix.image.getdata())
+
+    # Once the intro ends, the header clears and only the stat remains.
+    screen.update(DETAIL_INTERVAL_SECONDS)
     matrix.Clear()
     assert screen.render(matrix, summary)
-    assert list(matrix.image.getdata()) == first
+    assert not any(p == disc_color for p in matrix.image.getdata())
 
 
-def test_last_workout_screen_rotates_through_stat_details_and_wraps():
+def test_last_workout_screen_shows_instructor_in_intro_then_rotates_stats():
     from display.ui.last_workout_screen import DETAIL_INTERVAL_SECONDS, _stat_details
 
     matrix = ImageMatrix(height=64)
@@ -156,28 +160,35 @@ def test_last_workout_screen_rotates_through_stat_details_and_wraps():
     summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
                'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22,
                'hr_max': 165, 'instructor': 'Robin Arzon'}
-    detail_count = len(_stat_details(summary))
-    assert detail_count >= 2
+    all_details = _stat_details(summary)
+    stat_only_count = sum(1 for d in all_details if d['label'] != 'instructor')
+    assert stat_only_count >= 2
 
     screen = LastWorkoutScreen()
     screen.on_enter(matrix, summary)
-    screen.update(0.5)  # past the initial rise-in for the first detail
-
+    screen.update(0.5)  # past the initial rise-in, still in the intro
     assert screen.render(matrix, summary)
-    first_frame = list(matrix.image.getdata())
+    intro_frame = list(matrix.image.getdata())
+
+    # Stats phase starts once the intro ends; the instructor never appears
+    # again since it isn't part of the stats-only rotation.
+    screen.update(DETAIL_INTERVAL_SECONDS)
+    matrix.Clear()
+    assert screen.render(matrix, summary)
+    first_stat_frame = list(matrix.image.getdata())
+    assert first_stat_frame != intro_frame
 
     screen.update(DETAIL_INTERVAL_SECONDS)
     matrix.Clear()
     assert screen.render(matrix, summary)
-    second_frame = list(matrix.image.getdata())
-    assert second_frame != first_frame
+    second_stat_frame = list(matrix.image.getdata())
+    assert second_stat_frame != first_stat_frame
 
-    # After a full cycle through every detail, the first one shows again,
-    # at the same 0.5s phase offset used to capture first_frame.
-    screen.update(DETAIL_INTERVAL_SECONDS * (detail_count - 1))
+    # After a full cycle through every stat, the first one shows again.
+    screen.update(DETAIL_INTERVAL_SECONDS * (stat_only_count - 1))
     matrix.Clear()
     assert screen.render(matrix, summary)
-    assert list(matrix.image.getdata()) == first_frame
+    assert list(matrix.image.getdata()) == first_stat_frame
 
 
 @pytest.mark.parametrize('height', [32, 64])
