@@ -214,17 +214,71 @@ def _middle_stats(summary: dict) -> List[Tuple[Optional[str], Optional[str]]]:
 
 
 def _stat_details(summary: dict) -> List[dict]:
-    """Flatten _middle_stats' rows into one detail item per stat, plus
-    instructor when present, for the rotating single-item display."""
+    """Discipline-specific stat values with spelled-out labels, one detail per
+    stat, for the rotating single-item display. Mirrors _middle_stats' field
+    selection and discipline routing exactly, but builds a full label instead
+    of the abbreviated unit that fits _middle_stats' packed side-by-side rows
+    (e.g. "output" instead of "kj") since only one detail is shown at a time.
+    """
+    disc = (summary.get("discipline") or "").strip().lower()
     details = []
-    for left, right in _middle_stats(summary):
-        for value in (left, right):
-            if value:
-                parts = value.split(' ', 1)
-                details.append({'value': parts[0], 'label': parts[1] if len(parts) == 2 else ''})
+
+    def add(label, value):
+        if value is not None:
+            details.append({'label': label, 'value': value})
+
+    if any(d in disc for d in ("cycling", "bike")):
+        output = summary.get("total_output_kj")
+        strive = summary.get("strive_score")
+        spd = summary.get("avg_speed")
+        spd_unit = summary.get("avg_speed_unit") or ""
+        cad = summary.get("avg_cadence")
+        res = summary.get("avg_resistance")
+        dist_val = summary.get("distance")
+        dist_unit = summary.get("distance_unit") or ""
+        add("total output", f"{int(output)} kj" if isinstance(output, (int, float)) else None)
+        add("strive score", f"{int(strive)}" if isinstance(strive, (int, float)) else None)
+        add("avg speed", f"{spd:.1f} {spd_unit}" if isinstance(spd, (int, float)) else None)
+        add("avg cadence", f"{int(cad)} rpm" if isinstance(cad, (int, float)) else None)
+        add("avg resistance", f"{int(res)}%" if isinstance(res, (int, float)) else None)
+        add("distance", f"{dist_val:.1f} {dist_unit}" if isinstance(dist_val, (int, float)) else None)
+    elif any(d in disc for d in ("running", "walking", "outdoor", "tread", "hiking")):
+        dist_val = summary.get("distance")
+        dist_unit = summary.get("distance_unit") or ""
+        pace_val = summary.get("avg_pace")
+        elevation = summary.get("elevation")
+        elevation_unit = summary.get("elevation_unit") or ""
+        incline = summary.get("avg_incline")
+        add("distance", f"{dist_val:.1f} {dist_unit}" if isinstance(dist_val, (int, float)) else None)
+        add("avg pace", f"{_fmt_pace(pace_val)}{(summary.get('avg_pace_unit') or '').replace('min', '')}"
+            if pace_val is not None else None)
+        if elevation is not None or incline is not None:
+            add("elevation gain", f"{elevation:g} {elevation_unit}" if isinstance(elevation, (int, float)) else None)
+            add("avg incline", f"{incline:g}%" if isinstance(incline, (int, float)) else None)
+    elif "rowing" in disc or disc.startswith("row "):
+        dist_val = summary.get("distance")
+        dist_unit = summary.get("distance_unit") or ""
+        spm_val = summary.get("avg_stroke_rate")
+        split_val = summary.get("row_split_sec_per_500m")
+        out_val = summary.get("avg_output_w")
+        add("distance", f"{dist_val:g}{dist_unit}" if isinstance(dist_val, (int, float)) else None)
+        add("stroke rate", f"{int(spm_val)} spm" if isinstance(spm_val, (int, float)) else None)
+        add("split per 500m", _fmt_split(split_val) if split_val else None)
+        add("avg output", f"{int(out_val)}W" if isinstance(out_val, (int, float)) else None)
+    else:
+        strive = summary.get("strive_score")
+        hr_max = summary.get("hr_max")
+        distance = summary.get("distance")
+        distance_unit = summary.get("distance_unit") or ""
+        avg_output = summary.get("avg_output_w")
+        add("strive score", f"{strive:g}" if isinstance(strive, (int, float)) else None)
+        add("max heart rate", f"{int(hr_max)}" if isinstance(hr_max, (int, float)) else None)
+        add("distance", f"{distance:g} {distance_unit}" if isinstance(distance, (int, float)) else None)
+        add("avg output", f"{int(avg_output)}W" if isinstance(avg_output, (int, float)) else None)
+
     instructor = (summary.get("instructor") or "").strip()
     if instructor:
-        details.append({'value': instructor, 'label': 'instructor'})
+        add("instructor", instructor)
     return details
 
 
@@ -396,7 +450,10 @@ class LastWorkoutScreen(Screen):
             # Each new detail rises into place during its first 0.3 seconds.
             offset = max(0, round(3 * (1 - min(1, phase_seconds / 0.3))))
             is_instructor = detail['label'] == 'instructor'
-            mid_y = available_top + (available_bottom - available_top) // 2
+            mid_y = available_top + (available_bottom - available_top) // 2 - 3
+            # Shifting the block up must never crowd the title above; the
+            # topmost line always keeps at least a 5px gap below header_bottom.
+            min_top = header_bottom + 5
 
             if is_instructor:
                 value_font = text_font
@@ -406,7 +463,7 @@ class LastWorkoutScreen(Screen):
                 # without crowding the header above or HR/cal bar below.
                 show_label = len(value_lines) == 1
                 block_lines = (1 if show_label else 0) + len(value_lines)
-                start_y = mid_y - 3 * (block_lines - 1)
+                start_y = max(mid_y - 3 * (block_lines - 1), min_top)
                 y = start_y
                 if show_label:
                     label_text = _truncate(stat_font, "INSTRUCTOR", w - 4)
@@ -420,15 +477,15 @@ class LastWorkoutScreen(Screen):
             else:
                 value_font = (title_font if get_text_width(title_font, detail['value'].upper()) <= w - 4
                               else text_font)
-                label_y = mid_y - 3
-                value_y = mid_y + 9
+                label_y = max(mid_y - 3, min_top)
+                value_y = label_y + 12
                 label_text = _truncate(stat_font, detail['label'].upper(), w - 4)
                 lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
                 _draw_text(matrix, stat_font, lx, label_y + offset, graphics.Color(145, 165, 190), label_text)
 
                 value_text = _truncate(value_font, detail['value'].upper(), w - 4)
                 vx = max((w - get_text_width(value_font, value_text)) // 2, 2)
-                star = bool(summary.get("is_output_pr")) and detail['label'] == 'kj'
+                star = bool(summary.get("is_output_pr")) and detail['label'] == 'total output'
                 graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value_text)
                 if star:
                     star_x = vx + get_text_width(value_font, value_text) + 2
