@@ -129,6 +129,47 @@ def test_long_discipline_name_with_max_stat_rows_does_not_collide():
     assert any(gap > 1 for gap in gaps), 'title and stats rows have no separating gap'
 
 
+def test_last_workout_screen_without_instructor_never_changes_over_time():
+    matrix = ImageMatrix(height=64)
+    initialize_fonts(64)
+    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
+               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
+    screen = LastWorkoutScreen()
+    screen.on_enter(matrix, summary)
+    assert screen.render(matrix, summary)
+    first = list(matrix.image.getdata())
+    screen.update(30.0)
+    matrix.Clear()
+    assert screen.render(matrix, summary)
+    assert list(matrix.image.getdata()) == first
+
+
+def test_last_workout_screen_rotates_to_instructor_tier_then_back():
+    from display.ui.last_workout_screen import STAT_TIER_INTERVAL_SECONDS
+
+    matrix = ImageMatrix(height=64)
+    initialize_fonts(64)
+    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
+               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22,
+               'hr_max': 165, 'instructor': 'Robin Arzon'}
+    screen = LastWorkoutScreen()
+    screen.on_enter(matrix, summary)
+
+    assert screen.render(matrix, summary)
+    stats_frame = list(matrix.image.getdata())
+
+    screen.update(STAT_TIER_INTERVAL_SECONDS + 0.1)
+    matrix.Clear()
+    assert screen.render(matrix, summary)
+    instructor_frame = list(matrix.image.getdata())
+    assert instructor_frame != stats_frame
+
+    screen.update(STAT_TIER_INTERVAL_SECONDS)
+    matrix.Clear()
+    assert screen.render(matrix, summary)
+    assert list(matrix.image.getdata()) == stats_frame
+
+
 @pytest.mark.parametrize('height', [32, 64])
 def test_startup_logo_mask_renders_centered_within_panel(height):
     from display.ui.logo_art import LOGO_ROWS

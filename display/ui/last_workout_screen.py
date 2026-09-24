@@ -251,11 +251,31 @@ def _draw_heart(matrix, x: int, y: int, color: graphics.Color) -> None:
         matrix.SetPixel(x + dx, y + dy, r, g, b)
 
 
+STAT_TIER_INTERVAL_SECONDS = 5.0
+
+
 class LastWorkoutScreen(Screen):
     """Displays key stats from a workout summary on a 64x64 LED matrix.
 
     state should be the dict returned by peloton.summaries.summarize_workout().
+
+    The discipline/title/duration header and the bottom HR/calories bar stay
+    fixed for the whole screen. The middle stat block rotates through tiers
+    (performance stats, then instructor) when there's more than one tier to
+    show, on the same "hold, then flip" pattern as UsernameScreen's details.
     """
+
+    animated = True
+    atomic_frames = True
+
+    def __init__(self):
+        self.elapsed = 0.0
+
+    def on_enter(self, matrix, state=None):
+        self.elapsed = 0.0
+
+    def update(self, dt):
+        self.elapsed += max(0, dt)
 
     def render(self, matrix, state: Optional[Any] = None) -> bool:
         summary = state or {}
@@ -344,27 +364,48 @@ class LastWorkoutScreen(Screen):
         header_bottom = dur_y + 7 + max(len(title_lines[:2]) - 1, 0) * 7
 
         # ── Stats: stacked between the header and the HR/cal bar ──────────
-        stats = _middle_stats(summary)
+        # The middle block rotates through tiers (stats, then instructor) when
+        # there's more than one tier to show; header and HR/cal stay fixed.
+        instructor = (summary.get("instructor") or "").strip()
+        tiers = ["stats"]
+        if instructor:
+            tiers.append("instructor")
+        tier = tiers[int(self.elapsed / STAT_TIER_INTERVAL_SECONDS) % len(tiers)]
+
         _BOTTOM_Y = 61
         _STAT_STEP = 6
         mid = w // 2 + 1
         _half = mid - 2 - 2
         last_row_y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below the last stat.
-        default_top = last_row_y - _STAT_STEP * (len(stats) - 1)
-        if default_top >= header_bottom + _STAT_STEP or len(stats) <= 1:
-            top, step = default_top, _STAT_STEP
+
+        if tier == "instructor":
+            instr_font = text_font
+            instr_text = _truncate(instr_font, instructor.upper(), w - 4)
+            instr_y = header_bottom + (last_row_y - header_bottom) // 2 + 3
+            ix = max((w - _text_width(instr_font, instr_text)) // 2, 2)
+            label = "INSTRUCTOR"
+            label_font = stat_font
+            label_y = instr_y - 8
+            lx = max((w - _text_width(label_font, label)) // 2, 2)
+            _draw_text(matrix, label_font, lx, label_y, graphics.Color(145, 165, 190), label)
+            _draw_text(matrix, instr_font, ix, instr_y, _WHITE, instr_text)
         else:
-            # Not enough room at the normal step; compress rows to fit between
-            # the header and the HR/cal bar instead of overlapping either one.
-            top = header_bottom + _STAT_STEP
-            step = max(1, (last_row_y - top) // (len(stats) - 1))
-        stat_ys = [top + step * i for i in range(len(stats))]
-        for row_y, (left, right) in zip(stat_ys, stats):
-            if left:
-                _draw_stat(matrix, stat_font, 2, row_y, _WHITE, left, _half,
-                           star=bool(summary.get("is_output_pr")) and left.endswith("kj"))
-            if right:
-                _draw_stat(matrix, stat_font, w - 1, row_y, _WHITE, right, w - mid - 2, right_align=True)
+            stats = _middle_stats(summary)
+            default_top = last_row_y - _STAT_STEP * (len(stats) - 1)
+            if default_top >= header_bottom + _STAT_STEP or len(stats) <= 1:
+                top, step = default_top, _STAT_STEP
+            else:
+                # Not enough room at the normal step; compress rows to fit between
+                # the header and the HR/cal bar instead of overlapping either one.
+                top = header_bottom + _STAT_STEP
+                step = max(1, (last_row_y - top) // (len(stats) - 1))
+            stat_ys = [top + step * i for i in range(len(stats))]
+            for row_y, (left, right) in zip(stat_ys, stats):
+                if left:
+                    _draw_stat(matrix, stat_font, 2, row_y, _WHITE, left, _half,
+                               star=bool(summary.get("is_output_pr")) and left.endswith("kj"))
+                if right:
+                    _draw_stat(matrix, stat_font, w - 1, row_y, _WHITE, right, w - mid - 2, right_align=True)
 
         # ── Bottom left: ♥ HR ─────────────────────────────────────────────
         hr_val = summary.get("hr_avg")
