@@ -213,6 +213,21 @@ def _middle_stats(summary: dict) -> List[Tuple[Optional[str], Optional[str]]]:
     return rows
 
 
+def _stat_details(summary: dict) -> List[dict]:
+    """Flatten _middle_stats' rows into one detail item per stat, plus
+    instructor when present, for the rotating single-item display."""
+    details = []
+    for left, right in _middle_stats(summary):
+        for value in (left, right):
+            if value:
+                parts = value.split(' ', 1)
+                details.append({'value': parts[0], 'label': parts[1] if len(parts) == 2 else ''})
+    instructor = (summary.get("instructor") or "").strip()
+    if instructor:
+        details.append({'value': instructor, 'label': 'instructor'})
+    return details
+
+
 # 5-wide × 5-tall pixel star (offsets from top-left)
 _STAR_PIXELS = [
     (2,0),                          # top point
@@ -251,7 +266,7 @@ def _draw_heart(matrix, x: int, y: int, color: graphics.Color) -> None:
         matrix.SetPixel(x + dx, y + dy, r, g, b)
 
 
-STAT_TIER_INTERVAL_SECONDS = 5.0
+DETAIL_INTERVAL_SECONDS = 4.0
 
 
 class LastWorkoutScreen(Screen):
@@ -260,9 +275,10 @@ class LastWorkoutScreen(Screen):
     state should be the dict returned by peloton.summaries.summarize_workout().
 
     The discipline/title/duration header and the bottom HR/calories bar stay
-    fixed for the whole screen. The middle stat block rotates through tiers
-    (performance stats, then instructor) when there's more than one tier to
-    show, on the same "hold, then flip" pattern as UsernameScreen's details.
+    fixed for the whole screen. The middle shows one stat at a time, large,
+    cycling through them on the same "hold, then rise into place" pattern as
+    UsernameScreen's details, instead of bundling every stat into small rows
+    at once.
     """
 
     animated = True
@@ -363,49 +379,61 @@ class LastWorkoutScreen(Screen):
             _draw_text(matrix, text_font, tx, dur_y + 7 + i * 7, _WHITE, line)
         header_bottom = dur_y + 7 + max(len(title_lines[:2]) - 1, 0) * 7
 
-        # ── Stats: stacked between the header and the HR/cal bar ──────────
-        # The middle block rotates through tiers (stats, then instructor) when
-        # there's more than one tier to show; header and HR/cal stay fixed.
-        instructor = (summary.get("instructor") or "").strip()
-        tiers = ["stats"]
-        if instructor:
-            tiers.append("instructor")
-        tier = tiers[int(self.elapsed / STAT_TIER_INTERVAL_SECONDS) % len(tiers)]
-
+        # ── Middle: one stat at a time, large, cycling ─────────────────────
+        # Header and HR/cal stay fixed; only this middle detail rotates.
         _BOTTOM_Y = 61
         _STAT_STEP = 6
-        mid = w // 2 + 1
-        _half = mid - 2 - 2
-        last_row_y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below the last stat.
+        last_row_y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below.
+        available_top = header_bottom + _STAT_STEP
+        available_bottom = last_row_y
 
-        if tier == "instructor":
-            instr_font = text_font
-            instr_text = _truncate(instr_font, instructor.upper(), w - 4)
-            instr_y = header_bottom + (last_row_y - header_bottom) // 2 + 3
-            ix = max((w - _text_width(instr_font, instr_text)) // 2, 2)
-            label = "INSTRUCTOR"
-            label_font = stat_font
-            label_y = instr_y - 8
-            lx = max((w - _text_width(label_font, label)) // 2, 2)
-            _draw_text(matrix, label_font, lx, label_y, graphics.Color(145, 165, 190), label)
-            _draw_text(matrix, instr_font, ix, instr_y, _WHITE, instr_text)
-        else:
-            stats = _middle_stats(summary)
-            default_top = last_row_y - _STAT_STEP * (len(stats) - 1)
-            if default_top >= header_bottom + _STAT_STEP or len(stats) <= 1:
-                top, step = default_top, _STAT_STEP
+        details = _stat_details(summary)
+        if details:
+            interval = DETAIL_INTERVAL_SECONDS
+            index = int(self.elapsed / interval) % len(details)
+            phase_seconds = self.elapsed % interval
+            detail = details[index]
+            # Each new detail rises into place during its first 0.3 seconds.
+            offset = max(0, round(3 * (1 - min(1, phase_seconds / 0.3))))
+            is_instructor = detail['label'] == 'instructor'
+            mid_y = available_top + (available_bottom - available_top) // 2
+
+            if is_instructor:
+                value_font = text_font
+                value_lines = _wrap_two_lines(value_font, detail['value'].upper(), w - 4)[:2]
+                # A single-line name keeps its "INSTRUCTOR" caption; a name
+                # long enough to wrap drops it so both lines have room
+                # without crowding the header above or HR/cal bar below.
+                show_label = len(value_lines) == 1
+                block_lines = (1 if show_label else 0) + len(value_lines)
+                start_y = mid_y - 3 * (block_lines - 1)
+                y = start_y
+                if show_label:
+                    label_text = _truncate(stat_font, "INSTRUCTOR", w - 4)
+                    lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
+                    _draw_text(matrix, stat_font, lx, y + offset, graphics.Color(145, 165, 190), label_text)
+                    y += 8
+                for line in value_lines:
+                    vx = max((w - _text_width(value_font, line)) // 2, 2)
+                    _draw_text(matrix, value_font, vx, y + offset, _WHITE, line)
+                    y += 7
             else:
-                # Not enough room at the normal step; compress rows to fit between
-                # the header and the HR/cal bar instead of overlapping either one.
-                top = header_bottom + _STAT_STEP
-                step = max(1, (last_row_y - top) // (len(stats) - 1))
-            stat_ys = [top + step * i for i in range(len(stats))]
-            for row_y, (left, right) in zip(stat_ys, stats):
-                if left:
-                    _draw_stat(matrix, stat_font, 2, row_y, _WHITE, left, _half,
-                               star=bool(summary.get("is_output_pr")) and left.endswith("kj"))
-                if right:
-                    _draw_stat(matrix, stat_font, w - 1, row_y, _WHITE, right, w - mid - 2, right_align=True)
+                value_font = (title_font if get_text_width(title_font, detail['value'].upper()) <= w - 4
+                              else text_font)
+                label_y = mid_y - 3
+                value_y = mid_y + 9
+                label_text = _truncate(stat_font, detail['label'].upper(), w - 4)
+                lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
+                _draw_text(matrix, stat_font, lx, label_y + offset, graphics.Color(145, 165, 190), label_text)
+
+                value_text = _truncate(value_font, detail['value'].upper(), w - 4)
+                vx = max((w - get_text_width(value_font, value_text)) // 2, 2)
+                star = bool(summary.get("is_output_pr")) and detail['label'] == 'kj'
+                graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value_text)
+                if star:
+                    star_x = vx + get_text_width(value_font, value_text) + 2
+                    star_top = value_y + offset - _STAR_H
+                    _draw_star(matrix, star_x, star_top)
 
         # ── Bottom left: ♥ HR ─────────────────────────────────────────────
         hr_val = summary.get("hr_avg")
@@ -418,6 +446,7 @@ class LastWorkoutScreen(Screen):
         cal_val = summary.get("calories")
         if isinstance(cal_val, (int, float)):
             right = w - 1 - (8 if summary.get('login_required') else 0)
+            mid = w // 2 + 1
             _draw_stat(matrix, stat_font, right, _BOTTOM_Y, _WHITE, f"{int(cal_val)} cal",
                        max(0, right - mid), right_align=True)
 

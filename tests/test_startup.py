@@ -129,13 +129,17 @@ def test_long_discipline_name_with_max_stat_rows_does_not_collide():
     assert any(gap > 1 for gap in gaps), 'title and stats rows have no separating gap'
 
 
-def test_last_workout_screen_without_instructor_never_changes_over_time():
+def test_last_workout_screen_with_single_stat_never_changes_after_rise_in():
+    # Only one detail available (only strive_score, no hr_max/instructor here)
+    # -> nothing to rotate to, so once the initial 0.3s rise-in settles, the
+    # frame must stay identical as elapsed time advances.
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
     summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
                'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
     screen = LastWorkoutScreen()
     screen.on_enter(matrix, summary)
+    screen.update(0.5)
     assert screen.render(matrix, summary)
     first = list(matrix.image.getdata())
     screen.update(30.0)
@@ -144,30 +148,36 @@ def test_last_workout_screen_without_instructor_never_changes_over_time():
     assert list(matrix.image.getdata()) == first
 
 
-def test_last_workout_screen_rotates_to_instructor_tier_then_back():
-    from display.ui.last_workout_screen import STAT_TIER_INTERVAL_SECONDS
+def test_last_workout_screen_rotates_through_stat_details_and_wraps():
+    from display.ui.last_workout_screen import DETAIL_INTERVAL_SECONDS, _stat_details
 
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
     summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
                'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22,
                'hr_max': 165, 'instructor': 'Robin Arzon'}
+    detail_count = len(_stat_details(summary))
+    assert detail_count >= 2
+
     screen = LastWorkoutScreen()
     screen.on_enter(matrix, summary)
+    screen.update(0.5)  # past the initial rise-in for the first detail
 
     assert screen.render(matrix, summary)
-    stats_frame = list(matrix.image.getdata())
+    first_frame = list(matrix.image.getdata())
 
-    screen.update(STAT_TIER_INTERVAL_SECONDS + 0.1)
+    screen.update(DETAIL_INTERVAL_SECONDS)
     matrix.Clear()
     assert screen.render(matrix, summary)
-    instructor_frame = list(matrix.image.getdata())
-    assert instructor_frame != stats_frame
+    second_frame = list(matrix.image.getdata())
+    assert second_frame != first_frame
 
-    screen.update(STAT_TIER_INTERVAL_SECONDS)
+    # After a full cycle through every detail, the first one shows again,
+    # at the same 0.5s phase offset used to capture first_frame.
+    screen.update(DETAIL_INTERVAL_SECONDS * (detail_count - 1))
     matrix.Clear()
     assert screen.render(matrix, summary)
-    assert list(matrix.image.getdata()) == stats_frame
+    assert list(matrix.image.getdata()) == first_frame
 
 
 @pytest.mark.parametrize('height', [32, 64])
