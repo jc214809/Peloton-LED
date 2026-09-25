@@ -10,6 +10,19 @@ Preview any size with real cached data:
 python scripts/render_rotation.py --height 32 --cache cookies-joel-dashboard-cache.json --out /tmp/joel-32.png
 ```
 
+Run the real app at 64x32 in the emulator:
+
+```bash
+./peloton_led.py --emulated --led-rows 32 --led-cols 64          # your data
+./peloton_led.py --emulated --led-rows 32 --led-cols 64 --demo   # demo data
+```
+
+**Previews to look at:** `docs/screenshots/64x32/`. It holds `joel-rotation.png`,
+`jen-rotation.png`, `demo-rotation.png` (every page and every stat slide
+of a full rotation) and `edge-cases.png` (PR variants, 4-digit output, long
+titles, Bike Bootcamp, status screens, goals). They are not committed because
+the repo is public and two of them show your real workout data.
+
 ## Status
 
 | Screen | 64x32 before | Status |
@@ -20,8 +33,8 @@ python scripts/render_rotation.py --height 32 --cache cookies-joel-dashboard-cac
 | Total workouts count page | Two-line names crowded the count | **done** |
 | Lifetime disciplines | One text page per discipline (12 pages) | **done**: icon pages, 2 per page |
 | Goals / milestones | Unit missing ("2/5" of what?) | **done** |
-| Logo | Separate 64x32 art exists | to check |
-| Login / stale overlays | Bottom corners | to check |
+| Logo | Separate 64x32 art exists | **checked, no change** |
+| Login / stale overlays | Bottom corners | **checked**; workout title and calories move out of their way |
 
 ## Changes and decisions
 
@@ -102,6 +115,14 @@ bottom row. The "Total Workouts" page is still the text page.
 **This changes 64x32 more than any other item here.** If you prefer the old
 text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
 `build_rotation_pages`.
+
+### Other
+- The startup warning "Detailed workout view is simplified on 32-row
+  panels" was removed because it's no longer true.
+- README's 64x32 sections were updated to describe the new behavior.
+- Verified end to end: `peloton_led.py --emulated --demo --led-rows 32
+  --cycles 1` ran a full rotation for both configured users and exited
+  cleanly (in the emulator on port 8893, so your 8888 session was untouched).
 
 ## Open questions for Joel
 

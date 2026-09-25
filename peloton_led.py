@@ -268,8 +268,6 @@ def main():
     except Exception as exc:
         raise SystemExit(f'Could not initialize the matrix: {exc}') from exc
     initialize_fonts(matrix.height)
-    if matrix.height < 64:
-        logger.warning('Detailed workout view is simplified on 32-row panels')
     profiles = configured_profiles(config, options)
     active = {'dashboard': profiles[0]['dashboard']}
     manager = ScreenManager(matrix,

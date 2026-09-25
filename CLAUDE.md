@@ -20,6 +20,16 @@ sudo ./peloton_led.py
 
 Key CLI flags: `--config <path>` (default: `config.json`), `--led-rows`, `--led-cols`, `--cookies`, `--username`, `--display-duration`.
 
+## Previewing Screens
+
+```bash
+# Whole rotation to a PNG contact sheet, no API calls (cache file or --demo)
+python scripts/render_rotation.py --height 32 --cache cookies-joel-dashboard-cache.json --out /tmp/joel-32.png
+python scripts/render_rotation.py --height 64 --demo --out /tmp/demo-64.png
+```
+
+Both 64x64 and 64x32 are supported. 32-row layouts live behind `matrix.height < 64` checks in each screen; the 64x64 layout is the reference and must not change when adjusting 32 rows (compare `render_rotation.py --height 64` output byte for byte before/after). `docs/64x32-NOTES.md` records every 32-row difference and why.
+
 ## Running Tests
 
 ```bash
