@@ -282,6 +282,19 @@ def _stat_details(summary: dict) -> List[dict]:
     return details
 
 
+def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
+    """Details the stats phase cycles through, in order.
+
+    64-row panels show the instructor in the intro, so only stats rotate.
+    32-row panels have no room for it there, so it leads the rotation.
+    """
+    details = _stat_details(summary)
+    stats = [d for d in details if d['label'] != 'instructor']
+    if matrix_height < 64:
+        return [d for d in details if d['label'] == 'instructor'] + stats
+    return stats
+
+
 # 5-wide × 5-tall pixel star (offsets from top-left)
 _STAR_PIXELS = [
     (2,0),                          # top point
@@ -320,6 +333,41 @@ def _draw_heart(matrix, x: int, y: int, color: graphics.Color) -> None:
         matrix.SetPixel(x + dx, y + dy, r, g, b)
 
 
+def _draw_hr_calories(matrix, summary: dict, stat_font, bottom_y: int) -> None:
+    """Bottom bar: ♥ average HR on the left, calories on the right."""
+    font_h = getattr(stat_font, "height", 8)
+    w = matrix.width
+    hr_val = summary.get("hr_avg")
+    if isinstance(hr_val, (int, float)):
+        heart_top = bottom_y - font_h + (font_h - _HEART_H) // 2 + 1
+        _draw_heart(matrix, 2, heart_top, _RED)
+        graphics.DrawText(matrix, stat_font, 2 + _HEART_W + 1, bottom_y, _WHITE, str(int(hr_val)))
+
+    cal_val = summary.get("calories")
+    if isinstance(cal_val, (int, float)):
+        # Leave the bottom-right corner free for the login padlock.
+        right = w - 1 - (8 if summary.get('login_required') else 0)
+        mid = w // 2 + 1
+        _draw_stat(matrix, stat_font, right, bottom_y, _WHITE, f"{int(cal_val)} cal",
+                   max(0, right - mid), right_align=True)
+
+
+def _draw_short_lines(matrix, font, lines: List[str], top_y: int, summary: dict) -> None:
+    """Up to two centered 4x6 lines, 7px apart, for the 32-row layout.
+
+    The second line sits on the bottom rows, so it is narrowed to clear the
+    login padlock (bottom right) and stale-data clock (bottom left) when shown.
+    """
+    w = matrix.width
+    for i, line in enumerate(lines[:2]):
+        if i == 1:
+            left = 9 if summary.get('data_stale') else 2
+            right = 9 if summary.get('login_required') else 2
+            line = _truncate(font, line, w - 2 * max(left, right))
+        tx = max((w - _text_width(font, line)) // 2, 2)
+        _draw_text(matrix, font, tx, top_y + i * 7, _WHITE, line)
+
+
 # Default seconds each intro/stat holds for; overridable via the
 # `last_workout_detail_interval` display config key.
 LAST_WORKOUT_DETAIL_INTERVAL_SECONDS = 4.0
@@ -354,6 +402,74 @@ class LastWorkoutScreen(Screen):
     def update(self, dt):
         self.elapsed += max(0, dt)
 
+    def _render_short(self, matrix, summary: dict, discipline: str, title_font, text_font, stat_font) -> bool:
+        """64x32 version of the two-phase layout.
+
+        Same order as 64x64 with the room redistributed:
+          intro: discipline / duration (+ gold PR) / title on up to two lines
+          stats: discipline / label / one large value / ♥ HR + calories bar
+        The instructor leads the stat rotation instead of sitting in the intro,
+        and the HR/calories bar only shows during stats; there is no room for
+        either under a two-line title.
+        """
+        w = matrix.width
+        bottom_y = matrix.height - 1
+        value_big = loaded_fonts.get("countdown") or title_font
+        grey = graphics.Color(145, 165, 190)
+
+        # ── Discipline: fixed at the top for both phases ────────────────────
+        disc_text = discipline.upper()
+        disc_font = title_font
+        if get_text_width(disc_font, disc_text) > w - 2:
+            disc_font = text_font
+        disc_text = _truncate(disc_font, disc_text, w - 2)
+        disc_y = 7 if disc_font is title_font else 6
+        dx = max((w - get_text_width(disc_font, disc_text)) // 2, 1)
+        graphics.DrawText(matrix, disc_font, dx, disc_y, _disc_color(discipline), disc_text)
+
+        if self.elapsed < self.detail_interval:
+            dur_min = summary.get("duration_min")
+            if isinstance(dur_min, (int, float)):
+                dur_text = f"{int(dur_min)} MIN"
+                x = max((w - _text_width(text_font, dur_text)) // 2, 2)
+                _draw_text(matrix, text_font, x, 15, _BLUE, dur_text)
+            if summary.get("is_pr"):
+                graphics.DrawText(matrix, text_font, w - get_text_width(text_font, "PR") - 2, 15, _GOLD, "PR")
+            title = (summary.get("title") or "").strip()
+            title = re.sub(r'^\d+\s*min\s*', '', title, flags=re.IGNORECASE).strip() or title
+            _draw_short_lines(matrix, text_font, _wrap_two_lines(text_font, title, w - 4), 22, summary)
+            return True
+
+        details = rotating_details(summary, matrix.height)
+        if details:
+            interval = self.detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+            stats_elapsed = self.elapsed - self.detail_interval
+            detail = details[int(stats_elapsed / interval) % len(details)]
+            # Rise 2px rather than 3 so the value never brushes the bottom bar.
+            offset = max(0, round(2 * (1 - min(1, (stats_elapsed % interval) / 0.3))))
+            value = detail['value'].upper()
+            value_font = next((f for f in (value_big, title_font, text_font)
+                               if get_text_width(f, value) <= w - 4), text_font)
+            label = _truncate(stat_font, detail['label'].upper(), w - 4)
+            lx = max((w - _text_width(stat_font, label)) // 2, 2)
+            _draw_text(matrix, stat_font, lx, 15 + offset, grey, label)
+            if value_font is text_font and get_text_width(text_font, value) > w - 4:
+                # Long instructor names wrap into the bar's rows, so this one
+                # detail goes without the HR/calories bar.
+                _draw_short_lines(matrix, text_font, _wrap_two_lines(text_font, value, w - 4),
+                                  22 + offset, summary)
+                return True
+            else:
+                value_y = 24 if value_font is value_big else 23
+                vx = max((w - get_text_width(value_font, value)) // 2, 2)
+                graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value)
+                if summary.get("is_output_pr") and detail['label'] == 'total output':
+                    star_x = vx + get_text_width(value_font, value) + 2
+                    _draw_star(matrix, min(star_x, w - _STAR_W), value_y + offset - _STAR_H)
+
+        _draw_hr_calories(matrix, summary, stat_font, bottom_y)
+        return True
+
     def render(self, matrix, state: Optional[Any] = None) -> bool:
         summary = state or {}
         if not summary:
@@ -372,7 +488,10 @@ class LastWorkoutScreen(Screen):
         discipline = (summary.get("discipline") or "Workout").strip()
         font_h = getattr(stat_font, "height", 8)
         w = matrix.width
+        if matrix.height < 64 and 'compact_page' not in summary:
+            return self._render_short(matrix, summary, discipline, title_font, text_font, stat_font)
         if matrix.height < 64:
+            # Legacy two-page layout, kept for display.compact_workout_pages.
             if summary.get('compact_page') == 1:
                 stats = []
                 for left, right in _middle_stats(summary):
@@ -504,20 +623,7 @@ class LastWorkoutScreen(Screen):
                 star_top = value_y + offset - _STAR_H
                 _draw_star(matrix, star_x, star_top)
 
-        # ── Bottom left: ♥ HR ─────────────────────────────────────────────
-        hr_val = summary.get("hr_avg")
-        if isinstance(hr_val, (int, float)):
-            heart_top = _BOTTOM_Y - font_h + (font_h - _HEART_H) // 2 + 1
-            _draw_heart(matrix, 2, heart_top, _RED)
-            graphics.DrawText(matrix, stat_font, 2 + _HEART_W + 1, _BOTTOM_Y, _WHITE, str(int(hr_val)))
-
-        # ── Bottom right: calories ─────────────────────────────────────────
-        cal_val = summary.get("calories")
-        if isinstance(cal_val, (int, float)):
-            right = w - 1 - (8 if summary.get('login_required') else 0)
-            mid = w // 2 + 1
-            _draw_stat(matrix, stat_font, right, _BOTTOM_Y, _WHITE, f"{int(cal_val)} cal",
-                       max(0, right - mid), right_align=True)
+        _draw_hr_calories(matrix, summary, stat_font, _BOTTOM_Y)
 
         # ── PR badge ──────────────────────────────────────────────────────
         if summary.get("is_pr"):
