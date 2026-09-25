@@ -95,6 +95,18 @@ Set `brightness_schedule` to `null` to retain command-line brightness, or use a 
 
 Times use the configured/profile timezone and brightness ranges from 1 through 100. On 32-row panels, `compact_workout_pages: true` switches back to the older two-page compact workout layout in place of the rotating one.
 
+Set `refresh_schedule` to poll Peloton less often overnight, when nobody's likely to be working out:
+
+```json
+"refresh_schedule": {
+  "quiet_start": "23:00",
+  "quiet_end": "05:00",
+  "quiet_interval": 1800
+}
+```
+
+Between `quiet_start` and `quiet_end` (wraps midnight; uses the configured/profile timezone, or `refresh_schedule.timezone` to set its own), refreshes use `quiet_interval` seconds instead of `refresh_interval`. A workout started during the window shows once normal polling resumes at `quiet_end`, not immediately. Failure backoff (after a failed request) always uses `refresh_interval`, not the quiet interval, so a real outage still retries promptly. `refresh_schedule: null` (the default) disables this and always uses `refresh_interval`.
+
 ## Offline demo and checks
 
 Demo mode uses five synthetic API-shaped workouts, including a PR, long title, metric/imperial distances, and missing metrics. It does not read credentials or call Peloton. If no config exists, defaults are used.
@@ -140,6 +152,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `milestone_step` | `100` | Also count down to (and celebrate) every Nth lifetime workout, e.g. 2,200 after 2,100; `0` turns this off |
 | `journey` | Columbus → Disney World, 880 mi, Cycling + Running + Walking | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880, "disciplines": ["Cycling", "Running", "Walking"]}`. Any places, distance and disciplines; also settable per rider under `users[]` |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
+| `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |
 | `compact_workout_pages` | `false` | On 32-row panels, use the older two-page compact workout layout instead of the rotating one |
 
 `rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `journey`, `milestones`, `goals`, each at most once. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
@@ -193,6 +206,7 @@ Each refresh saves Peloton's output personal-records table (one record per disci
     "rotation": ["username", "latest_workouts", "total_workouts", "lifetime", "milestones", "goals"],
     "screen_durations": { "latest_workouts": 15, "username": 9, "lifetime": 5, "milestones": 4, "goals": 4 },
     "brightness_schedule": null,
+    "refresh_schedule": null,
     "compact_workout_pages": false
   }
 }

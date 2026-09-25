@@ -200,3 +200,39 @@ Code: `peloton/journey.py`, `display/ui/journey_screen.py`, the tally in
 2. Peloton also reports a **daily** streak (`current_daily`, 0 for you
    right now). It's parsed and saved but not shown. Say if you want it
    on the flame screen when it's 2 days or more.
+
+
+## Overnight quiet-hours refresh schedule (requested 2026-09-25, off-queue)
+
+Not one of the six numbered features — a follow-up to the rate-limiting
+conversation. Peloton's API is unofficial/undocumented with no published
+rate limits, so the community norm is to poll conservatively rather than
+find the limit the hard way.
+
+Set `display.refresh_schedule` to poll less often overnight:
+
+```json
+"refresh_schedule": {"quiet_start": "23:00", "quiet_end": "05:00", "quiet_interval": 1800}
+```
+
+- Wraps midnight, same pattern as the existing `brightness_schedule`.
+- Uses the quiet interval (default suggestion: 1800s / 30min) instead of
+  `refresh_interval` (default 300s / 5min) for the whole window.
+- Doesn't stop polling entirely — you asked to still catch a late workout
+  eventually rather than wait until 5am to show it.
+- No wake-on-activity trigger: a workout started at 1am shows once normal
+  polling resumes at `quiet_end`, not immediately. Detecting activity
+  without polling would defeat the purpose.
+- Failure backoff always uses the normal `refresh_interval` as its base,
+  never the quiet interval, so a real outage during quiet hours still
+  retries promptly instead of going an hour between attempts.
+- `null` (default) disables it entirely; behavior is unchanged for anyone
+  who doesn't set it.
+- With the 11pm-5am/30min example above: about 228 refreshes/day instead
+  of 288 (a refresh is several API calls: profile, overview, recent
+  workouts, instructor/distance tally page, and per-workout performance
+  graphs for anything new) — a 21% cut concentrated in the six hours
+  nobody's realistically on the bike.
+
+Code: `peloton/schedule.py`; wired into `Dashboard._current_interval()` in
+`peloton/dashboard.py`; tests in `tests/test_schedule.py`.

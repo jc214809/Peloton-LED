@@ -38,6 +38,7 @@
     },
     "milestones": [],
     "brightness_schedule": null,
+    "refresh_schedule": null,
     "compact_workout_pages": false
   }
 }

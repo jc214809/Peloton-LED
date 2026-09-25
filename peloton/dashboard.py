@@ -19,6 +19,7 @@ from .totals import extract_discipline_totals, parse_streaks
 from .goals import reached_milestones, weekly_progress
 from .instructors import merge_instructor_counts
 from .journey import merge_distance_totals, uses_metric
+from .schedule import scheduled_refresh_interval
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
 
 logger = logging.getLogger('peloton-led.dashboard')
@@ -29,6 +30,7 @@ class Dashboard:
         self.token_path = Path(token_path)
         self.config = config
         self.interval = config.get('refresh_interval', 300)
+        self.refresh_schedule = config.get('refresh_schedule')
         self._factory = client_factory or (lambda path: PelotonClient(make_session(path)))
         self._lock = threading.Lock()
         self._refresh_lock = threading.Lock()
@@ -145,6 +147,11 @@ class Dashboard:
         except (OSError, TypeError, ValueError) as exc:
             logger.warning('Could not persist milestone state (%s)', type(exc).__name__)
 
+    def _current_interval(self):
+        """The refresh interval for right now, honoring quiet hours."""
+        return scheduled_refresh_interval(self.refresh_schedule, self.interval,
+                                          timezone_name=self.config.get('timezone'))
+
     def _finish_attempt(self, started, delay, **values):
         """Publish refresh health fields together and return the next delay."""
         self._publish(refresh_in_progress=False,
@@ -181,6 +188,7 @@ class Dashboard:
         """Refresh once. Return the delay until the next request attempt."""
         if self.demo:
             return self.interval
+        interval = self._current_interval()
         started = time.monotonic()
         attempted_at = time.time()
         self._publish(refresh_in_progress=True, last_attempt=attempted_at)
@@ -188,7 +196,7 @@ class Dashboard:
         if stamp is None:
             self._client = None
             self._token_stamp = None
-            return self._finish_attempt(started, self.interval, login_required=True,
+            return self._finish_attempt(started, interval, login_required=True,
                                         status='login_needed', last_error='token_missing', data_stale=True)
         try:
             if self._client is None or stamp != self._token_stamp:
@@ -198,7 +206,7 @@ class Dashboard:
                 self._failures = 0
             elif self.login_required:
                 # Rejected token: wait for a replacement instead of retrying it.
-                return self._finish_attempt(started, self.interval,
+                return self._finish_attempt(started, interval,
                     login_required=True, status='login_needed', last_error='authentication', data_stale=True)
             client = self._client
             me = client.get_me()
@@ -258,7 +266,7 @@ class Dashboard:
             refreshed_at = time.time()
             progress = weekly_progress(workouts, tz)
             self._failures = 0
-            delay = self._finish_attempt(started, self.interval,
+            delay = self._finish_attempt(started, interval,
                 me=me, totals=extract_discipline_totals(overview), summaries=summaries,
                 streaks=parse_streaks(overview),
                 weekly_progress=progress,
@@ -282,7 +290,7 @@ class Dashboard:
                 isinstance(exc, ValueError) and str(exc) == 'Peloton token file is empty')
             if unauthorized or missing:
                 logger.warning('Peloton login needed; replace the token file to resume')
-                return self._finish_attempt(started, self.interval,
+                return self._finish_attempt(started, interval,
                     login_required=True, status='login_needed', last_error='authentication', data_stale=True)
             self._failures += 1
             delay = min(self.interval, 15 * 2 ** min(self._failures - 1, 6))

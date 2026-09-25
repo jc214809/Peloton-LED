@@ -26,6 +26,7 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'milestone_step': 100,
             'journey': DEFAULT_JOURNEY,
             'brightness_schedule': None,
+            'refresh_schedule': None,
             'compact_workout_pages': False}
 
 ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
@@ -210,5 +211,27 @@ def load_config(path='config', allow_missing=False):
                 datetime.strptime(schedule[key], '%H:%M')
             except (TypeError, ValueError) as exc:
                 raise ValueError(f'{path}: brightness {key} must use HH:MM') from exc
+    refresh_schedule = display.get('refresh_schedule')
+    if refresh_schedule is not None:
+        required = {'quiet_start', 'quiet_end', 'quiet_interval'}
+        if not isinstance(refresh_schedule, dict) or not required <= set(refresh_schedule):
+            raise ValueError(f'{path}: display.refresh_schedule requires quiet_start, quiet_end, and quiet_interval')
+        if set(refresh_schedule) - required - {'timezone'}:
+            raise ValueError(f'{path}: display.refresh_schedule has unsupported keys')
+        for key in ('quiet_start', 'quiet_end'):
+            try:
+                datetime.strptime(refresh_schedule[key], '%H:%M')
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f'{path}: refresh_schedule {key} must use HH:MM') from exc
+        interval = refresh_schedule['quiet_interval']
+        if isinstance(interval, bool) or not isinstance(interval, int) or interval <= 0:
+            raise ValueError(f'{path}: refresh_schedule.quiet_interval must be a positive integer')
+        if refresh_schedule.get('timezone') is not None:
+            if not isinstance(refresh_schedule['timezone'], str):
+                raise ValueError(f'{path}: refresh_schedule.timezone must be a string')
+            try:
+                ZoneInfo(refresh_schedule['timezone'])
+            except (ZoneInfoNotFoundError, ValueError) as exc:
+                raise ValueError(f'{path}: invalid refresh_schedule.timezone') from exc
     config['display'] = display
     return config
