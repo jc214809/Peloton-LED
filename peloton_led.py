@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from peloton.config import load_config, default_token_path, load_dotenv
 from peloton.dashboard import Dashboard
+from peloton.goals import next_milestone
 from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
 from utils.utils import args, led_matrix_options
@@ -18,7 +19,8 @@ from display.ui.streak_screen import streak_lines
 
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
-DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'lifetime',
+DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
+                    'next_milestone', 'lifetime',
                     'milestones', 'goals')
 
 
@@ -145,6 +147,12 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         groups['total_workouts'].append(('discipline', {
             'discipline': 'Total Workouts', 'count': total,
             'color_key': display['color']}, discipline_duration))
+    if 'next_milestone' in groups and total is not None:
+        upcoming = next_milestone(total, display.get('milestones', []), display.get('milestone_step', 0))
+        if upcoming:
+            groups['next_milestone'].append(('countdown', {
+                'total': total, 'previous': upcoming[0], 'target': upcoming[1]},
+                _duration(display, 'next_milestone', display['overview_duration'])))
     if 'lifetime' in groups:
         for index, items in enumerate(overview_pages):
             groups['lifetime'].append(('lifetime', {
@@ -159,7 +167,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                 groups['goals'].append(('goal', {
                     'title': 'Weekly Goal', 'current': progress.get(key, 0),
                     'target': target, 'unit': key}, goal_duration))
-    if 'milestones' in groups and display.get('milestones'):
+    if 'milestones' in groups and (display.get('milestones') or display.get('milestone_step')):
         for milestone in dashboard.pending_milestones(snapshot):
             groups['milestones'].append(('goal', {
                 'title': 'Milestone', 'current': milestone, 'target': milestone,
@@ -295,6 +303,7 @@ def main():
     from display.ui.goal_screen import GoalScreen
     from display.ui.streak_screen import StreakScreen
     from display.ui.versus_screen import VersusScreen
+    from display.ui.countdown_screen import CountdownScreen
 
     matrix = RGBMatrix(options=led_matrix_options(options))
     try:
@@ -317,6 +326,7 @@ def main():
     manager.register('goal', GoalScreen())
     manager.register('streak', StreakScreen())
     manager.register('versus', VersusScreen())
+    manager.register('countdown', CountdownScreen())
     configured_logo = display.get('logo_path')
     logo = Path(configured_logo) if configured_logo else None
     for profile in profiles:

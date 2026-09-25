@@ -12,8 +12,8 @@ feature works on both 64x64 and 64x32 panels.
 | 6 | Heart-rate zone bar | **done** |
 | 1 | Streak screen | **done** |
 | 3 | Joel vs. Jen this week | **done** |
-| 5 | Next-milestone countdown | next |
-| 9 | Distance journey (Columbus → Walt Disney World by default) | queued |
+| 5 | Next-milestone countdown | **done** |
+| 9 | Distance journey (Columbus → Walt Disney World by default) | next |
 
 Preview any of it without the API:
 
@@ -105,6 +105,35 @@ A new rotation section, `versus` (default position: after `streaks`).
 
 Code: `display/ui/versus_screen.py`, `weekly_rivals` in `peloton_led.py`;
 tests in `tests/test_versus.py`.
+
+## #5 Next-milestone countdown
+
+A new rotation section, `next_milestone` (default: right after the Total
+Workouts page).
+
+- **Target:** the next milestone in your `milestones` list above your
+  total. If you've passed them all (you have: your list is 100/250/500 and
+  you're at 2,111), it's the next multiple of the new `milestone_step`
+  setting, **default 100**. So Joel is at `89 TO GO` to 2,200 and Jen at
+  69.
+- **64x64:** `NEXT MILESTONE`, the target in gold, the remaining count big,
+  `TO GO`, a progress bar for the current stretch (2,100 → 2,200), and
+  `2,111 WORKOUTS`.
+- **64x32:** `NEXT: 2,200`, then the big number with `TO GO` beside it, the
+  bar, and the total.
+- **Celebration:** reaching a step milestone (2,200, 2,300, …) now shows
+  the existing gold `MILESTONE` screen once, like configured milestones.
+  To avoid celebrating something old, a step milestone only celebrates if
+  you crossed it within the last 10 workouts. So turning this on at 2,111
+  doesn't celebrate 2,100.
+- `milestone_step: 0` turns off both the step countdown and the step
+  celebrations. Configured `milestones` work as before.
+- Timing: `screen_durations.next_milestone`, falling back to
+  `overview_duration`.
+
+Code: `display/ui/countdown_screen.py`; `next_milestone` and
+`reached_milestones` in `peloton/goals.py`; tests in
+`tests/test_countdown.py`.
 
 ## Open questions for Joel
 

@@ -124,7 +124,8 @@ class Dashboard:
     def pending_milestones(self, snapshot=None):
         data = snapshot or self.snapshot()
         total = data.get('totals', {}).get('Total Workouts')
-        reached = reached_milestones(total, self.config.get('milestones', []))
+        reached = reached_milestones(total, self.config.get('milestones', []),
+                                     self.config.get('milestone_step', 0))
         celebrated = set(data.get('celebrated_milestones', []))
         return [value for value in reached if value not in celebrated]
 

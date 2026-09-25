@@ -14,18 +14,20 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'history_page_size': 50, 'history_max_pages': 10,
             'instructor_tally_max_pages': 200,
             'performance_cache_size': 32,
-            'rotation': ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'lifetime',
+            'rotation': ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
+                         'next_milestone', 'lifetime',
                          'milestones', 'goals'],
             'screen_durations': {},
             'weekly_goals': {'workouts': 0, 'minutes': 0},
             'milestones': [],
+            'milestone_step': 100,
             'brightness_schedule': None,
             'compact_workout_pages': False}
 
 ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
+                     'next_milestone', 'lifetime', 'milestones', 'goals'}
+DURATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'next_milestone',
                      'lifetime', 'milestones', 'goals'}
-DURATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'lifetime',
-                     'milestones', 'goals'}
 
 
 def user_slug(name):
@@ -165,6 +167,9 @@ def load_config(path='config', allow_missing=False):
             raise ValueError(f'{path}: display.screen_durations values must be non-negative numbers')
     _validate_weekly_goals(path, display.get('weekly_goals'), 'display.')
     display['milestones'] = _validate_milestones(path, display.get('milestones'), 'display.')
+    step = display.get('milestone_step')
+    if isinstance(step, bool) or not isinstance(step, int) or step < 0:
+        raise ValueError(f'{path}: display.milestone_step must be a non-negative integer')
     if not isinstance(display.get('compact_workout_pages'), bool):
         raise ValueError(f'{path}: display.compact_workout_pages must be true or false')
     schedule = display.get('brightness_schedule')

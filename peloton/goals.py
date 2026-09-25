@@ -31,7 +31,43 @@ def weekly_progress(workouts, timezone_name=None, now=None):
             'output_kj': int(round(joules / 1000))}
 
 
-def reached_milestones(total, thresholds):
-    if not isinstance(total, (int, float)):
+# A step milestone only celebrates if it was crossed this recently, so the
+# first run after enabling steps doesn't celebrate one reached long ago.
+STEP_CELEBRATION_WINDOW = 10
+
+
+def reached_milestones(total, thresholds, step=0):
+    """Configured milestones at or below total, plus the latest step multiple
+    (every `step` workouts) when it was crossed within the last few workouts."""
+    if not isinstance(total, (int, float)) or isinstance(total, bool):
         return []
-    return [value for value in thresholds if value <= total]
+    reached = {value for value in thresholds if value <= total}
+    if step and total >= step:
+        latest = int(total) // step * step
+        if total - latest < STEP_CELEBRATION_WINDOW:
+            reached.add(latest)
+    return sorted(reached)
+
+
+def next_milestone(total, thresholds, step=0):
+    """(previous, target) around total for the countdown, or None.
+
+    target is the next configured milestone above total, else the next
+    multiple of step; previous is the last milestone reached (or 0), so the
+    progress bar covers just the current stretch.
+    """
+    if not isinstance(total, int) or isinstance(total, bool) or total < 0:
+        return None
+    upcoming = [value for value in thresholds if value > total]
+    stepped = (total // step + 1) * step if step else None
+    if upcoming:
+        target = min(upcoming)
+    elif stepped:
+        target = stepped
+    else:
+        return None
+    below = [value for value in thresholds if value <= total]
+    if step:
+        below.append(total // step * step)
+    previous = max([value for value in below if value < target] or [0])
+    return previous, target
