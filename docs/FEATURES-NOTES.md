@@ -11,8 +11,8 @@ feature works on both 64x64 and 64x32 panels.
 | 4 | Output graph for the last workout | **done** |
 | 6 | Heart-rate zone bar | **done** |
 | 1 | Streak screen | **done** |
-| 3 | Joel vs. Jen this week | next |
-| 5 | Next-milestone countdown | queued |
+| 3 | Joel vs. Jen this week | **done** |
+| 5 | Next-milestone countdown | next |
 | 9 | Distance journey (Columbus → Walt Disney World by default) | queued |
 
 Preview any of it without the API:
@@ -77,6 +77,34 @@ the default rotation.
 
 Code: `display/ui/streak_screen.py`, `parse_streaks` in `peloton/totals.py`;
 tests in `tests/test_streaks.py`.
+
+## #3 Joel vs. Jen this week
+
+A new rotation section, `versus` (default position: after `streaks`).
+
+- Shows only when 2+ riders are configured, and **once per household
+  cycle** (in the first rider's rotation), not once per rider. With 3+
+  riders it compares the first two in `users`.
+- **Stats:** workouts, minutes and output (kJ) since Monday in the display
+  timezone, the same week as the weekly goals. Output is new: weekly
+  progress now also sums each workout's `total_work`. No extra API calls,
+  since the workout history is already downloaded.
+- **Leader:** most workouts, then minutes, then output as tie-breakers.
+  The leader gets a gold trophy by their name. For each stat the higher
+  value is gold. A full tie has no trophy.
+- **64x64:** `THIS WEEK`, both names (Joel blue, Jen pink), and all three
+  stats in rows.
+- **64x32:** names on top, one stat per slide rotating every 4s. The page
+  lasts at least 12s so each stat gets its turn. Big values drop to a smaller
+  font when they'd run into each other.
+- Caches written before this change have no weekly output, so output shows
+  0 for both riders until the first refresh.
+- Timing: `screen_durations.versus`, falling back to `overview_duration`.
+- Preview with two caches:
+  `python scripts/render_rotation.py --height 32 --cache cookies-joel-dashboard-cache.json --username Joel --rival cookies-jen-dashboard-cache.json --rival-name Jen --out /tmp/vs.png`
+
+Code: `display/ui/versus_screen.py`, `weekly_rivals` in `peloton_led.py`;
+tests in `tests/test_versus.py`.
 
 ## Open questions for Joel
 

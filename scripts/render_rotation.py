@@ -19,7 +19,7 @@ import unittest  # noqa: F401,E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 SCALE = 4
-ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'total_workouts', 'lifetime', 'milestones', 'goals']
+ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'lifetime', 'milestones', 'goals']
 
 
 class PreviewDashboard:
@@ -61,6 +61,9 @@ def frame_times(name, state, duration, detail_interval):
     if name == 'last_workout':
         count = max(1, round(duration / detail_interval))
         return [0.6 + i * detail_interval for i in range(count)]
+    if name == 'versus' and state and 'riders' in state:
+        from display.ui.versus_screen import DETAIL_INTERVAL_SECONDS
+        return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, round(duration / DETAIL_INTERVAL_SECONDS)))]
     if name == 'username':
         from display.ui.username import DETAIL_INTERVAL_SECONDS
         return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, len(state.get('details', []))))]
@@ -80,6 +83,7 @@ def render(options):
     from display.ui.pr_celebration import PrCelebrationScreen
     from display.ui.status_screen import StatusScreen
     from display.ui.streak_screen import StreakScreen
+    from display.ui.versus_screen import VersusScreen
     from display.ui.username import UsernameScreen
     from display.ui.login_indicator import draw_login_indicator
     from display.ui.stale_indicator import draw_stale_indicator
@@ -95,12 +99,22 @@ def render(options):
                'discipline': DisciplinePageScreen(), 'lifetime': LifetimeOverviewScreen(),
                'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
                'pr': PrCelebrationScreen(), 'status': StatusScreen(), 'goal': GoalScreen(),
-               'logo': LogoMaskScreen(), 'streak': StreakScreen()}
+               'logo': LogoMaskScreen(), 'streak': StreakScreen(), 'versus': VersusScreen()}
     snapshot = load_snapshot_for(options)
     username = options.username or (snapshot.get('me') or {}).get('username') or 'Rider'
     pages = [('logo', None, 1.0)]
+    rivals = None
+    if options.rival:
+        from peloton.cache import load_snapshot
+        other = load_snapshot(options.rival) or {}
+        rivals = [{'name': name, **{k: (snap.get('weekly_progress') or {}).get(k, 0)
+                                    for k in ('workouts', 'minutes', 'output_kj')}}
+                  for name, snap in ((username, snapshot), (options.rival_name, other))]
+    elif options.demo:
+        rivals = [{'name': username, 'workouts': 3, 'minutes': 95, 'output_kj': 612},
+                  {'name': 'Rival', 'workouts': 4, 'minutes': 80, 'output_kj': 540}]
     pages += build_rotation_pages(snapshot, PreviewDashboard(display['milestones']),
-                                  display, username, options.height)
+                                  display, username, options.height, rivals=rivals)
     if options.overlays and snapshot['summaries']:
         pages.append(('last_workout', {**snapshot['summaries'][0], 'login_required': True,
                                        'data_stale': True}, detail_interval))
@@ -142,6 +156,8 @@ def main(argv=None):
     source.add_argument('--demo', action='store_true', help='Use built-in demo data')
     parser.add_argument('--height', type=int, choices=(32, 64), default=32)
     parser.add_argument('--username', help='Name to show on the username page')
+    parser.add_argument('--rival', help="Second rider's dashboard cache, for the versus page")
+    parser.add_argument('--rival-name', default='Rival', help='Name for the --rival rider')
     parser.add_argument('--columns', type=int, default=5)
     parser.add_argument('--no-overlays', dest='overlays', action='store_false',
                         help='Skip the extra frame showing the login and stale-data icons')

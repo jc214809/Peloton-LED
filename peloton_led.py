@@ -18,7 +18,7 @@ from display.ui.streak_screen import streak_lines
 
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
-DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'total_workouts', 'lifetime',
+DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'lifetime',
                     'milestones', 'goals')
 
 
@@ -52,8 +52,12 @@ def _duration(display, section, fallback):
     return display.get('screen_durations', {}).get(section, fallback)
 
 
-def build_rotation_pages(snapshot, dashboard, display, username, matrix_height):
-    """Build one rotation from configured named sections."""
+def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, rivals=None):
+    """Build one rotation from configured named sections.
+
+    rivals: every configured rider's weekly progress, passed for only one
+    rider per multi-user cycle so the head-to-head page shows once.
+    """
     rotation = display.get('rotation', DEFAULT_ROTATION)
     groups = {name: [] for name in rotation}
     workout_duration = _duration(display, 'latest_workouts', display['last_workout_duration'])
@@ -123,6 +127,14 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height):
         groups['streaks'].append(('streak', snapshot['streaks'],
                                   _duration(display, 'streaks', display['overview_duration'])))
 
+    if 'versus' in groups and rivals and len(rivals) >= 2:
+        from display.ui.versus_screen import DETAIL_INTERVAL_SECONDS, STATS
+        versus_duration = _duration(display, 'versus', display['overview_duration'])
+        if versus_duration > 0 and matrix_height < 64:
+            # 32 rows show one stat at a time; give each its full turn.
+            versus_duration = max(versus_duration, len(STATS) * DETAIL_INTERVAL_SECONDS)
+        groups['versus'].append(('versus', {'riders': rivals}, versus_duration))
+
     overview_pages = lifetime_overview_pages(snapshot['totals'],
                                              page_size=4 if matrix_height >= 64 else 2)
     discipline_duration = _duration(display, 'lifetime', display['overview_duration'])
@@ -172,7 +184,7 @@ def show_and_wait(manager, name, state, duration, dashboard=None):
             manager.tick(state)
 
 
-def run_display_loop(manager, dashboard, display, username_override=None, cycles=0):
+def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None):
     completed = 0
     while not cycles or completed < cycles:
         snapshot = dashboard.snapshot()
@@ -183,7 +195,8 @@ def run_display_loop(manager, dashboard, display, username_override=None, cycles
         profile = snapshot.get('me') or {}
         apply_scheduled_brightness(manager.matrix, display,
                                    timezone_name=profile.get('timezone'))
-        pages = build_rotation_pages(snapshot, dashboard, display, username, matrix_height)
+        pages = build_rotation_pages(snapshot, dashboard, display, username, matrix_height,
+                                     rivals=rivals)
         for name, state, duration in pages:
             show_and_wait(manager, name, state, duration, dashboard)
             if name == 'pr':
@@ -199,11 +212,25 @@ def run_multi_user_loop(manager, profiles, display, active, cycles=0):
     """Show one complete rotation per user, in configured order."""
     completed = 0
     while not cycles or completed < cycles:
-        for profile in profiles:
+        rivals = weekly_rivals(profiles)
+        for index, profile in enumerate(profiles):
             active['dashboard'] = profile['dashboard']
+            # The head-to-head page covers everyone, so show it once per cycle.
             run_display_loop(manager, profile['dashboard'], display,
-                             profile.get('username'), cycles=1)
+                             profile.get('username'), cycles=1,
+                             rivals=rivals if index == 0 else None)
         completed += 1
+
+
+def weekly_rivals(profiles):
+    """Each rider's name and this week's progress, for the versus page."""
+    rivals = []
+    for profile in profiles:
+        progress = profile['dashboard'].snapshot().get('weekly_progress') or {}
+        rivals.append({'name': profile.get('name') or profile.get('username') or 'Rider',
+                       'workouts': progress.get('workouts', 0), 'minutes': progress.get('minutes', 0),
+                       'output_kj': progress.get('output_kj', 0)})
+    return rivals
 
 
 def configured_profiles(config, options):
@@ -267,6 +294,7 @@ def main():
     from display.ui.status_screen import StatusScreen
     from display.ui.goal_screen import GoalScreen
     from display.ui.streak_screen import StreakScreen
+    from display.ui.versus_screen import VersusScreen
 
     matrix = RGBMatrix(options=led_matrix_options(options))
     try:
@@ -288,6 +316,7 @@ def main():
     manager.register('status', StatusScreen())
     manager.register('goal', GoalScreen())
     manager.register('streak', StreakScreen())
+    manager.register('versus', VersusScreen())
     configured_logo = display.get('logo_path')
     logo = Path(configured_logo) if configured_logo else None
     for profile in profiles:

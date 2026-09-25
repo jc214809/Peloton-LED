@@ -331,13 +331,14 @@ def test_weekly_progress_uses_local_monday_and_completed_duration():
     now = datetime(2026, 9, 16, 12, tzinfo=timezone.utc)  # Wednesday
     workouts = [
         {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 14, 13, tzinfo=timezone.utc).timestamp(),
-         'ride': {'duration': 1800}},
+         'ride': {'duration': 1800}, 'total_work': 250400},
         {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 13, 13, tzinfo=timezone.utc).timestamp(),
          'ride': {'duration': 3600}},
         {'status': 'IN_PROGRESS', 'start_time': datetime(2026, 9, 15, 13, tzinfo=timezone.utc).timestamp(),
-         'ride': {'duration': 1200}},
+         'ride': {'duration': 1200}, 'total_work': 99000},
     ]
-    assert weekly_progress(workouts, 'UTC', now) == {'workouts': 1, 'minutes': 30}
+    # Output only counts completed workouts from this week.
+    assert weekly_progress(workouts, 'UTC', now) == {'workouts': 1, 'minutes': 30, 'output_kj': 250}
 
 
 def test_caesar_bootcamp_normalizes_to_row_bootcamp():
