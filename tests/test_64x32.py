@@ -101,3 +101,31 @@ def test_32_row_output_pr_star_stays_on_the_panel():
     matrix = frame(summary, 4.5)  # total output is the first cycling stat
     gold = rows_of(matrix, (255, 215, 0))
     assert gold and gold[-1] < BAR_TOP
+
+
+def test_32_row_username_detail_lines_have_a_blank_row_between_them():
+    from display.ui.username import UsernameScreen
+    matrix = ImageMatrix(height=32)
+    initialize_fonts(32)
+    screen = UsernameScreen()
+    state = {'username': 'Joel', 'details': [
+        {'label': 'THIS WEEK', 'lines': ['2 WORKOUTS', '35 MINUTES']}]}
+    screen.on_enter(matrix, state)
+    screen.update(0.5)
+    assert screen.render(matrix, state)
+    white = [y for y in rows_of(matrix, WHITE) if y > rows_of(matrix, GREY)[-1]]
+    gaps = [b - a for a, b in zip(white, white[1:]) if b - a > 1]
+    assert gaps, 'the two value lines run together'
+    assert white[-1] <= 31
+
+
+def test_32_row_two_line_discipline_name_clears_the_count():
+    from display.ui.discipline_page import DisciplinePageScreen
+    matrix = ImageMatrix(height=32)
+    initialize_fonts(32)
+    assert DisciplinePageScreen().render(matrix, {'discipline': 'Tread Bootcamp', 'count': 112,
+                                                  'color_key': 'white'})
+    lit = rows_of(matrix, WHITE)
+    # The wrapped name's descenders ("p") used to sit one row above the count.
+    gaps = [b - a - 1 for a, b in zip(lit, lit[1:]) if b - a > 1]
+    assert len(gaps) == 2 and gaps[-1] >= 3

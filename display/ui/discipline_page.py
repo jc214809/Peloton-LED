@@ -52,6 +52,9 @@ class DisciplinePageScreen(Screen):
 
         title_lines = title_lines[:2]
         current_y = 12 if matrix.height < 64 else 18
+        if matrix.height < 64 and len(title_lines) > 1:
+            # Start two-line names higher so the second line clears the count.
+            current_y = 8
         for line in title_lines:
             while line and get_text_width(title_font, line) > matrix.width - 4:
                 line = line[:-1]

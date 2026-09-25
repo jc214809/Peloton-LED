@@ -16,8 +16,8 @@ python scripts/render_rotation.py --height 32 --cache cookies-joel-dashboard-cac
 |---|---|---|
 | Last workout | Old 3-line layout; title cut off; no stat rotation, HR or calories | **done** |
 | PR celebration | Has a compact card | to check |
-| Username + details | Has a compact layout | to check |
-| Total workouts / lifetime | One discipline per page on 32 rows | to check |
+| Username + details | Two value lines touched | **done** |
+| Total workouts / lifetime | Two-line names crowded the count | **done** |
 | Goals / milestones | Has 32-row positions | to check |
 | Logo | Separate 64x32 art exists | to check |
 | Login / stale overlays | Bottom corners | to check |
@@ -58,6 +58,19 @@ The old 32-row layout is still there when `display.compact_workout_pages` is
 
 Code: `LastWorkoutScreen._render_short` and `rotating_details` in
 `display/ui/last_workout_screen.py`; tests in `tests/test_64x32.py`.
+
+### Username details (done)
+The two white value lines (e.g. `2 WORKOUTS` / `35 MINUTES`) were 5px apart
+in a 6px font, so they ran together. On 32 rows the label moved up 2px
+(baseline 17), the accent line moved up 1px, and the value lines now sit at
+baselines 24 and 31, with a blank row between them. New details rise 2px
+instead of 3px so the second line stays on the panel while it animates in.
+
+### Discipline count pages (done)
+On 32 rows, two-line names (Total Workouts, Tread/Bike/Row Bootcamp) now
+start at baseline 8 instead of 12, which leaves 5 blank rows above the count
+instead of 1 (the "p" in Bootcamp was nearly touching it). One-line names
+are unchanged.
 
 ## Open questions for Joel
 

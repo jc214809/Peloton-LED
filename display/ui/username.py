@@ -63,7 +63,7 @@ class UsernameScreen(Screen):
         blue = graphics.Color(0, 120, 255)
         line_width = min(matrix.width - 12, max(8, round((matrix.width - 12) * min(1, self.elapsed / 0.35))))
         line_left = (matrix.width - line_width) // 2
-        line_y = 11 if compact else 23
+        line_y = 10 if compact else 23
         for x in range(line_left, line_left + line_width):
             matrix.SetPixel(x, line_y, blue.red, blue.green, blue.blue)
 
@@ -73,12 +73,15 @@ class UsernameScreen(Screen):
             phase_seconds = self.elapsed % interval
             detail = details[index]
             # Each new detail rises into place during its first 0.3 seconds.
-            offset = max(0, round(3 * (1 - min(1, phase_seconds / 0.3))))
+            # 32-row panels rise 2px so the second line never drops off the bottom.
+            rise = 2 if compact else 3
+            offset = max(0, round(rise * (1 - min(1, phase_seconds / 0.3))))
             label = self._fit(small_font, str(detail.get('label', '')).upper(), matrix.width - 4)
-            self._center(matrix, small_font, label, (19 if compact else 38) + offset,
+            self._center(matrix, small_font, label, (17 if compact else 38) + offset,
                          graphics.Color(145, 165, 190))
             lines = detail.get('lines') or [detail.get('value', '')]
-            baselines = (26, 31) if compact else (50, 59)
+            # 32 rows: 7px line pitch leaves a blank row between the two 4x6 lines.
+            baselines = (24, 31) if compact else (50, 59)
             for line, baseline in zip(lines[:2], baselines):
                 line = self._fit(value_font, str(line).upper(), matrix.width - 4)
                 self._center(matrix, value_font, line, baseline + offset,
