@@ -131,3 +131,21 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
 2. **Stale-data clock over the heart:** on both 64x64 and 64x32, the clock icon
    (shown after 3 failed refreshes) sits on top of the ♥ HR. I left it alone
    because it's the same on 64x64.
+3. **Your `config.json` was briefly pushed** (my mistake: a `git commit -a`
+   in commit `3985c6e`). It held no secrets: first names, the env-var
+   *names* for credentials, goals, milestones and the timezone. Commit
+   `Restore config.json` puts the branch back to main's version, and your
+   local edits are still in your working copy. The file is still visible in
+   that one commit's history. If you want it gone completely, I can drop
+   the two commits and force-push `fit-64x32`; I didn't rewrite the pushed
+   history without asking.
+4. **Lifetime icon pages on 32 rows** replace the old one-discipline-per-page
+   text screens. Keep that, or go back to the text pages?
+
+## Where things stand
+
+Everything on the status table is done or checked. 64x64 output is
+byte-identical to before this branch (Joel, Jen and demo rotations), and
+all 286 tests pass. The branch is pushed; no PR yet. It's based on
+`last-workout-stat-rotation` (PR #2), so merge #2 first or point this PR
+at that branch.
