@@ -17,7 +17,8 @@ python scripts/render_rotation.py --height 32 --cache cookies-joel-dashboard-cac
 | Last workout | Old 3-line layout; title cut off; no stat rotation, HR or calories | **done** |
 | PR celebration | Has a compact card | **checked, no change** |
 | Username + details | Two value lines touched | **done** |
-| Total workouts / lifetime | Two-line names crowded the count | **done** |
+| Total workouts count page | Two-line names crowded the count | **done** |
+| Lifetime disciplines | One text page per discipline (12 pages) | **done**: icon pages, 2 per page |
 | Goals / milestones | Unit missing ("2/5" of what?) | **done** |
 | Logo | Separate 64x32 art exists | to check |
 | Login / stale overlays | Bottom corners | to check |
@@ -89,6 +90,18 @@ The burst, the "OUTPUT PR / 512 KJ / 45 MIN CLASS" card, splits PRs and
 plain "NEW PR" all fit. The existing 32-row card has room for three lines,
 so when there's a gain (`+14 KJ`) it replaces the `45 MIN CLASS` line
 (64x64 shows both). No sparkles on 32 rows; they would sit on the text.
+
+### Lifetime disciplines use icon pages (done)
+64x64 shows the lifetime counts as pages of four icon tiles (2x2). 64x32
+used to show one text page per discipline instead ("Cycling / 639"), which
+for your 12 disciplines was 12 pages. Each icon tile is 32x30, so a 32-row
+panel fits one row of two: the same icons, colors and counts as 64x64, in 6
+pages. The page dots moved from row 63 (off the panel on 32 rows) to the
+bottom row. The "Total Workouts" page is still the text page.
+
+**This changes 64x32 more than any other item here.** If you prefer the old
+text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
+`build_rotation_pages`.
 
 ## Open questions for Joel
 

@@ -212,6 +212,6 @@ class LifetimeOverviewScreen(Screen):
             centered(matrix,font,count,left,32,top+29,white)
         pages = state.get('pages',1)
         for index in range(pages):
-            matrix.SetPixel(32 - (pages*3)//2 + index*3,63,
+            matrix.SetPixel(32 - (pages*3)//2 + index*3,matrix.height-1,
                             *((255,255,255) if index+1 == state.get('page',1) else (45,45,45)))
         return True

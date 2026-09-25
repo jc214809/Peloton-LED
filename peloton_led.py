@@ -117,7 +117,9 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height):
         groups['username'].append(('username', {'username': username, 'details': details},
                                    username_duration))
 
-    overview_pages = lifetime_overview_pages(snapshot['totals'])
+    # 64 rows fit a 2x2 grid of icon tiles per page; 32 rows fit one row of two.
+    overview_pages = lifetime_overview_pages(snapshot['totals'],
+                                             page_size=4 if matrix_height >= 64 else 2)
     discipline_duration = _duration(display, 'lifetime', display['overview_duration'])
     if discipline_duration > 0:
         discipline_duration = max(discipline_duration, 5.0)
@@ -127,17 +129,10 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height):
             'discipline': 'Total Workouts', 'count': total,
             'color_key': display['color']}, discipline_duration))
     if 'lifetime' in groups:
-        if matrix_height >= 64:
-            for index, items in enumerate(overview_pages):
-                groups['lifetime'].append(('lifetime', {
-                    'items': items, 'page': index + 1, 'pages': len(overview_pages)},
-                    discipline_duration))
-        else:
-            for discipline, count in snapshot['totals'].items():
-                if discipline != 'Total Workouts':
-                    groups['lifetime'].append(('discipline', {
-                        'discipline': discipline, 'count': count,
-                        'color_key': display['color']}, discipline_duration))
+        for index, items in enumerate(overview_pages):
+            groups['lifetime'].append(('lifetime', {
+                'items': items, 'page': index + 1, 'pages': len(overview_pages)},
+                discipline_duration))
 
     goal_duration = _duration(display, 'goals', display['overview_duration'])
     if 'goals' in groups:

@@ -156,3 +156,22 @@ def test_32_row_workout_without_stats_shows_hr_in_intro():
                'hr_avg': 70, 'calories': 20}
     assert rotating_details(summary, 32) == []
     assert rows_of(frame(summary, 0.5), HEART)
+
+
+def test_32_row_lifetime_uses_icon_pages_of_two():
+    from display.ui.lifetime_overview import LifetimeOverviewScreen
+    totals = {'Total Workouts': 100, 'Cycling': 40, 'Running': 30, 'Strength': 20, 'Yoga': 10,
+              'Rowing': 5}
+    snapshot = {'summaries': [], 'totals': totals, 'status': 'ready'}
+    display = {'rotation': ['lifetime'], 'last_workout_duration': 15, 'overview_duration': 5,
+               'color': 'white'}
+    pages = build_rotation_pages(snapshot, Mock(), display, 'R', 32)
+    assert [name for name, _, _ in pages] == ['lifetime'] * 3
+    assert [len(state['items']) for _, state, _ in pages] == [2, 2, 1]
+    assert len(build_rotation_pages(snapshot, Mock(), display, 'R', 64)) == 2
+
+    matrix = ImageMatrix(height=32)
+    initialize_fonts(32)
+    assert LifetimeOverviewScreen().render(matrix, pages[1][1])
+    # Current-page dot is on the bottom row, not off the panel at row 63.
+    assert WHITE in [matrix.image.getpixel((x, 31)) for x in range(64)]
