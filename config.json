@@ -1,47 +1,10 @@
 {
-  "debug": false,
-  "users": [
-    {
-      "name": "Joel",
-      "email_env": "PELOTON_EMAIL_RIDER_ONE",
-      "password_env": "PELOTON_PASSWORD_RIDER_ONE",
-      "weekly_goals": {
-        "workouts": 5,
-        "minutes": 0
-      },
-      "milestones": [
-        100,
-        250,
-        500
-      ]
-    },
-    {
-      "name": "Jen",
-      "email_env": "PELOTON_EMAIL_RIDER_TWO",
-      "password_env": "PELOTON_PASSWORD_RIDER_TWO",
-      "weekly_goals": {
-        "workouts": 3,
-        "minutes": 0
-      },
-      "milestones": [
-        50,
-        100,
-        250
-      ]
-    }
-  ],
-  "display": {
-    "timezone": "America/New_York",
-    "rotation": [
-      "latest_workouts"
-    ],
-    "last_workout_detail_interval": 4,
-    "screen_durations": {
-      "latest_workouts": 15,
-      "username": 9,
-      "lifetime": 5,
-      "milestones": 4,
-      "goals": 4
-    }
-  }
+	"debug": true,
+	"display": {
+		"username": "peloton_user",
+		"font": "ride",
+		"color": "gold",
+		"duration": 4,
+		"overview_duration": 8
+	}
 }
