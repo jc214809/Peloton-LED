@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from peloton.config import load_config, default_token_path, load_dotenv
 from peloton.dashboard import Dashboard
 from peloton.goals import next_milestone
+from peloton.journey import journey_progress
 from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
 from utils.utils import args, led_matrix_options
@@ -20,7 +21,7 @@ from display.ui.streak_screen import streak_lines
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
 DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                    'next_milestone', 'lifetime',
+                    'next_milestone', 'lifetime', 'journey',
                     'milestones', 'goals')
 
 
@@ -159,6 +160,13 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                 'items': items, 'page': index + 1, 'pages': len(overview_pages)},
                 discipline_duration))
 
+    if 'journey' in groups:
+        progress = journey_progress(snapshot.get('distance_totals'), display.get('journey'))
+        # Skip until the distance tally has something (e.g. before the backfill).
+        if progress and progress['miles'] > 0:
+            groups['journey'].append(('journey', progress,
+                                      _duration(display, 'journey', display['overview_duration'])))
+
     goal_duration = _duration(display, 'goals', display['overview_duration'])
     if 'goals' in groups:
         progress = snapshot.get('weekly_progress', {})
@@ -260,6 +268,8 @@ def configured_profiles(config, options):
             user_display['weekly_goals'] = user['weekly_goals']
         if 'milestones' in user:
             user_display['milestones'] = user['milestones']
+        if 'journey' in user:
+            user_display['journey'] = user['journey']
         if user.get('cache_path'):
             cache_path = Path(user['cache_path']).expanduser()
             if not cache_path.is_absolute():
@@ -304,6 +314,7 @@ def main():
     from display.ui.streak_screen import StreakScreen
     from display.ui.versus_screen import VersusScreen
     from display.ui.countdown_screen import CountdownScreen
+    from display.ui.journey_screen import JourneyScreen
 
     matrix = RGBMatrix(options=led_matrix_options(options))
     try:
@@ -327,6 +338,7 @@ def main():
     manager.register('streak', StreakScreen())
     manager.register('versus', VersusScreen())
     manager.register('countdown', CountdownScreen())
+    manager.register('journey', JourneyScreen())
     configured_logo = display.get('logo_path')
     logo = Path(configured_logo) if configured_logo else None
     for profile in profiles:

@@ -19,7 +19,7 @@ import unittest  # noqa: F401,E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 SCALE = 4
-ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'next_milestone', 'lifetime', 'milestones', 'goals']
+ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'next_milestone', 'lifetime', 'journey', 'milestones', 'goals']
 
 
 class PreviewDashboard:
@@ -47,7 +47,8 @@ def load_snapshot_for(options):
                               for w in data['workouts']],
                 'weekly_progress': {'workouts': 3, 'minutes': 95},
                 'instructor_counts': {}, 'status': 'ready',
-                'streaks': parse_streaks(data['overview'])}
+                'streaks': parse_streaks(data['overview']),
+                'distance_totals': data['distance_totals']}
     from peloton.cache import load_snapshot
     snapshot = load_snapshot(options.cache)
     if snapshot is None:
@@ -85,6 +86,7 @@ def render(options):
     from display.ui.streak_screen import StreakScreen
     from display.ui.versus_screen import VersusScreen
     from display.ui.countdown_screen import CountdownScreen
+    from display.ui.journey_screen import JourneyScreen
     from display.ui.username import UsernameScreen
     from display.ui.login_indicator import draw_login_indicator
     from display.ui.stale_indicator import draw_stale_indicator
@@ -101,7 +103,7 @@ def render(options):
                'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
                'pr': PrCelebrationScreen(), 'status': StatusScreen(), 'goal': GoalScreen(),
                'logo': LogoMaskScreen(), 'streak': StreakScreen(), 'versus': VersusScreen(),
-               'countdown': CountdownScreen()}
+               'countdown': CountdownScreen(), 'journey': JourneyScreen()}
     snapshot = load_snapshot_for(options)
     username = options.username or (snapshot.get('me') or {}).get('username') or 'Rider'
     pages = [('logo', None, 1.0)]

@@ -54,6 +54,7 @@ The startup logo (the Peloton P, in Peloton red) is shown once when the applicat
 3. Username screen.
 4. Weekly streak: a flame, your current weekly streak and your best (skipped when the streak is 0). Read from the profile overview the app already downloads.
    A **Next Milestone** countdown (e.g. `89 TO GO` to 2,200, with a progress bar) follows the Total Workouts page.
+   After the lifetime pages, a **Journey** map shows lifetime miles as a trip (default Columbus → Disney World), there and back again once you arrive.
    Households with two or more riders then get a head-to-head **This Week** page (workouts, minutes, output; leader gets a trophy), once per full cycle.
 5. A dedicated full-size Total Workouts page, followed on 64×64 panels by compact lifetime pages with four separate disciplines per page. Each has its own pixel icon and exact count; Bootcamp disciplines remain separate. 64×32 panels show the same icon tiles two per page.
 
@@ -137,10 +138,11 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `weekly_goals` | `{"workouts": 0, "minutes": 0}` | Weekly workout/minute targets; `0` disables that goal. See [Phase 6 customization](#phase-6-customization) |
 | `milestones` | `[]` | Lifetime Total Workouts thresholds that celebrate once each, e.g. `[100, 250, 500]` |
 | `milestone_step` | `100` | Also count down to (and celebrate) every Nth lifetime workout, e.g. 2,200 after 2,100; `0` turns this off |
+| `journey` | Columbus → Disney World, 880 mi, Cycling + Running + Walking | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880, "disciplines": ["Cycling", "Running", "Walking"]}`. Any places, distance and disciplines; also settable per rider under `users[]` |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `compact_workout_pages` | `false` | On 32-row panels, use the older two-page compact workout layout instead of the rotating one |
 
-`rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `milestones`, `goals`, each at most once. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
+`rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `journey`, `milestones`, `goals`, each at most once. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
 
 Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds. The page lasts exactly `last_workout_detail_interval * (1 + stat count)` seconds, so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. `last_workout_duration` (or `screen_durations.latest_workouts`) only sets the page length on 32-row panels, where pages are static; `0` still disables the section.
 

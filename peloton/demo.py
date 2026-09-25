@@ -63,4 +63,6 @@ def demo_data():
                      'workout_counts': [{'name': label, 'count': count} for label, count in
             [('Total Workouts', 1531), ('Cycling', 1234), ('Running', 204),
              ('Walking', 75), ('Rowing', 18), ('Strength', 0)]]},
-        'workouts': workouts, 'performance': performance})
+        'workouts': workouts, 'performance': performance,
+        # Lifetime miles by discipline, as the dashboard's distance tally holds them.
+        'distance_totals': {'cycling': 612.4, 'running': 88.2, 'walking': 41.0}})

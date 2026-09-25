@@ -7,6 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .journey import DEFAULT_JOURNEY
+from .selection import normalize_discipline
+
 DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration': 4,
             'per_workout_duration': 4, 'last_workout_duration': 30, 'logo_duration': 3,
             'last_workout_detail_interval': 4.0,
@@ -15,19 +18,20 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'instructor_tally_max_pages': 200,
             'performance_cache_size': 32,
             'rotation': ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                         'next_milestone', 'lifetime',
+                         'next_milestone', 'lifetime', 'journey',
                          'milestones', 'goals'],
             'screen_durations': {},
             'weekly_goals': {'workouts': 0, 'minutes': 0},
             'milestones': [],
             'milestone_step': 100,
+            'journey': DEFAULT_JOURNEY,
             'brightness_schedule': None,
             'compact_workout_pages': False}
 
 ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                     'next_milestone', 'lifetime', 'milestones', 'goals'}
+                     'next_milestone', 'lifetime', 'journey', 'milestones', 'goals'}
 DURATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'next_milestone',
-                     'lifetime', 'milestones', 'goals'}
+                     'lifetime', 'journey', 'milestones', 'goals'}
 
 
 def user_slug(name):
@@ -74,6 +78,24 @@ def _validate_milestones(path, milestones, prefix):
             not isinstance(value, int) or value <= 0 for value in milestones)):
         raise ValueError(f'{path}: {prefix}milestones must contain positive integers')
     return sorted(set(milestones))
+
+
+def _validate_journey(path, journey, prefix):
+    """Route for the distance journey: from/to names, miles, disciplines."""
+    where = f'{path}: {prefix}journey'
+    if not isinstance(journey, dict) or not {'from', 'to', 'miles', 'disciplines'} <= set(journey):
+        raise ValueError(f'{where} needs from, to, miles and disciplines')
+    for key in ('from', 'to'):
+        if not isinstance(journey[key], str) or not journey[key].strip():
+            raise ValueError(f'{where}.{key} must be a non-empty string')
+    miles = journey['miles']
+    if isinstance(miles, bool) or not isinstance(miles, (int, float)) or not math.isfinite(miles) or miles <= 0:
+        raise ValueError(f'{where}.miles must be a positive number')
+    disciplines = journey['disciplines']
+    if (not isinstance(disciplines, list) or not disciplines
+            or not all(isinstance(d, str) and normalize_discipline(d) for d in disciplines)):
+        raise ValueError(f'{where}.disciplines must be a non-empty list of discipline names')
+    return {**journey, 'from': journey['from'].strip(), 'to': journey['to'].strip()}
 
 
 def load_config(path='config', allow_missing=False):
@@ -127,6 +149,8 @@ def load_config(path='config', allow_missing=False):
                 _validate_weekly_goals(path, user['weekly_goals'], f'users[{index}].')
             if 'milestones' in user:
                 user['milestones'] = _validate_milestones(path, user['milestones'], f'users[{index}].')
+            if 'journey' in user:
+                user['journey'] = _validate_journey(path, user['journey'], f'users[{index}].')
     display = {**DEFAULTS, **config.get('display', {})}
     for key in ('duration', 'overview_duration', 'per_workout_duration', 'last_workout_duration', 'logo_duration',
                 'last_workout_detail_interval'):
@@ -167,6 +191,7 @@ def load_config(path='config', allow_missing=False):
             raise ValueError(f'{path}: display.screen_durations values must be non-negative numbers')
     _validate_weekly_goals(path, display.get('weekly_goals'), 'display.')
     display['milestones'] = _validate_milestones(path, display.get('milestones'), 'display.')
+    display['journey'] = _validate_journey(path, display.get('journey'), 'display.')
     step = display.get('milestone_step')
     if isinstance(step, bool) or not isinstance(step, int) or step < 0:
         raise ValueError(f'{path}: display.milestone_step must be a non-negative integer')

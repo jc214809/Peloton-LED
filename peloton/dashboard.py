@@ -18,6 +18,7 @@ from .timestamps import workout_timestamp
 from .totals import extract_discipline_totals, parse_streaks
 from .goals import reached_milestones, weekly_progress
 from .instructors import merge_instructor_counts
+from .journey import merge_distance_totals, uses_metric
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
 
 logger = logging.getLogger('peloton-led.dashboard')
@@ -53,6 +54,7 @@ class Dashboard:
                       'celebrated_pr_ids': [], 'celebrated_milestones': [],
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
                       'instructor_counts': {}, 'instructor_tally_cursor': None, 'streaks': {},
+                      'distance_totals': {}, 'distance_tally_cursor': None,
                       'personal_records': {}}
         self.demo = demo
         if demo:
@@ -60,6 +62,7 @@ class Dashboard:
             zone = config.get('timezone') or data['me'].get('timezone')
             self._publish(me=data['me'], totals=extract_discipline_totals(data['overview']),
                 streaks=parse_streaks(data['overview']),
+                distance_totals=data['distance_totals'],
                 summaries=[summarize_workout(w, data['performance'][w['id']]) for w in data['workouts']],
                 weekly_progress=weekly_progress(data['workouts'], zone),
                 login_required=demo_login_needed, status='ready', last_updated=time.time(),
@@ -231,12 +234,27 @@ class Dashboard:
                 generation = self._data['generation'] + 1
                 prior_counts = self._data.get('instructor_counts', {})
                 cursor = self._data.get('instructor_tally_cursor')
+                prior_distance = self._data.get('distance_totals', {})
+                distance_cursor = self._data.get('distance_tally_cursor')
             new_workouts = client.get_all_workouts(user_id,
                 page_size=self.config.get('history_page_size', 50),
                 max_pages=self.config.get('instructor_tally_max_pages', 200),
                 stop_at_id=cursor)
             instructor_counts = merge_instructor_counts(prior_counts, new_workouts)
             newest_id = new_workouts[0].get('id') if new_workouts else cursor
+            # The distance tally shares the instructor tally's pages whenever
+            # the two cursors agree (including a first run, when both page the
+            # full history). Caches from before the journey feature have only
+            # an instructor cursor, so they backfill distance once.
+            if distance_cursor == cursor:
+                distance_rows = new_workouts
+            else:
+                distance_rows = client.get_all_workouts(user_id,
+                    page_size=self.config.get('history_page_size', 50),
+                    max_pages=self.config.get('instructor_tally_max_pages', 200),
+                    stop_at_id=distance_cursor)
+            distance_totals = merge_distance_totals(prior_distance, distance_rows, uses_metric(me))
+            distance_newest = distance_rows[0].get('id') if distance_rows else distance_cursor
             refreshed_at = time.time()
             progress = weekly_progress(workouts, tz)
             self._failures = 0
@@ -245,6 +263,7 @@ class Dashboard:
                 streaks=parse_streaks(overview),
                 weekly_progress=progress,
                 instructor_counts=instructor_counts, instructor_tally_cursor=newest_id,
+                distance_totals=distance_totals, distance_tally_cursor=distance_newest,
                 personal_records=personal_records,
                 login_required=False, status='ready', last_updated=refreshed_at,
                 last_error=None, generation=generation,

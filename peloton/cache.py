@@ -10,6 +10,7 @@ PERSISTED_KEYS = (
     'active_day_count', 'history_truncated', 'celebrated_pr_ids',
     'weekly_progress', 'celebrated_milestones',
     'instructor_counts', 'instructor_tally_cursor', 'personal_records', 'streaks',
+    'distance_totals', 'distance_tally_cursor',
 )
 
 
@@ -59,6 +60,14 @@ def load_snapshot(path):
     if streaks is not None and (not isinstance(streaks, dict) or not all(
             isinstance(v, int) and not isinstance(v, bool) for v in streaks.values())):
         del restored['streaks']
+    # A damaged distance tally is dropped with its cursor so it rebuilds.
+    distance = restored.get('distance_totals')
+    distance_cursor = restored.get('distance_tally_cursor')
+    if (distance is not None and (not isinstance(distance, dict) or not all(
+            isinstance(v, (int, float)) and not isinstance(v, bool) for v in distance.values()))) or (
+            distance_cursor is not None and not isinstance(distance_cursor, str)):
+        restored.pop('distance_totals', None)
+        restored.pop('distance_tally_cursor', None)
     return restored
 
 

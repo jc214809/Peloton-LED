@@ -13,7 +13,7 @@ feature works on both 64x64 and 64x32 panels.
 | 1 | Streak screen | **done** |
 | 3 | Joel vs. Jen this week | **done** |
 | 5 | Next-milestone countdown | **done** |
-| 9 | Distance journey (Columbus → Walt Disney World by default) | next |
+| 9 | Distance journey (Columbus → Disney World by default) | **done** |
 
 Preview any of it without the API:
 
@@ -135,6 +135,48 @@ Code: `display/ui/countdown_screen.py`; `next_milestone` and
 `reached_milestones` in `peloton/goals.py`; tests in
 `tests/test_countdown.py`.
 
+## #9 Distance journey
+
+A new rotation section, `journey` (default: after the lifetime pages).
+Your lifetime miles become a trip from one place to another.
+
+- **Configure it** under `display.journey` (and per rider under
+  `users[].journey`, like weekly goals):
+  ```json
+  "journey": {"from": "Columbus", "to": "Disney World", "miles": 880,
+              "disciplines": ["Cycling", "Running", "Walking"]}
+  ```
+  That is the default. `disciplines` takes any Peloton discipline names
+  ("Rowing", "Tread Bootcamp", "Outdoor Run", ...), one or several.
+  880 is roughly the driving distance from Columbus to Walt Disney World;
+  set `miles` to whatever you like.
+- **64x64:** a vertical map on the left (Florida is south): a blue start
+  dot, a dotted route, an orange trail for what you've covered, a white
+  "you are here" dot, and a gold castle with pink towers at the bottom.
+  On the right: the start name, the miles (big), `MILES`, `138 TO GO`, and
+  the destination name at the bottom (wraps to 2 lines).
+- **64x32:** `TO DISNEY WORLD` across the top, big miles with the percent,
+  `138 TO GO`, and the route running left to right along the bottom to
+  the castle.
+- **Past the destination** the trip turns around: `TRIP 2`, `TO HOME` /
+  `TO COLUMBUS`, and the trail runs back from the castle. Trip 3 heads out
+  again, and so on.
+- **Where the miles come from:** each workout row in your history has a
+  `distance`. They're summed per discipline into a saved tally that's
+  updated incrementally, the same way the top-instructor counts are.
+  Rowing is reported in meters and converted. Other distances are taken
+  as miles, or as km when the profile is metric.
+- **API cost:** the first refresh after this update pages through each
+  rider's full workout history once to build the tally (about 43 calls
+  for 2,100 workouts; Jen's is similar). After that it reuses the page
+  the instructor tally already fetches, so **no extra calls per refresh**.
+  The journey page stays hidden until the tally has miles.
+- Long start names are trimmed on 64x64 (`SAN FRANCISC`). Destination
+  names wrap onto two lines.
+
+Code: `peloton/journey.py`, `display/ui/journey_screen.py`, the tally in
+`peloton/dashboard.py`; tests in `tests/test_journey.py`.
+
 ## Open questions for Joel
 
 1. **Your `config.json` rotation is just `["latest_workouts"]`**, so the new
@@ -142,7 +184,8 @@ Code: `display/ui/countdown_screen.py`; `next_milestone` and
    you add them, e.g.
    `"rotation": ["latest_workouts", "username", "streaks", "total_workouts", "lifetime", "milestones", "goals"]`.
    The workout graph and zone slides are part of `latest_workouts`, so those
-   already show. I haven't edited your config.
+   already show. I haven't edited your config. The full list now:
+   `["latest_workouts", "username", "streaks", "versus", "total_workouts", "next_milestone", "lifetime", "journey", "milestones", "goals"]`.
 2. Peloton also reports a **daily** streak (`current_daily`, 0 for you
    right now). It's parsed and saved but not shown. Say if you want it
    on the flame screen when it's 2 days or more.
