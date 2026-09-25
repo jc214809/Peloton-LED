@@ -135,6 +135,8 @@ Workouts page).
   To avoid celebrating something old, a step milestone only celebrates if
   you crossed it within the last 10 workouts. So turning this on at 2,111
   doesn't celebrate 2,100.
+- The progress bar sits two blank rows above the `2,111 WORKOUTS` line on
+  both boards (moved up a pixel on request).
 - `milestone_step: 0` turns off both the step countdown and the step
   celebrations. Configured `milestones` work as before.
 - Timing: `screen_durations.next_milestone`, falling back to

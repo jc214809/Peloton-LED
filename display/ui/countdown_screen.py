@@ -49,13 +49,13 @@ class CountdownScreen(Screen):
             x = max((matrix.width - width) // 2, 1)
             graphics.DrawText(matrix, big, x, 19, _WHITE, remaining)
             graphics.DrawText(matrix, small, x + get_text_width(big, remaining) + gap, 19, _ORANGE, 'TO GO')
-            _bar(matrix, 22, 3, fraction)
+            _bar(matrix, 21, 3, fraction)
             _center(matrix, small, 31, _GREY, f'{total:,} WORKOUTS')
             return True
         _center(matrix, small, 8, _GREY, 'NEXT MILESTONE')
         _center(matrix, mid, 18, _GOLD, f'{target:,}')
         _center(matrix, big, 40, _WHITE, remaining)
         _center(matrix, mid, 49, _ORANGE, 'TO GO')
-        _bar(matrix, 54, 3, fraction)
+        _bar(matrix, 53, 3, fraction)
         _center(matrix, small, 63, _GREY, f'{total:,} WORKOUTS')
         return True

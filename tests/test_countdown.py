@@ -65,6 +65,10 @@ def test_countdown_fits_and_fills_the_bar_by_progress(height, state):
     assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))
     bar_row = next(y for y in range(height) if pixels[60, y] in (BAR_FILL, BAR_EMPTY))
     filled = sum(pixels[x, bar_row] == BAR_FILL for x in range(64))
+    # At least two blank rows between the bar and the total underneath it.
+    bar_bottom = max(y for y in range(height) if pixels[60, y] in (BAR_FILL, BAR_EMPTY))
+    text_top = min(y for y in range(bar_bottom + 1, height) for x in range(64) if pixels[x, y] != (0, 0, 0))
+    assert text_top - bar_bottom - 1 >= 2
     expected = round(58 * (state['total'] - state['previous']) / (state['target'] - state['previous']))
     assert filled == expected
 
