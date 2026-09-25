@@ -15,6 +15,15 @@ feature works on both 64x64 and 64x32 panels.
 | 5 | Next-milestone countdown | **done** |
 | 9 | Distance journey (Columbus → Disney World by default) | **done** |
 
+**Status (2026-09-25):** every item is done, tested (378 tests pass) and
+pushed to `board-features`. The full demo rotation also ran in the
+emulator at both 64x64 and 64x32 with no errors. No PR yet; this branch
+sits on `fit-64x32`, which sits on `last-workout-stat-rotation` (PR #2).
+
+**Previews:** `docs/screenshots/features/`: one sheet per feature plus the
+whole demo rotation at each size. They're local only (not committed) because
+some use your real data.
+
 Preview any of it without the API:
 
 ```bash
