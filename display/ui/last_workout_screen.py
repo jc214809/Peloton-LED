@@ -491,7 +491,6 @@ class LastWorkoutScreen(Screen):
         text_font = loaded_fonts.get("info") or titles_font or stat_font  # fallback if titles not loaded
 
         discipline = (summary.get("discipline") or "Workout").strip()
-        font_h = getattr(stat_font, "height", 8)
         w = matrix.width
         if matrix.height < 64 and 'compact_page' not in summary:
             return self._render_short(matrix, summary, discipline, title_font, text_font, stat_font)
