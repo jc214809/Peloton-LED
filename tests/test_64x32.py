@@ -69,6 +69,8 @@ def test_32_row_intro_shows_title_without_the_bar():
 def test_32_row_stats_show_label_value_and_bar_without_overlap():
     for summary in demo_summaries() + [STRENGTH]:
         for turn, detail in enumerate(rotating_details(summary, 32)):
+            if detail.get('kind'):
+                continue  # graph and zone slides have no label/value pair
             matrix = frame(summary, 4 * (turn + 1) + 0.5)
             label = rows_of(matrix, GREY)
             assert label, (summary['discipline'], detail)

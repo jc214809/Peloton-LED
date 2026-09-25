@@ -287,12 +287,96 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
 
     64-row panels show the instructor in the intro, so only stats rotate.
     32-row panels have no room for it there, so it leads the rotation.
+    The workout graph and heart-rate zone bar close out the rotation when the
+    workout recorded them.
     """
     details = _stat_details(summary)
     stats = [d for d in details if d['label'] != 'instructor']
     if matrix_height < 64:
-        return [d for d in details if d['label'] == 'instructor'] + stats
+        stats = [d for d in details if d['label'] == 'instructor'] + stats
+    graph = summary.get('graph')
+    if isinstance(graph, dict) and graph.get('values'):
+        label = 'output' if graph.get('metric') == 'output' else 'heart rate'
+        stats.append({'label': label, 'value': '', 'kind': 'graph'})
+    zones = summary.get('hr_zone_seconds')
+    if isinstance(zones, list) and len(zones) == 5 and sum(zones) > 0:
+        stats.append({'label': 'hr zones', 'value': '', 'kind': 'zones'})
     return stats
+
+
+# Heart-rate zone colors, zone 1 first; also used to color graph columns.
+HR_ZONE_COLORS = [(90, 160, 255), (40, 200, 120), (250, 210, 0), (255, 130, 0), (240, 40, 40)]
+_LABEL_GREY = (145, 165, 190)
+_PEAK_WHITE = (255, 255, 255)
+
+
+def _draw_graph(matrix, summary: dict, font, label_y: int, top: int, bottom: int) -> None:
+    """Workout graph: label and peak on one row, then one column per sample.
+
+    Columns take the heart-rate zone color of that moment, or the discipline
+    color when there's no heart-rate data; the peak column is capped in gold.
+    """
+    graph = summary['graph']
+    w = matrix.width
+    values = graph['values']
+    zones = graph.get('zones') or [None] * len(values)
+    label = 'OUTPUT' if graph.get('metric') == 'output' else 'HEART RATE'
+    peak = f"{graph.get('peak', max(values))}{'W' if graph.get('metric') == 'output' else ''}"
+    _draw_text(matrix, font, 2, label_y, graphics.Color(*_LABEL_GREY), label)
+    _draw_text(matrix, font, w - 2 - _text_width(font, peak), label_y, _WHITE, peak)
+
+    # Output reads best from zero; heart rate sits in a narrow band, so it's
+    # scaled from just under its lowest value to show the shape.
+    floor = 0 if graph.get('metric') == 'output' else max(0, min(values) - 10)
+    ceiling = max(values)
+    height = bottom - top + 1
+    columns = w - 4
+    fallback = _disc_color(summary.get('discipline') or '')
+    peak_x = None
+    for col in range(columns):
+        i = col * len(values) // columns
+        value = values[i]
+        bar = 0 if ceiling <= floor else round((value - floor) / (ceiling - floor) * (height - 1))
+        bar = max(1, bar) if value > floor else 0
+        zone = zones[i] if i < len(zones) else None
+        r, g, b = (HR_ZONE_COLORS[zone - 1] if zone else
+                   (fallback.red, fallback.green, fallback.blue))
+        x = 2 + col
+        for y in range(bottom - bar + 1, bottom + 1):
+            matrix.SetPixel(x, y, r, g, b)
+        if value == ceiling and peak_x is None:
+            peak_x = x
+            matrix.SetPixel(x, bottom - bar, 255, 215, 0)
+
+
+def _draw_zones(matrix, seconds: List[float], font, big_font, label_y: int,
+                bar_top: int, bar_bottom: int, text_y: int) -> None:
+    """Stacked zone bar across the panel, then the zone you spent longest in."""
+    w = matrix.width
+    label = 'HR ZONES'
+    _draw_text(matrix, font, max((w - _text_width(font, label)) // 2, 2), label_y,
+               graphics.Color(*_LABEL_GREY), label)
+    total = sum(seconds)
+    span = w - 4
+    # Largest-remainder rounding so the segments fill the bar exactly.
+    exact = [s / total * span for s in seconds]
+    widths = [int(e) for e in exact]
+    for i in sorted(range(5), key=lambda i: exact[i] - widths[i], reverse=True)[:span - sum(widths)]:
+        widths[i] += 1
+    x = 2
+    for zone, width in enumerate(widths):
+        r, g, b = HR_ZONE_COLORS[zone]
+        for dx in range(width):
+            for y in range(bar_top, bar_bottom + 1):
+                matrix.SetPixel(x + dx, y, r, g, b)
+        x += width
+    top_zone = max(range(5), key=lambda i: seconds[i])
+    name = f'ZONE {top_zone + 1}'
+    pct = f' {round(seconds[top_zone] / total * 100)}%'
+    total_w = get_text_width(big_font, name) + get_text_width(big_font, pct)
+    tx = max((w - total_w) // 2, 2)
+    graphics.DrawText(matrix, big_font, tx, text_y, graphics.Color(*HR_ZONE_COLORS[top_zone]), name)
+    graphics.DrawText(matrix, big_font, tx + get_text_width(big_font, name), text_y, _WHITE, pct)
 
 
 # 7-wide × 7-tall pixel trophy marking PRs: 'C' gold cup, 'B' darker stem/base.
@@ -455,6 +539,14 @@ class LastWorkoutScreen(Screen):
             interval = self.detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
             stats_elapsed = self.elapsed - self.detail_interval
             detail = details[int(stats_elapsed / interval) % len(details)]
+            # The graph and zone slides use the bar's rows, so they go without it.
+            if detail.get('kind') == 'graph':
+                _draw_graph(matrix, summary, stat_font, 14, 16, matrix.height - 1)
+                return True
+            if detail.get('kind') == 'zones':
+                _draw_zones(matrix, summary['hr_zone_seconds'], stat_font, text_font,
+                            14, 17, 22, 30)
+                return True
             # Rise 2px rather than 3 so the value never brushes the bottom bar.
             offset = max(0, round(2 * (1 - min(1, (stats_elapsed % interval) / 0.3))))
             value = detail['value'].upper()
@@ -530,7 +622,7 @@ class LastWorkoutScreen(Screen):
         last_row_y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below.
 
         all_details = _stat_details(summary)
-        stat_details = [d for d in all_details if d['label'] != 'instructor']
+        stat_details = rotating_details(summary, matrix.height)
         instructor_detail = next((d for d in all_details if d['label'] == 'instructor'), None)
         in_intro = self.elapsed < self.detail_interval
 
@@ -615,21 +707,27 @@ class LastWorkoutScreen(Screen):
             offset = max(0, round(3 * (1 - min(1, phase_seconds / 0.3))))
             available_top = block_y + _STAT_STEP
             mid_y = (available_top + last_row_y) // 2
-            value_font = (title_font if get_text_width(title_font, detail['value'].upper()) <= w - 4
-                          else text_font)
             label_y = mid_y - 8
-            value_y = label_y + 15
-            label_text = _truncate(stat_font, detail['label'].upper(), w - 4)
-            lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
-            _draw_text(matrix, stat_font, lx, label_y + offset, graphics.Color(145, 165, 190), label_text)
+            if detail.get('kind') == 'graph':
+                _draw_graph(matrix, summary, stat_font, label_y, label_y + 4, last_row_y - 2)
+            elif detail.get('kind') == 'zones':
+                _draw_zones(matrix, summary['hr_zone_seconds'], stat_font, titles_font or text_font,
+                            label_y, label_y + 5, label_y + 13, label_y + 24)
+            else:
+                value_font = (title_font if get_text_width(title_font, detail['value'].upper()) <= w - 4
+                              else text_font)
+                value_y = label_y + 15
+                label_text = _truncate(stat_font, detail['label'].upper(), w - 4)
+                lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
+                _draw_text(matrix, stat_font, lx, label_y + offset, graphics.Color(145, 165, 190), label_text)
 
-            value_text = _truncate(value_font, detail['value'].upper(), w - 4)
-            vx = max((w - get_text_width(value_font, value_text)) // 2, 2)
-            star = bool(summary.get("is_output_pr")) and detail['label'] == 'total output'
-            graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value_text)
-            if star:
-                star_x = vx + get_text_width(value_font, value_text) + 2
-                _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)
+                value_text = _truncate(value_font, detail['value'].upper(), w - 4)
+                vx = max((w - get_text_width(value_font, value_text)) // 2, 2)
+                star = bool(summary.get("is_output_pr")) and detail['label'] == 'total output'
+                graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value_text)
+                if star:
+                    star_x = vx + get_text_width(value_font, value_text) + 2
+                    _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)
 
         _draw_hr_calories(matrix, summary, stat_font, _BOTTOM_Y)
 

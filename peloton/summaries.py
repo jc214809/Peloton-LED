@@ -64,6 +64,68 @@ def extract_summary_from_perf(perf, allowed_slugs):
     return result
 
 
+GRAPH_POINTS = 60  # one column each across a 64-px panel, leaving a 2-px margin
+
+
+def _metric(perf, slug):
+    return next((m for m in perf.get('metrics') or []
+                 if isinstance(m, dict) and m.get('slug') == slug), None)
+
+
+def _series(metric):
+    values = (metric or {}).get('values')
+    return [number(v) for v in values] if isinstance(values, list) else []
+
+
+def heart_rate_zone_seconds(perf):
+    """Seconds spent in HR zones 1-5, or None when the workout has no zone data."""
+    durations = (perf.get('effort_zones') or {}).get('heart_rate_zone_durations')
+    if isinstance(durations, dict):
+        seconds = [number(durations.get(f'heart_rate_z{i}_duration')) or 0 for i in range(1, 6)]
+    else:
+        zones = (_metric(perf, 'heart_rate') or {}).get('zones')
+        if not isinstance(zones, list) or len(zones) != 5:
+            return None
+        seconds = [number(z.get('duration')) or 0 if isinstance(z, dict) else 0 for z in zones]
+    return [round(s) for s in seconds] if sum(seconds) > 0 else None
+
+
+def _zone_of(bpm, lower_bounds):
+    """1-5 zone for a heart rate, given each zone's min bpm (zone 1 first)."""
+    zone = None
+    for index, bound in enumerate(lower_bounds, start=1):
+        if bound is not None and bpm >= bound:
+            zone = index
+    return zone
+
+
+def performance_graph(perf, points=GRAPH_POINTS):
+    """Downsampled series for the workout graph: output when recorded, else HR.
+
+    Returns {'metric', 'unit', 'values', 'zones', 'peak'} or None. 'values'
+    are bucket averages (at most `points` of them, rounded); 'zones' gives the
+    HR zone (1-5, or None) during each bucket, for coloring the columns.
+    """
+    output = _series(_metric(perf, 'output'))
+    heart = _series(_metric(perf, 'heart_rate'))
+    metric, unit, raw = ('output', 'W', output) if any(output) else ('heart_rate', 'BPM', heart)
+    if not any(raw) or len(raw) < 2:
+        return None
+    zones_meta = (_metric(perf, 'heart_rate') or {}).get('zones')
+    bounds = ([number(z.get('min_value')) if isinstance(z, dict) else None for z in zones_meta]
+              if isinstance(zones_meta, list) and len(zones_meta) == 5 else None)
+    count = min(points, len(raw))
+    values, zones = [], []
+    for i in range(count):
+        start, end = i * len(raw) // count, (i + 1) * len(raw) // count
+        bucket = [v for v in raw[start:end] if v is not None]
+        values.append(round(sum(bucket) / len(bucket)) if bucket else 0)
+        beats = [v for v in heart[start:end] if v]
+        zones.append(_zone_of(sum(beats) / len(beats), bounds) if beats and bounds else None)
+    return {'metric': metric, 'unit': unit, 'values': values, 'zones': zones,
+            'peak': round(max(v for v in raw if v is not None))}
+
+
 def _display_discipline(workout, ride=None):
     key = discipline_of(workout)
     return {'running_outdoor': 'Outdoor Run', 'walking_outdoor': 'Outdoor Walk'}.get(
@@ -137,6 +199,8 @@ def summarize_workout(workout, perf=None):
         'total_output_kj': total_output, 'total_work_kj': total_work_kj, 'avg_output_w': avg_output,
         'is_pr': bool(kinds), 'is_output_pr': 'output' in kinds, 'is_splits_pr': 'splits' in kinds,
         'strive_score': number((perf.get('effort_zones') or {}).get('total_effort_points')),
+        'graph': performance_graph(perf),
+        'hr_zone_seconds': heart_rate_zone_seconds(perf),
     }
     for key in ('calories', 'max_speed', 'avg_incline', 'max_incline', 'elevation',
                 'avg_cadence', 'avg_resistance', 'avg_stroke_rate', 'hr_avg', 'hr_max'):
