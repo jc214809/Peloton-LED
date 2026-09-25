@@ -10,7 +10,7 @@ from display.ui.last_workout_screen import LastWorkoutScreen
 from display.ui.discipline_page import DisciplinePageScreen
 from display.ui.lifetime_overview import LifetimeOverviewScreen
 from display.ui.username import UsernameScreen
-from display.ui.pr_star import PrStarScreen
+from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS, PrCelebrationScreen
 from display.ui.manager import ScreenManager
 from peloton.demo import demo_data
 from peloton.summaries import summarize_workout
@@ -40,7 +40,7 @@ def render_contact_sheet(destination):
                     summarize_workout(w, data['performance'][w['id']])) for w in data['workouts']]
         samples += [('Login needed', LastWorkoutScreen(), samples[0][2]),
                     ('Username', UsernameScreen('info'), 'Demo Rider'),
-                    ('PR', PrStarScreen(), None)]
+                    ('PR', PrCelebrationScreen(), next(s for _, _, s in samples if s.get('is_pr')))]
         if height == 64:
             lifetime = lifetime_overview_pages(extract_discipline_totals(data['overview']))
             samples += [(f'Lifetime {index + 1}', LifetimeOverviewScreen(),
@@ -50,6 +50,8 @@ def render_contact_sheet(destination):
             samples += [('Totals', DisciplinePageScreen(), {'discipline': 'Bike Bootcamp', 'count': 1234})]
         for label, screen, state in samples:
             manager = ScreenManager(matrix, initial=screen, login_required=lambda: label == 'Login needed')
+            if label == 'PR':
+                screen.update(BURST_SECONDS + SETTLE_SECONDS + 0.5)  # show the card, not the burst
             manager.tick(state)
             tile = Image.new('RGB', (272, 294), '#202020')
             tile.paste(matrix.image.resize((256, height * 4), Image.Resampling.NEAREST), (8, 26))

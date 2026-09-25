@@ -146,6 +146,8 @@ History fetches stop on the date cutoff, end of results, repeated pages, or conf
 
 Timestamps accept Unix seconds/milliseconds and ISO dates with offsets. Date-only values can be grouped into days but never establish which workout occurred last. Explicit API metrics take precedence over derived averages, including rowing split values supplied in minutes per 500 m. Missing metrics remain blank; zero is preserved. Output PRs and splits PRs share a badge, but only output PRs receive the output star.
 
+Each refresh saves Peloton's output personal-records table (one record per discipline and class length) in the dashboard cache, at no extra API cost since it arrives with the profile overview. Peloton only reports the current record, so when a record's workout ID changes, the saved value is kept as the record it replaced, and the PR screen shows the gain (e.g. `+14 KJ`). A PR set before the app first saw the old record, such as on a fresh install, shows the class length instead.
+
 ### Full example: every option set explicitly
 
 [`config.json-example`](config.json-example) and [`config.dual-users-example.json`](config.dual-users-example.json) are intentionally minimal — anything left out just uses its default. The example below sets every `display` option and every per-user option at once, purely as a reference for what exists; it isn't meant to be used verbatim or copied as a starting point.

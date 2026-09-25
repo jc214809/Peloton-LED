@@ -9,7 +9,7 @@ PERSISTED_KEYS = (
     'me', 'totals', 'summaries', 'last_updated', 'generation',
     'active_day_count', 'history_truncated', 'celebrated_pr_ids',
     'weekly_progress', 'celebrated_milestones',
-    'instructor_counts', 'instructor_tally_cursor',
+    'instructor_counts', 'instructor_tally_cursor', 'personal_records',
 )
 
 
@@ -48,7 +48,13 @@ def load_snapshot(path):
     cursor = snapshot.get('instructor_tally_cursor')
     if cursor is not None and not isinstance(cursor, str):
         return None
-    return {key: snapshot[key] for key in PERSISTED_KEYS if key in snapshot}
+    restored = {key: snapshot[key] for key in PERSISTED_KEYS if key in snapshot}
+    # A damaged records table only loses PR gains, so drop it, not the cache.
+    records = restored.get('personal_records')
+    if records is not None and (not isinstance(records, dict) or not all(
+            isinstance(r, dict) and isinstance(r.get('workout_id'), str) for r in records.values())):
+        del restored['personal_records']
+    return restored
 
 
 def save_snapshot(path, snapshot):

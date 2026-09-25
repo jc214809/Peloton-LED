@@ -195,7 +195,7 @@ def test_get_all_workouts_stops_at_known_id_without_paging_further():
 
 @pytest.mark.parametrize('display', [{'duration': -1}, {'color': 'unknown'}, {'font': 'missing'},
     {'timezone': 'Invalid/Zone'}, {'refresh_interval': 0}, {'performance_cache_size': 0},
-    {'duration': True}, {'instructor_tally_max_pages': 0}])
+    {'duration': True}, {'instructor_tally_max_pages': 0}, {'last_workout_detail_interval': -1}])
 def test_config_validation(tmp_path, display):
     import json
     path = tmp_path / 'config.json'

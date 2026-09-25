@@ -12,6 +12,8 @@ from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
 from utils.utils import args, led_matrix_options
 from utils.username import resolve_display_username
+from display.ui.last_workout_screen import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, _stat_details
+from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
 
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
@@ -54,17 +56,30 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height):
     rotation = display.get('rotation', DEFAULT_ROTATION)
     groups = {name: [] for name in rotation}
     workout_duration = _duration(display, 'latest_workouts', display['last_workout_duration'])
+    detail_interval = display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)
     if 'latest_workouts' in groups:
         if snapshot['summaries']:
             for summary in snapshot['summaries']:
                 states = [summary]
-                if matrix_height < 64 and display.get('compact_workout_pages'):
+                compact = matrix_height < 64 and display.get('compact_workout_pages')
+                if compact:
                     states = [{**summary, 'compact_page': page} for page in (0, 1)]
+                # On the full-board layout the screen intros, then cycles one
+                # stat at a time; size the page to exactly one pass so every
+                # stat shows once — no cut-offs and no wrap-around repeats.
+                if workout_duration > 0 and not compact:
+                    stat_count = len([d for d in _stat_details(summary) if d['label'] != 'instructor'])
+                    page_duration = detail_interval * (1 + stat_count)
+                else:
+                    page_duration = workout_duration
                 for state in states:
-                    groups['latest_workouts'].append(('last_workout', state, workout_duration))
+                    groups['latest_workouts'].append(('last_workout', state, page_duration))
                 if dashboard.should_celebrate_pr(summary):
-                    groups['latest_workouts'].append(
-                        ('pr', summary.get('workout_id'), _duration(display, 'milestones', display['overview_duration'])))
+                    # Burst + settle animation, then the card holds one interval.
+                    pr_duration = _duration(display, 'milestones', display['overview_duration'])
+                    if pr_duration > 0:
+                        pr_duration = PR_BURST_SECONDS + PR_SETTLE_SECONDS + detail_interval
+                    groups['latest_workouts'].append(('pr', summary, pr_duration))
         else:
             status = snapshot['status'] if snapshot['status'] != 'ready' else 'empty'
             groups['latest_workouts'].append(
@@ -172,7 +187,7 @@ def run_display_loop(manager, dashboard, display, username_override=None, cycles
         for name, state, duration in pages:
             show_and_wait(manager, name, state, duration, dashboard)
             if name == 'pr':
-                dashboard.acknowledge_pr(state)
+                dashboard.acknowledge_pr(state.get('workout_id'))
             elif name == 'goal' and state.get('milestone'):
                 dashboard.acknowledge_milestone(state['target'])
         completed += 1
@@ -248,7 +263,7 @@ def main():
     from display.ui.logo_screen import LogoScreen
     from display.ui.logo_mask_screen import LogoMaskScreen
     from display.ui.last_workout_screen import LastWorkoutScreen
-    from display.ui.pr_star import PrStarScreen
+    from display.ui.pr_celebration import PrCelebrationScreen
     from display.ui.status_screen import StatusScreen
     from display.ui.goal_screen import GoalScreen
 
@@ -268,8 +283,9 @@ def main():
     manager.register('username', UsernameScreen(font_key=display['font'], color_key=display['color']))
     manager.register('discipline', DisciplinePageScreen())
     manager.register('lifetime', LifetimeOverviewScreen())
-    manager.register('last_workout', LastWorkoutScreen())
-    manager.register('pr', PrStarScreen(color_key='gold'))
+    manager.register('last_workout', LastWorkoutScreen(
+        detail_interval=display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)))
+    manager.register('pr', PrCelebrationScreen())
     manager.register('status', StatusScreen())
     manager.register('goal', GoalScreen())
     configured_logo = display.get('logo_path')
