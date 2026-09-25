@@ -15,10 +15,10 @@ python scripts/render_rotation.py --height 32 --cache cookies-joel-dashboard-cac
 | Screen | 64x32 before | Status |
 |---|---|---|
 | Last workout | Old 3-line layout; title cut off; no stat rotation, HR or calories | **done** |
-| PR celebration | Has a compact card | to check |
+| PR celebration | Has a compact card | **checked, no change** |
 | Username + details | Two value lines touched | **done** |
 | Total workouts / lifetime | Two-line names crowded the count | **done** |
-| Goals / milestones | Has 32-row positions | to check |
+| Goals / milestones | Unit missing ("2/5" of what?) | **done** |
 | Logo | Separate 64x32 art exists | to check |
 | Login / stale overlays | Bottom corners | to check |
 
@@ -71,6 +71,24 @@ On 32 rows, two-line names (Total Workouts, Tread/Bike/Row Bootcamp) now
 start at baseline 8 instead of 12, which leaves 5 blank rows above the count
 instead of 1 (the "p" in Bootcamp was nearly touching it). One-line names
 are unchanged.
+
+### Goals and milestones (done)
+On 32 rows the weekly goal showed `2/5` or `135/150` with no unit, so you
+couldn't tell workouts from minutes, and the milestone showed `2,000` alone.
+The weekly goal now moves up (title baseline 6, value 16) to fit the unit
+(`WORKOUTS` / `MINUTES`) between the value and the progress bar. The
+milestone adds `TOTAL WORKOUTS` in gold under the number, as on 64x64.
+
+### Workouts with HR but no stats (done)
+Meditation-style workouts with HR/calories but no rotating stats never
+reached the stats phase, so the bar never showed. When there are no stats and
+the title fits on one line, the bar now shows in the intro.
+
+### PR celebration (checked, no change)
+The burst, the "OUTPUT PR / 512 KJ / 45 MIN CLASS" card, splits PRs and
+plain "NEW PR" all fit. The existing 32-row card has room for three lines,
+so when there's a gain (`+14 KJ`) it replaces the `45 MIN CLASS` line
+(64x64 shows both). No sparkles on 32 rows; they would sit on the text.
 
 ## Open questions for Joel
 

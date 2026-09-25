@@ -437,7 +437,12 @@ class LastWorkoutScreen(Screen):
                 graphics.DrawText(matrix, text_font, w - get_text_width(text_font, "PR") - 2, 15, _GOLD, "PR")
             title = (summary.get("title") or "").strip()
             title = re.sub(r'^\d+\s*min\s*', '', title, flags=re.IGNORECASE).strip() or title
-            _draw_short_lines(matrix, text_font, _wrap_two_lines(text_font, title, w - 4), 22, summary)
+            title_lines = _wrap_two_lines(text_font, title, w - 4)
+            _draw_short_lines(matrix, text_font, title_lines, 22, summary)
+            if len(title_lines) < 2 and not rotating_details(summary, matrix.height):
+                # No stats phase to carry the bar (e.g. meditation), and a
+                # one-line title leaves its rows free.
+                _draw_hr_calories(matrix, summary, stat_font, bottom_y)
             return True
 
         details = rotating_details(summary, matrix.height)

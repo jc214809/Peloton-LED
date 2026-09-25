@@ -129,3 +129,30 @@ def test_32_row_two_line_discipline_name_clears_the_count():
     # The wrapped name's descenders ("p") used to sit one row above the count.
     gaps = [b - a - 1 for a, b in zip(lit, lit[1:]) if b - a > 1]
     assert len(gaps) == 2 and gaps[-1] >= 3
+
+
+@pytest.mark.parametrize('state', [
+    {'title': 'Weekly Goal', 'current': 2, 'target': 5, 'unit': 'workouts'},
+    {'title': 'Milestone', 'current': 2000, 'target': 2000, 'unit': 'Total Workouts', 'milestone': True}])
+def test_32_row_goal_screens_say_what_they_count(state):
+    from display.display import loaded_fonts, get_text_width
+    from display.ui.goal_screen import GoalScreen
+    matrix = ImageMatrix(height=32)
+    initialize_fonts(32)
+    assert GoalScreen().render(matrix, state)
+    # The unit is drawn in the small font on its own band; find its rows.
+    lit = sorted({y for y in range(32) for x in range(64) if matrix.image.getpixel((x, y)) != (0, 0, 0)
+                  and matrix.image.getpixel((x, y)) != (35, 35, 35)})
+    bands = [[lit[0]]]
+    for y in lit[1:]:
+        (bands[-1].append(y) if y - bands[-1][-1] == 1 else bands.append([y]))
+    # Title, value, unit (and the progress bar for weekly goals).
+    assert len(bands) == (3 if state.get('milestone') else 4)
+    assert bands[-1][-1] <= 31
+
+
+def test_32_row_workout_without_stats_shows_hr_in_intro():
+    summary = {'discipline': 'Meditation', 'title': '10 min Calm', 'duration_min': 10,
+               'hr_avg': 70, 'calories': 20}
+    assert rotating_details(summary, 32) == []
+    assert rows_of(frame(summary, 0.5), HEART)

@@ -20,17 +20,18 @@ class GoalScreen(Screen):
         current = int(state.get('current') or 0)
         target = max(1, int(state.get('target') or 1))
         unit = str(state.get('unit') or '')
+        short = matrix.height < 64
         if state.get('milestone'):
-            draw_centered_text(matrix, small, 'MILESTONE', 8 if matrix.height < 64 else 14, _GOLD)
-            draw_centered_text(matrix, large, f'{target:,}', 21 if matrix.height < 64 else 36, _WHITE)
-            if matrix.height >= 64:
-                draw_centered_text(matrix, small, unit.upper(), 49, _GOLD)
+            draw_centered_text(matrix, small, 'MILESTONE', 8 if short else 14, _GOLD)
+            draw_centered_text(matrix, large, f'{target:,}', 21 if short else 36, _WHITE)
+            # 32 rows: the unit goes on the bottom rows, under the number.
+            draw_centered_text(matrix, small, unit.upper(), 29 if short else 49, _GOLD)
             return True
-        draw_centered_text(matrix, small, title, 7 if matrix.height < 64 else 12, _WHITE)
+        # 32 rows: everything moves up so the unit fits between value and bar.
+        draw_centered_text(matrix, small, title, 6 if short else 12, _WHITE)
         value = f'{current}/{target}'
-        draw_centered_text(matrix, large, value, 19 if matrix.height < 64 else 33, _BLUE)
-        if matrix.height >= 64:
-            draw_centered_text(matrix, small, unit.upper(), 43, _WHITE)
+        draw_centered_text(matrix, large, value, 16 if short else 33, _BLUE)
+        draw_centered_text(matrix, small, unit.upper(), 23 if short else 43, _WHITE)
         left, right = 3, matrix.width - 4
         top = matrix.height - 7
         filled = round((right - left + 1) * min(1, current / target))
