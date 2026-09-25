@@ -213,6 +213,75 @@ def _middle_stats(summary: dict) -> List[Tuple[Optional[str], Optional[str]]]:
     return rows
 
 
+def _stat_details(summary: dict) -> List[dict]:
+    """Discipline-specific stat values with spelled-out labels, one detail per
+    stat, for the rotating single-item display. Mirrors _middle_stats' field
+    selection and discipline routing exactly, but builds a full label instead
+    of the abbreviated unit that fits _middle_stats' packed side-by-side rows
+    (e.g. "output" instead of "kj") since only one detail is shown at a time.
+    """
+    disc = (summary.get("discipline") or "").strip().lower()
+    details = []
+
+    def add(label, value):
+        if value is not None:
+            details.append({'label': label, 'value': value})
+
+    if any(d in disc for d in ("cycling", "bike")):
+        output = summary.get("total_output_kj")
+        strive = summary.get("strive_score")
+        spd = summary.get("avg_speed")
+        spd_unit = summary.get("avg_speed_unit") or ""
+        cad = summary.get("avg_cadence")
+        res = summary.get("avg_resistance")
+        dist_val = summary.get("distance")
+        dist_unit = summary.get("distance_unit") or ""
+        add("total output", f"{int(output)} kj" if isinstance(output, (int, float)) else None)
+        add("strive score", f"{int(strive)}" if isinstance(strive, (int, float)) else None)
+        add("avg speed", f"{spd:.1f} {spd_unit}" if isinstance(spd, (int, float)) else None)
+        add("avg cadence", f"{int(cad)} rpm" if isinstance(cad, (int, float)) else None)
+        add("avg resistance", f"{int(res)}%" if isinstance(res, (int, float)) else None)
+        add("distance", f"{dist_val:.1f} {dist_unit}" if isinstance(dist_val, (int, float)) else None)
+    elif any(d in disc for d in ("running", "walking", "outdoor", "tread", "hiking")):
+        dist_val = summary.get("distance")
+        dist_unit = summary.get("distance_unit") or ""
+        pace_val = summary.get("avg_pace")
+        elevation = summary.get("elevation")
+        elevation_unit = summary.get("elevation_unit") or ""
+        incline = summary.get("avg_incline")
+        add("distance", f"{dist_val:.1f} {dist_unit}" if isinstance(dist_val, (int, float)) else None)
+        add("avg pace", f"{_fmt_pace(pace_val)}{(summary.get('avg_pace_unit') or '').replace('min', '')}"
+            if pace_val is not None else None)
+        if elevation is not None or incline is not None:
+            add("elevation gain", f"{elevation:g} {elevation_unit}" if isinstance(elevation, (int, float)) else None)
+            add("avg incline", f"{incline:g}%" if isinstance(incline, (int, float)) else None)
+    elif "rowing" in disc or disc.startswith("row "):
+        dist_val = summary.get("distance")
+        dist_unit = summary.get("distance_unit") or ""
+        spm_val = summary.get("avg_stroke_rate")
+        split_val = summary.get("row_split_sec_per_500m")
+        out_val = summary.get("avg_output_w")
+        add("distance", f"{dist_val:g}{dist_unit}" if isinstance(dist_val, (int, float)) else None)
+        add("stroke rate", f"{int(spm_val)} spm" if isinstance(spm_val, (int, float)) else None)
+        add("split per 500m", _fmt_split(split_val) if split_val else None)
+        add("avg output", f"{int(out_val)}W" if isinstance(out_val, (int, float)) else None)
+    else:
+        strive = summary.get("strive_score")
+        hr_max = summary.get("hr_max")
+        distance = summary.get("distance")
+        distance_unit = summary.get("distance_unit") or ""
+        avg_output = summary.get("avg_output_w")
+        add("strive score", f"{strive:g}" if isinstance(strive, (int, float)) else None)
+        add("max heart rate", f"{int(hr_max)}" if isinstance(hr_max, (int, float)) else None)
+        add("distance", f"{distance:g} {distance_unit}" if isinstance(distance, (int, float)) else None)
+        add("avg output", f"{int(avg_output)}W" if isinstance(avg_output, (int, float)) else None)
+
+    instructor = (summary.get("instructor") or "").strip()
+    if instructor:
+        add("instructor", instructor)
+    return details
+
+
 # 5-wide × 5-tall pixel star (offsets from top-left)
 _STAR_PIXELS = [
     (2,0),                          # top point
@@ -251,11 +320,39 @@ def _draw_heart(matrix, x: int, y: int, color: graphics.Color) -> None:
         matrix.SetPixel(x + dx, y + dy, r, g, b)
 
 
+# Default seconds each intro/stat holds for; overridable via the
+# `last_workout_detail_interval` display config key.
+LAST_WORKOUT_DETAIL_INTERVAL_SECONDS = 4.0
+
+
 class LastWorkoutScreen(Screen):
     """Displays key stats from a workout summary on a 64x64 LED matrix.
 
     state should be the dict returned by peloton.summaries.summarize_workout().
+
+    The bottom HR/calories bar stays fixed for the whole screen. Everything
+    above it goes through two phases:
+      1. Intro (first detail_interval seconds): discipline/duration/title,
+         plus the instructor's name underneath if there is one.
+      2. Stats: the discipline title stays fixed at the top; duration/title/
+         instructor clear and one stat at a time, large, cycles through the
+         freed-up space below it, on the same "hold, then rise into place"
+         pattern as UsernameScreen's details, instead of bundling every stat
+         into small rows at once.
     """
+
+    animated = True
+    atomic_frames = True
+
+    def __init__(self, detail_interval: float = LAST_WORKOUT_DETAIL_INTERVAL_SECONDS):
+        self.elapsed = 0.0
+        self.detail_interval = detail_interval
+
+    def on_enter(self, matrix, state=None):
+        self.elapsed = 0.0
+
+    def update(self, dt):
+        self.elapsed += max(0, dt)
 
     def render(self, matrix, state: Optional[Any] = None) -> bool:
         summary = state or {}
@@ -300,7 +397,16 @@ class LastWorkoutScreen(Screen):
                 graphics.DrawText(matrix, text_font, 2, y, color, text)
             return True
 
-        # ── Line 1: discipline ────────────────────────────────────────────
+        _BOTTOM_Y = 61
+        _STAT_STEP = 6
+        last_row_y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below.
+
+        all_details = _stat_details(summary)
+        stat_details = [d for d in all_details if d['label'] != 'instructor']
+        instructor_detail = next((d for d in all_details if d['label'] == 'instructor'), None)
+        in_intro = self.elapsed < self.detail_interval
+
+        # ── Line 1: discipline ── stays on screen for both intro and stats ──
         disc_text = discipline.upper()
         disc_font = title_font
         # Bike Bootcamp is clearer as two 5x8 lines than one tiny 4x6 line.
@@ -320,51 +426,83 @@ class LastWorkoutScreen(Screen):
                               _disc_color(discipline), line)
         block_y = disc_y + (len(disc_lines) - 1) * disc_font_h
 
-        # ── Line 2: duration (centered) ───────────────────────────────────
-        dur_min = summary.get("duration_min")
-        # Tighten the gap when the discipline wraps to 2 lines, to leave room for stats below.
-        dur_y = block_y + (7 if len(disc_lines) > 1 else 10)
-        if isinstance(dur_min, (int, float)):
-            dur_val = str(int(dur_min))
-            dur_label = "min"
-            dur_val_w = _text_width(text_font, dur_val)
-            dur_label_w = _text_width(text_font, dur_label)
-            dur_total_w = dur_val_w + 1 + dur_label_w
-            dur_x = max((w - dur_total_w) // 2, 2)
-            _draw_text(matrix, text_font, dur_x, dur_y, _BLUE, dur_val)
-            _draw_text(matrix, text_font, dur_x + dur_val_w + 1, dur_y, _BLUE, dur_label)
+        if in_intro:
+            # ── Line 2: duration (centered) ─────────────────────────────────
+            dur_min = summary.get("duration_min")
+            # Tighten the gap when the discipline wraps to 2 lines, to leave room for the title below.
+            dur_y = block_y + (7 if len(disc_lines) > 1 else 10)
+            if isinstance(dur_min, (int, float)):
+                dur_val = str(int(dur_min))
+                dur_label = "min"
+                dur_val_w = _text_width(text_font, dur_val)
+                dur_label_w = _text_width(text_font, dur_label)
+                dur_total_w = dur_val_w + 1 + dur_label_w
+                dur_x = max((w - dur_total_w) // 2, 2)
+                _draw_text(matrix, text_font, dur_x, dur_y, _BLUE, dur_val)
+                _draw_text(matrix, text_font, dur_x + dur_val_w + 1, dur_y, _BLUE, dur_label)
 
-        # ── Lines 3–4: title below the duration with a visible gap ────────
-        title = (summary.get("title") or "").strip()
-        title_stripped = re.sub(r'^\d+\s*min\s*', '', title, flags=re.IGNORECASE).strip() or title
-        title_lines = _wrap_two_lines(text_font, title_stripped, w - 4)
-        for i, line in enumerate(title_lines[:2]):
-            tx = max((w - _text_width(text_font, line)) // 2, 2)
-            _draw_text(matrix, text_font, tx, dur_y + 7 + i * 7, _WHITE, line)
-        header_bottom = dur_y + 7 + max(len(title_lines[:2]) - 1, 0) * 7
+            # ── Lines 3–4: title below the duration with a visible gap ──────
+            title = (summary.get("title") or "").strip()
+            title_stripped = re.sub(r'^\d+\s*min\s*', '', title, flags=re.IGNORECASE).strip() or title
+            title_lines = _wrap_two_lines(text_font, title_stripped, w - 4)
+            for i, line in enumerate(title_lines[:2]):
+                tx = max((w - _text_width(text_font, line)) // 2, 2)
+                _draw_text(matrix, text_font, tx, dur_y + 7 + i * 7, _WHITE, line)
+            header_bottom = dur_y + 7 + max(len(title_lines[:2]) - 1, 0) * 7
 
-        # ── Stats: stacked between the header and the HR/cal bar ──────────
-        stats = _middle_stats(summary)
-        _BOTTOM_Y = 61
-        _STAT_STEP = 6
-        mid = w // 2 + 1
-        _half = mid - 2 - 2
-        last_row_y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below the last stat.
-        default_top = last_row_y - _STAT_STEP * (len(stats) - 1)
-        if default_top >= header_bottom + _STAT_STEP or len(stats) <= 1:
-            top, step = default_top, _STAT_STEP
-        else:
-            # Not enough room at the normal step; compress rows to fit between
-            # the header and the HR/cal bar instead of overlapping either one.
-            top = header_bottom + _STAT_STEP
-            step = max(1, (last_row_y - top) // (len(stats) - 1))
-        stat_ys = [top + step * i for i in range(len(stats))]
-        for row_y, (left, right) in zip(stat_ys, stats):
-            if left:
-                _draw_stat(matrix, stat_font, 2, row_y, _WHITE, left, _half,
-                           star=bool(summary.get("is_output_pr")) and left.endswith("kj"))
-            if right:
-                _draw_stat(matrix, stat_font, w - 1, row_y, _WHITE, right, w - mid - 2, right_align=True)
+            # ── Instructor, if any, underneath the title ────────────────────
+            if instructor_detail:
+                offset = max(0, round(3 * (1 - min(1, self.elapsed / 0.3))))
+                # Two-line titles need extra clearance below their second
+                # line before the instructor block starts.
+                two_line_extra = 2 if len(title_lines[:2]) > 1 else 0
+                available_top = header_bottom + _STAT_STEP
+                available_bottom = last_row_y
+                min_top = header_bottom + 5
+                value_font = text_font
+                value_lines = _wrap_two_lines(value_font, instructor_detail['value'].upper(), w - 4)[:2]
+                mid_y = available_top + (available_bottom - available_top) // 2 - 3
+                show_label = len(value_lines) == 1
+                block_lines = (1 if show_label else 0) + len(value_lines)
+                y = max(mid_y - 3 * (block_lines - 1), min_top) + two_line_extra
+                if show_label:
+                    label_text = _truncate(stat_font, "INSTRUCTOR", w - 4)
+                    lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
+                    _draw_text(matrix, stat_font, lx, y + offset, graphics.Color(145, 165, 190), label_text)
+                    y += 8
+                for line in value_lines:
+                    vx = max((w - _text_width(value_font, line)) // 2, 2)
+                    _draw_text(matrix, value_font, vx, y + offset, _WHITE, line)
+                    y += 7
+        elif stat_details:
+            # ── Stats phase: discipline title stays; everything below it ────
+            # (duration/workout-title/instructor) is replaced by one rotating
+            # stat at a time, using the space freed up below the title.
+            interval = self.detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+            stats_elapsed = self.elapsed - self.detail_interval
+            index = int(stats_elapsed / interval) % len(stat_details)
+            phase_seconds = stats_elapsed % interval
+            detail = stat_details[index]
+            # Each new detail rises into place during its first 0.3 seconds.
+            offset = max(0, round(3 * (1 - min(1, phase_seconds / 0.3))))
+            available_top = block_y + _STAT_STEP
+            mid_y = (available_top + last_row_y) // 2
+            value_font = (title_font if get_text_width(title_font, detail['value'].upper()) <= w - 4
+                          else text_font)
+            label_y = mid_y - 8
+            value_y = label_y + 15
+            label_text = _truncate(stat_font, detail['label'].upper(), w - 4)
+            lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
+            _draw_text(matrix, stat_font, lx, label_y + offset, graphics.Color(145, 165, 190), label_text)
+
+            value_text = _truncate(value_font, detail['value'].upper(), w - 4)
+            vx = max((w - get_text_width(value_font, value_text)) // 2, 2)
+            star = bool(summary.get("is_output_pr")) and detail['label'] == 'total output'
+            graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value_text)
+            if star:
+                star_x = vx + get_text_width(value_font, value_text) + 2
+                star_top = value_y + offset - _STAR_H
+                _draw_star(matrix, star_x, star_top)
 
         # ── Bottom left: ♥ HR ─────────────────────────────────────────────
         hr_val = summary.get("hr_avg")
@@ -377,6 +515,7 @@ class LastWorkoutScreen(Screen):
         cal_val = summary.get("calories")
         if isinstance(cal_val, (int, float)):
             right = w - 1 - (8 if summary.get('login_required') else 0)
+            mid = w // 2 + 1
             _draw_stat(matrix, stat_font, right, _BOTTOM_Y, _WHITE, f"{int(cal_val)} cal",
                        max(0, right - mid), right_align=True)
 

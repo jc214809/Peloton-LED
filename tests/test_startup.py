@@ -9,7 +9,7 @@ from display.ui.last_workout_screen import LastWorkoutScreen
 from display.ui.username import UsernameScreen
 from display.ui.discipline_page import DisciplinePageScreen
 from display.ui.lifetime_overview import LifetimeOverviewScreen
-from display.ui.pr_star import PrStarScreen
+from display.ui.pr_celebration import PrCelebrationScreen
 from display.ui.status_screen import StatusScreen
 from display.display import initialize_fonts
 from scripts.render_demo import ImageMatrix
@@ -24,7 +24,7 @@ def test_demo_rotation_has_no_network_and_renders_all_screens(tmp_path):
     manager = ScreenManager(matrix, login_required=lambda: dashboard.login_required)
     for name, screen in [('last_workout', LastWorkoutScreen()), ('username', UsernameScreen('info')),
                          ('discipline', DisciplinePageScreen()), ('lifetime', LifetimeOverviewScreen()),
-                         ('pr', PrStarScreen()), ('status', StatusScreen())]:
+                         ('pr', PrCelebrationScreen()), ('status', StatusScreen())]:
         manager.register(name, screen)
     with patch('requests.Session.request', side_effect=AssertionError('Demo made a network request')):
         run_display_loop(manager, dashboard, config, cycles=1)
@@ -129,6 +129,144 @@ def test_long_discipline_name_with_max_stat_rows_does_not_collide():
     assert any(gap > 1 for gap in gaps), 'title and stats rows have no separating gap'
 
 
+def test_last_workout_screen_keeps_discipline_title_through_stats_phase():
+    from display.ui.last_workout_screen import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+
+    matrix = ImageMatrix(height=64)
+    initialize_fonts(64)
+    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
+               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
+    screen = LastWorkoutScreen()
+    screen.on_enter(matrix, summary)
+
+    # During the intro, the discipline header is drawn (its color pixels appear).
+    screen.update(0.5)
+    assert screen.render(matrix, summary)
+    disc_color = (255, 140, 0)  # Strength's discipline color
+    assert any(p == disc_color for p in matrix.image.getdata())
+
+    # Once the intro ends and stats start rotating, the discipline title
+    # stays put — only the duration/workout-title below it is replaced.
+    screen.update(LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)
+    matrix.Clear()
+    assert screen.render(matrix, summary)
+    assert any(p == disc_color for p in matrix.image.getdata())
+
+
+@pytest.mark.parametrize('discipline', ['Cycling', 'Bike Bootcamp'])
+def test_two_line_title_leaves_extra_gap_above_instructor(discipline):
+    matrix = ImageMatrix(height=64)
+    initialize_fonts(64)
+    summary = {'discipline': discipline, 'title': 'Power Zone Endurance Ride With Robin',
+               'duration_min': 45, 'calories': 400, 'hr_avg': 140, 'instructor': 'Robin Arzon'}
+    screen = LastWorkoutScreen()
+    screen.on_enter(matrix, summary)
+    screen.update(2.0)  # in the intro, past the instructor's rise-in
+    assert screen.render(matrix, summary)
+    pixels = matrix.image.load()
+    title_color = (255, 255, 255)
+    label_color = (145, 165, 190)
+    # Restrict to white rows in the title's band (above the instructor
+    # label) so the instructor's own white value text isn't mistaken for
+    # the title.
+    label_rows = sorted({y for y in range(64) for x in range(64) if pixels[x, y] == label_color})
+    assert label_rows, 'instructor label did not render'
+    title_rows = sorted({y for y in range(min(label_rows)) for x in range(64)
+                         if pixels[x, y] == title_color})
+    assert title_rows, 'title did not render'
+    gap = min(label_rows) - max(title_rows)
+    # Two-line titles get three blank rows before the instructor block.
+    assert gap == 4, f'expected 3 blank rows between a 2-line title and instructor, got gap={gap}'
+    value_rows = sorted({y for y in range(min(label_rows), 54) for x in range(64)
+                         if pixels[x, y] == title_color})
+    assert value_rows[-1] < 55, 'instructor name collides with the HR/calories row'
+
+
+def test_last_workout_screen_shows_instructor_in_intro_then_rotates_stats():
+    from display.ui.last_workout_screen import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, _stat_details
+
+    matrix = ImageMatrix(height=64)
+    initialize_fonts(64)
+    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
+               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22,
+               'hr_max': 165, 'instructor': 'Robin Arzon'}
+    all_details = _stat_details(summary)
+    stat_only_count = sum(1 for d in all_details if d['label'] != 'instructor')
+    assert stat_only_count >= 2
+
+    screen = LastWorkoutScreen()
+    screen.on_enter(matrix, summary)
+    screen.update(0.5)  # past the initial rise-in, still in the intro
+    assert screen.render(matrix, summary)
+    intro_frame = list(matrix.image.getdata())
+
+    # Stats phase starts once the intro ends; the instructor never appears
+    # again since it isn't part of the stats-only rotation.
+    screen.update(LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)
+    matrix.Clear()
+    assert screen.render(matrix, summary)
+    first_stat_frame = list(matrix.image.getdata())
+    assert first_stat_frame != intro_frame
+
+    screen.update(LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)
+    matrix.Clear()
+    assert screen.render(matrix, summary)
+    second_stat_frame = list(matrix.image.getdata())
+    assert second_stat_frame != first_stat_frame
+
+    # After a full cycle through every stat, the first one shows again.
+    screen.update(LAST_WORKOUT_DETAIL_INTERVAL_SECONDS * (stat_only_count - 1))
+    matrix.Clear()
+    assert screen.render(matrix, summary)
+    assert list(matrix.image.getdata()) == first_stat_frame
+
+
+def test_rotating_stat_position_below_discipline_title():
+    matrix = ImageMatrix(height=64)
+    initialize_fonts(64)
+    summary = {'discipline': 'Strength', 'title': 'Full Body', 'duration_min': 20,
+               'calories': 200, 'hr_avg': 130, 'strive_score': 22}
+    screen = LastWorkoutScreen()
+    screen.on_enter(matrix, summary)
+    screen.update(5.0)  # stats phase, past the rise-in
+    assert screen.render(matrix, summary)
+    pixels = matrix.image.load()
+    label_rows = sorted({y for y in range(64) for x in range(64) if pixels[x, y] == (145, 165, 190)})
+    disc_rows = sorted({y for y in range(64) for x in range(64) if pixels[x, y] == (255, 140, 0)})
+    assert label_rows[0] == 23
+    assert label_rows[0] - disc_rows[-1] > 1
+
+
+def test_last_workout_screen_honors_custom_detail_interval():
+    matrix = ImageMatrix(height=64)
+    initialize_fonts(64)
+    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
+               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
+    screen = LastWorkoutScreen(detail_interval=1.0)
+    screen.on_enter(matrix, summary)
+
+    # Still within the shortened 1s intro.
+    screen.update(0.5)
+    assert screen.render(matrix, summary)
+
+    # Past the shortened intro: stats phase renders without error.
+    screen.update(1.0)
+    matrix.Clear()
+    assert screen.render(matrix, summary)
+    assert matrix.image.getbbox() is not None
+
+
+def test_last_workout_screen_zero_detail_interval_does_not_crash():
+    matrix = ImageMatrix(height=64)
+    initialize_fonts(64)
+    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
+               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
+    screen = LastWorkoutScreen(detail_interval=0)
+    screen.on_enter(matrix, summary)
+    screen.update(0.1)
+    assert screen.render(matrix, summary)
+
+
 @pytest.mark.parametrize('height', [32, 64])
 def test_startup_logo_mask_renders_centered_within_panel(height):
     from display.ui.logo_art import LOGO_ROWS
@@ -171,6 +309,8 @@ def test_rotation_places_pr_after_its_workout():
         'last_workout', 'pr', 'last_workout', 'username',
     ]
     dashboard.acknowledge_pr.assert_called_once_with('newest')
+    pr_state = next(call.args[1] for call in manager.show.call_args_list if call.args[0] == 'pr')
+    assert pr_state['workout_id'] == 'newest' and pr_state['is_pr']
 
 
 def test_multi_user_loop_runs_complete_rotations_in_configured_order():
@@ -291,6 +431,67 @@ def test_configured_rotation_order_and_disabled_sections():
     assert [page[0] for page in pages] == ['goal', 'username']
     assert pages[0][1]['current'] == 2
     assert pages[0][2] == 6
+
+
+def test_last_workout_duration_stretches_to_fit_every_stat():
+    from display.ui.last_workout_screen import _stat_details
+
+    dashboard = Mock()
+    dashboard.should_celebrate_pr.return_value = False
+    summary = {'workout_id': 'one', 'discipline': 'Cycling', 'title': 'Cycling Class',
+               'duration_min': 20, 'total_output_kj': 200, 'strive_score': 22,
+               'avg_speed': 12, 'avg_speed_unit': 'mph', 'avg_cadence': 80,
+               'avg_resistance': 40, 'distance': 3.1, 'distance_unit': 'mi'}
+    stat_count = len([d for d in _stat_details(summary) if d['label'] != 'instructor'])
+    assert stat_count == 6  # sanity check that this fixture exercises every cycling stat
+    snapshot = {'me': {'username': 'Rider'}, 'summaries': [summary],
+                'totals': {'Total Workouts': 1}, 'status': 'ready', 'weekly_progress': {}}
+    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
+               'last_workout_detail_interval': 4, 'overview_duration': 4,
+               'duration': 4, 'color': 'white'}
+
+    pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
+
+    assert len(pages) == 1
+    # 15s is too short for a 4s intro plus 6 stats at 4s each (28s); the
+    # page duration stretches so every stat gets its full rotation turn.
+    assert pages[0][2] == pytest.approx(4 * (1 + stat_count))
+
+
+def test_last_workout_duration_shows_each_stat_once_without_repeats():
+    # Strength has only strive score + max HR; a longer configured duration
+    # used to wrap the rotation back around and show strive score twice.
+    dashboard = Mock()
+    dashboard.should_celebrate_pr.return_value = False
+    summary = {'workout_id': 'one', 'discipline': 'Strength', 'title': 'Full Body',
+               'duration_min': 20, 'strive_score': 11.3, 'hr_max': 142,
+               'instructor': 'Matty Maggiacomo'}
+    snapshot = {'me': {'username': 'Rider'}, 'summaries': [summary],
+                'totals': {'Total Workouts': 1}, 'status': 'ready', 'weekly_progress': {}}
+    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
+               'last_workout_detail_interval': 4, 'overview_duration': 4,
+               'duration': 4, 'color': 'white'}
+
+    pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
+
+    # 4s intro + 2 stats x 4s — ends right as the last stat finishes.
+    assert pages[0][2] == pytest.approx(12)
+
+
+def test_last_workout_without_stats_shows_intro_for_one_interval():
+    dashboard = Mock()
+    dashboard.should_celebrate_pr.return_value = False
+    summary = {'workout_id': 'one', 'discipline': 'Meditation', 'title': 'Calm',
+               'duration_min': 10}
+    snapshot = {'me': {'username': 'Rider'}, 'summaries': [summary],
+                'totals': {'Total Workouts': 1}, 'status': 'ready', 'weekly_progress': {}}
+    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
+               'last_workout_detail_interval': 4, 'overview_duration': 4,
+               'duration': 4, 'color': 'white'}
+
+    pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
+
+    assert pages[0][2] == pytest.approx(4)
 
 
 def test_username_profile_details_all_receive_display_time():

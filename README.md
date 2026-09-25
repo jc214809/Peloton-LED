@@ -116,7 +116,8 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `color` | white | white, red, gold, disney_blue, down |
 | `duration` | 4 | Username screen seconds |
 | `overview_duration` | 4 | Per-discipline and PR screen seconds |
-| `last_workout_duration` | 30 | Workout screen seconds |
+| `last_workout_duration` | 30 | Workout screen seconds on 32-row panels; 64-row pages are timed by `last_workout_detail_interval` (see below) |
+| `last_workout_detail_interval` | 4 | Seconds each stat (and the intro) holds for during the workout screen's rotation |
 | `logo_duration` | 3 | Startup logo seconds |
 | `logo_path` | Auto-selected | Optional logo file; missing logos are skipped |
 | `timezone` | Profile, then system local | Calendar-day grouping; explicit config must be a valid IANA zone |
@@ -137,11 +138,15 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 
 `rotation` accepts any subset of `latest_workouts`, `username`, `total_workouts`, `lifetime`, `milestones`, `goals`, each at most once. `screen_durations` keys are `latest_workouts`, `username`, `lifetime`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
 
+Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds. The page lasts exactly `last_workout_detail_interval * (1 + stat count)` seconds, so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. `last_workout_duration` (or `screen_durations.latest_workouts`) only sets the page length on 32-row panels, where pages are static; `0` still disables the section.
+
 Legacy `ride` and `park` font names map to `discipline`. `per_workout_duration` is accepted for older configs but is not used in the current rotation.
 
 History fetches stop on the date cutoff, end of results, repeated pages, or configured limits. A warning is logged when a limit prevents a complete search. Explicit incomplete workouts are excluded; older payloads without a status remain usable. If no workout matches the selected discipline, the latest completed workout is shown and the fallback is logged.
 
 Timestamps accept Unix seconds/milliseconds and ISO dates with offsets. Date-only values can be grouped into days but never establish which workout occurred last. Explicit API metrics take precedence over derived averages, including rowing split values supplied in minutes per 500 m. Missing metrics remain blank; zero is preserved. Output PRs and splits PRs share a badge, but only output PRs receive the output star.
+
+Each refresh saves Peloton's output personal-records table (one record per discipline and class length) in the dashboard cache, at no extra API cost since it arrives with the profile overview. Peloton only reports the current record, so when a record's workout ID changes, the saved value is kept as the record it replaced, and the PR screen shows the gain (e.g. `+14 KJ`). A PR set before the app first saw the old record, such as on a fresh install, shows the class length instead.
 
 ### Full example: every option set explicitly
 
@@ -168,6 +173,7 @@ Timestamps accept Unix seconds/milliseconds and ISO dates with offsets. Date-onl
     "duration": 9,
     "overview_duration": 4,
     "last_workout_duration": 15,
+    "last_workout_detail_interval": 4,
     "logo_duration": 3,
     "logo_path": null,
     "timezone": "America/New_York",

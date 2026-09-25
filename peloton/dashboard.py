@@ -18,6 +18,7 @@ from .timestamps import workout_timestamp
 from .totals import extract_discipline_totals
 from .goals import reached_milestones, weekly_progress
 from .instructors import merge_instructor_counts
+from .records import merge_personal_records, parse_personal_records, previous_best_kj
 
 logger = logging.getLogger('peloton-led.dashboard')
 
@@ -51,7 +52,8 @@ class Dashboard:
                       'consecutive_failures': 0,
                       'celebrated_pr_ids': [], 'celebrated_milestones': [],
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
-                      'instructor_counts': {}, 'instructor_tally_cursor': None}
+                      'instructor_counts': {}, 'instructor_tally_cursor': None,
+                      'personal_records': {}}
         self.demo = demo
         if demo:
             data = demo_data()
@@ -199,6 +201,9 @@ class Dashboard:
             if not user_id:
                 raise ValueError('Profile response has no user ID')
             overview = client.get_overview(user_id)
+            with self._lock:
+                stored_records = self._data.get('personal_records', {})
+            personal_records = merge_personal_records(stored_records, parse_personal_records(overview))
             workouts = client.get_recent_workouts(user_id,
                 limit=self.config.get('history_limit', 200), days=self.config.get('history_days', 90),
                 page_size=self.config.get('history_page_size', 50), max_pages=self.config.get('history_max_pages', 10))
@@ -217,7 +222,9 @@ class Dashboard:
                     self._cache_performance(identity, signature, perf)
                 else:
                     perf = cached[1] if cached else None
-                summaries.append(summarize_workout(workout, perf))
+                summary = summarize_workout(workout, perf)
+                summary['previous_best_kj'] = previous_best_kj(identity, personal_records)
+                summaries.append(summary)
             with self._lock:
                 generation = self._data['generation'] + 1
                 prior_counts = self._data.get('instructor_counts', {})
@@ -235,6 +242,7 @@ class Dashboard:
                 me=me, totals=extract_discipline_totals(overview), summaries=summaries,
                 weekly_progress=progress,
                 instructor_counts=instructor_counts, instructor_tally_cursor=newest_id,
+                personal_records=personal_records,
                 login_required=False, status='ready', last_updated=refreshed_at,
                 last_error=None, generation=generation,
                 active_day_count=len(active_day),

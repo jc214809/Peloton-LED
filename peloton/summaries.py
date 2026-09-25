@@ -109,8 +109,10 @@ def summarize_workout(workout, perf=None):
         total_output /= 1000
     elif output_unit not in ('kj', None):
         total_output = None
+    joules = number(workout.get('total_work'))
+    # The graph's Total Output is rounded to whole kJ; PR gains need the raw work.
+    total_work_kj = round(joules / 1000, 1) if joules is not None and joules > 0 else None
     if total_output is None:
-        joules = number(workout.get('total_work'))
         total_output = joules / 1000 if joules is not None else None
     avg_output = metrics.get('avg_output')
     avg_unit = metrics.get('avg_output__unit')
@@ -132,7 +134,7 @@ def summarize_workout(workout, perf=None):
         'avg_speed': speed, 'avg_speed_unit': speed_unit,
         'avg_pace': pace, 'avg_pace_unit': pace_unit,
         'row_split_sec_per_500m': split,
-        'total_output_kj': total_output, 'avg_output_w': avg_output,
+        'total_output_kj': total_output, 'total_work_kj': total_work_kj, 'avg_output_w': avg_output,
         'is_pr': bool(kinds), 'is_output_pr': 'output' in kinds, 'is_splits_pr': 'splits' in kinds,
         'strive_score': number((perf.get('effort_zones') or {}).get('total_effort_points')),
     }

@@ -387,3 +387,58 @@ def test_screen_rotation_continues_during_slow_refresh(tmp_path):
     finally:
         release.set()
         assert dashboard.stop(timeout=2)
+
+
+def _overview_with_record(data, raw_value, workout_id):
+    return dict(data['overview'], personal_records=[
+        {'slug': 'cycling', 'records': [
+            {'name': '30 min', 'raw_value': raw_value, 'workout_id': workout_id,
+             'workout_date': '2026-09-01T12:00:00'},
+            {'name': '45 min', 'raw_value': -1, 'workout_id': None, 'workout_date': None},
+        ]}])
+
+
+def test_new_pr_gets_the_record_it_beat_and_survives_restart(tmp_path):
+    dashboard, client, token = setup_dashboard(tmp_path)
+    data = demo_data()
+    # Startup refresh: the old record is already on file.
+    client.get_overview.return_value = _overview_with_record(data, 250400.0, 'old-ride')
+    dashboard.refresh()
+    assert dashboard.snapshot()['summaries'][0]['previous_best_kj'] is None
+    # The rider sets a new 30 min record with the latest workout.
+    pr_ride = dict(data['workouts'][0], id='pr-ride', is_total_work_personal_record=True)
+    client.get_recent_workouts.return_value = [pr_ride]
+    client.get_overview.return_value = _overview_with_record(data, 262900.0, 'pr-ride')
+    dashboard.refresh()
+    snap = dashboard.snapshot()
+    assert snap['summaries'][0]['previous_best_kj'] == 250.4
+    assert snap['personal_records']['cycling|30 min']['previous']['workout_id'] == 'old-ride'
+    # Later refreshes (same record holder) keep the comparison.
+    dashboard.refresh()
+    assert dashboard.snapshot()['summaries'][0]['previous_best_kj'] == 250.4
+    offline = Mock()
+    offline.get_me.side_effect = requests.ConnectionError('offline')
+    restarted = Dashboard(token, {}, client_factory=lambda _: offline)
+    assert restarted.snapshot()['summaries'][0]['previous_best_kj'] == 250.4
+    assert restarted.snapshot()['personal_records']['cycling|30 min']['value_kj'] == 262.9
+
+
+def test_pr_set_before_first_capture_has_no_previous_best(tmp_path):
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    data = demo_data()
+    client.get_recent_workouts.return_value = [dict(data['workouts'][0], id='pr-ride')]
+    client.get_overview.return_value = _overview_with_record(data, 262900.0, 'pr-ride')
+    dashboard.refresh()
+    assert dashboard.snapshot()['summaries'][0]['previous_best_kj'] is None
+
+
+def test_damaged_records_table_is_dropped_without_losing_cache(tmp_path):
+    dashboard, client, token = setup_dashboard(tmp_path)
+    dashboard.refresh()
+    cache = tmp_path / 'dashboard-cache.json'
+    payload = json.loads(cache.read_text())
+    payload['snapshot']['personal_records'] = {'cycling|30 min': 'garbage'}
+    cache.write_text(json.dumps(payload))
+    restarted = Dashboard(token, {}, client_factory=lambda _: Mock())
+    assert restarted.snapshot()['summaries'][0]['workout_id'] == 'demo-cycling'
+    assert restarted.snapshot()['personal_records'] == {}

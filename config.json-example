@@ -7,6 +7,7 @@
     "duration": 4,
     "overview_duration": 4,
     "last_workout_duration": 30,
+    "last_workout_detail_interval": 4,
     "logo_duration": 3,
     "timezone": "America/New_York",
     "refresh_interval": 300,
