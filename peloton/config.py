@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration': 4,
             'per_workout_duration': 4, 'last_workout_duration': 30, 'logo_duration': 3,
+            'last_workout_detail_interval': 4.0,
             'refresh_interval': 300, 'history_days': 90, 'history_limit': 200,
             'history_page_size': 50, 'history_max_pages': 10,
             'instructor_tally_max_pages': 200,
@@ -124,7 +125,8 @@ def load_config(path='config', allow_missing=False):
             if 'milestones' in user:
                 user['milestones'] = _validate_milestones(path, user['milestones'], f'users[{index}].')
     display = {**DEFAULTS, **config.get('display', {})}
-    for key in ('duration', 'overview_duration', 'per_workout_duration', 'last_workout_duration', 'logo_duration'):
+    for key in ('duration', 'overview_duration', 'per_workout_duration', 'last_workout_duration', 'logo_duration',
+                'last_workout_detail_interval'):
         value = display[key]
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
             raise ValueError(f'{path}: display.{key} must be a non-negative number')
