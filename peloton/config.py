@@ -14,7 +14,7 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'history_page_size': 50, 'history_max_pages': 10,
             'instructor_tally_max_pages': 200,
             'performance_cache_size': 32,
-            'rotation': ['latest_workouts', 'username', 'total_workouts', 'lifetime',
+            'rotation': ['latest_workouts', 'username', 'streaks', 'total_workouts', 'lifetime',
                          'milestones', 'goals'],
             'screen_durations': {},
             'weekly_goals': {'workouts': 0, 'minutes': 0},
@@ -22,9 +22,9 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'brightness_schedule': None,
             'compact_workout_pages': False}
 
-ROTATION_SECTIONS = {'latest_workouts', 'username', 'total_workouts', 'lifetime',
+ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'total_workouts', 'lifetime',
                      'milestones', 'goals'}
-DURATION_SECTIONS = {'latest_workouts', 'username', 'lifetime', 'milestones', 'goals'}
+DURATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'lifetime', 'milestones', 'goals'}
 
 
 def user_slug(name):

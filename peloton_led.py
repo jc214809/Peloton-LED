@@ -14,10 +14,11 @@ from utils.utils import args, led_matrix_options
 from utils.username import resolve_display_username
 from display.ui.last_workout_screen import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details
 from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
+from display.ui.streak_screen import streak_lines
 
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
-DEFAULT_ROTATION = ('latest_workouts', 'username', 'total_workouts', 'lifetime',
+DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'total_workouts', 'lifetime',
                     'milestones', 'goals')
 
 
@@ -118,6 +119,10 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height):
                                    username_duration))
 
     # 64 rows fit a 2x2 grid of icon tiles per page; 32 rows fit one row of two.
+    if 'streaks' in groups and streak_lines(snapshot.get('streaks')):
+        groups['streaks'].append(('streak', snapshot['streaks'],
+                                  _duration(display, 'streaks', display['overview_duration'])))
+
     overview_pages = lifetime_overview_pages(snapshot['totals'],
                                              page_size=4 if matrix_height >= 64 else 2)
     discipline_duration = _duration(display, 'lifetime', display['overview_duration'])
@@ -261,6 +266,7 @@ def main():
     from display.ui.pr_celebration import PrCelebrationScreen
     from display.ui.status_screen import StatusScreen
     from display.ui.goal_screen import GoalScreen
+    from display.ui.streak_screen import StreakScreen
 
     matrix = RGBMatrix(options=led_matrix_options(options))
     try:
@@ -281,6 +287,7 @@ def main():
     manager.register('pr', PrCelebrationScreen())
     manager.register('status', StatusScreen())
     manager.register('goal', GoalScreen())
+    manager.register('streak', StreakScreen())
     configured_logo = display.get('logo_path')
     logo = Path(configured_logo) if configured_logo else None
     for profile in profiles:

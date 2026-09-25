@@ -9,7 +9,7 @@ PERSISTED_KEYS = (
     'me', 'totals', 'summaries', 'last_updated', 'generation',
     'active_day_count', 'history_truncated', 'celebrated_pr_ids',
     'weekly_progress', 'celebrated_milestones',
-    'instructor_counts', 'instructor_tally_cursor', 'personal_records',
+    'instructor_counts', 'instructor_tally_cursor', 'personal_records', 'streaks',
 )
 
 
@@ -54,6 +54,11 @@ def load_snapshot(path):
     if records is not None and (not isinstance(records, dict) or not all(
             isinstance(r, dict) and isinstance(r.get('workout_id'), str) for r in records.values())):
         del restored['personal_records']
+    # Likewise a damaged streaks entry only hides the streak screen.
+    streaks = restored.get('streaks')
+    if streaks is not None and (not isinstance(streaks, dict) or not all(
+            isinstance(v, int) and not isinstance(v, bool) for v in streaks.values())):
+        del restored['streaks']
     return restored
 
 

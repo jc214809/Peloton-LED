@@ -10,8 +10,8 @@ feature works on both 64x64 and 64x32 panels.
 | — | Trophy instead of "PR" letters; red Peloton P | **done** (committed on `fit-64x32`) |
 | 4 | Output graph for the last workout | **done** |
 | 6 | Heart-rate zone bar | **done** |
-| 1 | Streak screen | next |
-| 3 | Joel vs. Jen this week | queued |
+| 1 | Streak screen | **done** |
+| 3 | Joel vs. Jen this week | next |
 | 5 | Next-milestone countdown | queued |
 | 9 | Distance journey (Columbus → Walt Disney World by default) | queued |
 
@@ -54,6 +54,38 @@ Code: `performance_graph` / `heart_rate_zone_seconds` in `peloton/summaries.py`;
 `_draw_graph` / `_draw_zones` / `rotating_details` in
 `display/ui/last_workout_screen.py`; tests in `tests/test_workout_graph.py`.
 
+## #1 Streak screen
+
+A new rotation section, `streaks`, placed right after the username page in
+the default rotation.
+
+- **64x64:** a pixel flame (red, orange and yellow) on top, the current
+  weekly streak in a big number (10x20 font), `WEEK STREAK` in orange,
+  then `BEST 74 WEEKS` in grey.
+- **64x32:** the flame and the number side by side on top, then the same
+  two lines.
+- When your current streak ties or beats your best, the footer becomes a
+  gold `PERSONAL BEST`.
+- The screen is skipped when the weekly streak is 0 or unknown (older
+  caches, or Peloton not returning streaks).
+- **No extra API calls:** the streaks come from the profile overview
+  (`/api/user/{id}/overview`) that every refresh already downloads, and
+  they're saved in the dashboard cache.
+- Timing: `screen_durations.streaks`, falling back to `overview_duration`.
+- Adds a `big` font key (10x20 on 64 rows, 7x13 bold on 32 rows) for large
+  numbers. The next features use it too.
+
+Code: `display/ui/streak_screen.py`, `parse_streaks` in `peloton/totals.py`;
+tests in `tests/test_streaks.py`.
+
 ## Open questions for Joel
 
-(none yet)
+1. **Your `config.json` rotation is just `["latest_workouts"]`**, so the new
+   screens (streaks, and the ones to come) won't appear on your panel until
+   you add them, e.g.
+   `"rotation": ["latest_workouts", "username", "streaks", "total_workouts", "lifetime", "milestones", "goals"]`.
+   The workout graph and zone slides are part of `latest_workouts`, so those
+   already show. I haven't edited your config.
+2. Peloton also reports a **daily** streak (`current_daily`, 0 for you
+   right now). It's parsed and saved but not shown. Say if you want it
+   on the flame screen when it's 2 days or more.

@@ -52,7 +52,8 @@ The startup logo (the Peloton P, in Peloton red) is shown once when the applicat
 1. One workout screen for every completed workout on the most recent active calendar day, newest first.
 2. A PR celebration immediately after a personal-record workout, the first time that PR is displayed. PR workouts are also marked with a gold trophy on the workout screen, in the corner during the intro and beside the record-setting value.
 3. Username screen.
-4. A dedicated full-size Total Workouts page, followed on 64×64 panels by compact lifetime pages with four separate disciplines per page. Each has its own pixel icon and exact count; Bootcamp disciplines remain separate. 64×32 panels show the same icon tiles two per page.
+4. Weekly streak: a flame, your current weekly streak and your best (skipped when the streak is 0). Read from the profile overview the app already downloads.
+5. A dedicated full-size Total Workouts page, followed on 64×64 panels by compact lifetime pages with four separate disciplines per page. Each has its own pixel icon and exact count; Bootcamp disciplines remain separate. 64×32 panels show the same icon tiles two per page.
 
 “Most recent active day” means the newest local calendar date containing at least one completed workout. If the member worked out today, today’s completed workouts are shown. If their last activity was a week ago, every completed workout from that date is shown. The search is bounded by `history_days`, `history_limit`, and the pagination safety settings. In-progress workouts are excluded. If no workout summary is available, the first position is replaced by a short `Loading`, `Login needed`, `Offline`, or `No workouts` status screen.
 
@@ -136,7 +137,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `compact_workout_pages` | `false` | On 32-row panels, use the older two-page compact workout layout instead of the rotating one |
 
-`rotation` accepts any subset of `latest_workouts`, `username`, `total_workouts`, `lifetime`, `milestones`, `goals`, each at most once. `screen_durations` keys are `latest_workouts`, `username`, `lifetime`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
+`rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `total_workouts`, `lifetime`, `milestones`, `goals`, each at most once. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `lifetime`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
 
 Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds. The page lasts exactly `last_workout_detail_interval * (1 + stat count)` seconds, so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. `last_workout_duration` (or `screen_durations.latest_workouts`) only sets the page length on 32-row panels, where pages are static; `0` still disables the section.
 

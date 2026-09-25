@@ -19,7 +19,7 @@ import unittest  # noqa: F401,E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 SCALE = 4
-ALL_SECTIONS = ['latest_workouts', 'username', 'total_workouts', 'lifetime', 'milestones', 'goals']
+ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'total_workouts', 'lifetime', 'milestones', 'goals']
 
 
 class PreviewDashboard:
@@ -40,13 +40,14 @@ def load_snapshot_for(options):
     if options.demo:
         from peloton.demo import demo_data
         from peloton.summaries import summarize_workout
-        from peloton.totals import extract_discipline_totals
+        from peloton.totals import extract_discipline_totals, parse_streaks
         data = demo_data()
         return {'me': data['me'], 'totals': extract_discipline_totals(data['overview']),
                 'summaries': [summarize_workout(w, data['performance'][w['id']])
                               for w in data['workouts']],
                 'weekly_progress': {'workouts': 3, 'minutes': 95},
-                'instructor_counts': {}, 'status': 'ready'}
+                'instructor_counts': {}, 'status': 'ready',
+                'streaks': parse_streaks(data['overview'])}
     from peloton.cache import load_snapshot
     snapshot = load_snapshot(options.cache)
     if snapshot is None:
@@ -78,6 +79,7 @@ def render(options):
     from display.ui.logo_mask_screen import LogoMaskScreen
     from display.ui.pr_celebration import PrCelebrationScreen
     from display.ui.status_screen import StatusScreen
+    from display.ui.streak_screen import StreakScreen
     from display.ui.username import UsernameScreen
     from display.ui.login_indicator import draw_login_indicator
     from display.ui.stale_indicator import draw_stale_indicator
@@ -93,7 +95,7 @@ def render(options):
                'discipline': DisciplinePageScreen(), 'lifetime': LifetimeOverviewScreen(),
                'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
                'pr': PrCelebrationScreen(), 'status': StatusScreen(), 'goal': GoalScreen(),
-               'logo': LogoMaskScreen()}
+               'logo': LogoMaskScreen(), 'streak': StreakScreen()}
     snapshot = load_snapshot_for(options)
     username = options.username or (snapshot.get('me') or {}).get('username') or 'Rider'
     pages = [('logo', None, 1.0)]

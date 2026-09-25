@@ -15,14 +15,16 @@ def fonts():
             "info": "assets/fonts/patched/4x6-legacy.bdf",
             "titles": "assets/fonts/patched/4x6-legacy.bdf",
             "stats":"assets/fonts/patched/4x6-legacy.bdf",
-            "countdown": "assets/fonts/patched/6x9.bdf"
+            "countdown": "assets/fonts/patched/6x9.bdf",
+            "big": "assets/fonts/patched/7x13B.bdf"
         },
         64: {
             "discipline": "assets/fonts/patched/6x13.bdf",
             "info": "assets/fonts/patched/4x6-legacy.bdf",
             "titles": "assets/fonts/patched/5x8.bdf",
             "stats":"assets/fonts/patched/tom-thumb.bdf",
-            "countdown": "assets/fonts/patched/7x13.bdf"
+            "countdown": "assets/fonts/patched/7x13.bdf",
+            "big": "assets/fonts/patched/10x20.bdf"
         }
     }
 

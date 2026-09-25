@@ -59,7 +59,8 @@ def demo_data():
     # Deliberately omit strength metrics to exercise missing-data rendering.
     performance['demo-strength'] = {'duration': 1200}
     return deepcopy({'me': {'id': 'demo', 'username': 'Demo Rider', 'timezone': 'America/New_York'},
-        'overview': {'workout_counts': [{'name': label, 'count': count} for label, count in
+        'overview': {'streaks': {'current_weekly': 23, 'best_weekly': 41, 'current_daily': 3},
+                     'workout_counts': [{'name': label, 'count': count} for label, count in
             [('Total Workouts', 1531), ('Cycling', 1234), ('Running', 204),
              ('Walking', 75), ('Rowing', 18), ('Strength', 0)]]},
         'workouts': workouts, 'performance': performance})

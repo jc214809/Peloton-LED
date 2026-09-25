@@ -15,7 +15,7 @@ from .demo import demo_data
 from .selection import last_active_day
 from .summaries import summarize_workout
 from .timestamps import workout_timestamp
-from .totals import extract_discipline_totals
+from .totals import extract_discipline_totals, parse_streaks
 from .goals import reached_milestones, weekly_progress
 from .instructors import merge_instructor_counts
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
@@ -52,13 +52,14 @@ class Dashboard:
                       'consecutive_failures': 0,
                       'celebrated_pr_ids': [], 'celebrated_milestones': [],
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
-                      'instructor_counts': {}, 'instructor_tally_cursor': None,
+                      'instructor_counts': {}, 'instructor_tally_cursor': None, 'streaks': {},
                       'personal_records': {}}
         self.demo = demo
         if demo:
             data = demo_data()
             zone = config.get('timezone') or data['me'].get('timezone')
             self._publish(me=data['me'], totals=extract_discipline_totals(data['overview']),
+                streaks=parse_streaks(data['overview']),
                 summaries=[summarize_workout(w, data['performance'][w['id']]) for w in data['workouts']],
                 weekly_progress=weekly_progress(data['workouts'], zone),
                 login_required=demo_login_needed, status='ready', last_updated=time.time(),
@@ -240,6 +241,7 @@ class Dashboard:
             self._failures = 0
             delay = self._finish_attempt(started, self.interval,
                 me=me, totals=extract_discipline_totals(overview), summaries=summaries,
+                streaks=parse_streaks(overview),
                 weekly_progress=progress,
                 instructor_counts=instructor_counts, instructor_tally_cursor=newest_id,
                 personal_records=personal_records,
