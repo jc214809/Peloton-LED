@@ -80,7 +80,7 @@ def _draw_stat(matrix, font, x: int, y: int, color, text: str, max_px: int, righ
     label = parts[1] if len(parts) == 2 else None
     val_w = _text_width(font, val)
     _GAP = 2
-    star_w = (_STAR_W + 1) if star else 0
+    star_w = (_TROPHY_W + 1) if star else 0
     label_trunc = _truncate(font, label, max_px - val_w - _GAP - star_w) if label else None
     total_w = val_w + (_GAP + _text_width(font, label_trunc) + star_w if label_trunc else 0)
     if right_align:
@@ -91,8 +91,8 @@ def _draw_stat(matrix, font, x: int, y: int, color, text: str, max_px: int, righ
         label_end_x = _draw_text(matrix, font, lx, y, color, label_trunc)
         if star:
             font_h = getattr(font, "height", 6)
-            star_top = y - font_h + (font_h - _STAR_H) // 2 + 1
-            _draw_star(matrix, label_end_x + 1, star_top)
+            star_top = y - font_h + (font_h - _TROPHY_H) // 2 + 1
+            _draw_trophy(matrix, label_end_x + 1, star_top)
 
 
 def _fmt_duration(minutes) -> str:
@@ -295,22 +295,27 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
     return stats
 
 
-# 5-wide × 5-tall pixel star (offsets from top-left)
-_STAR_PIXELS = [
-    (2,0),                          # top point
-    (0,1),(1,1),(2,1),(3,1),(4,1),  # left point — center — right point
-    (1,2),(2,2),(3,2),              # middle body
-    (0,3),(2,3),(4,3),              # lower body with side points
-    (1,4),(3,4),                    # two bottom points angled inward
-]
-_STAR_W = 5
-_STAR_H = 5
-_GOLD_COLOR = graphics.Color(255, 215, 0)
+# 7-wide × 7-tall pixel trophy marking PRs: 'C' gold cup, 'B' darker stem/base.
+_TROPHY_ROWS = (
+    "CCCCCCC",
+    "C.CCC.C",
+    ".CCCCC.",
+    "..CCC..",
+    "...B...",
+    "...B...",
+    "..BBB..",
+)
+_TROPHY_W = 7
+_TROPHY_H = 7
+_TROPHY_COLORS = {'C': (255, 215, 0), 'B': (205, 145, 0)}
 
 
-def _draw_star(matrix, x: int, y: int) -> None:
-    for dx, dy in _STAR_PIXELS:
-        matrix.SetPixel(x + dx, y + dy, 255, 215, 0)
+def _draw_trophy(matrix, x: int, y: int) -> None:
+    """Draw the PR trophy with its top-left at (x, y)."""
+    for dy, row in enumerate(_TROPHY_ROWS):
+        for dx, cell in enumerate(row):
+            if cell in _TROPHY_COLORS:
+                matrix.SetPixel(x + dx, y + dy, *_TROPHY_COLORS[cell])
 
 
 # 7-wide × 6-tall pixel heart (offsets from top-left)
@@ -434,7 +439,7 @@ class LastWorkoutScreen(Screen):
                 x = max((w - _text_width(text_font, dur_text)) // 2, 2)
                 _draw_text(matrix, text_font, x, 15, _BLUE, dur_text)
             if summary.get("is_pr"):
-                graphics.DrawText(matrix, text_font, w - get_text_width(text_font, "PR") - 2, 15, _GOLD, "PR")
+                _draw_trophy(matrix, w - _TROPHY_W - 2, 9)
             title = (summary.get("title") or "").strip()
             title = re.sub(r'^\d+\s*min\s*', '', title, flags=re.IGNORECASE).strip() or title
             title_lines = _wrap_two_lines(text_font, title, w - 4)
@@ -470,7 +475,7 @@ class LastWorkoutScreen(Screen):
                 graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value)
                 if summary.get("is_output_pr") and detail['label'] == 'total output':
                     star_x = vx + get_text_width(value_font, value) + 2
-                    _draw_star(matrix, min(star_x, w - _STAR_W), value_y + offset - _STAR_H)
+                    _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)
 
         _draw_hr_calories(matrix, summary, stat_font, bottom_y)
         return True
@@ -624,15 +629,14 @@ class LastWorkoutScreen(Screen):
             graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value_text)
             if star:
                 star_x = vx + get_text_width(value_font, value_text) + 2
-                star_top = value_y + offset - _STAR_H
-                _draw_star(matrix, star_x, star_top)
+                _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)
 
         _draw_hr_calories(matrix, summary, stat_font, _BOTTOM_Y)
 
-        # ── PR badge ──────────────────────────────────────────────────────
-        if summary.get("is_pr"):
-            pr_text = "PR"
-            pr_x = w - get_text_width(stat_font, pr_text) - 2
-            graphics.DrawText(matrix, stat_font, pr_x, 22, _GOLD, pr_text)
+        # ── PR trophy, where the "PR" letters used to sit ─────────────────
+        # Intro only: in the stats phase it would touch wide labels, and the
+        # output value carries its own trophy there.
+        if summary.get("is_pr") and in_intro:
+            _draw_trophy(matrix, w - _TROPHY_W - 2, 16)
 
         return True

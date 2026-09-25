@@ -124,6 +124,17 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   --cycles 1` ran a full rotation for both configured users and exited
   cleanly (in the emulator on port 8893, so your 8888 session was untouched).
 
+### Trophy for PRs, red Peloton P (both boards, requested 2026-09-25)
+- The gold `PR` letters on the workout screen are now a 7x7 pixel trophy:
+  a gold cup with handles on a darker gold stem and base. The small star beside
+  a record-setting output value is a trophy too. On 64x64 the corner trophy
+  now shows only during the intro. In the stats phase it touched wide labels
+  like `AVG RESISTANCE`, and the trophy beside the output value marks the PR
+  there. (Rowing splits PRs are still marked in the intro only.)
+- The startup Peloton P is Peloton red (#DF1C2F) instead of white on both
+  boards. A custom `display.logo_path` image is unaffected.
+- The PR celebration screen keeps its star burst.
+
 ## Open questions for Joel
 
 1. **`compact_workout_pages`**: the new 32-row layout makes this option

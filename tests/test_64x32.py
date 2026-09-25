@@ -175,3 +175,24 @@ def test_32_row_lifetime_uses_icon_pages_of_two():
     assert LifetimeOverviewScreen().render(matrix, pages[1][1])
     # Current-page dot is on the bottom row, not off the panel at row 63.
     assert WHITE in [matrix.image.getpixel((x, 31)) for x in range(64)]
+
+
+@pytest.mark.parametrize('height', [32, 64])
+def test_pr_is_marked_with_a_trophy_on_both_boards(height):
+    summary = next(s for s in demo_summaries() if s.get('is_output_pr'))
+    base = (205, 145, 0)  # the trophy's stem/base; nothing else uses this color
+    intro = frame(summary, 0.5, height)
+    assert rows_of(intro, base, range(48, 64)), 'corner trophy missing in the intro'
+    output = frame(summary, 4.5, height)  # total output is the first cycling stat
+    assert rows_of(output, base), 'trophy missing beside the PR output value'
+    later = frame(summary, 8.5, height)  # strive score: no PR trophy
+    assert rows_of(later, base) == []
+
+
+@pytest.mark.parametrize('height', [32, 64])
+def test_startup_logo_is_peloton_red(height):
+    from display.ui.logo_mask_screen import LogoMaskScreen, PELOTON_RED
+    matrix = ImageMatrix(height=height)
+    assert LogoMaskScreen().render(matrix)
+    colors = {c for _, c in matrix.image.getcolors(64 * 64)}
+    assert colors == {(0, 0, 0), PELOTON_RED}

@@ -47,10 +47,10 @@ python peloton_led.py --emulated --refresh-interval 300
 
 ## Display rotation logic
 
-The startup logo is shown once when the application starts. After that, the dashboard repeats this rotation:
+The startup logo (the Peloton P, in Peloton red) is shown once when the application starts. After that, the dashboard repeats this rotation:
 
 1. One workout screen for every completed workout on the most recent active calendar day, newest first.
-2. A PR star immediately after a personal-record workout, the first time that PR is displayed.
+2. A PR celebration immediately after a personal-record workout, the first time that PR is displayed. PR workouts are also marked with a gold trophy on the workout screen, in the corner during the intro and beside the record-setting value.
 3. Username screen.
 4. A dedicated full-size Total Workouts page, followed on 64×64 panels by compact lifetime pages with four separate disciplines per page. Each has its own pixel icon and exact count; Bootcamp disciplines remain separate. 64×32 panels show the same icon tiles two per page.
 

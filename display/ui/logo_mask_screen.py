@@ -2,13 +2,16 @@
 from .logo_art import LOGO_ROWS, LOGO_ROWS_32
 from .screen import Screen
 
+# Peloton's brand red (#DF1C2F).
+PELOTON_RED = (223, 28, 47)
+
 
 class LogoMaskScreen(Screen):
     # One static frame, composed off-screen so it appears all at once.
     animated = False
     atomic_frames = True
 
-    def __init__(self, rows=None, color=(255, 255, 255)):
+    def __init__(self, rows=None, color=PELOTON_RED):
         self.rows = rows
         self.color = color
 
