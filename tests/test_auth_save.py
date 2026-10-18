@@ -4,7 +4,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 from scripts.refresh_cookies import (_dump_failure_diagnostics, browser_login, ensure_all_tokens,
-                                     ensure_token, save_verified_token, token_expiration)
+                                     ensure_token, resolve_token_paths, save_verified_token,
+                                     token_expiration, token_status)
 
 
 def test_failed_verification_preserves_old_token(tmp_path):
@@ -130,6 +131,91 @@ def test_token_expiration_reads_jwt_payload(tmp_path):
     encoded = base64.urlsafe_b64encode(json.dumps({'exp': 1_800_000_000}).encode()).decode().rstrip('=')
     token.write_text(f'header.{encoded}.signature')
     assert token_expiration(token) == 1_800_000_000
+
+
+def _jwt_with_exp(exp) -> str:
+    import base64
+    import json
+    encoded = base64.urlsafe_b64encode(json.dumps({'exp': exp}).encode()).decode().rstrip('=')
+    return f'header.{encoded}.signature'
+
+
+def test_token_status_reports_missing_file(tmp_path):
+    status = token_status(tmp_path / 'missing-token')
+    assert status == {'path': str(tmp_path / 'missing-token'), 'ok': False, 'reason': 'file does not exist'}
+
+
+def test_token_status_reports_unreadable_file(tmp_path):
+    token = tmp_path / 'token'
+    token.write_text('irrelevant')
+    token.chmod(0o000)
+    try:
+        status = token_status(token)
+    finally:
+        token.chmod(0o600)
+    assert status['ok'] is False
+    assert 'cannot read file' in status['reason']
+
+
+def test_token_status_reports_empty_file(tmp_path):
+    token = tmp_path / 'token'
+    token.write_text('   ')
+    assert token_status(token) == {'path': str(token), 'ok': False, 'reason': 'file is empty'}
+
+
+def test_token_status_reports_non_jwt_shape(tmp_path):
+    token = tmp_path / 'token'
+    token.write_text('not-a-jwt-at-all')
+    status = token_status(token)
+    assert status['ok'] is False
+    assert 'not a 3-part JWT' in status['reason']
+    assert '1 dot-separated' in status['reason']
+
+
+def test_token_status_reports_payload_with_no_exp_claim(tmp_path):
+    import base64
+    import json
+    token = tmp_path / 'token'
+    encoded = base64.urlsafe_b64encode(json.dumps({'sub': 'rider'}).encode()).decode().rstrip('=')
+    token.write_text(f'header.{encoded}.signature')
+    status = token_status(token)
+    assert status == {'path': str(token), 'ok': False, 'reason': 'JWT payload has no usable exp claim'}
+
+
+def test_token_status_reports_expired_token(tmp_path):
+    token = tmp_path / 'token'
+    token.write_text(_jwt_with_exp(time.time() - 3600))
+    status = token_status(token)
+    assert status['ok'] is True
+    assert status['expired'] is True
+
+
+def test_token_status_reports_valid_token(tmp_path):
+    token = tmp_path / 'token'
+    expiry = time.time() + 3600
+    token.write_text(_jwt_with_exp(expiry))
+    status = token_status(token)
+    assert status == {'path': str(token), 'ok': True, 'expires_at': expiry, 'expired': False}
+
+
+def test_resolve_token_paths_without_users_returns_fallback(tmp_path):
+    config = tmp_path / 'config.json'
+    config.write_text('{}')
+    fallback = tmp_path / 'cookies.txt'
+    assert resolve_token_paths(config, fallback) == [('default', fallback)]
+
+
+def test_resolve_token_paths_missing_config_returns_fallback(tmp_path):
+    fallback = tmp_path / 'cookies.txt'
+    assert resolve_token_paths(tmp_path / 'missing.json', fallback) == [('default', fallback)]
+
+
+def test_resolve_token_paths_derives_each_users_token_file(tmp_path):
+    import json
+    config = tmp_path / 'config.json'
+    config.write_text(json.dumps({'users': [{'name': 'Joel'}, {'name': 'Jen', 'token_path': 'jen.token'}]}))
+    resolved = resolve_token_paths(config, tmp_path / 'cookies.txt')
+    assert resolved == [('Joel', tmp_path / 'cookies-joel.txt'), ('Jen', tmp_path / 'jen.token')]
 
 
 @pytest.mark.parametrize('failure', [requests.ConnectionError('offline'),

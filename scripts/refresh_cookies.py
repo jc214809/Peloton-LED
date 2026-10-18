@@ -14,6 +14,7 @@ Usage:
     python scripts/refresh_cookies.py --cookies path/to/cookies.txt --config path/to/config.json
     python scripts/refresh_cookies.py --verify-only
     python scripts/refresh_cookies.py --ensure
+    python scripts/refresh_cookies.py --status --all-users
 """
 import argparse
 import base64
@@ -26,6 +27,7 @@ import re
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -177,6 +179,53 @@ def token_expiration(token_path: Path) -> float | None:
         return None
 
 
+def token_status(token_path: Path) -> dict:
+    """Diagnose why a token's expiry can't be read, instead of collapsing every
+    failure (missing file, no read permission, malformed JWT, no exp claim) into
+    one unexplained 'unknown' the way token_expiration() does for schedulers."""
+    if not token_path.exists():
+        return {'path': str(token_path), 'ok': False, 'reason': 'file does not exist'}
+    try:
+        raw = token_path.read_text(encoding='utf-8')
+    except OSError as exc:
+        return {'path': str(token_path), 'ok': False, 'reason': f'cannot read file: {exc}'}
+    text = raw.strip()
+    if not text:
+        return {'path': str(token_path), 'ok': False, 'reason': 'file is empty'}
+    parts = text.split('.')
+    if len(parts) != 3:
+        return {'path': str(token_path), 'ok': False,
+                'reason': f'not a 3-part JWT ({len(parts)} dot-separated part(s))'}
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(parts[1] + '=' * (-len(parts[1]) % 4)))
+    except (UnicodeError, ValueError, TypeError, binascii.Error) as exc:
+        return {'path': str(token_path), 'ok': False, 'reason': f'JWT payload did not decode: {exc}'}
+    expiry = payload.get('exp')
+    if isinstance(expiry, bool) or not isinstance(expiry, (int, float)) or not math.isfinite(expiry):
+        return {'path': str(token_path), 'ok': False, 'reason': 'JWT payload has no usable exp claim'}
+    expiry = float(expiry)
+    return {'path': str(token_path), 'ok': True, 'expires_at': expiry,
+            'expired': expiry <= time.time()}
+
+
+def resolve_token_paths(config_path: Path, fallback_token: Path) -> list[tuple[str, Path]]:
+    """Map each configured profile name to its token path, the way ensure_all_tokens does,
+    so callers don't have to hand-reconstruct default_token_path() to find a file."""
+    if not config_path.exists():
+        return [('default', fallback_token)]
+    config = json.loads(config_path.read_text(encoding='utf-8'))
+    users = config.get('users')
+    if not isinstance(users, list) or not users:
+        return [('default', fallback_token)]
+    resolved = []
+    for user in users:
+        token_path = Path(user.get('token_path') or default_token_path(user['name'])).expanduser()
+        if not token_path.is_absolute():
+            token_path = config_path.parent / token_path
+        resolved.append((user['name'], token_path))
+    return resolved
+
+
 def ensure_token(token_path: Path, config_path: Path, headless: bool = True,
                  renew_before_seconds: float = 12 * 60 * 60,
                  email: str | None = None, password: str | None = None,
@@ -244,22 +293,40 @@ def main() -> None:
     parser.add_argument("--cookies", default="cookies.txt", help="Output token file path (default: cookies.txt)")
     parser.add_argument("--config", default="config.json", help="Config file path (default: config.json)")
     parser.add_argument("--verify-only", action="store_true", help="Skip login; just verify the existing token.")
+    parser.add_argument("--status", action="store_true",
+                        help="Report each token's path, readability, and expiry without any network calls.")
     parser.add_argument("--ensure", action="store_true",
                         help="Refresh headlessly after HTTP 401 or shortly before JWT expiration.")
     parser.add_argument("--all-users", action="store_true",
-                        help="With --ensure, maintain every user token configured in config.json.")
+                        help="With --ensure or --status, cover every user token configured in config.json.")
     parser.add_argument("--renew-before-hours", type=float, default=12,
                         help="With --ensure, renew this many hours before expiry (default: 12).")
     parser.add_argument("--no-headless", action="store_true", help="Show the browser window during login.")
     parsed = parser.parse_args()
     if parsed.ensure and parsed.verify_only:
         parser.error("--ensure and --verify-only cannot be combined")
-    if parsed.all_users and not parsed.ensure:
-        parser.error("--all-users requires --ensure")
+    if parsed.status and (parsed.ensure or parsed.verify_only):
+        parser.error("--status cannot be combined with --ensure or --verify-only")
+    if parsed.all_users and not (parsed.ensure or parsed.status):
+        parser.error("--all-users requires --ensure or --status")
     if not math.isfinite(parsed.renew_before_hours) or parsed.renew_before_hours < 0:
         parser.error("--renew-before-hours must be a non-negative number")
 
     token_path = Path(parsed.cookies)
+
+    if parsed.status:
+        config_path = Path(parsed.config)
+        profiles = (resolve_token_paths(config_path, token_path) if parsed.all_users
+                    else [('default', token_path)])
+        for name, path in profiles:
+            status = token_status(path)
+            if not status['ok']:
+                print(f"{name}: {status['path']} — {status['reason']}")
+                continue
+            expires_at = datetime.fromtimestamp(status['expires_at'], tz=timezone.utc)
+            state = 'EXPIRED' if status['expired'] else 'valid'
+            print(f"{name}: {status['path']} — {state}, expires {expires_at.isoformat()}")
+        return
 
     if parsed.verify_only:
         print(f"Verifying existing token in {token_path}...")
