@@ -10,8 +10,13 @@ M_TO_MI = 1 / 1609.344
 # Peloton reports rowing distance in meters regardless of the member's units.
 METER_DISCIPLINES = {'rowing', 'row_bootcamp'}
 
+# disciplines None counts every workout with a distance (see DISTANCE_DISCIPLINES).
 DEFAULT_JOURNEY = {'from': 'Columbus', 'to': 'Disney World', 'miles': 880,
-                   'disciplines': ['Cycling', 'Running', 'Walking'], 'start_date': None}
+                   'disciplines': None, 'start_date': None}
+# Peloton reports distance for these; everything else (strength, yoga, cardio,
+# stretching, meditation, ...) has none, so it never adds miles.
+DISTANCE_DISCIPLINES = ('Cycling', 'Bike Bootcamp', 'Running', 'Outdoor Run', 'Tread Bootcamp',
+                        'Walking', 'Outdoor Walk', 'Rowing', 'Row Bootcamp')
 
 
 def workout_miles(workout, metric=False):
@@ -64,9 +69,10 @@ def journey_progress(distance_totals, journey):
     route = journey.get('miles')
     if isinstance(route, bool) or not isinstance(route, (int, float)) or route <= 0:
         return None
-    wanted = {normalize_discipline(d) for d in journey.get('disciplines') or []}
+    chosen = journey.get('disciplines')
+    wanted = None if chosen is None else {normalize_discipline(d) for d in chosen}
     miles = sum(v for k, v in distance_totals.items()
-                if k in wanted and isinstance(v, (int, float)) and not isinstance(v, bool))
+                if (wanted is None or k in wanted) and isinstance(v, (int, float)) and not isinstance(v, bool))
     leg, into = divmod(miles, route)
     return {'from': str(journey.get('from') or 'Start'), 'to': str(journey.get('to') or 'Finish'),
             'route_miles': route, 'miles': miles, 'trip': int(leg) + 1,
