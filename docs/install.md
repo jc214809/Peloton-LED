@@ -288,6 +288,29 @@ restart needed). If Peloton ever introduces CAPTCHA, MFA, or another
 interactive step, the renewal fails safely, keeps the old token, and the
 dashboard's amber padlock signals that a manual login is needed.
 
+### Sharing the panel with another app (`--manual`)
+
+If the Pi already runs another display (say, a baseball scoreboard) that
+should stay the boot default, install in manual mode:
+
+```bash
+sudo ./peloton-install.sh --auto-token --manual
+```
+
+Nothing is enabled at boot and nothing is started during install. Only one
+program can drive the matrix at a time, so swap them by hand:
+
+```bash
+sudo systemctl stop <other-display>.service && sudo systemctl start peloton-led
+sudo systemctl stop peloton-led && sudo systemctl start <other-display>.service
+```
+
+With `--auto-token`, token renewal follows the display instead of running
+all the time: starting `peloton-led` runs one token check (logging in if the
+token expired while it was off) and starts the hourly timer, and stopping
+`peloton-led` stops the timer. Pass `--manual` again on upgrades; a run
+without it switches back to starting at boot.
+
 ## Installer options reference
 
 ```
@@ -302,6 +325,7 @@ sudo ./peloton-install.sh [options]
 | `--skip-packages` | Skip the `apt-get install` step — use when you manage system packages yourself or they're already present |
 | `--driver REF` | Git branch, tag, or commit of `rpi-rgb-led-matrix` to build (default: `master`) |
 | `--no-start` | Install and enable the systemd units but don't start them yet — useful when staging a config before going live |
+| `--manual` | Never start at boot or during install; you start/stop the display yourself (see [below](#sharing-the-panel-with-another-app---manual)) |
 | `-h`, `--help` | Print usage and exit |
 
 ## Upgrading

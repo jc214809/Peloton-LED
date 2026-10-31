@@ -12,6 +12,7 @@ AUTO_TOKEN=false
 SKIP_MATRIX=false
 SKIP_PACKAGES=false
 NO_START=false
+MANUAL=false
 RECONFIGURE=false
 
 usage() {
@@ -32,6 +33,9 @@ Options:
   --skip-packages       Skip apt package installation
   --driver REF          Matrix driver branch, tag, or commit (default: master)
   --no-start            Install and enable units without starting them now
+  --manual              Don't start at boot or now; run on demand with
+                         systemctl start/stop peloton-led (token renewal,
+                         with --auto-token, only runs while the display does)
   -h, --help            Show this help
 USAGE
 }
@@ -46,6 +50,7 @@ while (($#)); do
             [[ $# -ge 2 ]] || { echo "--driver requires a value" >&2; exit 2; }
             DRIVER_REF="$2"; shift 2 ;;
         --no-start) NO_START=true; shift ;;
+        --manual) MANUAL=true; NO_START=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -147,11 +152,27 @@ install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-token-ref
     "from peloton.config import load_config; load_config('$CONFIG_DIR/config.json')")
 systemd-analyze verify "$UNIT_DIR/peloton-led.service" \
     "$UNIT_DIR/peloton-token-refresh.service" "$UNIT_DIR/peloton-token-refresh.timer"
-systemctl daemon-reload
-systemctl enable peloton-led.service
+# Manual mode: tie token renewal to the display's lifetime instead of boot.
+# Starting the display runs one token check and starts the hourly timer;
+# stopping the display stops the timer.
+rm -f "$UNIT_DIR/peloton-led.service.d/manual.conf" "$UNIT_DIR/peloton-token-refresh.timer.d/manual.conf"
+if [[ "$MANUAL" == true && "$AUTO_TOKEN" == true ]]; then
+    install -d -m 0755 "$UNIT_DIR/peloton-led.service.d" "$UNIT_DIR/peloton-token-refresh.timer.d"
+    printf '[Unit]\nWants=peloton-token-refresh.service peloton-token-refresh.timer\n' \
+        > "$UNIT_DIR/peloton-led.service.d/manual.conf"
+    printf '[Unit]\nPartOf=peloton-led.service\n' \
+        > "$UNIT_DIR/peloton-token-refresh.timer.d/manual.conf"
+fi
 
-if [[ "$AUTO_TOKEN" == true ]]; then
-    systemctl enable peloton-token-refresh.timer
+systemctl daemon-reload
+if [[ "$MANUAL" == true ]]; then
+    # Undo boot-time enablement from an earlier non-manual install.
+    systemctl disable peloton-led.service peloton-token-refresh.timer 2>/dev/null || true
+else
+    systemctl enable peloton-led.service
+    if [[ "$AUTO_TOKEN" == true ]]; then
+        systemctl enable peloton-token-refresh.timer
+    fi
 fi
 
 if [[ "$NO_START" == false ]]; then
@@ -201,6 +222,12 @@ Peloton LED installation complete.
   Config:   $CONFIG_DIR/config.json
   Riders:   $rider_summary
 EOF
+if [[ "$MANUAL" == true ]]; then
+    cat <<EOF
+  Manual:   not started at boot; stop whatever else drives the panel, then
+            sudo systemctl start peloton-led   (and stop peloton-led when done)
+EOF
+fi
 if [[ "$AUTO_TOKEN" == true ]]; then
     cat <<EOF
   Timer:    systemctl list-timers peloton-token-refresh.timer
