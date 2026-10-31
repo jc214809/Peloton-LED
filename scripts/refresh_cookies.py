@@ -39,6 +39,9 @@ from peloton.api import make_session
 from peloton.config import default_token_path, load_dotenv
 
 LOGIN_URL = "https://www.onepeloton.com/login"
+# Generous limits: a Pi Zero 2 W takes minutes to load the members app.
+FORM_TIMEOUT_MS = 120_000
+TOKEN_TIMEOUT_MS = 180_000
 
 
 def _dump_failure_diagnostics(page, token_path: Path) -> str:
@@ -78,10 +81,12 @@ def browser_login(email: str, password: str, token_path: Path, headless: bool = 
 
         print(f"Opening {LOGIN_URL}...")
         try:
-            page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
-            page.locator("#usernameOrEmail").fill(email, timeout=30_000)
-            page.locator("#password").fill(password, timeout=30_000)
-            page.locator("[data-test-id='loginButton']").click(timeout=30_000)
+            # Wait for the form itself, not "networkidle": the members app keeps
+            # the network busy, and a slow Pi never sees it go quiet.
+            page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=FORM_TIMEOUT_MS)
+            page.locator("#usernameOrEmail").fill(email, timeout=FORM_TIMEOUT_MS)
+            page.locator("#password").fill(password, timeout=FORM_TIMEOUT_MS)
+            page.locator("[data-test-id='loginButton']").click(timeout=FORM_TIMEOUT_MS)
         except Exception as exc:
             location = urlsplit(page.url)
             diagnostics = _dump_failure_diagnostics(page, token_path)
@@ -106,7 +111,7 @@ def browser_login(email: str, password: str, token_path: Path, headless: bool = 
                     }
                     return false;
                 }""",
-                timeout=60_000,
+                timeout=TOKEN_TIMEOUT_MS,
             )
             access_token = token_handle.json_value()
         except Exception as exc:

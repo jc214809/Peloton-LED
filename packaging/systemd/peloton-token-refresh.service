@@ -9,6 +9,7 @@ User=peloton-led
 Group=peloton-led
 WorkingDirectory=/opt/peloton-led
 Environment=HOME=/var/lib/peloton-led
+Environment=PYTHONUNBUFFERED=1
 Environment=PLAYWRIGHT_BROWSERS_PATH=/var/lib/peloton-led/ms-playwright
 Environment=PELOTON_CHROMIUM_EXECUTABLE=/usr/bin/chromium
 EnvironmentFile=/etc/peloton-led/auth.env
