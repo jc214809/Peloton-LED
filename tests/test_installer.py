@@ -87,3 +87,17 @@ def test_installer_manual_mode_never_enables_at_boot():
     assert 'Wants=peloton-token-refresh.service peloton-token-refresh.timer' in text
     assert 'PartOf=peloton-led.service' in text
     assert 'rm -f "$UNIT_DIR/peloton-led.service.d/manual.conf"' in text
+
+
+
+def test_installer_binds_the_checkout_config_into_both_services():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    # ProtectHome hides the checkout, so the services see its config.json via
+    # a read-only bind; "-" keeps the /etc file when the checkout has none.
+    assert "printf '[Service]\\nBindReadOnlyPaths=-%s:%s\\n' \"$SOURCE_DIR/config.json\" \"$CONFIG_DIR/config.json\"" in text
+    assert 'for unit in peloton-led.service peloton-token-refresh.service; do' in text
+    assert 'project-config.conf' in text
+    # The installer validates and reads whichever config the services will see.
+    assert 'LIVE_CONFIG="$SOURCE_DIR/config.json"' in text
+    assert 'load_config(sys.argv[1])" "$LIVE_CONFIG"' in text
+    assert 'sync_config' not in text

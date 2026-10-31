@@ -251,7 +251,7 @@ want to reclaim the space.
 | Purpose | Path |
 |---|---|
 | Application code | `/opt/peloton-led` |
-| Configuration | `/etc/peloton-led/config.json` |
+| Configuration | `config.json` in your checkout (e.g. `~/Peloton-LED/config.json`), seen by the services as `/etc/peloton-led/config.json`; without one, the `/etc` file itself |
 | Login environment (credentials) | `/etc/peloton-led/auth.env` |
 | Access token(s) | `/var/lib/peloton-led/cookies*.txt` |
 | Persistent snapshot/cache | `/var/lib/peloton-led/dashboard-cache*.json` |
@@ -334,6 +334,40 @@ sudo ./peloton-install.sh [options]
 | `--manual` | Never start at boot or during install; you start/stop the display yourself (see [below](#sharing-the-panel-with-another-app---manual)) |
 | `-h`, `--help` | Print usage and exit |
 
+### Editing the config
+
+Edit `config.json` in the checkout you ran the installer from, then restart:
+
+```bash
+nano ~/Peloton-LED/config.json
+sudo systemctl restart peloton-led
+```
+
+The services run sandboxed and can't see home directories, so the installer
+maps that file read-only onto `/etc/peloton-led/config.json` inside both
+services (`BindReadOnlyPaths=` in `project-config.conf` under
+`/etc/systemd/system/peloton-led.service.d/` and
+`peloton-token-refresh.service.d/`). There's no copy to keep in sync; the
+file in your checkout is the one that runs.
+
+- The file must be readable by everyone (`chmod 644 ~/Peloton-LED/config.json`,
+  the default for a new file). It only names environment variables, never
+  passwords.
+- Use the Pi's paths: each rider's `token_path` and `cache_path`, and
+  `display.cache_path`, under `/var/lib/peloton-led/`. Relative paths would
+  point inside `/etc/peloton-led`, where the service can't write.
+- Each rider's `email_env`/`password_env` must match the names in
+  `/etc/peloton-led/auth.env` (`sudo cut -d= -f1 /etc/peloton-led/auth.env`
+  lists them), or automatic token renewal can't log in.
+- An invalid file stops the service from starting; the reason is in
+  `journalctl -u peloton-led.service -n 50`. Fix the file and restart.
+- With no `config.json` in the checkout, the services use
+  `/etc/peloton-led/config.json` as before.
+
+`config.json` isn't tracked by git, so `git pull` never overwrites it. Start
+from `config.json-example`. Re-run the installer after moving the checkout,
+since the mapping records its path.
+
 ## Upgrading
 
 Pull the latest code into your checkout, then re-run the same installer
@@ -390,12 +424,15 @@ and create each rider's token with
   `journalctl -u peloton-led.service -n 100` for the actual error;
   configuration is validated at startup, so a bad `config.json` value will
   show up there before the display initializes.
-- **Wrong number of riders / stuck on an old config** — `config.json` and
-  `auth.env` are only written once, on first install; every later run
-  preserves them untouched, even after `git pull`. Run
-  `sudo cat /etc/peloton-led/config.json` to see what's actually deployed
-  (compare against what you expect), and `sudo ./peloton-install.sh
-  --reconfigure` to redo the rider prompt and replace both files.
+- **Wrong number of riders / stuck on an old config** — if your checkout has a
+  `config.json`, that's the one the services run (see
+  [Editing the config](#editing-the-config)); remember to restart after
+  editing it. `systemctl cat peloton-led` shows the `BindReadOnlyPaths=` line
+  with the exact path. Without one, `/etc/peloton-led/config.json` and
+  `auth.env` are only written on first install; `sudo ./peloton-install.sh
+  --reconfigure` redoes the rider prompt (with a checkout `config.json`,
+  that file still wins for settings, so `--reconfigure` then only matters
+  for `auth.env`).
 - **`git pull` doesn't fix a bug you just pulled** — the systemd services run
   code copied into `/opt/peloton-led`, not your `~/Peloton-LED` checkout.
   `git pull` only updates the checkout; re-run `sudo ./peloton-install.sh`

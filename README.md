@@ -438,6 +438,8 @@ See [implementation status and validation evidence](docs/phase-1-2-status.md).
 
 `sudo ./peloton-install.sh` installs Peloton LED as a managed systemd service under a dedicated, unprivileged account, and is also how you upgrade an existing install. See the **[Installation Guide](docs/install.md#raspberry-pi-managed-install)** for the full walkthrough: directory layout, every installer flag, automatic token renewal (`--auto-token`), upgrading, uninstalling, and diagnostic commands.
 
+On the Pi, edit `config.json` in the checkout and restart the service; the services read it directly. See [Editing the config](docs/install.md#editing-the-config).
+
 ## Two users on one board
 
 See the complete [dual-user setup and operations guide](docs/dual-users.md).

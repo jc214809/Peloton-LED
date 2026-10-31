@@ -40,6 +40,10 @@ python -m pytest tests/
 python -m pytest tests/test_username.py
 ```
 
+## Pi config
+
+On the Pi, the checkout's `config.json` is the live config: the installer writes `project-config.conf` drop-ins (`BindReadOnlyPaths=-<checkout>/config.json:/etc/peloton-led/config.json`) for `peloton-led.service` and `peloton-token-refresh.service`, because `ProtectHome=true` hides `/home`. The file must use `/var/lib/peloton-led/...` token/cache paths. `config.json` is untracked; `config.json-example` is the template.
+
 ## Setup
 
 ```bash
