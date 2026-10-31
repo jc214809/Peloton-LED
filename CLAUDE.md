@@ -44,6 +44,8 @@ python -m pytest tests/test_username.py
 
 On the Pi, the checkout's `config.json` is the live config: the installer writes `project-config.conf` drop-ins (`BindReadOnlyPaths=-<checkout>/config.json:/etc/peloton-led/config.json`) for `peloton-led.service` and `peloton-token-refresh.service`, because `ProtectHome=true` hides `/home`. The file must use `/var/lib/peloton-led/...` token/cache paths. `config.json` is untracked; `config.json-example` is the template.
 
+Token renewal (`scripts/refresh_cookies.py --ensure`) prefers the Auth0 refresh token saved beside each token file (`cookies-x.refresh.json`). Auth0 rotates it on every use and rejects reuse with `invalid_grant`, so persist the new one before anything else, never share one file between machines, and never fall back to Chromium after `invalid_grant` (slow boards would fail hourly). `--seed-dir` makes a per-board pair on the Mac; `peloton-install.sh --no-browser` skips Chromium/Playwright.
+
 The installer builds `rpi-rgb-led-matrix` from upstream master, whose Python binding includes Pillow's private `Imaging.h`. `scripts/fetch_pillow_headers.py` pulls headers from the PyPI sdist of the exact Pillow in the venv (passed via `CFLAGS`); don't swap in Debian's `python3-pil` headers, since Pillow 12+ changed the struct layout the binding reads.
 
 ## Setup

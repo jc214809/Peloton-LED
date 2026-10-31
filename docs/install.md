@@ -134,6 +134,13 @@ the Peloton API before atomically replacing the existing file, sets
 owner-only file permissions, and never prints the token. Drop `--no-headless`
 for a background login once you've confirmed it works.
 
+The login also saves Peloton's refresh token beside the access token, as
+`<token stem>.refresh.json` (e.g. `cookies-joel.refresh.json`, owner-only,
+gitignored). `--ensure` uses it to get a new access token over plain HTTPS,
+with no browser. Refresh tokens rotate on every use and the old one stops
+working, so **a refresh file belongs to one machine**: copying it to a
+second machine breaks renewal on both.
+
 To just check whether the current token is still valid without logging in
 again:
 
@@ -151,6 +158,8 @@ Full `refresh_cookies.py` flags:
 | `--ensure` | off | Only log in if the token is missing/near expiry/rejected (used by the Pi renewal timer) |
 | `--renew-before-hours N` | `12` | With `--ensure`, renew when fewer than N hours remain before expiry |
 | `--all-users` | off | Refresh every user listed in a dual-user `config.json` instead of one `--cookies` path |
+| `--seed-dir DIR` | off | Log in every rider in `--config` and write a fresh token + refresh-token pair per rider into `DIR`, named for the board, then print the commands to install them (see [Seeding a board](#seeding-a-board-from-another-computer---no-browser)) |
+| `--status` | off | Show each token's expiry and whether it has a refresh token, without network calls |
 | `--no-headless` | off | Show the browser window during login (useful for first-time setup or debugging) |
 
 **Option B — manual:** log in to onepeloton.com in your browser, extract the
@@ -205,7 +214,8 @@ exits with an error rather than hanging if it can't prompt you.
 What the full run does, in order:
 
 1. Installs required `apt` packages (`python3`, build tools, `cmake`,
-   `libopenjp2-7`, and `chromium` if `--auto-token` is set). Skippable with
+   `libopenjp2-7`, and `chromium` if `--auto-token` is set without
+   `--no-browser`). Skippable with
    `--skip-packages` if you manage packages yourself.
 2. Creates a dedicated, unprivileged `peloton-led` system account (home
    `/var/lib/peloton-led`, shell `/usr/sbin/nologin`), and adds it to the
@@ -218,8 +228,8 @@ What the full run does, in order:
    untouched, so re-running the installer after a `git pull` won't clobber
    your settings.
 5. Copies any existing local `cookies.txt` / `cookies-*.txt` token files
-   into `/var/lib/peloton-led/`, but never overwrites a token that's
-   already there.
+   and `cookies*.refresh.json` refresh tokens into `/var/lib/peloton-led/`,
+   but never overwrites one that's already there.
 6. Creates a Python virtualenv under `/opt/peloton-led/venv` and installs
    `requirements.txt` into it.
 7. Builds and installs the native `rpi-rgb-led-matrix` Python bindings from
@@ -254,6 +264,7 @@ want to reclaim the space.
 | Configuration | `config.json` in your checkout (e.g. `~/Peloton-LED/config.json`), seen by the services as `/etc/peloton-led/config.json`; without one, the `/etc` file itself |
 | Login environment (credentials) | `/etc/peloton-led/auth.env` |
 | Access token(s) | `/var/lib/peloton-led/cookies*.txt` |
+| Refresh token(s) | `/var/lib/peloton-led/cookies*.refresh.json` |
 | Persistent snapshot/cache | `/var/lib/peloton-led/dashboard-cache*.json` |
 
 The display runs as `peloton-led.service`: it starts at boot, restarts on
@@ -271,7 +282,8 @@ sudo ./peloton-install.sh --auto-token
 Add this if you want the Pi to keep your Peloton token fresh without you
 manually re-running the login helper. It:
 
-- Installs the Pi distribution's Chromium build (needed for headless login).
+- Installs the Pi distribution's Chromium build, for logins when a rider has
+  no refresh token yet (skip it with `--no-browser`, below).
 - Uses the credentials already written to `/etc/peloton-led/auth.env`
   (root-readable, mode `0600`) during the rider setup prompt above. If that
   file is somehow missing, the installer warns and tells you to re-run with
@@ -281,18 +293,54 @@ manually re-running the login helper. It:
   1. Verifies the existing token against `/api/me`.
   2. Reads the token's real JWT expiry and does nothing if more than 12
      hours remain — no browser is opened on the common case.
-  3. Starts a headless Chromium login only within the final 12 hours of
-     expiry, or immediately after an HTTP 401.
+  3. Renews only within the final 12 hours of expiry, or immediately after
+     an HTTP 401. With a saved refresh token it asks Peloton's token
+     endpoint for a new one and saves the rotated refresh token first;
+     without one it starts a headless Chromium login, which saves a refresh
+     token for next time.
   4. Never opens a browser for DNS failures, timeouts, rate limits, or
      Peloton server errors — those are treated as transient and retried
      next hour instead.
-  5. Verifies the replacement token before atomically swapping it in.
-  6. Exits nonzero on failure, leaving the previous token untouched.
+  5. Never opens a browser when Peloton rejects a saved refresh token
+     (`invalid_grant`), since a board too slow for Chromium would fail that
+     login every hour. The log says to seed the board again (below).
+  6. Verifies the replacement token before atomically swapping it in.
+  7. Exits nonzero on failure, leaving the previous token untouched.
 
 The running dashboard notices the token file change on its own (no service
 restart needed). If Peloton ever introduces CAPTCHA, MFA, or another
 interactive step, the renewal fails safely, keeps the old token, and the
 dashboard's amber padlock signals that a manual login is needed.
+
+### Seeding a board from another computer (`--no-browser`)
+
+Chromium isn't available for 32-bit Raspberry Pi OS and is too slow on 512 MB
+boards like the Pi Zero 2 W. Install those with:
+
+```bash
+sudo ./peloton-install.sh --no-browser   # implies --auto-token
+```
+
+That skips Chromium and Playwright (and uninstalls Playwright on an upgrade)
+and renews only with refresh tokens. Give the board its own login from a
+computer that can run the login helper, using a `config.json` with the
+board's riders:
+
+```bash
+python scripts/refresh_cookies.py --seed-dir ~/peloton-seed-pelotonpi
+```
+
+It logs each rider in, writes each token + refresh-token pair under the
+board's file names, and prints the `scp` and `sudo install` commands to put
+them in `/var/lib/peloton-led/`. Delete the seed folder afterward, and seed
+each board separately. Repeat this if the renewal log reports
+`invalid_grant` (for example after a Peloton password change). Check which
+riders have refresh tokens with:
+
+```bash
+sudo -u peloton-led /opt/peloton-led/venv/bin/python /opt/peloton-led/scripts/refresh_cookies.py \
+    --status --all-users --config /etc/peloton-led/config.json --cookies /var/lib/peloton-led/cookies.txt
+```
 
 ### Sharing the panel with another app (`--manual`)
 
@@ -325,7 +373,8 @@ sudo ./peloton-install.sh [options]
 
 | Option | Effect |
 |---|---|
-| `--auto-token` | Install Chromium and enable hourly headless token verification/renewal (see above) |
+| `--auto-token` | Install Chromium and enable hourly token verification/renewal (see above) |
+| `--no-browser` | Renew only with seeded refresh tokens; no Chromium or Playwright. Implies `--auto-token` (see [above](#seeding-a-board-from-another-computer---no-browser)) |
 | `--reconfigure` | Re-run the interactive rider setup, overwriting `config.json` and `auth.env` (see [above](#changing-riders-later---reconfigure)) |
 | `--skip-matrix` | Skip building/installing the native `rpi-rgb-led-matrix` bindings — use when they're already installed, or when preparing a Pi with no panel attached yet |
 | `--skip-packages` | Skip the `apt-get install` step — use when you manage system packages yourself or they're already present |

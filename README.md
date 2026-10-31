@@ -419,7 +419,7 @@ Live mode cycles through every completed workout on the latest active day. Every
 - `peloton/summaries.py`: metric normalization for screens and reports
 - `display/ui/`: screens and login indicator
 - `driver/`: hardware/emulator selection
-- `scripts/refresh_cookies.py`: browser login and verified token saving
+- `scripts/refresh_cookies.py`: browser login, refresh-token renewal, board seeding, and verified token saving
 - `scripts/render_demo.py`: reproducible screen preview
 
 ## Phase 3 validation
@@ -466,7 +466,7 @@ PELOTON_EMAIL_RIDER_TWO="second@example.com"
 PELOTON_PASSWORD_RIDER_TWO="second password"
 ```
 
-`peloton-token-refresh.timer` checks every configured token hourly and renews each one headlessly when fewer than 12 hours remain. One user's failed login does not mix or overwrite another user's token. The installer stores each token and cache under `/var/lib/peloton-led/` with restricted permissions.
+`peloton-token-refresh.timer` checks every configured token hourly and renews each one when fewer than 12 hours remain, using its saved refresh token (no browser) when it has one. One user's failed login does not mix or overwrite another user's token. The installer stores each token and cache under `/var/lib/peloton-led/` with restricted permissions.
 
 ## Phase 5 validation
 

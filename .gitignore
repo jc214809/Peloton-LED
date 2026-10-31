@@ -4,6 +4,7 @@ config.old.json
 .env
 cookies.txt
 cookies-*.txt
+*.refresh.json
 dashboard-cache*.json
 dashboard-cache.json
 __pycache__/

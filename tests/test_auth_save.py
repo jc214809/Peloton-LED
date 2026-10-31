@@ -354,3 +354,286 @@ def test_all_user_renewal_failure_message_is_not_just_the_exception_type(tmp_pat
                                         'www.onepeloton.com/login. The existing token was not changed.')):
         with pytest.raises(RuntimeError, match='browser reached www.onepeloton.com/login'):
             ensure_all_tokens(config)
+
+
+# --- Refresh-token renewal (no browser) ---------------------------------------
+
+import json as _json
+from scripts.refresh_cookies import (AUTH0_CLIENT_ID, AUTH0_TOKEN_URL, RefreshTokenRejected,
+                                     browser_login_available, load_refresh_token,
+                                     refresh_token_path, renew_with_refresh_token,
+                                     save_refresh_token, seed_tokens)
+
+
+def _token_response(status, body):
+    response = requests.Response()
+    response.status_code = status
+    response._content = body if isinstance(body, bytes) else _json.dumps(body).encode()
+    response.url = AUTH0_TOKEN_URL
+    return response
+
+
+def _seeded(tmp_path, refresh='refresh-old', client_id='client-synthetic'):
+    token = tmp_path / 'cookies-joel.txt'
+    token.write_text('access-old')
+    save_refresh_token(refresh_token_path(token), refresh, client_id)
+    return token
+
+
+def test_refresh_token_path_sits_beside_the_access_token(tmp_path):
+    assert refresh_token_path(tmp_path / 'cookies-joel.txt') == tmp_path / 'cookies-joel.refresh.json'
+    assert refresh_token_path(tmp_path / 'cookies.txt') == tmp_path / 'cookies.refresh.json'
+
+
+def test_save_refresh_token_is_private_and_leaves_no_temp_files(tmp_path):
+    path = tmp_path / 'cookies.refresh.json'
+    save_refresh_token(path, 'refresh-synthetic', 'client-synthetic')
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert load_refresh_token(path) == ('refresh-synthetic', 'client-synthetic')
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_load_refresh_token_defaults_client_id(tmp_path):
+    path = tmp_path / 'cookies.refresh.json'
+    path.write_text(_json.dumps({'refresh_token': 'refresh-synthetic'}))
+    assert load_refresh_token(path) == ('refresh-synthetic', AUTH0_CLIENT_ID)
+
+
+@pytest.mark.parametrize('content', ['not json', '[]', '{"refresh_token": ""}', '{"client_id": "x"}'])
+def test_load_refresh_token_rejects_unusable_files(tmp_path, content):
+    path = tmp_path / 'cookies.refresh.json'
+    path.write_text(content)
+    with pytest.raises(RuntimeError, match='refresh'):
+        load_refresh_token(path)
+
+
+def test_renew_persists_rotated_refresh_token_before_verifying_access_token(tmp_path):
+    token = _seeded(tmp_path)
+    refresh_file = refresh_token_path(token)
+
+    def verify(path):
+        # The old refresh token is already spent; the new one must be on disk
+        # before anything else can fail.
+        assert load_refresh_token(refresh_file) == ('refresh-new', 'client-synthetic')
+        assert path.read_text() == 'access-new'
+        return 'demo'
+
+    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(
+            200, {'access_token': 'access-new', 'refresh_token': 'refresh-new', 'expires_in': 172800})) as post, \
+         patch('scripts.refresh_cookies.verify_token', side_effect=verify):
+        assert renew_with_refresh_token(token) == 'demo'
+    assert post.call_args.args == (AUTH0_TOKEN_URL,)
+    assert post.call_args.kwargs['json'] == {'grant_type': 'refresh_token',
+                                             'client_id': 'client-synthetic',
+                                             'refresh_token': 'refresh-old'}
+    assert post.call_args.kwargs['timeout'] > 0
+    assert token.read_text() == 'access-new'
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['cookies-joel.refresh.json', 'cookies-joel.txt']
+
+
+def test_renew_without_rotation_keeps_the_existing_refresh_token(tmp_path):
+    token = _seeded(tmp_path)
+    with patch('scripts.refresh_cookies.requests.post',
+               return_value=_token_response(200, {'access_token': 'access-new'})), \
+         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+        renew_with_refresh_token(token)
+    assert load_refresh_token(refresh_token_path(token))[0] == 'refresh-old'
+
+
+@pytest.mark.parametrize('status', [400, 401, 403])
+def test_renew_invalid_grant_raises_rejected_and_changes_nothing(tmp_path, status):
+    token = _seeded(tmp_path)
+    before = refresh_token_path(token).read_text()
+    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(
+            status, {'error': 'invalid_grant', 'error_description': 'Unknown or invalid refresh token.'})):
+        with pytest.raises(RefreshTokenRejected, match='seed-dir'):
+            renew_with_refresh_token(token)
+    assert token.read_text() == 'access-old'
+    assert refresh_token_path(token).read_text() == before
+
+
+def test_renew_other_client_error_is_not_reported_as_rejected(tmp_path):
+    token = _seeded(tmp_path)
+    with patch('scripts.refresh_cookies.requests.post',
+               return_value=_token_response(429, {'error': 'too_many_requests'})):
+        with pytest.raises(RuntimeError, match='HTTP 429 \\(too_many_requests\\)') as raised:
+            renew_with_refresh_token(token)
+    assert not isinstance(raised.value, RefreshTokenRejected)
+    assert token.read_text() == 'access-old'
+
+
+@pytest.mark.parametrize('failure', [requests.ConnectionError('offline'), requests.Timeout('slow')])
+def test_renew_network_failure_changes_nothing(tmp_path, failure):
+    token = _seeded(tmp_path)
+    before = refresh_token_path(token).read_text()
+    with patch('scripts.refresh_cookies.requests.post', side_effect=failure):
+        with pytest.raises(type(failure)):
+            renew_with_refresh_token(token)
+    assert token.read_text() == 'access-old'
+    assert refresh_token_path(token).read_text() == before
+
+
+def test_renew_server_error_changes_nothing(tmp_path):
+    token = _seeded(tmp_path)
+    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(503, b'<html>down</html>')):
+        with pytest.raises(requests.HTTPError):
+            renew_with_refresh_token(token)
+    assert token.read_text() == 'access-old'
+
+
+@pytest.mark.parametrize('body', [b'<html>not json</html>', b'[]', b'"text"'])
+def test_renew_bad_json_changes_nothing(tmp_path, body):
+    token = _seeded(tmp_path)
+    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(200, body)):
+        with pytest.raises(RuntimeError, match='non-JSON'):
+            renew_with_refresh_token(token)
+    assert token.read_text() == 'access-old'
+    assert load_refresh_token(refresh_token_path(token))[0] == 'refresh-old'
+
+
+def test_renew_missing_access_token_still_saves_the_rotated_refresh_token(tmp_path):
+    token = _seeded(tmp_path)
+    with patch('scripts.refresh_cookies.requests.post',
+               return_value=_token_response(200, {'refresh_token': 'refresh-new'})):
+        with pytest.raises(RuntimeError, match='no access_token'):
+            renew_with_refresh_token(token)
+    assert token.read_text() == 'access-old'
+    assert load_refresh_token(refresh_token_path(token))[0] == 'refresh-new'
+
+
+def test_renew_with_missing_refresh_file_raises_without_network(tmp_path):
+    token = tmp_path / 'cookies.txt'
+    with patch('scripts.refresh_cookies.requests.post') as post:
+        with pytest.raises(RuntimeError, match='Cannot read refresh token file'):
+            renew_with_refresh_token(token)
+    post.assert_not_called()
+
+
+def _rejected_401():
+    response = requests.Response()
+    response.status_code = 401
+    return requests.HTTPError(response=response)
+
+
+def test_ensure_uses_refresh_token_instead_of_browser(tmp_path):
+    token = _seeded(tmp_path)
+    with patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()), \
+         patch('scripts.refresh_cookies.renew_with_refresh_token', return_value='demo') as renew, \
+         patch('scripts.refresh_cookies.browser_login') as login:
+        assert ensure_token(token, tmp_path / 'config.json') == ('demo', True)
+    renew.assert_called_once_with(token)
+    login.assert_not_called()
+
+
+def test_ensure_renews_near_expiry_with_refresh_token(tmp_path):
+    token = _seeded(tmp_path)
+    with patch('scripts.refresh_cookies.verify_token', return_value='demo'), \
+         patch('scripts.refresh_cookies.token_expiration', return_value=time.time() + 11 * 3600), \
+         patch('scripts.refresh_cookies.renew_with_refresh_token', return_value='demo') as renew, \
+         patch('scripts.refresh_cookies.browser_login') as login:
+        assert ensure_token(token, tmp_path / 'config.json') == ('demo', True)
+    renew.assert_called_once_with(token)
+    login.assert_not_called()
+
+
+def test_ensure_never_falls_back_to_browser_after_invalid_grant(tmp_path, monkeypatch):
+    # A slow board would just fail a Chromium login every hour; keep the old
+    # token and tell the user to re-seed instead.
+    token = _seeded(tmp_path)
+    monkeypatch.setenv('PELOTON_EMAIL', 'rider@example.com')
+    monkeypatch.setenv('PELOTON_PASSWORD', 'secret')
+    with patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()), \
+         patch('scripts.refresh_cookies.renew_with_refresh_token',
+               side_effect=RefreshTokenRejected('invalid_grant; seed-dir')), \
+         patch('scripts.refresh_cookies.browser_login') as login:
+        with pytest.raises(RefreshTokenRejected):
+            ensure_token(token, tmp_path / 'config.json')
+    login.assert_not_called()
+    assert token.read_text() == 'access-old'
+
+
+def test_ensure_without_refresh_token_or_browser_asks_for_a_seed(tmp_path, monkeypatch):
+    token = tmp_path / 'cookies.txt'
+    token.write_text('rejected')
+    monkeypatch.setenv('PELOTON_EMAIL', 'rider@example.com')
+    monkeypatch.setenv('PELOTON_PASSWORD', 'secret')
+    with patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()), \
+         patch('scripts.refresh_cookies.browser_login_available', return_value=False), \
+         patch('scripts.refresh_cookies.browser_login') as login:
+        with pytest.raises(RuntimeError, match='no refresh token .* --seed-dir'):
+            ensure_token(token, tmp_path / 'config.json')
+    login.assert_not_called()
+
+
+def test_browser_login_unavailable_when_configured_chromium_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv('PELOTON_CHROMIUM_EXECUTABLE', str(tmp_path / 'no-chromium'))
+    assert browser_login_available() is False
+    monkeypatch.delenv('PELOTON_CHROMIUM_EXECUTABLE')
+    with patch('scripts.refresh_cookies.importlib.util.find_spec', return_value=None):
+        assert browser_login_available() is False
+
+
+def _logged_in_playwright(credentials):
+    page = MagicMock()
+    page.url = 'https://members.onepeloton.com/home'
+    page.wait_for_function.return_value.json_value.return_value = credentials
+    browser = MagicMock()
+    browser.new_context.return_value.new_page.return_value = page
+    playwright_cm = MagicMock()
+    playwright_cm.__enter__.return_value.chromium.launch.return_value = browser
+    return playwright_cm
+
+
+def test_browser_login_saves_the_refresh_token_beside_the_access_token(tmp_path):
+    token = tmp_path / 'cookies-joel.txt'
+    playwright_cm = _logged_in_playwright({'access_token': 'access-new', 'refresh_token': 'refresh-new',
+                                           'client_id': 'client-synthetic'})
+    with patch('playwright.sync_api.sync_playwright', return_value=playwright_cm), \
+         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+        assert browser_login('rider@example.com', 'secret', token) == 'demo'
+    assert token.read_text() == 'access-new'
+    assert load_refresh_token(refresh_token_path(token)) == ('refresh-new', 'client-synthetic')
+    assert stat.S_IMODE(refresh_token_path(token).stat().st_mode) == 0o600
+
+
+def test_browser_login_without_refresh_token_still_saves_access_token(tmp_path, capsys):
+    token = tmp_path / 'cookies.txt'
+    playwright_cm = _logged_in_playwright({'access_token': 'access-new', 'refresh_token': None,
+                                           'client_id': None})
+    with patch('playwright.sync_api.sync_playwright', return_value=playwright_cm), \
+         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+        browser_login('rider@example.com', 'secret', token)
+    assert token.read_text() == 'access-new'
+    assert not refresh_token_path(token).exists()
+    assert 'no refresh token' in capsys.readouterr().err
+
+
+def test_seed_tokens_writes_one_pair_per_rider_under_board_file_names(tmp_path, monkeypatch):
+    config = tmp_path / 'config.json'
+    config.write_text(_json.dumps({'users': [
+        {'name': 'Joel', 'token_path': '/var/lib/peloton-led/cookies-joel.txt'},
+        {'name': 'Jen'},
+    ]}))
+    for name in ('JOEL', 'JEN'):
+        monkeypatch.setenv(f'PELOTON_EMAIL_{name}', f'{name.lower()}@example.com')
+        monkeypatch.setenv(f'PELOTON_PASSWORD_{name}', 'secret')
+
+    def fake_login(email, password, token_path, headless=True):
+        token_path.write_text('access')
+        save_refresh_token(refresh_token_path(token_path), 'refresh', 'client')
+        return email
+
+    seed_dir = tmp_path / 'seed'
+    with patch('scripts.refresh_cookies.browser_login', side_effect=fake_login) as login:
+        seeded = seed_tokens(seed_dir, config)
+    assert seeded == [('Joel', seed_dir / 'cookies-joel.txt'), ('Jen', seed_dir / 'cookies-jen.txt')]
+    assert [call.args[0] for call in login.call_args_list] == ['joel@example.com', 'jen@example.com']
+    assert stat.S_IMODE(seed_dir.stat().st_mode) == 0o700
+
+
+def test_seed_tokens_fails_when_login_gives_no_refresh_token(tmp_path, monkeypatch):
+    monkeypatch.setenv('PELOTON_EMAIL', 'rider@example.com')
+    monkeypatch.setenv('PELOTON_PASSWORD', 'secret')
+    with patch('scripts.refresh_cookies.browser_login', return_value='demo'):
+        with pytest.raises(RuntimeError, match='no refresh token'):
+            seed_tokens(tmp_path / 'seed', tmp_path / 'missing.json')
