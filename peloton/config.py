@@ -3,7 +3,7 @@ import json
 import math
 import os
 import re
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -96,7 +96,13 @@ def _validate_journey(path, journey, prefix):
     if (not isinstance(disciplines, list) or not disciplines
             or not all(isinstance(d, str) and normalize_discipline(d) for d in disciplines)):
         raise ValueError(f'{where}.disciplines must be a non-empty list of discipline names')
-    return {**journey, 'from': journey['from'].strip(), 'to': journey['to'].strip()}
+    start = journey.get('start_date')
+    if start is not None:
+        try:
+            start = date.fromisoformat(start.strip()).isoformat()
+        except (AttributeError, ValueError):
+            raise ValueError(f'{where}.start_date must be a YYYY-MM-DD date') from None
+    return {**journey, 'from': journey['from'].strip(), 'to': journey['to'].strip(), 'start_date': start}
 
 
 def load_config(path='config', allow_missing=False):
