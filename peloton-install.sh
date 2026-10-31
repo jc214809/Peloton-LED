@@ -96,9 +96,10 @@ chown -R root:root "$APP_DIR"
 
 if [[ ! -f "$CONFIG_DIR/config.json" || "$RECONFIGURE" == true ]]; then
     [[ -t 0 ]] || { echo "Run this in an interactive terminal to set up riders (or copy an existing config.json + auth.env into place manually)." >&2; exit 1; }
-    umask 077
-    python3 "$SOURCE_DIR/scripts/setup_config.py" \
-        "$SOURCE_DIR/packaging/config.pi.json" "$CONFIG_DIR/config.json" "$CONFIG_DIR/auth.env"
+    # Subshell keeps the private umask to the secrets; leaking it would make
+    # the venv below unreadable to the service account.
+    (umask 077 && python3 "$SOURCE_DIR/scripts/setup_config.py" \
+        "$SOURCE_DIR/packaging/config.pi.json" "$CONFIG_DIR/config.json" "$CONFIG_DIR/auth.env")
     chown root:"$APP_USER" "$CONFIG_DIR/config.json"
     chmod 0640 "$CONFIG_DIR/config.json"
     chown root:root "$CONFIG_DIR/auth.env"
@@ -143,6 +144,10 @@ if [[ "$AUTO_TOKEN" == true ]]; then
         echo "Re-run with --reconfigure to set up rider credentials." >&2
     fi
 fi
+
+# The service runs as $APP_USER, so the code and venv must be world-readable.
+# This also repairs installs whose venv was built under a leaked umask 077.
+chmod -R a+rX "$APP_DIR"
 
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-led.service" "$UNIT_DIR/peloton-led.service"
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-token-refresh.service" "$UNIT_DIR/peloton-token-refresh.service"
