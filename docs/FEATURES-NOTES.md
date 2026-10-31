@@ -154,11 +154,12 @@ Your lifetime miles become a trip from one place to another.
 - **Configure it** under `display.journey` (and per rider under
   `users[].journey`, like weekly goals):
   ```json
-  "journey": {"from": "Columbus", "to": "Disney World", "miles": 880,
-              "disciplines": ["Cycling", "Running", "Walking"]}
+  "journey": {"from": "Columbus", "to": "Disney World", "miles": 880}
   ```
-  That is the default. `disciplines` takes any Peloton discipline names
-  ("Rowing", "Tread Bootcamp", "Outdoor Run", ...), one or several.
+  That is the default, and it counts every workout with a distance. An
+  optional `disciplines` list narrows it to exact discipline names
+  ("Rowing", "Tread Bootcamp", "Outdoor Run", ...); see the README's
+  `journey` section for what counts.
   880 is roughly the driving distance from Columbus to Walt Disney World;
   set `miles` to whatever you like.
 - **64x64:** a vertical map on the left (Florida is south): a blue start

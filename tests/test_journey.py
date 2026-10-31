@@ -8,8 +8,9 @@ from display.display import initialize_fonts
 from display.ui.journey_screen import CASTLE_COLORS, JourneyScreen
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import load_config
-from peloton.journey import (DEFAULT_JOURNEY, journey_progress, merge_distance_totals,
-                             uses_metric, workout_miles)
+from peloton.journey import (DEFAULT_JOURNEY, DISTANCE_DISCIPLINES, journey_progress,
+                             merge_distance_totals, uses_metric, workout_miles)
+from peloton.selection import normalize_discipline
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 from tests.test_dashboard import setup_dashboard
@@ -61,6 +62,35 @@ def test_progress_counts_only_chosen_disciplines_and_goes_there_and_back():
     assert out_again['trip'] == 3 and not out_again['returning']
 
 
+def test_default_journey_counts_every_discipline_with_distance():
+    totals = {'cycling': 100, 'bike_bootcamp': 10, 'tread_bootcamp': 5, 'running_outdoor': 3,
+              'rowing': 2, 'walking': 1}
+    assert journey_progress(totals, DEFAULT_JOURNEY)['miles'] == 121
+    # Listing disciplines still narrows it.
+    assert journey_progress(totals, {**DEFAULT_JOURNEY, 'disciplines': ['Cycling', 'Outdoor Run']})['miles'] == 103
+
+
+def test_every_distance_discipline_name_matches_a_tally_key():
+    keys = {'cycling', 'bike_bootcamp', 'running', 'running_outdoor', 'tread_bootcamp',
+            'walking', 'walking_outdoor', 'rowing', 'row_bootcamp'}
+    assert {normalize_discipline(name) for name in DISTANCE_DISCIPLINES} == keys
+    assert merge_distance_totals({}, [row('circuit', 1), row('caesar_bootcamp', 1609.344),
+                                      row('outdoor_running', 2)]) == pytest.approx(
+        {'tread_bootcamp': 1, 'row_bootcamp': 1, 'running_outdoor': 2})
+
+
+def test_config_warns_when_a_listed_discipline_has_no_distance(tmp_path, caplog):
+    load_config(write_config(tmp_path, {'display': {'journey': {
+        **DEFAULT_JOURNEY, 'disciplines': ['Cycling', 'Strength']}}}))
+    assert "'Strength' has no distance" in caplog.text and 'Cycling' not in caplog.text.split('distance comes')[0]
+
+
+def test_config_journey_without_disciplines_counts_everything(tmp_path):
+    journey = load_config(write_config(tmp_path, {'display': {'journey': {
+        'from': 'A', 'to': 'B', 'miles': 10}}}))['display']['journey']
+    assert journey['disciplines'] is None
+
+
 @pytest.mark.parametrize('journey', [None, {}, {**DEFAULT_JOURNEY, 'miles': 0},
                                      {**DEFAULT_JOURNEY, 'miles': True}])
 def test_progress_is_none_for_unusable_routes(journey):
@@ -109,7 +139,7 @@ def test_config_accepts_a_journey_start_date_for_display_and_riders(tmp_path):
 
 
 @pytest.mark.parametrize('journey, message', [
-    ({'from': 'A', 'to': 'B', 'miles': 10}, 'needs from, to, miles and disciplines'),
+    ({'from': 'A', 'to': 'B', 'disciplines': ['Cycling']}, 'needs from, to and miles'),
     ({'from': ' ', 'to': 'B', 'miles': 10, 'disciplines': ['Cycling']}, 'journey.from'),
     ({'from': 'A', 'to': 'B', 'miles': -1, 'disciplines': ['Cycling']}, 'journey.miles'),
     ({'from': 'A', 'to': 'B', 'miles': 10, 'disciplines': []}, 'journey.disciplines'),

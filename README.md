@@ -198,15 +198,23 @@ Options: `screen_durations.lifetime` / `overview_duration`, per page, minimum 5 
 
 Your lifetime miles, plotted as a trip on a little map: a start dot, the route, your position, and a castle at the destination. Reaching the destination turns you around for the trip home, and so on forever. `TRIP 4` means you're on your fourth one-way leg. The screen also shows total miles and how far is left on the current leg.
 
-The default route is Columbus → Disney World, 880 miles, counting Cycling, Running and Walking. Set your own:
+The default route is Columbus → Disney World, 880 miles, counting every workout that has a distance. Set your own:
 
 ```json
 "journey": {"from": "Columbus", "to": "Disney World", "miles": 880,
-            "disciplines": ["Cycling", "Running", "Walking"],
             "start_date": "2026-01-01"}
 ```
 
-`disciplines` picks which workouts' distance counts. Bootcamp distance is counted separately, so add `"Tread Bootcamp"` and the like if you want it included. The optional `start_date` counts only miles from that day on; changing it recounts your whole history once on the next refresh. The journey can also be set per rider under `users[]`. Distances are tallied from your full history the first time, then incrementally after that, and the screen is skipped until there's at least some distance.
+**What counts.** Every completed workout that Peloton reports a distance for:
+
+| Counts toward the trip | Doesn't count (no distance) |
+|---|---|
+| Cycling, Bike Bootcamp (bike segments) | Strength |
+| Running, Outdoor Run, Tread Bootcamp (tread segments) | Yoga, Stretching, Meditation |
+| Walking, Outdoor Walk | Cardio |
+| Rowing, Row Bootcamp (meters converted to miles) | Any class Peloton records without a distance, and incomplete workouts |
+
+To count only some of them, add `"disciplines"` with the names from the left column, e.g. `"disciplines": ["Cycling", "Running", "Outdoor Run"]`. Each name is matched exactly, so `"Running"` does not include Outdoor Run or Tread Bootcamp; list those too if you want them. Listing a type from the right column logs a warning, since it never adds miles. The optional `start_date` counts only miles from that day on; changing it recounts your whole history once on the next refresh. The journey can also be set per rider under `users[]`. Distances are tallied from your full history the first time, then incrementally after that, and the screen is skipped until there's at least some distance.
 
 ### `milestones` — milestone celebration
 
@@ -316,7 +324,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `weekly_goals` | `{"workouts": 0, "minutes": 0}` | Weekly workout/minute targets; `0` disables that goal. See [Phase 6 customization](#phase-6-customization) |
 | `milestones` | `[]` | Lifetime Total Workouts thresholds that celebrate once each, e.g. `[100, 250, 500]` |
 | `milestone_step` | `100` | Also count down to (and celebrate) every Nth lifetime workout, e.g. 2,200 after 2,100; `0` turns this off |
-| `journey` | Columbus → Disney World, 880 mi, Cycling + Running + Walking | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880, "disciplines": ["Cycling", "Running", "Walking"]}`. Any places, distance and disciplines; also settable per rider under `users[]`. Optional `"start_date": "YYYY-MM-DD"` counts only miles from that day on (display timezone); changing it recounts the full history once on the next refresh |
+| `journey` | Columbus → Disney World, 880 mi, every workout with a distance | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880}`. Any places and distance; optional `"disciplines"` list narrows which workouts count (see [`journey`](#journey--lifetime-miles-as-a-trip)); also settable per rider under `users[]`. Optional `"start_date": "YYYY-MM-DD"` counts only miles from that day on (display timezone); changing it recounts the full history once on the next refresh |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |
 | `compact_workout_pages` | `false` | On 32-row panels, use the older two-page compact workout layout instead of the rotating one |

@@ -1,5 +1,6 @@
 """Validate user configuration before initializing hardware or making requests."""
 import json
+import logging
 import math
 import os
 import re
@@ -7,8 +8,10 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .journey import DEFAULT_JOURNEY
+from .journey import DEFAULT_JOURNEY, DISTANCE_DISCIPLINES
 from .selection import normalize_discipline
+
+logger = logging.getLogger('peloton-led.config')
 
 DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration': 4,
             'per_workout_duration': 4, 'last_workout_duration': 30, 'logo_duration': 3,
@@ -92,25 +95,32 @@ def _validate_milestones(path, milestones, prefix):
 def _validate_journey(path, journey, prefix):
     """Route for the distance journey: from/to names, miles, disciplines."""
     where = f'{path}: {prefix}journey'
-    if not isinstance(journey, dict) or not {'from', 'to', 'miles', 'disciplines'} <= set(journey):
-        raise ValueError(f'{where} needs from, to, miles and disciplines')
+    if not isinstance(journey, dict) or not {'from', 'to', 'miles'} <= set(journey):
+        raise ValueError(f'{where} needs from, to and miles')
     for key in ('from', 'to'):
         if not isinstance(journey[key], str) or not journey[key].strip():
             raise ValueError(f'{where}.{key} must be a non-empty string')
     miles = journey['miles']
     if isinstance(miles, bool) or not isinstance(miles, (int, float)) or not math.isfinite(miles) or miles <= 0:
         raise ValueError(f'{where}.miles must be a positive number')
-    disciplines = journey['disciplines']
-    if (not isinstance(disciplines, list) or not disciplines
+    disciplines = journey.get('disciplines')
+    if disciplines is not None and (not isinstance(disciplines, list) or not disciplines
             or not all(isinstance(d, str) and normalize_discipline(d) for d in disciplines)):
         raise ValueError(f'{where}.disciplines must be a non-empty list of discipline names')
+    if disciplines is not None:
+        known = {normalize_discipline(d) for d in DISTANCE_DISCIPLINES}
+        for name in disciplines:
+            if normalize_discipline(name) not in known:
+                logger.warning('%s.disciplines: %r has no distance and adds no miles; distance comes from %s',
+                               where, name, ', '.join(DISTANCE_DISCIPLINES))
     start = journey.get('start_date')
     if start is not None:
         try:
             start = date.fromisoformat(start.strip()).isoformat()
         except (AttributeError, ValueError):
             raise ValueError(f'{where}.start_date must be a YYYY-MM-DD date') from None
-    return {**journey, 'from': journey['from'].strip(), 'to': journey['to'].strip(), 'start_date': start}
+    return {**journey, 'from': journey['from'].strip(), 'to': journey['to'].strip(),
+            'disciplines': disciplines, 'start_date': start}
 
 
 def _int_in(value, low, high=None):
