@@ -101,3 +101,14 @@ def test_installer_binds_the_checkout_config_into_both_services():
     assert 'LIVE_CONFIG="$SOURCE_DIR/config.json"' in text
     assert 'load_config(sys.argv[1])" "$LIVE_CONFIG"' in text
     assert 'sync_config' not in text
+
+
+def test_installer_builds_the_driver_against_matching_pillow_headers():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    # Upstream's binding includes Pillow's private Imaging.h; pip's Pillow ships
+    # none, and a distro python3-pil may not match the installed struct layout.
+    fetch = '"$APP_DIR/scripts/fetch_pillow_headers.py" "$pillow_headers"'
+    build = 'CFLAGS="-I$pillow_headers ${CFLAGS:-}" "$APP_DIR/venv/bin/python" -m pip install "$driver_dir"'
+    assert fetch in text and build in text
+    assert text.index('pip install -r "$APP_DIR/requirements.txt"') < text.index(fetch) < text.index(build)
+    assert 'python3-pil' not in text
