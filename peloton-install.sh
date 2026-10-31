@@ -153,14 +153,28 @@ install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-led.servi
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-token-refresh.service" "$UNIT_DIR/peloton-token-refresh.service"
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-token-refresh.timer" "$UNIT_DIR/peloton-token-refresh.timer"
 
+# The checkout's config.json, when present, is the live config: the services
+# see it at $CONFIG_DIR/config.json through a read-only bind mount (below).
+LIVE_CONFIG="$CONFIG_DIR/config.json"
+if [[ -f "$SOURCE_DIR/config.json" ]]; then
+    LIVE_CONFIG="$SOURCE_DIR/config.json"
+fi
 (cd "$APP_DIR" && "$APP_DIR/venv/bin/python" -c \
-    "from peloton.config import load_config; load_config('$CONFIG_DIR/config.json')")
+    "import sys; from peloton.config import load_config; load_config(sys.argv[1])" "$LIVE_CONFIG")
 systemd-analyze verify "$UNIT_DIR/peloton-led.service" \
     "$UNIT_DIR/peloton-token-refresh.service" "$UNIT_DIR/peloton-token-refresh.timer"
 # Manual mode: tie token renewal to the display's lifetime instead of boot.
 # Starting the display runs one token check and starts the hourly timer;
 # stopping the display stops the timer.
 rm -f "$UNIT_DIR/peloton-led.service.d/manual.conf" "$UNIT_DIR/peloton-token-refresh.timer.d/manual.conf"
+# ProtectHome hides the checkout from the services, so bind its config.json
+# read-only over $CONFIG_DIR/config.json. "-" falls back to the /etc file
+# when the checkout has none.
+for unit in peloton-led.service peloton-token-refresh.service; do
+    install -d -m 0755 "$UNIT_DIR/$unit.d"
+    printf '[Service]\nBindReadOnlyPaths=-%s:%s\n' "$SOURCE_DIR/config.json" "$CONFIG_DIR/config.json" \
+        > "$UNIT_DIR/$unit.d/project-config.conf"
+done
 if [[ "$MANUAL" == true && "$AUTO_TOKEN" == true ]]; then
     install -d -m 0755 "$UNIT_DIR/peloton-led.service.d" "$UNIT_DIR/peloton-token-refresh.timer.d"
     printf '[Unit]\nWants=peloton-token-refresh.service peloton-token-refresh.timer\n' \
@@ -181,7 +195,7 @@ else
 fi
 
 if [[ "$NO_START" == false ]]; then
-    mapfile -t configured_tokens < <("$APP_DIR/venv/bin/python" - "$CONFIG_DIR/config.json" <<'PY'
+    mapfile -t configured_tokens < <("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" <<'PY'
 import json, sys
 config=json.load(open(sys.argv[1], encoding='utf-8'))
 users=config.get('users') or []
@@ -206,7 +220,7 @@ PY
     fi
 fi
 
-rider_summary="$("$APP_DIR/venv/bin/python" - "$CONFIG_DIR/config.json" <<'PY'
+rider_summary="$("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" <<'PY'
 import json, sys
 config = json.load(open(sys.argv[1], encoding='utf-8'))
 users = config.get('users') or []
@@ -224,7 +238,7 @@ Peloton LED installation complete.
 
   Display:  systemctl status peloton-led.service
   Logs:     journalctl -u peloton-led.service -n 100
-  Config:   $CONFIG_DIR/config.json
+  Config:   $LIVE_CONFIG (edit, then restart peloton-led)
   Riders:   $rider_summary
 EOF
 if [[ "$MANUAL" == true ]]; then
