@@ -45,38 +45,204 @@ Override the interval:
 python peloton_led.py --emulated --refresh-interval 300
 ```
 
-## Display rotation logic
+## Screens and rotation
 
-The startup logo (the Peloton P, in Peloton red) is shown once when the application starts. After that, the dashboard repeats this rotation:
+The board shows the startup logo once, then loops through the sections listed in `display.rotation`, in that order, forever. Each section is one or more screens. A section with nothing to show is skipped for that pass; for example, `streaks` is skipped while your streak is 0. Leave a section out of `rotation` to hide it.
 
-1. One workout screen for every completed workout on the most recent active calendar day, newest first.
-2. A PR celebration immediately after a personal-record workout, the first time that PR is displayed. PR workouts are also marked with a gold trophy on the workout screen, in the corner during the intro and beside the record-setting value.
-3. Username screen.
-4. Weekly streak: a flame, your current weekly streak and your best (skipped when the streak is 0). Read from the profile overview the app already downloads.
-   A **Next Milestone** countdown (e.g. `89 TO GO` to 2,200, with a progress bar) follows the Total Workouts page.
-   After the lifetime pages, a **Journey** map shows lifetime miles as a trip (default Columbus → Disney World), there and back again once you arrive.
-   Households with two or more riders then get a head-to-head **This Week** page (workouts, minutes, output; leader gets a trophy), once per full cycle.
-5. A dedicated full-size Total Workouts page, followed on 64×64 panels by compact lifetime pages with four separate disciplines per page. Each has its own pixel icon and exact count; Bootcamp disciplines remain separate. 64×32 panels show the same icon tiles two per page.
+Default order:
 
-“Most recent active day” means the newest local calendar date containing at least one completed workout. If the member worked out today, today’s completed workouts are shown. If their last activity was a week ago, every completed workout from that date is shown. The search is bounded by `history_days`, `history_limit`, and the pagination safety settings. In-progress workouts are excluded. If no workout summary is available, the first position is replaced by a short `Loading`, `Login needed`, `Offline`, or `No workouts` status screen.
+```json
+"rotation": ["latest_workouts", "username", "streaks", "versus", "total_workouts",
+             "next_milestone", "lifetime", "journey", "milestones", "goals"]
+```
 
-The duration of each position comes from the display configuration:
+| Section | What it shows | Shown when | Time on screen |
+|---|---|---|---|
+| [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats) per workout |
+| [`username`](#username--rider-name-and-highlights) | Your name over rotating highlights: total workouts, this week, top discipline, top 3 instructors | Always | `duration`, extended to 4 s per highlight |
+| [`streaks`](#streaks--weekly-streak) | Current weekly streak and your best | Current weekly streak is above 0 | `overview_duration` |
+| [`versus`](#versus--household-head-to-head) | Two riders side by side for this week | 2+ riders configured under `users` | `overview_duration` (64×32: at least 12 s) |
+| [`total_workouts`](#total_workouts--lifetime-total) | Lifetime total workout count | Profile totals available | Same as `lifetime` (at least 5 s) |
+| [`next_milestone`](#next_milestone--countdown-to-the-next-milestone) | Workouts left until your next milestone | A milestone is ahead of you | `overview_duration` |
+| [`lifetime`](#lifetime--per-discipline-totals) | Every discipline's lifetime count, with icons | Profile totals available | `overview_duration` per page (at least 5 s) |
+| [`journey`](#journey--lifetime-miles-as-a-trip) | Lifetime miles plotted as a trip between two places | Some distance has been tallied | `overview_duration` |
+| [`milestones`](#milestones--milestone-celebration) | Celebration for a lifetime milestone you just reached | A milestone is reached and not yet celebrated | `overview_duration` |
+| [`goals`](#goals--weekly-goals) | Progress bar toward each weekly goal | `weekly_goals.workouts` and/or `.minutes` is above 0 | `overview_duration` per goal |
 
-| Position | Setting |
+Any section's time can be overridden with `screen_durations.<section>`; setting it to `0` turns the section off. The one exception is `total_workouts`: it has no key of its own and follows `screen_durations.lifetime`, so the two stay in step.
+
+**About the screenshots.** Every image below is real data from a two-rider household, rendered by the app's own screen code. The top row is a 64×64 panel and the bottom row is 64×32. Animated screens are shown as a strip of frames, left to right, in the order they appear. Jen is the featured rider and Joel is her rival on the versus screen. Sample settings: `weekly_goals` 3 workouts / 300 minutes, `milestones` `[250, 500, 1000, 2000]`.
+
+Data refreshes in the background (see [Refresh behavior](#refresh-behavior)), but each pass through the rotation uses one consistent snapshot. New workouts and totals appear at the start of the next pass. The login padlock is the one exception: it can appear or disappear mid-screen.
+
+### Startup logo
+
+![Startup logo](docs/screenshots/rotation/logo.png)
+
+Shown once at launch for `logo_duration` seconds (default 3), never again. The app picks `prepared_logos/peloton_64x64_auto.png` or `peloton_64x32_auto.png` to match the panel, unless `logo_path` points somewhere else. A missing logo file is skipped.
+
+### `latest_workouts` — last active day's workouts
+
+One screen per completed workout on your **most recent active day**, newest first. That means the newest calendar date (in your timezone) with at least one completed workout. If you worked out today, you see today's workouts; if your last workout was a week ago, you see that whole day. In-progress workouts are left out.
+
+Each screen opens with an **intro**: the discipline name in its color, class length, class title and instructor. It then shows **each stat once, one at a time**, finishing with the **output (or heart-rate) graph** and the **heart-rate zone bar** when the workout recorded them. Average heart rate and calories stay along the bottom. Each frame holds for `last_workout_detail_interval` seconds (default 4), so a cycling class with 8 stats stays up for 36 s. On 64×32 there's no room for the instructor in the intro, so the instructor becomes the first stat instead.
+
+![Cycling workout screen](docs/screenshots/rotation/workout-cycling.png)
+
+Which stats appear depends on the discipline. A stat Peloton didn't record is simply skipped.
+
+| Discipline | Stats, in order |
 |---|---|
-| Each latest-active-day workout | `last_workout_duration` |
-| PR screen | `overview_duration` |
-| Username | `duration` |
-| Total Workouts and each lifetime overview page | One shared `overview_duration` |
-| Status screen | The smaller of `overview_duration` and two seconds |
+| Cycling, Bike Bootcamp | Total output, Strive score, avg speed, avg cadence, avg resistance, distance |
+| Running, Walking, Tread Bootcamp (and outdoor/hiking) | Distance, avg pace, elevation gain, avg incline |
+| Rowing, Row Bootcamp | Distance, stroke rate, split per 500 m, avg output |
+| Everything else (Strength, Yoga, Stretching, Meditation, Cardio, and any future discipline) | Strive score, max heart rate, distance, avg output |
 
-Lifetime tiles are composed offscreen and published in one frame, so every label, icon, and count appears at the same time. Rowing uses a minimal indoor exercise-rower icon with a slim rail, supports, and filled flywheel housing. Bootcamp animations share one page clock: they show the activity icon on arrival, switch together on the first 0.2-second update, then alternate with a strength dumbbell every 0.8 seconds. Total Workouts and every lifetime discipline page use the same display time. When any Bootcamp is present and durations are nonzero, that shared time is at least 3.2 seconds so every page advances at the same pace.
+Every discipline then adds the graph and zone bar if they're available.
 
-The worker publishes refreshed data in the background, but a rotation uses one consistent snapshot from beginning to end. Newly fetched workouts and totals appear at the start of the next rotation. Authentication-state changes are the exception: the amber login padlock can appear or disappear while the current screen is still displayed.
+<details>
+<summary>Screenshots for every discipline</summary>
 
-The username screen keeps the complete rider name fixed while its lower panel rotates through Total Workouts, this week's workout/minute progress, and the leading lifetime discipline. It automatically selects the largest font that fits the username. Detail values use up to two short lines so counts, minutes, and discipline names remain complete. A blue underline and each detail animate as soon as the screen appears. When the configured username duration is nonzero, it is automatically extended to three seconds per available detail so every detail appears once.
+**Bike Bootcamp**
+![Bike Bootcamp](docs/screenshots/rotation/workout-bike-bootcamp.png)
 
-The former `last_workout_discipline` filter is no longer used: the rotation always includes every discipline completed on the most recent active day. `display.rotation` controls screen order and inclusion using `latest_workouts`, `username`, `total_workouts`, `lifetime`, `milestones`, and `goals`. `screen_durations` can override section timing; `lifetime` controls both Total Workouts and lifetime pages so their timing stays synchronized. `per_workout_duration` remains accepted for compatibility but is not used. Displayed PR workout IDs and lifetime milestones are saved with the dashboard cache, so celebrations do not replay after restart.
+**Running**
+![Running](docs/screenshots/rotation/workout-running.png)
+
+**Walking**
+![Walking](docs/screenshots/rotation/workout-walking.png)
+
+**Tread Bootcamp**
+![Tread Bootcamp](docs/screenshots/rotation/workout-tread-bootcamp.png)
+
+**Rowing**
+![Rowing](docs/screenshots/rotation/workout-rowing.png)
+
+**Row Bootcamp**
+![Row Bootcamp](docs/screenshots/rotation/workout-row-bootcamp.png)
+
+**Strength**
+![Strength](docs/screenshots/rotation/workout-strength.png)
+
+**Cardio**
+![Cardio](docs/screenshots/rotation/workout-cardio.png)
+
+**Stretching**
+![Stretching](docs/screenshots/rotation/workout-stretching.png)
+
+**Yoga**
+![Yoga](docs/screenshots/rotation/workout-yoga.png)
+
+**Meditation**
+![Meditation](docs/screenshots/rotation/workout-meditation.png)
+
+</details>
+
+**PR celebration.** When a workout set a personal record, a gold trophy marks it in the intro and beside the record-setting value. The **first time** that PR is displayed, the workout is followed by a star-burst animation and a PR card. The card shows how much the record improved (e.g. `+14 KJ`) when the app knew the previous record; otherwise it shows the class length, as it does on a fresh install. The card lasts about 5.5 s: 1.5 s of animation plus one `last_workout_detail_interval`. Celebrated PRs are saved in the dashboard cache, so a restart doesn't replay them.
+
+![PR workout followed by the PR celebration](docs/screenshots/rotation/pr-celebration.png)
+
+Options:
+
+- `last_workout_detail_interval` (default `4`): seconds per intro/stat frame.
+- `screen_durations.latest_workouts` / `last_workout_duration`: `0` hides the section; otherwise the value only matters with `compact_workout_pages`.
+- `compact_workout_pages` (64×32 only, default `false`): use the older layout of two static pages per workout instead of rotating stats.
+- `timezone`: decides which calendar day counts as "most recent".
+- `history_days`, `history_limit`, `history_page_size`, `history_max_pages`: how far back to look for that day.
+
+### `username` — rider name and highlights
+
+![Username screen](docs/screenshots/rotation/username.png)
+
+Your name stays fixed at the top in the largest font that fits, above a blue underline. The panel below rotates through up to six highlights, 4 s each: **Total Workouts**, **This Week** (workouts and minutes since Monday), **Top Discipline**, and your **top three instructors** by class count. The instructor counts come from a one-time walk of your full history; after that, only new workouts are added.
+
+Options: `duration` (or `screen_durations.username`) is the minimum time on screen; it's extended automatically so every highlight gets its 4 s. The name comes from `--username`, then `users[].username`, then your Peloton username, then `display.username`. `font` and `color` style the name.
+
+### `streaks` — weekly streak
+
+![Weekly streak](docs/screenshots/rotation/streaks.png)
+
+A pixel flame, your current **weekly streak**, and either `PERSONAL BEST` (when the current streak is your best) or `BEST N WEEKS`. This comes from Peloton's profile overview, so it costs no extra API calls. The screen is skipped while the streak is 0.
+
+### `versus` — household head-to-head
+
+![This week head-to-head](docs/screenshots/rotation/versus.png)
+
+Two riders compared on **workouts, minutes and output (kJ)** for the current week, Monday to now. The rider who's ahead gets a gold trophy; ties are broken by workouts, then minutes, then output, and a full tie shows no trophy. On 64×64 all three stats fit on one page; on 64×32 they show one at a time, 4 s each.
+
+Only shown when `users` lists two or more riders (see [Two users on one board](#two-users-on-one-board)). It appears **once per full cycle**, during the first rider's turn, and compares the first two riders.
+
+### `total_workouts` — lifetime total
+
+![Total workouts](docs/screenshots/rotation/total-workouts.png)
+
+A full-size page with your lifetime workout count, drawn in `color`. Its time on screen follows `screen_durations.lifetime` / `overview_duration`, with a minimum of 5 s.
+
+### `next_milestone` — countdown to the next milestone
+
+![Next milestone countdown](docs/screenshots/rotation/next-milestone.png)
+
+Shows how many workouts are left (`12 TO GO`) until your next lifetime milestone, with a progress bar measured from the last milestone you reached. The target is the next value in `milestones` above your total; if there isn't one, it's the next multiple of `milestone_step` (default `100`). Setting `milestone_step` to `0` with no `milestones` left ahead hides this screen.
+
+### `lifetime` — per-discipline totals
+
+![Lifetime discipline totals](docs/screenshots/rotation/lifetime.png)
+
+Every discipline you've done gets its own colored pixel-icon tile with its exact lifetime count, biggest first. That's four tiles per page on 64×64 and two on 64×32, with as many pages as needed. Disciplines are never merged: Bike, Tread and Row Bootcamp each keep their own tile, and their icons alternate with a strength dumbbell. All tiles on a page appear in the same frame.
+
+Options: `screen_durations.lifetime` / `overview_duration`, per page, minimum 5 s.
+
+### `journey` — lifetime miles as a trip
+
+![Journey map](docs/screenshots/rotation/journey.png)
+
+Your lifetime miles, plotted as a trip on a little map: a start dot, the route, your position, and a castle at the destination. Reaching the destination turns you around for the trip home, and so on forever. `TRIP 4` means you're on your fourth one-way leg. The screen also shows total miles and how far is left on the current leg.
+
+The default route is Columbus → Disney World, 880 miles, counting Cycling, Running and Walking. Set your own:
+
+```json
+"journey": {"from": "Columbus", "to": "Disney World", "miles": 880,
+            "disciplines": ["Cycling", "Running", "Walking"],
+            "start_date": "2026-01-01"}
+```
+
+`disciplines` picks which workouts' distance counts. Bootcamp distance is counted separately, so add `"Tread Bootcamp"` and the like if you want it included. The optional `start_date` counts only miles from that day on; changing it recounts your whole history once on the next refresh. The journey can also be set per rider under `users[]`. Distances are tallied from your full history the first time, then incrementally after that, and the screen is skipped until there's at least some distance.
+
+### `milestones` — milestone celebration
+
+![Milestone celebration](docs/screenshots/rotation/milestones.png)
+
+A gold `MILESTONE` card that appears **once** when your lifetime total reaches a value in `milestones` (e.g. `[100, 250, 500, 1000]`). It also appears for a multiple of `milestone_step`, but only if you crossed it within your last 10 workouts, so turning the feature on doesn't celebrate something you passed years ago. Celebrated milestones are saved in the dashboard cache. `milestones` can be set per rider under `users[]`.
+
+### `goals` — weekly goals
+
+![Weekly goals](docs/screenshots/rotation/goals.png)
+
+One page per weekly goal, showing current / target and a progress bar: **workouts** and/or **minutes** completed since Monday at midnight in your timezone. Turn a goal on by giving it a number above 0:
+
+```json
+"weekly_goals": {"workouts": 3, "minutes": 300}
+```
+
+`0` (the default) hides that goal. Goals can be set per rider under `users[]`.
+
+### Status screens
+
+When there's no workout data to show, a short status screen takes the place of the `latest_workouts` section. It stays up for the smaller of 2 s and the workout duration.
+
+| Loading | Login needed | Offline | No workouts |
+|---|---|---|---|
+| ![Loading](docs/screenshots/rotation/status-loading.png) | ![Login needed](docs/screenshots/rotation/status-login-needed.png) | ![Offline](docs/screenshots/rotation/status-offline.png) | ![No workouts](docs/screenshots/rotation/status-empty.png) |
+| Before the first successful refresh, with no saved cache | Token missing, empty or rejected; see [Authentication](#authentication) | Requests are failing and there's no saved data | Logged in, but no completed workouts within `history_days` |
+
+### Indicators
+
+Two small icons can appear on top of any screen:
+
+| Login padlock (bottom-right, amber) | Stale-data clock (bottom-left, blue) |
+|---|---|
+| ![Login padlock](docs/screenshots/rotation/indicator-login.png) | ![Stale-data clock](docs/screenshots/rotation/indicator-stale.png) |
+| Peloton rejected the token or it's missing. The board keeps showing saved data; replace the token and the padlock clears on the next refresh, even mid-screen. | Three refreshes in a row have failed, so you're looking at saved data. The first two failures stay quiet; any successful refresh clears it. |
 
 ## Phase 6 customization
 
@@ -132,7 +298,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `color` | white | white, red, gold, disney_blue, down |
 | `duration` | 4 | Username screen seconds |
 | `overview_duration` | 4 | Per-discipline and PR screen seconds |
-| `last_workout_duration` | 30 | Workout screen seconds on 32-row panels; 64-row pages are timed by `last_workout_detail_interval` (see below) |
+| `last_workout_duration` | 30 | `0` hides workout screens; otherwise only used with `compact_workout_pages`. Normal workout pages are timed by `last_workout_detail_interval` (see below) |
 | `last_workout_detail_interval` | 4 | Seconds each stat (and the intro) holds for during the workout screen's rotation |
 | `logo_duration` | 3 | Startup logo seconds |
 | `logo_path` | Auto-selected | Optional logo file; missing logos are skipped |
@@ -155,9 +321,9 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |
 | `compact_workout_pages` | `false` | On 32-row panels, use the older two-page compact workout layout instead of the rotating one |
 
-`rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `journey`, `milestones`, `goals`, each at most once. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
+`rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `milestones`, `goals`, each at most once. See [Screens and rotation](#screens-and-rotation) for what each one shows. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
 
-Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds. The page lasts exactly `last_workout_detail_interval * (1 + stat count)` seconds, so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. `last_workout_duration` (or `screen_durations.latest_workouts`) only sets the page length on 32-row panels, where pages are static; `0` still disables the section.
+Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds. The page lasts exactly `last_workout_detail_interval * (1 + stat count)` seconds, so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. `last_workout_duration` (or `screen_durations.latest_workouts`) only sets the page length with `compact_workout_pages` on 32-row panels, where pages are static; `0` still disables the section.
 
 Legacy `ride` and `park` font names map to `discipline`. `per_workout_duration` is accepted for older configs but is not used in the current rotation.
 
