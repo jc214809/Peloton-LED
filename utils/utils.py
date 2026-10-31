@@ -29,29 +29,29 @@ def args(argv=None):
     parser.add_argument(
         "--led-rows",
         action="store",
-        help="Panel height, 32 or 64. (Default: 64)",
-        default=64,
+        help="Panel height, 32 or 64. (Default: config matrix section)",
+        default=None,
         type=int,
     )
     parser.add_argument(
-        "--led-cols", action="store", help="Panel columns. Typically 32 or 64. (Default: 64)", default=64, type=int
+        "--led-cols", action="store", help="Panel columns. Typically 32 or 64. (Default: config matrix section)", default=None, type=int
     )
-    parser.add_argument("--led-chain", action="store", help="Daisy-chained boards. (Default: 1)", default=1, type=int)
+    parser.add_argument("--led-chain", action="store", help="Daisy-chained boards. (Default: config matrix section)", default=None, type=int)
     parser.add_argument(
         "--led-parallel",
         action="store",
-        help="For Plus-models or RPi2: parallel chains. 1..3. (Default: 1)",
-        default=1,
+        help="For Plus-models or RPi2: parallel chains. 1..3. (Default: config matrix section)",
+        default=None,
         type=int,
     )
     parser.add_argument(
-        "--led-pwm-bits", action="store", help="Bits used for PWM. Range 1..11. (Default: 11)", default=11, type=int
+        "--led-pwm-bits", action="store", help="Bits used for PWM. Range 1..11. (Default: config matrix section)", default=None, type=int
     )
     parser.add_argument(
         "--led-brightness",
         action="store",
-        help="Sets brightness level. Range: 1..100. (Default: 100)",
-        default=100,
+        help="Sets brightness level. Range: 1..100. (Default: config matrix section)",
+        default=None,
         type=int,
     )
     parser.add_argument(
@@ -63,25 +63,25 @@ def args(argv=None):
     parser.add_argument(
         "--led-scan-mode",
         action="store",
-        help="Progressive or interlaced scan. 0 = Progressive, 1 = Interlaced. (Default: 1)",
-        default=1,
+        help="Progressive or interlaced scan. 0 = Progressive, 1 = Interlaced. (Default: config matrix section)",
+        default=None,
         choices=range(2),
         type=int,
     )
     parser.add_argument(
         "--led-pwm-lsb-nanoseconds",
         action="store",
-        help="Base time-unit for the on-time in the lowest significant bit in nanoseconds. (Default: 130)",
-        default=130,
+        help="Base time-unit for the on-time in the lowest significant bit in nanoseconds. (Default: config matrix section)",
+        default=None,
         type=int,
     )
     parser.add_argument(
-        "--led-show-refresh", action="store_true", help="Shows the current refresh rate of the LED panel."
+        "--led-show-refresh", action="store_true", default=None, help="Shows the current refresh rate of the LED panel."
     )
     parser.add_argument(
         "--led-slowdown-gpio",
         action="store",
-        help="Slow down writing to GPIO. Range: 0..4. (Default: 1)",
+        help="Slow down writing to GPIO. Range: 0..4. (Default: config matrix section)",
         choices=range(5),
         type=int,
     )
@@ -89,18 +89,18 @@ def args(argv=None):
     parser.add_argument(
         "--led-rgb-sequence",
         action="store",
-        help="Switch if your matrix has led colors swapped. (Default: RGB)",
-        default="RGB",
+        help="Switch if your matrix has led colors swapped. (Default: config matrix section)",
+        default=None,
         type=str,
     )
     parser.add_argument(
-        "--led-pixel-mapper", action="store", help='Apply pixel mappers. e.g "Rotate:90"', default="", type=str
+        "--led-pixel-mapper", action="store", help='Apply pixel mappers. e.g "Rotate:90"', default=None, type=str
     )
     parser.add_argument(
         "--led-row-addr-type",
         action="store",
-        help="0 = default; 1 = AB-addressed panels; 2 = direct row select; 3 = ABC-addressed panels. (Default: 0)",
-        default=0,
+        help="0 = default; 1 = AB-addressed panels; 2 = direct row select; 3 = ABC-addressed panels. (Default: config matrix section)",
+        default=None,
         type=int,
         choices=[0, 1, 2, 3],
     )
@@ -108,20 +108,20 @@ def args(argv=None):
         "--led-multiplexing",
         action="store",
         help="Multiplexing type: 0 = direct; 1 = strip; 2 = checker; 3 = spiral; 4 = Z-strip; 5 = ZnMirrorZStripe;"
-        "6 = coreman; 7 = Kaler2Scan; 8 = ZStripeUneven. (Default: 0)",
-        default=0,
+        "6 = coreman; 7 = Kaler2Scan; 8 = ZStripeUneven. (Default: config matrix section)",
+        default=None,
         type=int,
     )
     parser.add_argument(
         "--led-limit-refresh",
         action="store",
         help="Limit refresh rate to this frequency in Hz. Useful to keep a constant refresh rate on loaded system. "
-        "0=no limit. Default: 0",
-        default=0,
+        "0=no limit. Default: config matrix section",
+        default=None,
         type=int,
     )
     parser.add_argument(
-        "--led-pwm-dither-bits", action="store", help="Time dithering of lower bits (Default: 0)", default=0, type=int,
+        "--led-pwm-dither-bits", action="store", help="Time dithering of lower bits (Default: config matrix section)", default=None, type=int,
     )
     parser.add_argument(
         "--config",
@@ -173,16 +173,31 @@ def args(argv=None):
         parser.error('--display-duration must be a non-negative number')
     if parsed.refresh_interval is not None and parsed.refresh_interval <= 0:
         parser.error('--refresh-interval must be positive')
-    if parsed.led_rows not in (32, 64):
+    if parsed.led_rows is not None and parsed.led_rows not in (32, 64):
         parser.error('--led-rows must be 32 or 64')
-    if min(parsed.led_cols, parsed.led_chain, parsed.led_parallel) <= 0:
+    if any(value is not None and value <= 0
+           for value in (parsed.led_cols, parsed.led_chain, parsed.led_parallel)):
         parser.error('Panel dimensions and chain counts must be positive')
     return parsed
 
 
-def led_matrix_options(args):
+def matrix_settings(args, configured=None):
+    """Resolve each --led-* setting: command-line flag, then config "matrix", then default."""
+    from peloton.config import MATRIX_DEFAULTS
+
+    settings = {**MATRIX_DEFAULTS, **(configured or {})}
+    for key in MATRIX_DEFAULTS:
+        flag = getattr(args, f'led_{key}', None)
+        if flag is not None:
+            settings[key] = flag
+    return argparse.Namespace(**{f'led_{key}': value for key, value in settings.items()},
+                              drop_privileges=getattr(args, 'drop_privileges', False))
+
+
+def led_matrix_options(args, configured=None):
     from driver import RGBMatrixOptions
 
+    args = matrix_settings(args, configured)
     options = RGBMatrixOptions()
 
     if args.led_gpio_mapping is not None:

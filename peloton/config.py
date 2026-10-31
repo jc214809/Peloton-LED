@@ -29,6 +29,14 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'refresh_schedule': None,
             'compact_workout_pages': False}
 
+# Panel/driver settings, one per --led-* flag (flag name minus "led-"). Flags win.
+MATRIX_DEFAULTS = {'rows': 64, 'cols': 64, 'chain': 1, 'parallel': 1, 'pwm_bits': 11,
+                   'brightness': 100, 'gpio_mapping': None, 'scan_mode': 1,
+                   'pwm_lsb_nanoseconds': 130, 'show_refresh': False, 'slowdown_gpio': None,
+                   'no_hardware_pulse': False, 'rgb_sequence': 'RGB', 'pixel_mapper': '',
+                   'row_addr_type': 0, 'multiplexing': 0, 'limit_refresh': 0, 'pwm_dither_bits': 0}
+GPIO_MAPPINGS = ('regular', 'adafruit-hat', 'adafruit-hat-pwm')
+
 ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
                      'next_milestone', 'lifetime', 'journey', 'milestones', 'goals'}
 DURATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'next_milestone',
@@ -105,6 +113,46 @@ def _validate_journey(path, journey, prefix):
     return {**journey, 'from': journey['from'].strip(), 'to': journey['to'].strip(), 'start_date': start}
 
 
+def _int_in(value, low, high=None):
+    return (not isinstance(value, bool) and isinstance(value, int) and value >= low
+            and (high is None or value <= high))
+
+
+def _validate_matrix(path, matrix):
+    """Optional top-level "matrix" section: LED panel and driver settings."""
+    if matrix is None:
+        matrix = {}
+    if not isinstance(matrix, dict):
+        raise ValueError(f'{path}: matrix must be a JSON object')
+    unknown = set(matrix) - set(MATRIX_DEFAULTS)
+    if unknown:
+        raise ValueError(f'{path}: matrix has unsupported keys: {", ".join(sorted(unknown))}')
+    merged = {**MATRIX_DEFAULTS, **matrix}
+    ranges = {'cols': (1, None), 'chain': (1, None), 'parallel': (1, 3), 'pwm_bits': (1, 11),
+              'brightness': (1, 100), 'scan_mode': (0, 1), 'pwm_lsb_nanoseconds': (1, None),
+              'row_addr_type': (0, 3), 'multiplexing': (0, None), 'limit_refresh': (0, None),
+              'pwm_dither_bits': (0, None)}
+    if merged['rows'] not in (32, 64) or isinstance(merged['rows'], bool):
+        raise ValueError(f'{path}: matrix.rows must be 32 or 64')
+    for key, (low, high) in ranges.items():
+        if not _int_in(merged[key], low, high):
+            span = f'from {low} to {high}' if high is not None else f'at least {low}'
+            raise ValueError(f'{path}: matrix.{key} must be a whole number {span}')
+    if merged['slowdown_gpio'] is not None and not _int_in(merged['slowdown_gpio'], 0, 4):
+        raise ValueError(f'{path}: matrix.slowdown_gpio must be a whole number from 0 to 4, or null')
+    if merged['gpio_mapping'] is not None and merged['gpio_mapping'] not in GPIO_MAPPINGS:
+        raise ValueError(f'{path}: matrix.gpio_mapping must be one of {", ".join(GPIO_MAPPINGS)}, or null')
+    for key in ('show_refresh', 'no_hardware_pulse'):
+        if not isinstance(merged[key], bool):
+            raise ValueError(f'{path}: matrix.{key} must be true or false')
+    if not isinstance(merged['rgb_sequence'], str) or sorted(merged['rgb_sequence'].upper()) != ['B', 'G', 'R']:
+        raise ValueError(f'{path}: matrix.rgb_sequence must be an ordering of R, G and B, e.g. "RBG"')
+    if not isinstance(merged['pixel_mapper'], str):
+        raise ValueError(f'{path}: matrix.pixel_mapper must be a string')
+    merged['rgb_sequence'] = merged['rgb_sequence'].upper()
+    return merged
+
+
 def load_config(path='config', allow_missing=False):
     path = Path(path).with_suffix('.json')
     if not path.exists():
@@ -158,6 +206,7 @@ def load_config(path='config', allow_missing=False):
                 user['milestones'] = _validate_milestones(path, user['milestones'], f'users[{index}].')
             if 'journey' in user:
                 user['journey'] = _validate_journey(path, user['journey'], f'users[{index}].')
+    config['matrix'] = _validate_matrix(path, config.get('matrix'))
     display = {**DEFAULTS, **config.get('display', {})}
     for key in ('duration', 'overview_duration', 'per_workout_duration', 'last_workout_duration', 'logo_duration',
                 'last_workout_detail_interval'):
