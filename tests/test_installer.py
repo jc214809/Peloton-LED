@@ -24,6 +24,16 @@ def test_installer_shell_syntax_and_upgrade_preservation_contract():
     assert 'pip install "$driver_dir"' in text
 
 
+def test_installer_keeps_private_umask_away_from_the_venv():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    # A bare `umask 077` leaked into venv creation, so the service account got
+    # "Permission denied" executing venv/bin/python (status=203/EXEC).
+    assert '\n    umask 077\n' not in text
+    assert '(umask 077 && python3 "$SOURCE_DIR/scripts/setup_config.py"' in text
+    assert text.index('chmod -R a+rX "$APP_DIR"') > text.index('pip install "$driver_dir"')
+    assert text.index('chmod -R a+rX "$APP_DIR"') < text.index('systemctl daemon-reload')
+
+
 def test_installer_uses_interactive_setup_script_not_silent_migration():
     text = (ROOT / 'peloton-install.sh').read_text()
     # Config creation/rider setup must be one interactive step (config.json +
