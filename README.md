@@ -150,7 +150,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `weekly_goals` | `{"workouts": 0, "minutes": 0}` | Weekly workout/minute targets; `0` disables that goal. See [Phase 6 customization](#phase-6-customization) |
 | `milestones` | `[]` | Lifetime Total Workouts thresholds that celebrate once each, e.g. `[100, 250, 500]` |
 | `milestone_step` | `100` | Also count down to (and celebrate) every Nth lifetime workout, e.g. 2,200 after 2,100; `0` turns this off |
-| `journey` | Columbus → Disney World, 880 mi, Cycling + Running + Walking | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880, "disciplines": ["Cycling", "Running", "Walking"]}`. Any places, distance and disciplines; also settable per rider under `users[]` |
+| `journey` | Columbus → Disney World, 880 mi, Cycling + Running + Walking | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880, "disciplines": ["Cycling", "Running", "Walking"]}`. Any places, distance and disciplines; also settable per rider under `users[]`. Optional `"start_date": "YYYY-MM-DD"` counts only miles from that day on (display timezone); changing it recounts the full history once on the next refresh |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |
 | `compact_workout_pages` | `false` | On 32-row panels, use the older two-page compact workout layout instead of the rotating one |

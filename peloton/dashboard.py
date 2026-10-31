@@ -57,7 +57,7 @@ class Dashboard:
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
                       'instructor_counts': {}, 'instructor_tally_cursor': None, 'streaks': {},
                       'distance_totals': {}, 'distance_tally_cursor': None,
-                      'personal_records': {}}
+                      'distance_tally_since': None, 'personal_records': {}}
         self.demo = demo
         if demo:
             data = demo_data()
@@ -244,6 +244,13 @@ class Dashboard:
                 cursor = self._data.get('instructor_tally_cursor')
                 prior_distance = self._data.get('distance_totals', {})
                 distance_cursor = self._data.get('distance_tally_cursor')
+                tallied_since = self._data.get('distance_tally_since')
+            since = (self.config.get('journey') or {}).get('start_date')
+            if since != tallied_since:
+                # The journey start date changed: recount distance from scratch, once.
+                logger.info('Journey start date changed (%s -> %s); recounting distance',
+                            tallied_since, since)
+                prior_distance, distance_cursor = {}, None
             new_workouts = client.get_all_workouts(user_id,
                 page_size=self.config.get('history_page_size', 50),
                 max_pages=self.config.get('instructor_tally_max_pages', 200),
@@ -261,7 +268,8 @@ class Dashboard:
                     page_size=self.config.get('history_page_size', 50),
                     max_pages=self.config.get('instructor_tally_max_pages', 200),
                     stop_at_id=distance_cursor)
-            distance_totals = merge_distance_totals(prior_distance, distance_rows, uses_metric(me))
+            distance_totals = merge_distance_totals(prior_distance, distance_rows, uses_metric(me),
+                                                    since=since, tzname=tz)
             distance_newest = distance_rows[0].get('id') if distance_rows else distance_cursor
             refreshed_at = time.time()
             progress = weekly_progress(workouts, tz)
@@ -272,6 +280,7 @@ class Dashboard:
                 weekly_progress=progress,
                 instructor_counts=instructor_counts, instructor_tally_cursor=newest_id,
                 distance_totals=distance_totals, distance_tally_cursor=distance_newest,
+                distance_tally_since=since,
                 personal_records=personal_records,
                 login_required=False, status='ready', last_updated=refreshed_at,
                 last_error=None, generation=generation,

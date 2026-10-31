@@ -1,7 +1,9 @@
 """Lifetime distance as a trip between two places (default: Columbus to Disney World)."""
+from datetime import date
 from math import isfinite
 
 from .selection import discipline_of, is_completed, normalize_discipline
+from .timestamps import workout_date
 
 KM_TO_MI = 0.621371
 M_TO_MI = 1 / 1609.344
@@ -9,7 +11,7 @@ M_TO_MI = 1 / 1609.344
 METER_DISCIPLINES = {'rowing', 'row_bootcamp'}
 
 DEFAULT_JOURNEY = {'from': 'Columbus', 'to': 'Disney World', 'miles': 880,
-                   'disciplines': ['Cycling', 'Running', 'Walking']}
+                   'disciplines': ['Cycling', 'Running', 'Walking'], 'start_date': None}
 
 
 def workout_miles(workout, metric=False):
@@ -22,12 +24,21 @@ def workout_miles(workout, metric=False):
     return value * KM_TO_MI if metric else value
 
 
-def merge_distance_totals(totals, workouts, metric=False):
-    """Add newly-seen completed workouts to a {discipline_key: miles} tally."""
+def merge_distance_totals(totals, workouts, metric=False, since=None, tzname=None):
+    """Add newly-seen completed workouts to a {discipline_key: miles} tally.
+
+    With since (a YYYY-MM-DD string), only workouts on or after that day in
+    the display timezone count; workouts with no readable date are skipped.
+    """
     merged = dict(totals or {})
+    start = date.fromisoformat(since) if since else None
     for workout in workouts:
         if not is_completed(workout):
             continue
+        if start is not None:
+            day = workout_date(workout, tzname)
+            if day is None or day < start:
+                continue
         miles = workout_miles(workout, metric)
         if miles is not None:
             key = discipline_of(workout)

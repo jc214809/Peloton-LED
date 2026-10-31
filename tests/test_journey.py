@@ -36,6 +36,14 @@ def test_merge_distance_totals_skips_incomplete_and_distance_less_workouts():
     assert totals == {'cycling': 15, 'running': 1.25, 'tread_bootcamp': 0.75}
 
 
+def test_merge_distance_totals_counts_only_from_the_start_date():
+    rows = [{**row('cycling', 5, 'new'), 'created_at': 1767268800},    # 2026-01-01 07:00 New York
+            {**row('cycling', 7, 'eve'), 'created_at': 1767241800},    # 2025-12-31 23:30 New York
+            {**row('running', 2, 'undated')}]
+    assert merge_distance_totals({}, rows, since='2026-01-01', tzname='America/New_York') == {'cycling': 5}
+    assert merge_distance_totals({}, rows) == {'cycling': 12, 'running': 2}
+
+
 def test_uses_metric_follows_the_profile_height_unit():
     assert uses_metric({'height_unit': 'metric'})
     assert not uses_metric({'height_unit': 'imperial'})
@@ -88,8 +96,16 @@ def test_config_accepts_a_custom_route_and_per_rider_override(tmp_path):
     config = load_config(write_config(tmp_path, {
         'display': {'journey': custom},
         'users': [{'name': 'Jen', 'journey': {**custom, 'disciplines': ['Running', 'Walking']}}]}))
-    assert config['display']['journey'] == custom
+    assert config['display']['journey'] == {**custom, 'start_date': None}
     assert config['users'][0]['journey']['disciplines'] == ['Running', 'Walking']
+
+
+def test_config_accepts_a_journey_start_date_for_display_and_riders(tmp_path):
+    config = load_config(write_config(tmp_path, {
+        'display': {'journey': {**DEFAULT_JOURNEY, 'start_date': ' 2026-01-01 '}},
+        'users': [{'name': 'Jen', 'journey': {**DEFAULT_JOURNEY, 'start_date': '2026-06-15'}}]}))
+    assert config['display']['journey']['start_date'] == '2026-01-01'
+    assert config['users'][0]['journey']['start_date'] == '2026-06-15'
 
 
 @pytest.mark.parametrize('journey, message', [
@@ -98,6 +114,9 @@ def test_config_accepts_a_custom_route_and_per_rider_override(tmp_path):
     ({'from': 'A', 'to': 'B', 'miles': -1, 'disciplines': ['Cycling']}, 'journey.miles'),
     ({'from': 'A', 'to': 'B', 'miles': 10, 'disciplines': []}, 'journey.disciplines'),
     ({'from': 'A', 'to': 'B', 'miles': 10, 'disciplines': [5]}, 'journey.disciplines'),
+    ({**DEFAULT_JOURNEY, 'start_date': '2026-13-01'}, 'journey.start_date'),
+    ({**DEFAULT_JOURNEY, 'start_date': 'last spring'}, 'journey.start_date'),
+    ({**DEFAULT_JOURNEY, 'start_date': 20260101}, 'journey.start_date'),
 ])
 def test_config_rejects_bad_routes(tmp_path, journey, message):
     with pytest.raises(ValueError, match=message):
@@ -135,12 +154,45 @@ def test_dashboard_backfills_distance_for_caches_from_before_the_journey(tmp_pat
     assert snap['distance_tally_cursor'] == 'w2' == snap['instructor_tally_cursor']
 
 
+def test_dashboard_recounts_distance_once_when_the_start_date_changes(tmp_path):
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    history = [{**row('cycling', 5, 'w2'), 'created_at': 1767268800},   # 2026-01-01
+               {**row('cycling', 7, 'w1'), 'created_at': 1735732800}]   # 2025-01-01
+    client.get_all_workouts.return_value = history
+    dashboard.refresh()
+    assert dashboard.snapshot()['distance_totals'] == {'cycling': 12}
+    assert dashboard.snapshot()['distance_tally_since'] is None
+
+    dashboard.config['journey'] = {**DEFAULT_JOURNEY, 'start_date': '2025-06-01'}
+    client.get_all_workouts.reset_mock()
+    client.get_all_workouts.side_effect = [[], history]  # instructor: nothing new; distance: full recount
+    dashboard.refresh()
+    calls = client.get_all_workouts.call_args_list
+    assert calls[0].kwargs['stop_at_id'] == 'w2' and calls[1].kwargs['stop_at_id'] is None
+    snap = dashboard.snapshot()
+    assert snap['distance_totals'] == {'cycling': 5} and snap['distance_tally_since'] == '2025-06-01'
+
+    # Same date next time: back to sharing the instructor pages, no recount.
+    client.get_all_workouts.reset_mock()
+    client.get_all_workouts.side_effect = None
+    client.get_all_workouts.return_value = [{**row('cycling', 2, 'w3'), 'created_at': 1767355200}]
+    dashboard.refresh()
+    assert client.get_all_workouts.call_count == 1
+    assert dashboard.snapshot()['distance_totals'] == {'cycling': 7}
+
+
 def test_distance_tally_survives_the_cache_and_bad_entries_rebuild(tmp_path):
     path = tmp_path / 'cache.json'
     base = {'me': None, 'totals': {}, 'summaries': [], 'last_updated': 1.0}
     save_snapshot(path, {**base, 'distance_totals': {'cycling': 5.5}, 'distance_tally_cursor': 'w1'})
     restored = load_snapshot(path)
     assert restored['distance_totals'] == {'cycling': 5.5} and restored['distance_tally_cursor'] == 'w1'
+    save_snapshot(path, {**base, 'distance_totals': {'cycling': 5.5}, 'distance_tally_cursor': 'w1',
+                         'distance_tally_since': '2026-01-01'})
+    assert load_snapshot(path)['distance_tally_since'] == '2026-01-01'
+    save_snapshot(path, {**base, 'distance_totals': {'cycling': 5.5}, 'distance_tally_cursor': 'w1',
+                         'distance_tally_since': 7})
+    assert 'distance_totals' not in load_snapshot(path)
     save_snapshot(path, {**base, 'distance_totals': {'cycling': 'far'}, 'distance_tally_cursor': 'w1'})
     restored = load_snapshot(path)
     assert 'distance_totals' not in restored and 'distance_tally_cursor' not in restored
