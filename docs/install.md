@@ -77,30 +77,36 @@ documented in the [main README's configuration table](../README.md#configuration
 | `--cycles N` | `0` | Stop after N full screen rotations; `0` runs continuously |
 | `--drop-privileges` | off | Force the matrix driver to drop root privileges after GPIO setup |
 
-Matrix hardware flags (passed straight through to `rpi-rgb-led-matrix` /
-`RGBMatrixEmulator`; only relevant when driving real hardware or when you
-need to emulate a non-default panel shape):
+Matrix hardware settings (passed straight through to `rpi-rgb-led-matrix` /
+`RGBMatrixEmulator`). Set them once in the top-level `"matrix"` section of
+`config.json`, using the key in the second column; a flag overrides the
+config value for that run. The panel can't report its own size, so a 64×32
+board needs `"rows": 32`.
 
-| Flag | Default | Meaning |
-|---|---|---|
-| `--led-rows N` | `64` | Panel height in pixels: `32` or `64` |
-| `--led-cols N` | `64` | Panel width in pixels |
-| `--led-chain N` | `1` | Number of daisy-chained boards |
-| `--led-parallel N` | `1` | Parallel chains (Plus-models/RPi2 only), `1`-`3` |
-| `--led-pwm-bits N` | `11` | Bits used for PWM, `1`-`11` |
-| `--led-brightness N` | `100` | Brightness, `1`-`100` |
-| `--led-gpio-mapping NAME` | none | `regular`, `adafruit-hat`, or `adafruit-hat-pwm` |
-| `--led-scan-mode N` | `1` | `0` progressive, `1` interlaced |
-| `--led-pwm-lsb-nanoseconds N` | `130` | Base on-time unit for the lowest PWM bit |
-| `--led-show-refresh` | off | Print the panel's live refresh rate |
-| `--led-slowdown-gpio N` | `1` | Slow down GPIO writes, `0`-`4` |
-| `--led-no-hardware-pulse` | off | Disable hardware pin-pulse generation |
-| `--led-rgb-sequence STR` | `RGB` | Reorder color channels if wired differently |
-| `--led-pixel-mapper STR` | `""` | e.g. `"Rotate:90"` |
-| `--led-row-addr-type N` | `0` | `0` default, `1` AB-addressed, `2` direct row select, `3` ABC-addressed |
-| `--led-multiplexing N` | `0` | `0`-`8`; see `--help` for the full mapping |
-| `--led-limit-refresh HZ` | `0` | Cap refresh rate; `0` = no limit |
-| `--led-pwm-dither-bits N` | `0` | Time-dither the lower PWM bits |
+```json
+"matrix": {"rows": 32, "cols": 64, "gpio_mapping": "adafruit-hat", "slowdown_gpio": 2}
+```
+
+| Flag | `matrix` key | Default | Meaning |
+|---|---|---|---|
+| `--led-rows N` | `rows` | `64` | Panel height in pixels: `32` or `64` |
+| `--led-cols N` | `cols` | `64` | Panel width in pixels |
+| `--led-chain N` | `chain` | `1` | Number of daisy-chained boards |
+| `--led-parallel N` | `parallel` | `1` | Parallel chains (Plus-models/RPi2 only), `1`-`3` |
+| `--led-pwm-bits N` | `pwm_bits` | `11` | Bits used for PWM, `1`-`11` |
+| `--led-brightness N` | `brightness` | `100` | Brightness, `1`-`100` |
+| `--led-gpio-mapping NAME` | `gpio_mapping` | `null` | `regular`, `adafruit-hat`, or `adafruit-hat-pwm` |
+| `--led-scan-mode N` | `scan_mode` | `1` | `0` progressive, `1` interlaced |
+| `--led-pwm-lsb-nanoseconds N` | `pwm_lsb_nanoseconds` | `130` | Base on-time unit for the lowest PWM bit |
+| `--led-show-refresh` | `show_refresh` | `false` | Print the panel's live refresh rate |
+| `--led-slowdown-gpio N` | `slowdown_gpio` | `null` (driver default) | Slow down GPIO writes, `0`-`4` |
+| `--led-no-hardware-pulse` | `no_hardware_pulse` | `false` | Disable hardware pin-pulse generation |
+| `--led-rgb-sequence STR` | `rgb_sequence` | `RGB` | Reorder color channels if wired differently |
+| `--led-pixel-mapper STR` | `pixel_mapper` | `""` | e.g. `"Rotate:90"` |
+| `--led-row-addr-type N` | `row_addr_type` | `0` | `0` default, `1` AB-addressed, `2` direct row select, `3` ABC-addressed |
+| `--led-multiplexing N` | `multiplexing` | `0` | `0`-`8`; see `--help` for the full mapping |
+| `--led-limit-refresh HZ` | `limit_refresh` | `0` | Cap refresh rate; `0` = no limit |
+| `--led-pwm-dither-bits N` | `pwm_dither_bits` | `0` | Time-dither the lower PWM bits |
 
 Run `python peloton_led.py --help` at any time for the authoritative list —
 this table mirrors it but the `--help` output wins if they ever diverge.

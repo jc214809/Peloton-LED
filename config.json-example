@@ -1,5 +1,11 @@
 {
   "debug": false,
+  "matrix": {
+    "rows": 64,
+    "cols": 64,
+    "gpio_mapping": null,
+    "brightness": 100
+  },
   "display": {
     "username": "Peloton Member",
     "font": "stats",

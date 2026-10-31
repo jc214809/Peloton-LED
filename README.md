@@ -392,12 +392,13 @@ Top-level and per-user fields, and whether each is required:
 | `users[].password_env` | No | Only used for unattended token renewal |
 | `users[].weekly_goals` | No | Falls back to `display.weekly_goals` when omitted |
 | `users[].milestones` | No | Falls back to `display.milestones` when omitted |
+| `matrix` | No | LED panel/driver settings, e.g. `{"rows": 32, "gpio_mapping": "adafruit-hat"}`; one key per `--led-*` flag, see the [Installation Guide](docs/install.md#every-peloton_ledpy-command-line-flag). Defaults to a 64×64 panel |
 | `display` | No | Omit entirely to use every default in the table above |
 | every `display.*` key | No | See the configuration table above for each default |
 
 ## Display support and remaining work
 
-Both **64×64** and **64×32** panels are supported; for 64×32 use `--led-rows 32 --led-cols 64`. On 64×32 the workout screen uses the same intro-then-rotating-stats layout as 64×64, adapted to fit: the instructor is the first rotating stat, and the heart-rate/calories bar shows during the stats. See [docs/64x32-NOTES.md](docs/64x32-NOTES.md) for every difference. Preview either size with `python scripts/render_rotation.py --height 32 --demo`.
+Both **64×64** and **64×32** panels are supported; for 64×32 set `"matrix": {"rows": 32}` in `config.json` (or pass `--led-rows 32`). Panels can't report their size, so it has to be set. On 64×32 the workout screen uses the same intro-then-rotating-stats layout as 64×64, adapted to fit: the instructor is the first rotating stat, and the heart-rate/calories bar shows during the stats. See [docs/64x32-NOTES.md](docs/64x32-NOTES.md) for every difference. Preview either size with `python scripts/render_rotation.py --height 32 --demo`.
 
 Live mode cycles through every completed workout on the latest active day. Every discipline uses a safe common layout; cycling/bike bootcamp, running/walking/tread, and rowing/row bootcamp add discipline-specific statistics when Peloton supplies them. Unknown future disciplines still show discipline, title, duration, heart rate, calories, and compatible common metrics. Lifetime totals preserve every discipline and its exact count in separate pixel-icon tiles, four per page on 64×64 and two per page on 64×32. No disciplines are combined. Goals, milestones, scheduled brightness, configurable rotation, and optional two-page 32-row workout details are implemented in Phase 6.
 

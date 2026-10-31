@@ -20,6 +20,8 @@ sudo ./peloton_led.py
 
 Key CLI flags: `--config <path>` (default: `config.json`), `--led-rows`, `--led-cols`, `--cookies`, `--username`, `--display-duration`.
 
+Every `--led-*` flag also has a key in the top-level `matrix` config section (flag name minus `led-`, dashes to underscores; `MATRIX_DEFAULTS` in `peloton/config.py`). `utils.utils.matrix_settings` resolves flag → config → default, so the `--led-*` argparse defaults must stay `None`.
+
 ## Previewing Screens
 
 ```bash

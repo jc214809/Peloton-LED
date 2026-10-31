@@ -1,3 +1,4 @@
+import json
 from unittest.mock import Mock, patch
 import pytest
 from peloton.config import load_config
@@ -44,6 +45,38 @@ def test_cli_duration_respects_config_by_default():
     from utils.utils import args
     assert args([]).display_duration is None
     assert args(['--display-duration', '0']).display_duration == 0
+
+
+def test_matrix_settings_come_from_config_with_flags_winning(tmp_path):
+    from utils.utils import args, led_matrix_options, matrix_settings
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps({'matrix': {'rows': 32, 'gpio_mapping': 'adafruit-hat',
+                                           'slowdown_gpio': 2, 'brightness': 60, 'rgb_sequence': 'rbg'}}))
+    configured = load_config(path)['matrix']
+    resolved = matrix_settings(args([]), configured)
+    assert (resolved.led_rows, resolved.led_cols, resolved.led_gpio_mapping) == (32, 64, 'adafruit-hat')
+    assert (resolved.led_slowdown_gpio, resolved.led_brightness, resolved.led_rgb_sequence) == (2, 60, 'RBG')
+    assert resolved.led_pwm_bits == 11 and resolved.led_show_refresh is False
+    flagged = matrix_settings(args(['--led-rows', '64', '--led-brightness', '20']), configured)
+    assert (flagged.led_rows, flagged.led_brightness, flagged.led_cols) == (64, 20, 64)
+    options = led_matrix_options(args([]), configured)
+    assert (options.rows, options.cols, options.brightness) == (32, 64, 60)
+    # No config at all keeps the old 64x64 defaults.
+    assert matrix_settings(args([])).led_rows == 64
+
+
+@pytest.mark.parametrize('matrix, message', [
+    ({'rows': 48}, 'matrix.rows'), ({'rows': True}, 'matrix.rows'), ({'cols': 0}, 'matrix.cols'),
+    ({'brightness': 101}, 'matrix.brightness'), ({'slowdown_gpio': 5}, 'matrix.slowdown_gpio'),
+    ({'gpio_mapping': 'hat'}, 'matrix.gpio_mapping'), ({'show_refresh': 1}, 'matrix.show_refresh'),
+    ({'rgb_sequence': 'RRB'}, 'matrix.rgb_sequence'), ({'led_rows': 32}, 'unsupported keys: led_rows'),
+    ([], 'matrix must be a JSON object'),
+])
+def test_config_rejects_bad_matrix_settings(tmp_path, matrix, message):
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps({'matrix': matrix}))
+    with pytest.raises(ValueError, match=message):
+        load_config(path)
 
 
 def test_empty_token_shows_login_without_request(tmp_path):

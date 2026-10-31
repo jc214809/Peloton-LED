@@ -316,7 +316,7 @@ def main():
     from display.ui.countdown_screen import CountdownScreen
     from display.ui.journey_screen import JourneyScreen
 
-    matrix = RGBMatrix(options=led_matrix_options(options))
+    matrix = RGBMatrix(options=led_matrix_options(options, config['matrix']))
     try:
         matrix.Clear()
     except Exception as exc:
