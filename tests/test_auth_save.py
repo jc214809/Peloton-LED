@@ -55,6 +55,30 @@ def test_browser_login_uses_a_realistic_desktop_context(tmp_path):
     assert context_kwargs['timezone_id']
 
 
+def test_browser_login_waits_for_the_form_not_network_idle(tmp_path):
+    # The members app keeps the network busy; on a Pi Zero 2 W "networkidle"
+    # never arrived within 30 s, so login failed before the form was tried.
+    import playwright.sync_api
+    from scripts.refresh_cookies import FORM_TIMEOUT_MS, TOKEN_TIMEOUT_MS
+
+    page = MagicMock()
+    page.url = 'https://members.onepeloton.com/login/'
+    page.wait_for_function.side_effect = playwright.sync_api.TimeoutError('no token')
+    browser = MagicMock()
+    browser.new_context.return_value.new_page.return_value = page
+    playwright_cm = MagicMock()
+    playwright_cm.__enter__.return_value.chromium.launch.return_value = browser
+
+    with patch('playwright.sync_api.sync_playwright', return_value=playwright_cm):
+        with pytest.raises(RuntimeError, match='No access token found after login'):
+            browser_login('rider@example.com', 'secret', tmp_path / 'token')
+    assert page.goto.call_args.kwargs == {'wait_until': 'domcontentloaded', 'timeout': FORM_TIMEOUT_MS}
+    assert FORM_TIMEOUT_MS >= 120_000 and TOKEN_TIMEOUT_MS >= 180_000
+    for call in page.locator.return_value.fill.call_args_list + page.locator.return_value.click.call_args_list:
+        assert call.kwargs['timeout'] == FORM_TIMEOUT_MS
+    assert page.wait_for_function.call_args.kwargs['timeout'] == TOKEN_TIMEOUT_MS
+
+
 def test_dump_failure_diagnostics_writes_screenshot_and_html(tmp_path):
     token_path = tmp_path / 'cookies-joel.txt'
     page = MagicMock()

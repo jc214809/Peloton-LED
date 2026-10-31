@@ -67,6 +67,8 @@ def test_systemd_units_have_managed_runtime_and_token_safety():
     assert 'PELOTON_LOG_DIR=/var/lib/peloton-led/logs' in display
     assert 'EnvironmentFile=/etc/peloton-led/auth.env' in refresh
     assert 'PELOTON_CHROMIUM_EXECUTABLE=/usr/bin/chromium' in refresh
+    # Progress ("Opening ...") reaches the journal live, not only at exit.
+    assert 'Environment=PYTHONUNBUFFERED=1' in refresh
     assert ' --ensure ' in refresh
     assert ' --all-users ' in refresh
     assert 'OnBootSec=5min' in timer
