@@ -65,7 +65,8 @@ def test_systemd_units_have_managed_runtime_and_token_safety():
     # default log location (next to the code) must be redirected somewhere
     # writable, or the app crashes on startup trying to create it.
     assert 'PELOTON_LOG_DIR=/var/lib/peloton-led/logs' in display
-    assert 'EnvironmentFile=/etc/peloton-led/auth.env' in refresh
+    # Optional: refresh-token renewal needs no credentials.
+    assert 'EnvironmentFile=-/etc/peloton-led/auth.env' in refresh
     assert 'PELOTON_CHROMIUM_EXECUTABLE=/usr/bin/chromium' in refresh
     # Progress ("Opening ...") reaches the journal live, not only at exit.
     assert 'Environment=PYTHONUNBUFFERED=1' in refresh
@@ -114,3 +115,25 @@ def test_installer_builds_the_driver_against_matching_pillow_headers():
     assert fetch in text and build in text
     assert text.index('pip install -r "$APP_DIR/requirements.txt"') < text.index(fetch) < text.index(build)
     assert 'python3-pil' not in text
+
+
+def test_installer_no_browser_mode_skips_chromium_and_playwright():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    assert '--no-browser) AUTO_TOKEN=true; NO_BROWSER=true; shift ;;' in text
+    assert 'if [[ "$AUTO_TOKEN" == true && "$NO_BROWSER" == false ]]; then\n        packages+=(chromium)' in text
+    no_browser, rest = text.split('if [[ "$NO_BROWSER" == true ]]; then\n    # Renewal', 1)[1].split('elif', 1)
+    assert 'pip uninstall -y playwright' in no_browser
+    assert 'requirements-auth.txt' not in no_browser
+    assert 'requirements-auth.txt' in rest.split('fi', 1)[0]
+
+
+def test_installer_copies_seeded_refresh_tokens_without_overwriting():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    assert 'for source_token in "$SOURCE_DIR"/cookies-*.txt "$SOURCE_DIR"/cookies*.refresh.json; do' in text
+    loop = text.split('"$SOURCE_DIR"/cookies*.refresh.json; do', 1)[1].split('done', 1)[0]
+    assert 'if [[ ! -f "$target_token" ]]' in loop
+    assert 'install -m 0600 -o "$APP_USER"' in loop
+
+
+def test_refresh_token_files_are_gitignored():
+    assert '*.refresh.json' in (ROOT / '.gitignore').read_text().splitlines()

@@ -12,7 +12,8 @@ Environment=HOME=/var/lib/peloton-led
 Environment=PYTHONUNBUFFERED=1
 Environment=PLAYWRIGHT_BROWSERS_PATH=/var/lib/peloton-led/ms-playwright
 Environment=PELOTON_CHROMIUM_EXECUTABLE=/usr/bin/chromium
-EnvironmentFile=/etc/peloton-led/auth.env
+# Credentials only matter for browser logins; refresh-token renewal needs none.
+EnvironmentFile=-/etc/peloton-led/auth.env
 ExecStart=/opt/peloton-led/venv/bin/python /opt/peloton-led/scripts/refresh_cookies.py --ensure --all-users --renew-before-hours 12 --cookies /var/lib/peloton-led/cookies.txt --config /etc/peloton-led/config.json
 NoNewPrivileges=true
 PrivateTmp=true

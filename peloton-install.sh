@@ -9,6 +9,7 @@ UNIT_DIR="/etc/systemd/system"
 SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DRIVER_REF="master"
 AUTO_TOKEN=false
+NO_BROWSER=false
 SKIP_MATRIX=false
 SKIP_PACKAGES=false
 NO_START=false
@@ -27,6 +28,9 @@ to add one rider for a single-user board, or two or more for a shared board.
 
 Options:
   --auto-token          Verify hourly; renew within 12 hours of expiry or after 401
+  --no-browser          With --auto-token (implied): renew only with refresh
+                         tokens seeded from another computer; skip Chromium and
+                         Playwright (32-bit or 512 MB boards)
   --reconfigure         Re-prompt for riders, replacing the existing config and
                          auth.env (e.g. to switch between single- and dual-user)
   --skip-matrix         Skip the native rpi-rgb-led-matrix build
@@ -43,6 +47,7 @@ USAGE
 while (($#)); do
     case "$1" in
         --auto-token) AUTO_TOKEN=true; shift ;;
+        --no-browser) AUTO_TOKEN=true; NO_BROWSER=true; shift ;;
         --reconfigure) RECONFIGURE=true; shift ;;
         --skip-matrix) SKIP_MATRIX=true; shift ;;
         --skip-packages) SKIP_PACKAGES=true; shift ;;
@@ -66,7 +71,7 @@ echo "Installing Peloton LED from $SOURCE_DIR"
 if [[ "$SKIP_PACKAGES" == false ]]; then
     apt-get update
     packages=(python3 python3-dev python3-pip python3-venv cython3 git make gcc g++ cmake libopenjp2-7)
-    if [[ "$AUTO_TOKEN" == true ]]; then
+    if [[ "$AUTO_TOKEN" == true && "$NO_BROWSER" == false ]]; then
         packages+=(chromium)
     fi
     DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
@@ -111,7 +116,8 @@ fi
 if [[ ! -f "$STATE_DIR/cookies.txt" && -f "$SOURCE_DIR/cookies.txt" ]]; then
     install -m 0600 -o "$APP_USER" -g "$APP_USER" "$SOURCE_DIR/cookies.txt" "$STATE_DIR/cookies.txt"
 fi
-for source_token in "$SOURCE_DIR"/cookies-*.txt; do
+# Seeded refresh tokens (refresh_cookies.py --seed-dir) ride along the same way.
+for source_token in "$SOURCE_DIR"/cookies-*.txt "$SOURCE_DIR"/cookies*.refresh.json; do
     [[ -f "$source_token" ]] || continue
     target_token="$STATE_DIR/$(basename "$source_token")"
     if [[ ! -f "$target_token" ]]; then
@@ -142,7 +148,11 @@ if [[ "$SKIP_MATRIX" == false ]]; then
     rm -rf "$pillow_headers"
 fi
 
-if [[ "$AUTO_TOKEN" == true ]]; then
+if [[ "$NO_BROWSER" == true ]]; then
+    # Renewal falls back to a browser login only when Playwright is importable;
+    # remove it so an upgraded board never starts Chromium.
+    "$APP_DIR/venv/bin/python" -m pip uninstall -y playwright >/dev/null 2>&1 || true
+elif [[ "$AUTO_TOKEN" == true ]]; then
     "$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements-auth.txt"
     if [[ ! -f "$CONFIG_DIR/auth.env" ]]; then
         echo "Warning: $CONFIG_DIR/auth.env is missing; unattended token renewal needs it." >&2
@@ -257,5 +267,12 @@ if [[ "$AUTO_TOKEN" == true ]]; then
   Timer:    systemctl list-timers peloton-token-refresh.timer
   Refresh:  systemctl start peloton-token-refresh.service
   Auth log: journalctl -u peloton-token-refresh.service -n 100
+EOF
+fi
+if [[ "$NO_BROWSER" == true ]]; then
+    cat <<EOF
+  Seeding:  no browser here; on another computer run
+            python scripts/refresh_cookies.py --seed-dir ~/peloton-seed
+            and follow its install instructions (one seed per board)
 EOF
 fi
