@@ -134,7 +134,12 @@ if [[ "$SKIP_MATRIX" == false ]]; then
     # Upstream builds the Python bindings via scikit-build-core/cmake now
     # (pyproject.toml at the repo root); the old make-based targets for this
     # no longer exist on current master.
-    "$APP_DIR/venv/bin/python" -m pip install "$driver_dir"
+    # The binding compiles against Pillow's private Imaging.h, which pip's
+    # Pillow doesn't ship; use headers from the exact installed version.
+    pillow_headers="$(mktemp -d)"
+    "$APP_DIR/venv/bin/python" "$APP_DIR/scripts/fetch_pillow_headers.py" "$pillow_headers" >/dev/null
+    CFLAGS="-I$pillow_headers ${CFLAGS:-}" "$APP_DIR/venv/bin/python" -m pip install "$driver_dir"
+    rm -rf "$pillow_headers"
 fi
 
 if [[ "$AUTO_TOKEN" == true ]]; then
