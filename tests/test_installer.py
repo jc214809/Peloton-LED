@@ -62,3 +62,18 @@ def test_systemd_units_have_managed_runtime_and_token_safety():
     assert 'OnBootSec=5min' in timer
     assert 'OnUnitActiveSec=1h' in timer
     assert 'Persistent=true' in timer
+
+
+def test_installer_manual_mode_never_enables_at_boot():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    assert '--manual) MANUAL=true; NO_START=true; shift ;;' in text
+    enable_block = text.split('if [[ "$MANUAL" == true ]]; then\n    # Undo boot-time', 1)[1]
+    manual_branch, default_branch = enable_block.split('else', 1)
+    assert 'systemctl disable peloton-led.service peloton-token-refresh.timer' in manual_branch
+    assert 'systemctl enable' not in manual_branch
+    assert 'systemctl enable peloton-led.service' in default_branch
+    # Token renewal follows the display: started with it, stopped with it,
+    # and the drop-ins are removed again on a later non-manual install.
+    assert 'Wants=peloton-token-refresh.service peloton-token-refresh.timer' in text
+    assert 'PartOf=peloton-led.service' in text
+    assert 'rm -f "$UNIT_DIR/peloton-led.service.d/manual.conf"' in text
