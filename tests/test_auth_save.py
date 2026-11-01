@@ -648,3 +648,98 @@ def test_seed_dir_install_hint_can_be_suppressed_for_seed_board(tmp_path, monkey
         with patch('scripts.refresh_cookies.seed_tokens', return_value=seeded):
             refresh_cookies.main()
         assert ('sudo install' in capsys.readouterr().out) is expected
+
+
+# Refresh-chain age: learn how long Auth0 keeps a login's chain alive.
+from datetime import datetime as _datetime, timedelta as _timedelta, timezone as _timezone
+from scripts.refresh_cookies import describe_chain, load_refresh_chain
+
+
+def test_new_refresh_token_starts_a_chain(tmp_path):
+    token = _seeded(tmp_path)
+    chain = load_refresh_chain(refresh_token_path(token))
+    assert chain['chain_start_exact'] is True
+    assert chain['renewals'] == 0
+    started = _datetime.fromisoformat(chain['chain_started_at'])
+    assert abs((_datetime.now(_timezone.utc) - started).total_seconds()) < 60
+
+
+def test_rotation_carries_the_chain_start_and_counts_renewals(tmp_path):
+    token = tmp_path / 'cookies-joel.txt'
+    token.write_text('access-old')
+    started = '2026-10-01T00:00:00+00:00'
+    save_refresh_token(refresh_token_path(token), 'refresh-old', 'client-synthetic',
+                       {'chain_started_at': started, 'chain_start_exact': True, 'renewals': 4})
+    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(
+            200, {'access_token': 'access-new', 'refresh_token': 'refresh-new'})), \
+         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+        renew_with_refresh_token(token)
+    chain = load_refresh_chain(refresh_token_path(token))
+    assert chain == {'chain_started_at': started, 'chain_start_exact': True, 'renewals': 5}
+    assert load_refresh_token(refresh_token_path(token))[0] == 'refresh-new'
+
+
+def test_untracked_file_falls_back_to_its_save_time_as_a_lower_bound(tmp_path):
+    path = tmp_path / 'cookies.refresh.json'
+    path.write_text(_json.dumps({'refresh_token': 'r', 'saved_at': '2026-10-30T00:00:00+00:00'}))
+    chain = load_refresh_chain(path)
+    assert chain == {'chain_started_at': '2026-10-30T00:00:00+00:00',
+                     'chain_start_exact': False, 'renewals': None}
+    now = _datetime(2026, 11, 1, tzinfo=_timezone.utc)
+    assert describe_chain(chain, now) == 'refresh chain at least 2.0 days old'
+    assert describe_chain({**chain, 'renewals': 1}, now) == 'refresh chain at least 2.0 days old, 1+ renewals'
+
+
+@pytest.mark.parametrize('content', ['not json', '[]', '{"chain_started_at": "yesterday", "renewals": -1}',
+                                     '{"chain_started_at": 5, "renewals": true}'])
+def test_unreadable_chain_metadata_is_unknown_not_an_error(tmp_path, content):
+    path = tmp_path / 'cookies.refresh.json'
+    path.write_text(content)
+    chain = load_refresh_chain(path)
+    assert chain['chain_started_at'] is None and chain['renewals'] is None
+    assert describe_chain(chain) == 'refresh chain age unknown'
+
+
+def test_missing_refresh_file_chain_is_unknown(tmp_path):
+    assert describe_chain(load_refresh_chain(tmp_path / 'absent.refresh.json')) == 'refresh chain age unknown'
+
+
+def test_describe_chain_exact(tmp_path):
+    chain = {'chain_started_at': '2026-10-01T00:00:00+00:00', 'chain_start_exact': True, 'renewals': 1}
+    assert describe_chain(chain, _datetime(2026, 10, 4, 12, tzinfo=_timezone.utc)) == \
+        'refresh chain 3.5 days old, 1 renewal'
+
+
+def test_invalid_grant_message_reports_the_chain_age(tmp_path):
+    token = tmp_path / 'cookies.txt'
+    token.write_text('access-old')
+    save_refresh_token(refresh_token_path(token), 'r', 'c',
+                       {'chain_started_at': '2026-10-01T00:00:00+00:00', 'chain_start_exact': True,
+                        'renewals': 30})
+    with patch('scripts.refresh_cookies.requests.post',
+               return_value=_token_response(403, {'error': 'invalid_grant'})):
+        with pytest.raises(RefreshTokenRejected, match=r'refresh chain [\d.]+ days old, 30 renewals'):
+            renew_with_refresh_token(token)
+
+
+def test_untracked_file_gains_a_chain_on_first_renewal(tmp_path):
+    token = tmp_path / 'cookies.txt'
+    token.write_text('access-old')
+    refresh_token_path(token).write_text(_json.dumps(
+        {'refresh_token': 'r', 'client_id': 'c', 'saved_at': '2026-10-30T00:00:00+00:00'}))
+    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(
+            200, {'access_token': 'a', 'refresh_token': 'r2'})), \
+         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+        renew_with_refresh_token(token)
+    assert load_refresh_chain(refresh_token_path(token)) == {
+        'chain_started_at': '2026-10-30T00:00:00+00:00', 'chain_start_exact': False, 'renewals': 1}
+
+
+def test_status_reports_the_chain(tmp_path, capsys, monkeypatch):
+    from scripts import refresh_cookies
+    token = tmp_path / 'cookies.txt'
+    token.write_text(_jwt_with_exp(time.time() + 3600))
+    save_refresh_token(refresh_token_path(token), 'r', 'c')
+    monkeypatch.setattr('sys.argv', ['refresh_cookies.py', '--status', '--cookies', str(token)])
+    refresh_cookies.main()
+    assert 'refresh token saved (refresh chain 0.0 days old, 0 renewals)' in capsys.readouterr().out
