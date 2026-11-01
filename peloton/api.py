@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 import logging
-from .timestamps import workout_timestamp, parse_timestamp
+from .timestamps import workout_timestamp
 
 logger = logging.getLogger("peloton-led.api")
 
@@ -170,9 +170,3 @@ class PelotonClient:
         if not isinstance(data, dict):
             raise ValueError("Expected a Peloton JSON object")
         return data
-
-
-    @staticmethod
-    def _normalize_ts(value: Any) -> Optional[float]:
-        timestamp = parse_timestamp(value)
-        return timestamp.timestamp() if timestamp else None

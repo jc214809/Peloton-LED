@@ -1,25 +1,7 @@
 import argparse
-import json
 import math
-from collections.abc import Mapping
-from datetime import datetime
-
-import pytz
 
 from utils import debug
-
-
-def pretty_print_json(json_obj):
-    """Return a pretty-printed JSON string."""
-    return "\n%s" % json.dumps(json_obj, indent=4, sort_keys=True)
-
-
-def center_text_position(text, center_pos, font_width):
-    return abs(center_pos - ((len(text) * font_width) // 2))
-
-
-def split_string(string, num_chars):
-    return [(string[i : i + num_chars]).strip() for i in range(0, len(string), num_chars)]  # noqa: E203
 
 
 def args(argv=None):
@@ -245,29 +227,3 @@ def led_matrix_options(args, configured=None):
 
     return options
 
-
-def deep_update(source, overrides):
-    """Update a nested dictionary or similar mapping.
-    Modify ``source`` in place.
-    """
-    for key, value in list(overrides.items()):
-        if isinstance(value, Mapping) and value:
-            returned = deep_update(source.get(key, {}), value)
-            source[key] = returned
-        else:
-            source[key] = overrides[key]
-    return source
-
-
-def get_eastern(utc_timestamp):
-    if not utc_timestamp:
-        return None
-    # Parse the timestamp and create a UTC datetime object
-    utc_time = datetime.fromisoformat(utc_timestamp[:-1])  # Remove 'Z' for parsing
-    utc_time = utc_time.replace(tzinfo=pytz.utc)
-    # Define the Eastern Time zone
-    eastern = pytz.timezone('US/Eastern')
-    # Convert to Eastern Time
-    eastern_time = utc_time.astimezone(eastern)
-    # Format the time in a non-military format (12-hour) with AM/PM
-    return eastern_time.strftime("%Y-%m-%d %I:%M %p")  # e.g., "2025-05-10 04:11 PM"

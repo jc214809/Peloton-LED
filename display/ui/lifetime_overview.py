@@ -84,87 +84,29 @@ def draw_icon(matrix, key, left, top, color):
                     x -= 1
                     error += 2 * (y - x) + 1
 
-    family = {'bike_bootcamp': 'cycling', 'tread_bootcamp': 'running',
-              'row_bootcamp': 'rowing', 'running_outdoor': 'running',
-              'walking_outdoor': 'walking'}.get(key, key)
-    if key == 'bike_bootcamp':
-        circle(6, 3, 2, thickness=2)
-        thick_line(6, 6, 7, 13); thick_line(7, 8, 3, 11)
-        thick_line(7, 13, 4, 21); thick_line(7, 13, 11, 21)
-        circle(20, 17, 5, thickness=2)
-        thick_line(15, 17, 19, 9); thick_line(19, 9, 23, 9)
-        thick_line(15, 17, 20, 17)
-    elif key == 'tread_bootcamp':
-        circle(6, 3, 2, thickness=2)
-        thick_line(6, 6, 7, 13); thick_line(7, 8, 3, 11)
-        thick_line(7, 13, 4, 21); thick_line(7, 13, 11, 21)
-        thick_line(15, 7, 22, 19); thick_line(22, 19, 12, 19)
-        thick_line(12, 21, 24, 21); thick_line(21, 6, 24, 1)
-    elif key == 'row_bootcamp':
-        circle(6, 3, 2, thickness=2)
-        thick_line(6, 6, 7, 13); thick_line(7, 8, 3, 11)
-        thick_line(7, 13, 4, 21); thick_line(7, 13, 11, 21)
-        thick_line(12, 16, 22, 16); thick_line(22, 16, 24, 11)
-        thick_line(24, 11, 22, 7); thick_line(22, 16, 24, 21)
-    elif family == 'cycling':
-        circle(5, 18, 5, thickness=2); circle(21, 18, 5, thickness=2)
-        thick_line(5, 18, 10, 10); thick_line(10, 10, 15, 18)
-        thick_line(15, 18, 5, 18); thick_line(10, 10, 19, 10)
-        thick_line(19, 10, 21, 18)
-        circle(11, 3, 2, thickness=2)
-        thick_line(11, 6, 14, 10); thick_line(11, 7, 18, 7)
-        thick_line(11, 7, 8, 11)
-    elif family in ('cardio', 'dance_cardio'):
-        circle(12, 3, 2, thickness=2)
-        thick_line(12, 6, 11, 14); thick_line(11, 8, 4, 5)
-        thick_line(12, 8, 20, 3); thick_line(11, 14, 4, 20)
-        thick_line(11, 14, 21, 20); line(20, 7, 24, 3)
-    elif family == 'running':
-        circle(11, 3, 2, thickness=2)
-        thick_line(11, 6, 9, 13); thick_line(10, 8, 4, 11)
-        thick_line(10, 8, 17, 10); thick_line(9, 13, 16, 15)
-        thick_line(16, 15, 22, 21); thick_line(9, 13, 3, 21)
-        thick_line(2, 22, 8, 22)
-    elif family in ('walking', 'hiking', 'outdoor'):
+    # Every discipline with bitmap rows returned above; these line drawings
+    # cover the rest.
+    if key in ('hiking', 'outdoor'):
         circle(11, 3, 2, thickness=2)
         thick_line(11, 6, 10, 13); thick_line(10, 8, 5, 12)
         thick_line(11, 8, 17, 11); thick_line(10, 13, 7, 21)
         thick_line(10, 13, 16, 20); thick_line(16, 20, 21, 20)
         thick_line(20, 8, 24, 1)
-    elif family in ('strength', 'boxing'):
+    elif key == 'boxing':
         circle(11, 3, 2, thickness=2)
         thick_line(11, 6, 10, 13); thick_line(10, 8, 16, 12)
         thick_line(10, 13, 5, 19); thick_line(5, 19, 12, 19)
         thick_line(10, 13, 18, 17); thick_line(18, 17, 23, 17)
         thick_line(16, 12, 21, 8)
         fill_rect(19, 6, 23, 8); fill_rect(18, 5, 19, 9); fill_rect(23, 5, 24, 9)
-    elif family == 'rowing':
-        circle(8, 3, 2, thickness=2)
-        thick_line(8, 6, 6, 12); thick_line(6, 12, 11, 15)
-        thick_line(11, 15, 17, 12); thick_line(8, 7, 15, 10)
-        thick_line(15, 10, 20, 8); thick_line(2, 16, 21, 16)
-        thick_line(3, 16, 1, 20); thick_line(21, 16, 24, 20)
-        circle(22, 11, 3, thickness=2)
-    elif family == 'yoga':
-        circle(13, 3, 2, thickness=2)
-        thick_line(13, 6, 13, 15); thick_line(13, 8, 5, 4)
-        thick_line(13, 8, 21, 4); thick_line(13, 15, 7, 21)
-        thick_line(13, 15, 19, 18); thick_line(19, 18, 19, 10)
-        line(2, 22, 24, 22)
-    elif family == 'meditation':
-        circle(13, 3, 2, thickness=2)
-        thick_line(13, 6, 13, 13); thick_line(13, 8, 7, 13)
-        thick_line(13, 8, 19, 13); thick_line(13, 13, 5, 18)
-        thick_line(5, 18, 13, 20); thick_line(13, 20, 21, 18)
-        thick_line(21, 18, 13, 13); line(3, 22, 23, 22)
-    elif family in ('stretching', 'mobility'):
+    elif key == 'mobility':
         circle(17, 4, 2, thickness=2)
         thick_line(16, 7, 12, 13); thick_line(12, 13, 5, 18)
         thick_line(12, 13, 20, 18); thick_line(16, 8, 9, 5)
         thick_line(9, 5, 4, 1)
         line(4, 1, 11, 0); line(11, 0, 19, 2); line(19, 2, 23, 7)
         line(2, 21, 24, 21)
-    elif family in ('pilates', 'barre'):
+    elif key in ('pilates', 'barre'):
         circle(13, 3, 2, thickness=2)
         thick_line(13, 6, 10, 14); thick_line(10, 14, 3, 19)
         thick_line(10, 14, 22, 19)
