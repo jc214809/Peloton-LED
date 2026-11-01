@@ -13,7 +13,7 @@ from .api import PelotonClient, make_session
 from .cache import load_snapshot, save_snapshot
 from .config import renewal_failed_path
 from .demo import demo_data
-from .selection import last_active_day
+from .selection import last_active_day, settled_rows
 from .summaries import summarize_workout
 from .timestamps import workout_timestamp
 from .totals import extract_discipline_totals, parse_streaks
@@ -27,6 +27,9 @@ logger = logging.getLogger('peloton-led.dashboard')
 
 # The padlock reads a file the renewal job writes; checking it every frame is waste.
 RENEWAL_MARKER_CHECK_SECONDS = 30
+# Bump to recount the instructor and distance tallies from scratch once.
+# 2: tallies used to step past workouts still in progress, so those never counted.
+TALLY_VERSION = 2
 
 
 class Dashboard:
@@ -63,7 +66,8 @@ class Dashboard:
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
                       'instructor_counts': {}, 'instructor_tally_cursor': None, 'streaks': {},
                       'distance_totals': {}, 'distance_tally_cursor': None,
-                      'distance_tally_since': None, 'personal_records': {}}
+                      'distance_tally_since': None, 'tally_version': None,
+                      'personal_records': {}}
         self.demo = demo
         if demo:
             data = demo_data()
@@ -279,16 +283,22 @@ class Dashboard:
                 prior_distance = self._data.get('distance_totals', {})
                 distance_cursor = self._data.get('distance_tally_cursor')
                 tallied_since = self._data.get('distance_tally_since')
+                tally_version = self._data.get('tally_version')
+            if tally_version != TALLY_VERSION:
+                logger.info('Tally format changed (%s -> %s); recounting instructors and distance',
+                            tally_version, TALLY_VERSION)
+                prior_counts, cursor, prior_distance, distance_cursor = {}, None, {}, None
+                tallied_since = since = (self.config.get('journey') or {}).get('start_date')
             since = (self.config.get('journey') or {}).get('start_date')
             if since != tallied_since:
                 # The journey start date changed: recount distance from scratch, once.
                 logger.info('Journey start date changed (%s -> %s); recounting distance',
                             tallied_since, since)
                 prior_distance, distance_cursor = {}, None
-            new_workouts = client.get_all_workouts(user_id,
+            new_workouts = settled_rows(client.get_all_workouts(user_id,
                 page_size=self.config.get('history_page_size', 50),
                 max_pages=self.config.get('instructor_tally_max_pages', 200),
-                stop_at_id=cursor)
+                stop_at_id=cursor))
             instructor_counts = merge_instructor_counts(prior_counts, new_workouts)
             newest_id = new_workouts[0].get('id') if new_workouts else cursor
             # The distance tally shares the instructor tally's pages whenever
@@ -298,10 +308,10 @@ class Dashboard:
             if distance_cursor == cursor:
                 distance_rows = new_workouts
             else:
-                distance_rows = client.get_all_workouts(user_id,
+                distance_rows = settled_rows(client.get_all_workouts(user_id,
                     page_size=self.config.get('history_page_size', 50),
                     max_pages=self.config.get('instructor_tally_max_pages', 200),
-                    stop_at_id=distance_cursor)
+                    stop_at_id=distance_cursor))
             distance_totals = merge_distance_totals(prior_distance, distance_rows, uses_metric(me),
                                                     since=since, tzname=tz)
             distance_newest = distance_rows[0].get('id') if distance_rows else distance_cursor
@@ -314,7 +324,7 @@ class Dashboard:
                 weekly_progress=progress,
                 instructor_counts=instructor_counts, instructor_tally_cursor=newest_id,
                 distance_totals=distance_totals, distance_tally_cursor=distance_newest,
-                distance_tally_since=since,
+                distance_tally_since=since, tally_version=TALLY_VERSION,
                 personal_records=personal_records,
                 login_required=False, status='ready', last_updated=refreshed_at,
                 last_error=None, generation=generation,

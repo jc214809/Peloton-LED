@@ -121,6 +121,24 @@ def test_32_row_username_detail_lines_have_a_blank_row_between_them():
     assert white[-1] <= 31
 
 
+@pytest.mark.parametrize('height', [32, 64])
+@pytest.mark.parametrize('total, big', [('2,126', True), ('123,456,789', False)])
+def test_username_total_workouts_is_big_and_gold_when_it_fits(height, total, big):
+    from display.ui.username import UsernameScreen
+    matrix = ImageMatrix(height=height)
+    initialize_fonts(height)
+    screen = UsernameScreen()
+    state = {'username': 'Joel', 'details': [
+        {'label': 'TOTAL WORKOUTS', 'lines': [total], 'font_key': 'big', 'color_key': 'gold'}]}
+    screen.on_enter(matrix, state)
+    screen.update(0.5)
+    assert screen.render(matrix, state)
+    gold = rows_of(matrix, (255, 215, 0))
+    assert gold and gold[0] > rows_of(matrix, GREY)[-1] and gold[-1] < height
+    # Too wide for the big font: falls back to the normal value line, still gold.
+    assert (gold[-1] - gold[0] + 1 > 7) is big
+
+
 def test_32_row_two_line_discipline_name_clears_the_count():
     from display.ui.discipline_page import DisciplinePageScreen
     matrix = ImageMatrix(height=32)

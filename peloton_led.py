@@ -103,7 +103,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         details = []
         if total is not None:
             details.append({'label': 'TOTAL WORKOUTS', 'value': f'{total:,}',
-                            'lines': [f'{total:,}']})
+                            'lines': [f'{total:,}'], 'font_key': 'big', 'color_key': 'gold'})
         weekly_workouts = progress.get('workouts', 0)
         weekly_minutes = progress.get('minutes', 0)
         details.append({'label': 'THIS WEEK',

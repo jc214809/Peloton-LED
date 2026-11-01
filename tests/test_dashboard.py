@@ -2,7 +2,10 @@ from unittest.mock import Mock
 import json
 import stat
 import requests
-from peloton.dashboard import Dashboard
+import time
+
+from peloton.dashboard import TALLY_VERSION, Dashboard
+from peloton.selection import settled_rows
 from peloton.demo import demo_data
 
 
@@ -442,3 +445,57 @@ def test_damaged_records_table_is_dropped_without_losing_cache(tmp_path):
     restarted = Dashboard(token, {}, client_factory=lambda _: Mock())
     assert restarted.snapshot()['summaries'][0]['workout_id'] == 'demo-cycling'
     assert restarted.snapshot()['personal_records'] == {}
+
+
+def _ride(identity, status='COMPLETE', started=None, instructor='Cody Rigsby'):
+    return {'id': identity, 'status': status, 'fitness_discipline': 'cycling', 'distance': 5,
+            'created_at': started if started is not None else time.time() - 600,
+            'ride': {'instructor': {'name': instructor}}}
+
+
+def test_settled_rows_hold_back_everything_from_the_newest_unfinished_workout():
+    now = time.time()
+    rows = [_ride('w4'), _ride('w3', 'IN_PROGRESS', now - 1200), _ride('w2'), _ride('w1')]
+    assert [r['id'] for r in settled_rows(rows, now)] == ['w2', 'w1']
+    # Unfinished for longer than the settle window: abandoned, so final.
+    rows[1]['created_at'] = now - 7 * 3600
+    assert [r['id'] for r in settled_rows(rows, now)] == ['w4', 'w3', 'w2', 'w1']
+    assert settled_rows([_ride('w1', 'IN_PROGRESS', now)], now) == []
+    assert len(settled_rows([{'id': 'x', 'status': 'IN_PROGRESS'}], now)) == 1  # no start time
+
+
+def test_tallies_count_a_workout_that_was_in_progress_at_the_last_refresh(tmp_path):
+    # Regression: the cursor used to step past the running workout, so it
+    # never reached the instructor or distance tallies once it finished.
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    client.get_all_workouts.return_value = [_ride('w2', 'IN_PROGRESS', instructor='Robin Arzon'), _ride('w1')]
+    dashboard.refresh()
+    snap = dashboard.snapshot()
+    assert snap['instructor_counts'] == {'Cody Rigsby': 1} and snap['distance_totals'] == {'cycling': 5}
+    assert snap['instructor_tally_cursor'] == 'w1' == snap['distance_tally_cursor']
+
+    client.get_all_workouts.return_value = [_ride('w2', instructor='Robin Arzon')]
+    dashboard.refresh()
+    assert client.get_all_workouts.call_args.kwargs['stop_at_id'] == 'w1'
+    snap = dashboard.snapshot()
+    assert snap['instructor_counts'] == {'Cody Rigsby': 1, 'Robin Arzon': 1}
+    assert snap['distance_totals'] == {'cycling': 10} and snap['instructor_tally_cursor'] == 'w2'
+
+
+def test_older_tally_format_recounts_both_tallies_once(tmp_path):
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    # A cache from before the fix: cursor already past the missed workout.
+    dashboard._publish(instructor_counts={'Cody Rigsby': 1}, instructor_tally_cursor='w2',
+                       distance_totals={'cycling': 5}, distance_tally_cursor='w2')
+    client.get_all_workouts.return_value = [_ride('w2', instructor='Robin Arzon'), _ride('w1')]
+    dashboard.refresh()
+    assert client.get_all_workouts.call_count == 1
+    assert client.get_all_workouts.call_args.kwargs['stop_at_id'] is None
+    snap = dashboard.snapshot()
+    assert snap['instructor_counts'] == {'Cody Rigsby': 1, 'Robin Arzon': 1}
+    assert snap['distance_totals'] == {'cycling': 10} and snap['tally_version'] == TALLY_VERSION
+
+    client.get_all_workouts.return_value = []
+    dashboard.refresh()
+    assert client.get_all_workouts.call_args.kwargs['stop_at_id'] == 'w2'
+    assert dashboard.snapshot()['instructor_counts'] == {'Cody Rigsby': 1, 'Robin Arzon': 1}

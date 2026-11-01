@@ -8,6 +8,7 @@ from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.journey_screen import CASTLE_COLORS, JourneyScreen, journey_text
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import load_config
+from peloton.dashboard import TALLY_VERSION
 from peloton.journey import (DEFAULT_JOURNEY, DISTANCE_DISCIPLINES, journey_progress,
                              merge_distance_totals, uses_metric, workout_miles)
 from peloton.selection import normalize_discipline
@@ -171,7 +172,8 @@ def test_dashboard_backfills_distance_once_then_reuses_the_instructor_pages(tmp_
 
 def test_dashboard_backfills_distance_for_caches_from_before_the_journey(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path)
-    dashboard._publish(instructor_tally_cursor='w2', instructor_counts={'Cody': 2})
+    dashboard._publish(instructor_tally_cursor='w2', instructor_counts={'Cody': 2},
+                       tally_version=TALLY_VERSION)
     client.get_all_workouts.side_effect = [
         [],                                              # instructor: nothing new
         [row('cycling', 5, 'w2'), row('running', 1, 'w1')],  # distance: full backfill
