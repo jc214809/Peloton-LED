@@ -1,2 +1,3 @@
--r requirements.txt
+# Tests import Playwright (the browser itself is mocked; no Chromium download).
+-r requirements-auth.txt
 pytest>=8

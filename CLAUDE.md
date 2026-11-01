@@ -40,6 +40,8 @@ python -m pytest tests/
 python -m pytest tests/test_username.py
 ```
 
+CI (`.github/workflows/tests.yml`) runs the suite on Python 3.11 and 3.13 for every PR and push to main. Install test deps with `pip install -r requirements-dev.txt`: it pulls in `requirements-auth.txt` because the browser-login tests import Playwright (Chromium itself is mocked).
+
 ## Pi config
 
 On the Pi, the checkout's `config.json` is the live config: the installer writes `project-config.conf` drop-ins (`BindReadOnlyPaths=-<checkout>/config.json:/etc/peloton-led/config.json`) for `peloton-led.service` and `peloton-token-refresh.service`, because `ProtectHome=true` hides `/home`. The file must use `/var/lib/peloton-led/...` token/cache paths. `config.json` is untracked; `config.json-example` is the template.
