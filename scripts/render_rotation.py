@@ -57,8 +57,16 @@ def load_snapshot_for(options):
     return snapshot
 
 
-def frame_times(name, state, duration, detail_interval):
+def frame_times(name, state, duration, detail_interval, height=64):
     """Seconds into the page at which to capture a frame."""
+    if name == 'last_workout' and state.get('compact_page') is None:
+        # One frame per intro/stat, at each one's own start: graph frames hold longer.
+        from display.ui.last_workout_screen import detail_hold_seconds, rotating_details
+        starts, start = [0.0], detail_interval
+        for detail in rotating_details(state, height):
+            starts.append(start)
+            start += detail_hold_seconds(detail, detail_interval)
+        return [0.6 + s for s in starts if s < duration] or [0.6]
     if name == 'last_workout':
         count = max(1, round(duration / detail_interval))
         return [0.6 + i * detail_interval for i in range(count)]
@@ -125,7 +133,8 @@ def render(options):
 
     tiles = []
     for name, state, duration in pages:
-        for t in frame_times(name, state or {}, duration, detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS):
+        for t in frame_times(name, state or {}, duration, detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS,
+                             options.height):
             matrix = ImageMatrix(height=options.height)
             screen = screens[name]
             screen.on_enter(matrix, state)

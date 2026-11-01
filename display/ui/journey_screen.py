@@ -64,12 +64,21 @@ def _route_points(start, end, fraction, returning):
     return round(start + (end - start) * along)
 
 
-def journey_text(progress):
-    """(miles, status) strings shared by both layouts."""
-    miles = f"{round(progress['miles']):,}"
-    remaining = round(progress['route_miles'] - progress['leg_miles'])
-    status = f'{remaining:,} TO HOME' if progress['returning'] else f'{remaining:,} TO GO'
-    return miles, status
+def _miles(value):
+    """8.8 under 1,000 miles; whole miles above, where the decimal would push
+    the number out of the big font."""
+    return f'{value:,.1f}' if value < 999.95 else f'{round(value):,}'
+
+
+def journey_text(progress, fits=lambda text: True):
+    """(miles, status) strings shared by both layouts. The status keeps its
+    decimal only when fits(status) says the line has room for it."""
+    remaining = progress['route_miles'] - progress['leg_miles']
+    suffix = 'TO HOME' if progress['returning'] else 'TO GO'
+    status = f'{_miles(remaining)} {suffix}'
+    if not fits(status):
+        status = f'{round(remaining):,} {suffix}'
+    return _miles(progress['miles']), status
 
 
 class JourneyScreen(Screen):
@@ -81,7 +90,9 @@ class JourneyScreen(Screen):
         big = loaded_fonts.get('big') or small
         if not progress or small is None or 'fraction' not in progress:
             return False
-        miles, status = journey_text(progress)
+        # Both layouts give the status line the board width less 14 columns.
+        miles, status = journey_text(
+            progress, fits=lambda text: get_text_width(small, text) <= matrix.width - 14)
         trip = progress.get('trip', 1)
         if matrix.height < 64:
             return self._render_short(matrix, progress, small, big, miles, status, trip)

@@ -14,7 +14,8 @@ from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
 from utils.utils import args, led_matrix_options
 from utils.username import resolve_display_username
-from display.ui.last_workout_screen import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details
+from display.ui.last_workout_screen import (LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details,
+                                           stats_phase_seconds)
 from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
 from display.ui.streak_screen import streak_lines
 
@@ -76,8 +77,8 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                 # stat at a time; size the page to exactly one pass so every
                 # stat shows once — no cut-offs and no wrap-around repeats.
                 if workout_duration > 0 and not compact:
-                    stat_count = len(rotating_details(summary, matrix_height))
-                    page_duration = detail_interval * (1 + stat_count)
+                    page_duration = detail_interval + stats_phase_seconds(
+                        rotating_details(summary, matrix_height), detail_interval)
                 else:
                     page_duration = workout_duration
                 for state in states:

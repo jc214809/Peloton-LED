@@ -58,7 +58,7 @@ Default order:
 
 | Section | What it shows | Shown when | Time on screen |
 |---|---|---|---|
-| [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats) per workout |
+| [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats), plus 1 s each for the graph and zone bar, per workout |
 | [`username`](#username--rider-name-and-highlights) | Your name over rotating highlights: total workouts, this week, top discipline, top 3 instructors | Always | `duration`, extended to 4 s per highlight |
 | [`streaks`](#streaks--weekly-streak) | Current weekly streak and your best | Current weekly streak is above 0 | `overview_duration` |
 | [`versus`](#versus--household-head-to-head) | Two riders side by side for this week | 2+ riders configured under `users` | `overview_duration` (64×32: at least 12 s) |
@@ -85,7 +85,7 @@ Shown once at launch for `logo_duration` seconds (default 3), never again. The a
 
 One screen per completed workout on your **most recent active day**, newest first. That means the newest calendar date (in your timezone) with at least one completed workout. If you worked out today, you see today's workouts; if your last workout was a week ago, you see that whole day. In-progress workouts are left out.
 
-Each screen opens with an **intro**: the discipline name in its color, class length, class title and instructor. It then shows **each stat once, one at a time**, finishing with the **output (or heart-rate) graph** and the **heart-rate zone bar** when the workout recorded them. Average heart rate and calories stay along the bottom. Each frame holds for `last_workout_detail_interval` seconds (default 4), so a cycling class with 8 stats stays up for 36 s. On 64×32 there's no room for the instructor in the intro, so the instructor becomes the first stat instead.
+Each screen opens with an **intro**: the discipline name in its color, class length, class title and instructor. It then shows **each stat once, one at a time**, finishing with the **output (or heart-rate) graph** and the **heart-rate zone bar** when the workout recorded them. Average heart rate and calories stay along the bottom. Each frame holds for `last_workout_detail_interval` seconds (default 4), and the graph and zone bar hold one second longer, so a cycling class with 8 stats (6 numbers, the graph and the zone bar) stays up for 38 s. On 64×32 there's no room for the instructor in the intro, so the instructor becomes the first stat instead.
 
 ![Cycling workout screen](docs/screenshots/rotation/workout-cycling.png)
 
@@ -196,7 +196,7 @@ Options: `screen_durations.lifetime` / `overview_duration`, per page, minimum 5 
 
 ![Journey map](docs/screenshots/rotation/journey.png)
 
-Your lifetime miles, plotted as a trip on a little map: a start dot, the route, your position, and a castle at the destination. Reaching the destination turns you around for the trip home, and so on forever. `TRIP 4` means you're on your fourth one-way leg. The screen also shows total miles and how far is left on the current leg.
+Your lifetime miles, plotted as a trip on a little map: a start dot, the route, your position, and a castle at the destination. Reaching the destination turns you around for the trip home, and so on forever. `TRIP 4` means you're on your fourth one-way leg. The screen also shows total miles and how far is left on the current leg, to a tenth of a mile (`741.6`) below 1,000 and in whole miles from there, where the decimal wouldn't fit. The route's `miles` can be a decimal too, e.g. `26.2`.
 
 The default route is Columbus → Disney World, 880 miles, counting every workout that has a distance. Set your own:
 
@@ -307,7 +307,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `duration` | 4 | Username screen seconds |
 | `overview_duration` | 4 | Per-discipline and PR screen seconds |
 | `last_workout_duration` | 30 | `0` hides workout screens; otherwise only used with `compact_workout_pages`. Normal workout pages are timed by `last_workout_detail_interval` (see below) |
-| `last_workout_detail_interval` | 4 | Seconds each stat (and the intro) holds for during the workout screen's rotation |
+| `last_workout_detail_interval` | 4 | Seconds each stat (and the intro) holds for during the workout screen's rotation; the graph and zone bar get one second more |
 | `logo_duration` | 3 | Startup logo seconds |
 | `logo_path` | Auto-selected | Optional logo file; missing logos are skipped |
 | `timezone` | Profile, then system local | Calendar-day grouping; explicit config must be a valid IANA zone |
@@ -331,7 +331,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 
 `rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `milestones`, `goals`, each at most once. See [Screens and rotation](#screens-and-rotation) for what each one shows. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
 
-Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds. The page lasts exactly `last_workout_detail_interval * (1 + stat count)` seconds, so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. `last_workout_duration` (or `screen_durations.latest_workouts`) only sets the page length with `compact_workout_pages` on 32-row panels, where pages are static; `0` still disables the section.
+Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds, with one extra second for the graph and the zone bar. The page lasts exactly that long (`last_workout_detail_interval * (1 + stat count)`, plus 1 s per graph or zone bar), so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. `last_workout_duration` (or `screen_durations.latest_workouts`) only sets the page length with `compact_workout_pages` on 32-row panels, where pages are static; `0` still disables the section.
 
 Legacy `ride` and `park` font names map to `discipline`. `per_workout_duration` is accepted for older configs but is not used in the current rotation.
 

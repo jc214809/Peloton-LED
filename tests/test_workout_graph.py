@@ -4,7 +4,8 @@ from unittest.mock import Mock
 import pytest
 
 from display.display import initialize_fonts
-from display.ui.last_workout_screen import HR_ZONE_COLORS, LastWorkoutScreen, rotating_details
+from display.ui.last_workout_screen import (GRAPH_FRAME_EXTRA_SECONDS, HR_ZONE_COLORS, LastWorkoutScreen,
+                                           detail_at, detail_hold_seconds, rotating_details)
 from peloton.demo import demo_data
 from peloton.summaries import heart_rate_zone_seconds, performance_graph, summarize_workout
 from peloton_led import build_rotation_pages
@@ -88,17 +89,47 @@ def test_rotation_page_duration_counts_the_new_slides():
     display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
                'last_workout_detail_interval': 4, 'overview_duration': 4}
     for height in (32, 64):
-        expected = 4 * (1 + len(rotating_details(ride, height)))
+        # The graph and zone slides each hold one extra second.
+        expected = 4 * (1 + len(rotating_details(ride, height))) + 2 * GRAPH_FRAME_EXTRA_SECONDS
         assert build_rotation_pages(snapshot, dashboard, display, 'R', height)[0][2] == expected
+
+
+def test_graph_and_zone_slides_hold_one_second_longer_than_stats():
+    stat, graph, zones = {'label': 'distance', 'value': '2 mi'}, {'kind': 'graph'}, {'kind': 'zones'}
+    assert GRAPH_FRAME_EXTRA_SECONDS == 1.0
+    assert detail_hold_seconds(stat, 4) == 4
+    assert detail_hold_seconds(graph, 4) == detail_hold_seconds(zones, 4) == 5
+    details = [stat, graph, zones]
+    assert detail_at(details, 4, 3.9) == (0, 3.9)
+    assert detail_at(details, 4, 4.0) == (1, 0.0)
+    assert detail_at(details, 4, 8.5) == (1, 4.5)   # A stat would have moved on at 8 s.
+    assert detail_at(details, 4, 9.0) == (2, 0.0)
+    assert detail_at(details, 4, 13.5) == (2, 4.5)
+    assert detail_at(details, 4, 14.0) == (0, 0.0)  # Wraps after one 14 s pass.
+
+
+@pytest.mark.parametrize('height', [32, 64])
+def test_graph_slide_is_still_up_in_its_extra_second(height):
+    ride = demo_ride()
+    details = rotating_details(ride, height)
+    turn = [d.get('kind') for d in details].index('graph')
+    matrix = ImageMatrix(height=height)
+    initialize_fonts(height)
+    screen = LastWorkoutScreen()
+    screen.on_enter(matrix, ride)
+    screen.update(4 * (turn + 1) + 4.5)  # Past a stat's 4 s, inside the graph's 5 s.
+    screen.render(matrix, ride)
+    assert matrix.image.tobytes() == render_slide(ride, height, 'graph').image.tobytes()
 
 
 def render_slide(summary, height, kind):
     matrix = ImageMatrix(height=height)
     initialize_fonts(height)
-    turn = [d.get('kind') for d in rotating_details(summary, height)].index(kind)
+    details = rotating_details(summary, height)
+    turn = [d.get('kind') for d in details].index(kind)
     screen = LastWorkoutScreen()
     screen.on_enter(matrix, summary)
-    screen.update(4 * (turn + 1) + 0.5)
+    screen.update(4 + sum(detail_hold_seconds(d, 4) for d in details[:turn]) + 0.5)
     assert screen.render(matrix, summary)
     return matrix
 

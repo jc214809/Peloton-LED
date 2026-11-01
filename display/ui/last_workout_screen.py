@@ -460,6 +460,33 @@ def _draw_short_lines(matrix, font, lines: List[str], top_y: int, summary: dict)
 # Default seconds each intro/stat holds for; overridable via the
 # `last_workout_detail_interval` display config key.
 LAST_WORKOUT_DETAIL_INTERVAL_SECONDS = 4.0
+# The graph and zone-bar frames hold this much longer than a stat: there's
+# more to read than one number.
+GRAPH_FRAME_EXTRA_SECONDS = 1.0
+
+
+def detail_hold_seconds(detail: dict, interval: float) -> float:
+    """Seconds one rotating detail stays up."""
+    if interval > 0 and detail.get('kind') in ('graph', 'zones'):
+        return interval + GRAPH_FRAME_EXTRA_SECONDS
+    return interval
+
+
+def stats_phase_seconds(details: List[dict], interval: float) -> float:
+    """Seconds for one pass through every rotating detail."""
+    return sum(detail_hold_seconds(d, interval) for d in details)
+
+
+def detail_at(details: List[dict], interval: float, stats_elapsed: float):
+    """(index, seconds into it) of the detail showing stats_elapsed seconds
+    into the stats phase, wrapping after the last one."""
+    remaining = max(0.0, stats_elapsed) % stats_phase_seconds(details, interval)
+    for index, detail in enumerate(details):
+        hold = detail_hold_seconds(detail, interval)
+        if remaining < hold:
+            return index, remaining
+        remaining -= hold
+    return len(details) - 1, remaining  # Float rounding at the very end of a pass.
 
 
 class LastWorkoutScreen(Screen):
@@ -537,8 +564,8 @@ class LastWorkoutScreen(Screen):
         details = rotating_details(summary, matrix.height)
         if details:
             interval = self.detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
-            stats_elapsed = self.elapsed - self.detail_interval
-            detail = details[int(stats_elapsed / interval) % len(details)]
+            index, phase_seconds = detail_at(details, interval, self.elapsed - self.detail_interval)
+            detail = details[index]
             # The graph and zone slides use the bar's rows, so they go without it.
             if detail.get('kind') == 'graph':
                 _draw_graph(matrix, summary, stat_font, 14, 16, matrix.height - 1)
@@ -548,7 +575,7 @@ class LastWorkoutScreen(Screen):
                             14, 17, 22, 30)
                 return True
             # Rise 2px rather than 3 so the value never brushes the bottom bar.
-            offset = max(0, round(2 * (1 - min(1, (stats_elapsed % interval) / 0.3))))
+            offset = max(0, round(2 * (1 - min(1, phase_seconds / 0.3))))
             value = detail['value'].upper()
             value_font = next((f for f in (value_big, title_font, text_font)
                                if get_text_width(f, value) <= w - 4), text_font)
@@ -699,9 +726,7 @@ class LastWorkoutScreen(Screen):
             # (duration/workout-title/instructor) is replaced by one rotating
             # stat at a time, using the space freed up below the title.
             interval = self.detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
-            stats_elapsed = self.elapsed - self.detail_interval
-            index = int(stats_elapsed / interval) % len(stat_details)
-            phase_seconds = stats_elapsed % interval
+            index, phase_seconds = detail_at(stat_details, interval, self.elapsed - self.detail_interval)
             detail = stat_details[index]
             # Each new detail rises into place during its first 0.3 seconds.
             offset = max(0, round(3 * (1 - min(1, phase_seconds / 0.3))))

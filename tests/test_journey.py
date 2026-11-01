@@ -4,8 +4,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from display.display import initialize_fonts
-from display.ui.journey_screen import CASTLE_COLORS, JourneyScreen
+from display.display import get_text_width, initialize_fonts, loaded_fonts
+from display.ui.journey_screen import CASTLE_COLORS, JourneyScreen, journey_text
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import load_config
 from peloton.journey import (DEFAULT_JOURNEY, DISTANCE_DISCIPLINES, journey_progress,
@@ -231,7 +231,8 @@ def test_distance_tally_survives_the_cache_and_bad_entries_rebuild(tmp_path):
 @pytest.mark.parametrize('height', [32, 64])
 @pytest.mark.parametrize('miles, journey', [
     (252, DEFAULT_JOURNEY), (3470, DEFAULT_JOURNEY), (1300, DEFAULT_JOURNEY),
-    (500, {**DEFAULT_JOURNEY, 'from': 'San Francisco', 'to': 'Walt Disney World Resort'})])
+    (500, {**DEFAULT_JOURNEY, 'from': 'San Francisco', 'to': 'Walt Disney World Resort'}),
+    (8.8, {**DEFAULT_JOURNEY, 'miles': 26.2}), (999.9, DEFAULT_JOURNEY), (1879.9, DEFAULT_JOURNEY)])
 def test_journey_screen_fits_both_boards(height, miles, journey):
     matrix = ImageMatrix(height=height)
     initialize_fonts(height)
@@ -245,3 +246,31 @@ def test_journey_screen_fits_both_boards(height, miles, journey):
 def test_journey_screen_renders_nothing_without_progress():
     initialize_fonts(64)
     assert not JourneyScreen().render(ImageMatrix(height=64), None)
+
+
+def test_journey_text_shows_tenths_of_a_mile():
+    progress = journey_progress({'cycling': 8.84}, {**DEFAULT_JOURNEY, 'miles': 26.2})
+    assert journey_text(progress) == ('8.8', '17.4 TO GO')
+
+
+def test_journey_text_keeps_whole_miles_from_1000_up():
+    # "1,300.5" would push the number out of the big font.
+    progress = journey_progress({'cycling': 1300.46}, {**DEFAULT_JOURNEY, 'miles': 2000})
+    assert journey_text(progress) == ('1,300', '699.5 TO GO')
+    assert journey_text(journey_progress({'cycling': 999.96}, DEFAULT_JOURNEY))[0] == '1,000'
+
+
+def test_journey_status_drops_the_decimal_when_the_line_is_full():
+    progress = journey_progress({'cycling': 880 + 0.1}, DEFAULT_JOURNEY)  # Heading home.
+    assert journey_text(progress) == ('880.1', '879.9 TO HOME')
+    assert journey_text(progress, fits=lambda text: len(text) <= 12) == ('880.1', '880 TO HOME')
+
+
+@pytest.mark.parametrize('height', [32, 64])
+def test_journey_screen_status_never_truncates(height):
+    initialize_fonts(height)
+    small = loaded_fonts.get('stats') or loaded_fonts.get('info')
+    progress = journey_progress({'cycling': 880 + 0.1}, DEFAULT_JOURNEY)
+    _, status = journey_text(progress, fits=lambda text: get_text_width(small, text) <= 64 - 14)
+    assert get_text_width(small, status) <= 64 - 14
+    assert status.endswith('TO HOME')
