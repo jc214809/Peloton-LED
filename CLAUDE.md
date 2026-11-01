@@ -42,7 +42,7 @@ python -m pytest tests/test_username.py
 
 CI (`.github/workflows/tests.yml`) runs the suite on Python 3.11 and 3.13 for every PR and push to main. Install test deps with `pip install -r requirements-dev.txt`: it pulls in `requirements-auth.txt` because the browser-login tests import Playwright (Chromium itself is mocked).
 
-Coverage: `python -m pytest tests/ --cov --cov-report=term-missing` (sources and omits in `.coveragerc`, branch coverage on). `fail_under = 85` in `.coveragerc` fails the run below 85%; new code needs tests, not omits. CI uploads the 3.11 run's `coverage.xml` to Codecov using the `CODECOV_TOKEN` repo secret, the same setup as LightningLane-Live-LED.
+Coverage: `python -m pytest tests/ --cov --cov-report=term-missing` (sources and omits in `.coveragerc`, branch coverage on). `fail_under = 90` in `.coveragerc` fails the run below 90%; new code needs tests, not omits. CI uploads the 3.11 run's `coverage.xml` to Codecov using the `CODECOV_TOKEN` repo secret, the same setup as LightningLane-Live-LED.
 
 ## Pi config
 
