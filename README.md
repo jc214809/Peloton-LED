@@ -177,7 +177,7 @@ Only shown when `users` lists two or more riders (see [Two users on one board](#
 
 ![Total workouts](docs/screenshots/rotation/total-workouts.png)
 
-A full-size page with your lifetime workout count, drawn in `color`. Its time on screen follows `screen_durations.lifetime` / `overview_duration`, with a minimum of 5 s.
+A full-size page with your lifetime workout count: the title in `color`, the number large and in gold. Its time on screen follows `screen_durations.lifetime` / `overview_duration`, with a minimum of 5 s.
 
 ### `next_milestone` — countdown to the next milestone
 

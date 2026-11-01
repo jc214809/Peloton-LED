@@ -150,7 +150,8 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
     if 'total_workouts' in groups and total is not None:
         groups['total_workouts'].append(('discipline', {
             'discipline': 'Total Workouts', 'count': total,
-            'color_key': display['color']}, discipline_duration))
+            'color_key': display['color'], 'number_font_key': 'big',
+            'number_color_key': 'gold'}, discipline_duration))
     if 'next_milestone' in groups and total is not None:
         upcoming = next_milestone(total, display.get('milestones', []), display.get('milestone_step', 0))
         if upcoming:

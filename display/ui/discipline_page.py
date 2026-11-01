@@ -24,6 +24,7 @@ class DisciplinePageScreen(Screen):
         - discipline: str
         - count: int
         - title_font_key, number_font_key, color_key (optional overrides)
+        - number_color_key: color for the count only (default: color_key)
         """
         title_font_key = (state or {}).get("title_font_key") or self.title_font_key
         number_font_key = (state or {}).get("number_font_key") or self.number_font_key
@@ -38,6 +39,7 @@ class DisciplinePageScreen(Screen):
             return False
 
         color = color_dict.get(color_key, color_dict.get("white"))
+        number_color = color_dict.get((state or {}).get("number_color_key"), color)
 
         discipline_name = (state or {}).get("discipline") or "Discipline"
         count_val = (state or {}).get("count")
@@ -68,6 +70,6 @@ class DisciplinePageScreen(Screen):
             if get_text_width(number_font, count_text) > matrix.width - 4:
                 count_text = count_text[:-1]
         baseline = min(matrix.height - 3, max(current_y + 9, matrix.height - 12))
-        draw_centered_text(matrix, number_font, count_text, baseline, color)
+        draw_centered_text(matrix, number_font, count_text, baseline, number_color)
 
         return True
