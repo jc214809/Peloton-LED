@@ -25,7 +25,7 @@ For every install option — the full `peloton_led.py` flag reference, getting a
 
 Despite its name, `cookies.txt` contains a bearer access token, not a cookie export. See the [Installation Guide](docs/install.md#getting-a-peloton-token) for how to generate one.
 
-An **amber padlock in the bottom-right** means the token is missing, empty, unreadable, or rejected with HTTP 401. Refresh the token file and the running display automatically reloads it. It checks for file changes approximately once per second between requests. Network errors alone do not trigger the padlock.
+An **amber padlock in the bottom-right** means the token is missing, empty, unreadable, or rejected with HTTP 401, or that the hourly renewal job found the rider needs a fresh login (for example Peloton rejected the refresh token). In that last case the current token still works for a while and data keeps updating; the padlock is the early warning. Refresh the token file and the running display automatically reloads it. It checks for file changes approximately once per second between requests. Network errors alone do not trigger the padlock.
 
 ## Refresh behavior
 
@@ -250,7 +250,7 @@ Two small icons can appear on top of any screen:
 | Login padlock (bottom-right, amber) | Stale-data clock (bottom-left, blue) |
 |---|---|
 | ![Login padlock](docs/screenshots/rotation/indicator-login.png) | ![Stale-data clock](docs/screenshots/rotation/indicator-stale.png) |
-| Peloton rejected the token or it's missing. The board keeps showing saved data; replace the token and the padlock clears on the next refresh, even mid-screen. | Three refreshes in a row have failed, so you're looking at saved data. The first two failures stay quiet; any successful refresh clears it. |
+Peloton rejected the token or it's missing, or renewal found the rider needs a fresh login. The board keeps showing data; replace or re-seed the token and the padlock clears on the next refresh, even mid-screen. | Three refreshes in a row have failed, so you're looking at saved data. The first two failures stay quiet; any successful refresh clears it. |
 
 ## Phase 6 customization
 
