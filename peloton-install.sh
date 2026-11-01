@@ -113,10 +113,12 @@ done
 install -d -m 0755 -o root -g root "$APP_DIR" "$CONFIG_DIR"
 install -d -m 0750 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR"
 
-for directory in api assets display driver models peloton prepared_logos scripts utils packaging; do
+for directory in assets display driver models peloton prepared_logos scripts utils packaging; do
     rm -rf "$APP_DIR/$directory"
     cp -a "$SOURCE_DIR/$directory" "$APP_DIR/$directory"
 done
+# Folders earlier versions installed that the app no longer has.
+rm -rf "$APP_DIR/api"
 for file in peloton_led.py requirements.txt requirements-auth.txt README.md config.json-example config.dual-users-example.json emulator_config.json; do
     install -m 0644 -o root -g root "$SOURCE_DIR/$file" "$APP_DIR/$file"
 done
