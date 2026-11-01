@@ -301,9 +301,11 @@ manually re-running the login helper. It:
   4. Never opens a browser for DNS failures, timeouts, rate limits, or
      Peloton server errors — those are treated as transient and retried
      next hour instead.
-  5. Never opens a browser when Peloton rejects a saved refresh token
-     (`invalid_grant`), since a board too slow for Chromium would fail that
-     login every hour. The log says to seed the board again (below).
+  5. When Peloton rejects a saved refresh token (`invalid_grant`), tries
+     one headless browser login if this board has Chromium and the rider's
+     credentials, then waits a day before trying again, so a board too slow
+     for Chromium doesn't fail that login every hour. A `--no-browser` board
+     never tries; the log says to seed it again (below).
   6. Verifies the replacement token before atomically swapping it in.
   7. Exits nonzero on failure, leaving the previous token untouched.
 

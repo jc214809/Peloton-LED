@@ -52,6 +52,9 @@ TOKEN_TIMEOUT_MS = 180_000
 AUTH0_TOKEN_URL = "https://auth.onepeloton.com/oauth/token"
 AUTH0_CLIENT_ID = "WVoJxVDdPoFx4RNewvvg6ch2mZ7bwnsM"
 REFRESH_TIMEOUT_SECONDS = 30
+# After invalid_grant, a board with a browser tries one login per this window,
+# so a board too slow for Chromium doesn't fail the same login every hour.
+BROWSER_FALLBACK_INTERVAL_SECONDS = 24 * 60 * 60
 
 
 class RefreshTokenRejected(RuntimeError):
@@ -346,15 +349,31 @@ def resolve_token_paths(config_path: Path, fallback_token: Path) -> list[tuple[s
     return resolved
 
 
+def browser_attempt_path(token_path: Path) -> Path:
+    """cookies-joel.txt -> cookies-joel.browser-attempt: when the last fallback login started."""
+    return token_path.with_name(f'{token_path.stem}.browser-attempt')
+
+
+def browser_fallback_due(token_path: Path, now: float | None = None) -> bool:
+    try:
+        last = float(browser_attempt_path(token_path).read_text(encoding='utf-8').strip())
+    except (OSError, ValueError):
+        return True
+    return not math.isfinite(last) or (now or time.time()) - last >= BROWSER_FALLBACK_INTERVAL_SECONDS
+
+
 def ensure_token(token_path: Path, config_path: Path, headless: bool = True,
                  renew_before_seconds: float = 12 * 60 * 60,
                  email: str | None = None, password: str | None = None,
                  load_credentials: bool = True) -> tuple[str, bool]:
     """Refresh a rejected token or a valid JWT nearing expiration.
 
-    With a saved refresh token, renewal never opens a browser, even when Auth0
-    rejects it: a slow board would only fail the same login every hour. The
-    browser is the fallback for tokens that have no refresh file yet."""
+    With a saved refresh token, renewal goes over plain HTTPS. If Auth0 rejects
+    it (invalid_grant), a board that has a browser and credentials tries one
+    login, at most once a day, so capable boards heal themselves while slow ones
+    never retry Chromium hourly. Boards without a browser keep the old token and
+    ask to be seeded again. The browser is also the way in for tokens that have
+    no refresh file yet."""
     try:
         username = verify_token(token_path)
     except requests.HTTPError as exc:
@@ -370,7 +389,24 @@ def ensure_token(token_path: Path, config_path: Path, headless: bool = True,
             return username, False
     refresh_path = refresh_token_path(token_path)
     if refresh_path.exists():
-        return renew_with_refresh_token(token_path), True
+        try:
+            return renew_with_refresh_token(token_path), True
+        except RefreshTokenRejected as rejected:
+            if load_credentials and (not email or not password):
+                email, password = load_auth(config_path, interactive=False)
+            if not (email and password and browser_login_available()):
+                raise
+            if not browser_fallback_due(token_path):
+                raise RefreshTokenRejected(f"{rejected} A browser login was already tried in "
+                                           "the last day; the next try is after that.") from rejected
+            # Record the try before starting: a hung or killed login still counts.
+            browser_attempt_path(token_path).write_text(str(time.time()), encoding='utf-8')
+            print(f"{rejected} Trying a browser login instead.", file=sys.stderr)
+            try:
+                return browser_login(email, password, token_path, headless=headless), True
+            except Exception as exc:
+                raise RefreshTokenRejected(f"{rejected} The browser login fallback also "
+                                           f"failed: {exc}") from exc
     if not browser_login_available():
         raise RuntimeError(
             f"Token needs renewal, but there is no refresh token at {refresh_path} and no "
