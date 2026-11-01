@@ -468,6 +468,8 @@ PELOTON_PASSWORD_RIDER_TWO="second password"
 
 `peloton-token-refresh.timer` checks every configured token hourly and renews each one when fewer than 12 hours remain, using its saved refresh token (no browser) when it has one. One user's failed login does not mix or overwrite another user's token. The installer stores each token and cache under `/var/lib/peloton-led/` with restricted permissions.
 
+If Peloton rejects a saved refresh token (`invalid_grant`, e.g. after a password change), a board that has Chromium and the rider's credentials tries one browser login and then waits a day before trying again, so a slow board never fails the same login every hour. A board installed with `--no-browser` keeps its current token until you [seed it again](docs/install.md#seeding-a-board-from-another-computer---no-browser).
+
 ## Phase 5 validation
 
 See [Phase 5 managed-installation status](docs/phase-5-status.md). Native matrix access, Pi Chromium login, and boot/restart behavior still require one on-device acceptance run because the development host is macOS.
