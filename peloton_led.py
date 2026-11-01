@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from peloton.config import load_config, default_token_path, load_dotenv
+from peloton.config import load_config, load_dotenv, user_token_path
 from peloton.dashboard import Dashboard
 from peloton.goals import next_milestone, week_day, week_start
 from peloton.journey import journey_progress
@@ -281,9 +281,7 @@ def configured_profiles(config, options):
     config_dir = Path(options.config).with_suffix('.json').expanduser().resolve().parent
     profiles = []
     for user in users:
-        token_path = Path(user.get('token_path') or default_token_path(user['name'])).expanduser()
-        if not token_path.is_absolute():
-            token_path = config_dir / token_path
+        token_path = user_token_path(user, config_dir)
         user_display = dict(display)
         if 'weekly_goals' in user:
             user_display['weekly_goals'] = user['weekly_goals']

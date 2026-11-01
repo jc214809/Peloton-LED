@@ -235,11 +235,15 @@ else
     fi
 fi
 
-mapfile -t configured_tokens < <("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" <<'PY'
+# Token paths as the service resolves them: a rider without token_path uses
+# cookies-<name>.txt beside the config the service reads ($CONFIG_DIR).
+mapfile -t configured_tokens < <("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" "$APP_DIR" "$CONFIG_DIR" <<'PY'
 import json, sys
+sys.path.insert(0, sys.argv[2])
+from peloton.config import user_token_path
 config=json.load(open(sys.argv[1], encoding='utf-8'))
 users=config.get('users') or []
-print('\n'.join(user['token_path'] for user in users) if users else '/var/lib/peloton-led/cookies.txt')
+print('\n'.join(str(user_token_path(user, sys.argv[3])) for user in users) if users else '/var/lib/peloton-led/cookies.txt')
 PY
 )
 if [[ "$NO_START" == false ]]; then
@@ -261,14 +265,16 @@ if [[ "$NO_START" == false ]]; then
     fi
 fi
 
-rider_summary="$("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" <<'PY'
+rider_summary="$("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" "$APP_DIR" "$CONFIG_DIR" <<'PY'
 import json, sys
+sys.path.insert(0, sys.argv[2])
+from peloton.config import user_token_path
 config = json.load(open(sys.argv[1], encoding='utf-8'))
 users = config.get('users') or []
 if not users:
     print('single-user (/var/lib/peloton-led/cookies.txt)')
 else:
-    names = ', '.join(f"{u['name']} ({u['token_path']})" for u in users)
+    names = ', '.join(f"{u['name']} ({user_token_path(u, sys.argv[3])})" for u in users)
     print(f'{len(users)} riders: {names}')
 PY
 )"

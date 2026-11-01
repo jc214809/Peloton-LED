@@ -241,3 +241,26 @@ def test_every_path_the_installer_copies_exists():
             f'installer copies folder {name}/, which the repo no longer has'
     for name in files:
         assert name in tracked, f'installer copies {name}, which the repo no longer has'
+
+
+def _installer_snippets():
+    """The installer's inline Python blocks that read riders from the live config."""
+    import re
+    text = (ROOT / 'peloton-install.sh').read_text()
+    return re.findall(r'"\$APP_DIR" "\$CONFIG_DIR" <<\'PY\'\n(.*?)\nPY\n', text, re.S)
+
+
+def test_installer_rider_snippets_resolve_default_token_paths_like_the_app(tmp_path):
+    # A rider without token_path crashed both snippets with KeyError on upgrade.
+    import sys
+    config = tmp_path / 'config.json'
+    config.write_text(json.dumps({'users': [
+        {'name': 'Joel'}, {'name': 'Jen', 'token_path': '/var/lib/peloton-led/cookies-jen.txt'}]}))
+    tokens, summary = _installer_snippets()
+    run = lambda code: subprocess.run([sys.executable, '-', str(config), str(ROOT), '/etc/peloton-led'],
+                                      input=code, text=True, capture_output=True, check=True).stdout
+    assert run(tokens).split() == ['/etc/peloton-led/cookies-joel.txt', '/var/lib/peloton-led/cookies-jen.txt']
+    assert run(summary).strip() == ('2 riders: Joel (/etc/peloton-led/cookies-joel.txt), '
+                                    'Jen (/var/lib/peloton-led/cookies-jen.txt)')
+    config.write_text('{}')
+    assert run(tokens).strip() == '/var/lib/peloton-led/cookies.txt'
