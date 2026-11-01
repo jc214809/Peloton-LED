@@ -80,10 +80,15 @@ class UsernameScreen(Screen):
             self._center(matrix, small_font, label, (17 if compact else 38) + offset,
                          graphics.Color(145, 165, 190))
             lines = detail.get('lines') or [detail.get('value', '')]
+            line_color = color_dict.get(detail.get('color_key'), graphics.Color(255, 255, 255))
+            big_font = loaded_fonts.get(detail.get('font_key'))
+            if big_font and len(lines) == 1 and get_text_width(big_font, str(lines[0])) <= matrix.width - 4:
+                # A single headline number (e.g. total workouts) fills the space below the label.
+                self._center(matrix, big_font, str(lines[0]), (30 if compact else 58) + offset, line_color)
+                return True
             # 32 rows: 7px line pitch leaves a blank row between the two 4x6 lines.
             baselines = (24, 31) if compact else (50, 59)
             for line, baseline in zip(lines[:2], baselines):
                 line = self._fit(value_font, str(line).upper(), matrix.width - 4)
-                self._center(matrix, value_font, line, baseline + offset,
-                             graphics.Color(255, 255, 255))
+                self._center(matrix, value_font, line, baseline + offset, line_color)
         return True

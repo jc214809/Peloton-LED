@@ -155,7 +155,7 @@ Options:
 
 ![Username screen](docs/screenshots/rotation/username.png)
 
-Your name stays fixed at the top in the largest font that fits, above a blue underline. The panel below rotates through up to six highlights, 4 s each: **Total Workouts**, **This Week** (workouts and minutes since Monday), **Top Discipline**, and your **top three instructors** by class count. The instructor counts come from a one-time walk of your full history; after that, only new workouts are added.
+Your name stays fixed at the top in the largest font that fits, above a blue underline. The panel below rotates through up to six highlights, 4 s each: **Total Workouts** (in large gold digits), **This Week** (workouts and minutes since Monday), **Top Discipline**, and your **top three instructors** by class count. The instructor counts come from a one-time walk of your full history; after that, only new workouts are added. A workout still in progress is added once it finishes.
 
 Options: `duration` (or `screen_durations.username`) is the minimum time on screen; it's extended automatically so every highlight gets its 4 s. The name comes from `--username`, then `users[].username`, then your Peloton username, then `display.username`. `font` and `color` style the name.
 

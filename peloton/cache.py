@@ -10,7 +10,7 @@ PERSISTED_KEYS = (
     'active_day_count', 'history_truncated', 'celebrated_pr_ids',
     'weekly_progress', 'celebrated_milestones',
     'instructor_counts', 'instructor_tally_cursor', 'personal_records', 'streaks',
-    'distance_totals', 'distance_tally_cursor', 'distance_tally_since',
+    'distance_totals', 'distance_tally_cursor', 'distance_tally_since', 'tally_version',
 )
 
 
