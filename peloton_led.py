@@ -191,12 +191,12 @@ def show_and_wait(manager, name, state, duration, dashboard=None):
     manager.show(name, state)
     manager.tick(state)
     deadline = time.monotonic() + duration
-    previous = dashboard.login_required if dashboard else None
+    previous = dashboard.login_indicator_required if dashboard else None
     while time.monotonic() < deadline:
         time.sleep(min(0.2, max(0, deadline - time.monotonic())))
-        if dashboard and dashboard.login_required != previous:
+        if dashboard and dashboard.login_indicator_required != previous:
             # Repaint when authentication changes, even during a long screen.
-            previous = dashboard.login_required
+            previous = dashboard.login_indicator_required
             manager.matrix.Clear()
             manager.tick(state)
         elif getattr(getattr(manager, 'current', None), 'animated', False) is True:
@@ -328,7 +328,7 @@ def main():
     profiles = configured_profiles(config, options)
     active = {'dashboard': profiles[0]['dashboard']}
     manager = ScreenManager(matrix,
-        login_required=lambda: active['dashboard'].login_required,
+        login_required=lambda: active['dashboard'].login_indicator_required,
         stale_data=lambda: active['dashboard'].stale_indicator_required)
     manager.register('username', UsernameScreen(font_key=display['font'], color_key=display['color']))
     manager.register('discipline', DisciplinePageScreen())

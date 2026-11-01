@@ -310,7 +310,7 @@ manually re-running the login helper. It:
 The running dashboard notices the token file change on its own (no service
 restart needed). If Peloton ever introduces CAPTCHA, MFA, or another
 interactive step, the renewal fails safely, keeps the old token, and the
-dashboard's amber padlock signals that a manual login is needed.
+dashboard's amber padlock signals that a manual login is needed. The padlock appears as soon as the renewal job knows a fresh login is needed (for example `invalid_grant`), while the old token still works and data keeps updating, and it clears when renewal succeeds or the board is re-seeded.
 
 ### Seeding a board from another computer (`--no-browser`)
 

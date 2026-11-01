@@ -42,7 +42,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from peloton.api import make_session
-from peloton.config import default_token_path, load_dotenv
+from peloton.config import default_token_path, load_dotenv, renewal_failed_path
 
 LOGIN_URL = "https://www.onepeloton.com/login"
 # Generous limits: a Pi Zero 2 W takes minutes to load the members app.
@@ -54,7 +54,12 @@ AUTH0_CLIENT_ID = "WVoJxVDdPoFx4RNewvvg6ch2mZ7bwnsM"
 REFRESH_TIMEOUT_SECONDS = 30
 
 
-class RefreshTokenRejected(RuntimeError):
+class LoginRequired(RuntimeError):
+    """Renewal can't continue without a fresh login (a re-seed). The display
+    shows its padlock as soon as this happens, while the old token still works."""
+
+
+class RefreshTokenRejected(LoginRequired):
     """Auth0 refused the refresh token (invalid_grant): the chain is dead and only
     a fresh login can replace it. Retrying, or opening a browser, won't help."""
 
@@ -350,6 +355,32 @@ def ensure_token(token_path: Path, config_path: Path, headless: bool = True,
                  renew_before_seconds: float = 12 * 60 * 60,
                  email: str | None = None, password: str | None = None,
                  load_credentials: bool = True) -> tuple[str, bool]:
+    """_ensure_token, plus the renewal-failed marker the display reads: written
+    when only a fresh login can help, removed once a token checks out again.
+    Transient failures (network, server errors) leave it as it was."""
+    marker = renewal_failed_path(token_path)
+    try:
+        result = _ensure_token(token_path, config_path, headless, renew_before_seconds,
+                               email, password, load_credentials)
+    except LoginRequired as exc:
+        _write_renewal_failed(marker, str(exc))
+        raise
+    marker.unlink(missing_ok=True)
+    return result
+
+
+def _write_renewal_failed(marker: Path, reason: str) -> None:
+    try:
+        marker.write_text(json.dumps({'reason': reason,
+            'at': datetime.now(timezone.utc).isoformat()}), encoding='utf-8')
+    except OSError as exc:
+        print(f"Warning: could not write {marker}: {exc}", file=sys.stderr)
+
+
+def _ensure_token(token_path: Path, config_path: Path, headless: bool = True,
+                  renew_before_seconds: float = 12 * 60 * 60,
+                  email: str | None = None, password: str | None = None,
+                  load_credentials: bool = True) -> tuple[str, bool]:
     """Refresh a rejected token or a valid JWT nearing expiration.
 
     With a saved refresh token, renewal never opens a browser, even when Auth0
@@ -372,14 +403,14 @@ def ensure_token(token_path: Path, config_path: Path, headless: bool = True,
     if refresh_path.exists():
         return renew_with_refresh_token(token_path), True
     if not browser_login_available():
-        raise RuntimeError(
+        raise LoginRequired(
             f"Token needs renewal, but there is no refresh token at {refresh_path} and no "
             "browser login on this machine. Seed this board from another computer: "
             "refresh_cookies.py --seed-dir.")
     if load_credentials and (not email or not password):
         email, password = load_auth(config_path, interactive=False)
     if not email or not password:
-        raise RuntimeError("Token needs renewal, but unattended Peloton credentials are not configured.")
+        raise LoginRequired("Token needs renewal, but unattended Peloton credentials are not configured.")
     return browser_login(email, password, token_path, headless=headless), True
 
 
