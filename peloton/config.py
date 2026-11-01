@@ -60,6 +60,12 @@ def default_token_path(name):
     return f'cookies-{user_slug(name)}.txt'
 
 
+def user_token_path(user, config_dir):
+    """A rider's token file: token_path, else cookies-<name>.txt, relative to the config's folder."""
+    path = Path(user.get('token_path') or default_token_path(user['name'])).expanduser()
+    return path if path.is_absolute() else Path(config_dir) / path
+
+
 def renewal_failed_path(token_path):
     """cookies-joel.txt -> cookies-joel.renewal-failed: written by the token
     renewal job when only a fresh login can help, read by the display."""
