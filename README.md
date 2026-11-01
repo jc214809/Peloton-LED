@@ -1,4 +1,5 @@
 # Peloton LED Dashboard
+![Tests](https://github.com/jc214809/Peloton-LED/actions/workflows/tests.yml/badge.svg) [![codecov](https://codecov.io/gh/jc214809/Peloton-LED/graph/badge.svg)](https://codecov.io/gh/jc214809/Peloton-LED)
 
 A Python dashboard for a Raspberry Pi RGB LED matrix, with a desktop browser emulator. Shows every completed workout from your latest active day, one-time personal-record celebrations, username, and lifetime workout counts by discipline.
 
