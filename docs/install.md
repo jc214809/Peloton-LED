@@ -306,6 +306,9 @@ manually re-running the login helper. It:
      login every hour. The log says to seed the board again (below).
   6. Verifies the replacement token before atomically swapping it in.
   7. Exits nonzero on failure, leaving the previous token untouched.
+- Optionally sends a Pushover alert when renewal keeps failing: add
+  `PUSHOVER_APP_TOKEN` and `PUSHOVER_USER_KEY` to `/etc/peloton-led/auth.env`
+  (see the README's token section for when alerts fire).
 
 The running dashboard notices the token file change on its own (no service
 restart needed). If Peloton ever introduces CAPTCHA, MFA, or another
