@@ -301,16 +301,21 @@ manually re-running the login helper. It:
   4. Never opens a browser for DNS failures, timeouts, rate limits, or
      Peloton server errors — those are treated as transient and retried
      next hour instead.
-  5. Never opens a browser when Peloton rejects a saved refresh token
-     (`invalid_grant`), since a board too slow for Chromium would fail that
-     login every hour. The log says to seed the board again (below).
+  5. When Peloton rejects a saved refresh token (`invalid_grant`), tries
+     one headless browser login if this board has Chromium and the rider's
+     credentials, then waits a day before trying again, so a board too slow
+     for Chromium doesn't fail that login every hour. A `--no-browser` board
+     never tries; the log says to seed it again (below).
   6. Verifies the replacement token before atomically swapping it in.
   7. Exits nonzero on failure, leaving the previous token untouched.
+- Optionally sends a Pushover alert when renewal keeps failing: add
+  `PUSHOVER_APP_TOKEN` and `PUSHOVER_USER_KEY` to `/etc/peloton-led/auth.env`
+  (see the README's token section for when alerts fire).
 
 The running dashboard notices the token file change on its own (no service
 restart needed). If Peloton ever introduces CAPTCHA, MFA, or another
 interactive step, the renewal fails safely, keeps the old token, and the
-dashboard's amber padlock signals that a manual login is needed.
+dashboard's amber padlock signals that a manual login is needed. The padlock appears as soon as the renewal job knows a fresh login is needed (for example `invalid_grant`), while the old token still works and data keeps updating, and it clears when renewal succeeds or the board is re-seeded.
 
 ### Seeding a board from another computer (`--no-browser`)
 

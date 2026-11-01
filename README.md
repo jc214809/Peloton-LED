@@ -1,4 +1,5 @@
 # Peloton LED Dashboard
+![Tests](https://github.com/jc214809/Peloton-LED/actions/workflows/tests.yml/badge.svg) [![codecov](https://codecov.io/gh/jc214809/Peloton-LED/graph/badge.svg)](https://codecov.io/gh/jc214809/Peloton-LED)
 
 A Python dashboard for a Raspberry Pi RGB LED matrix, with a desktop browser emulator. Shows every completed workout from your latest active day, one-time personal-record celebrations, username, and lifetime workout counts by discipline.
 
@@ -25,7 +26,7 @@ For every install option — the full `peloton_led.py` flag reference, getting a
 
 Despite its name, `cookies.txt` contains a bearer access token, not a cookie export. See the [Installation Guide](docs/install.md#getting-a-peloton-token) for how to generate one.
 
-An **amber padlock in the bottom-right** means the token is missing, empty, unreadable, or rejected with HTTP 401. Refresh the token file and the running display automatically reloads it. It checks for file changes approximately once per second between requests. Network errors alone do not trigger the padlock.
+An **amber padlock in the bottom-right** means the token is missing, empty, unreadable, or rejected with HTTP 401, or that the hourly renewal job found the rider needs a fresh login (for example Peloton rejected the refresh token). In that last case the current token still works for a while and data keeps updating; the padlock is the early warning. Refresh the token file and the running display automatically reloads it. It checks for file changes approximately once per second between requests. Network errors alone do not trigger the padlock.
 
 ## Refresh behavior
 
@@ -250,7 +251,7 @@ Two small icons can appear on top of any screen:
 | Login padlock (bottom-right, amber) | Stale-data clock (bottom-left, blue) |
 |---|---|
 | ![Login padlock](docs/screenshots/rotation/indicator-login.png) | ![Stale-data clock](docs/screenshots/rotation/indicator-stale.png) |
-| Peloton rejected the token or it's missing. The board keeps showing saved data; replace the token and the padlock clears on the next refresh, even mid-screen. | Three refreshes in a row have failed, so you're looking at saved data. The first two failures stay quiet; any successful refresh clears it. |
+Peloton rejected the token or it's missing, or renewal found the rider needs a fresh login. The board keeps showing data; replace or re-seed the token and the padlock clears on the next refresh, even mid-screen. | Three refreshes in a row have failed, so you're looking at saved data. The first two failures stay quiet; any successful refresh clears it. |
 
 ## Phase 6 customization
 
@@ -291,7 +292,10 @@ python peloton_led.py --emulated --demo --demo-login-needed --cycles 1
 python scripts/render_demo.py /tmp/peloton-demo.png
 python -m pip install -r requirements-dev.txt
 python -m pytest tests/ -q
+python -m pytest tests/ --cov --cov-report=term-missing   # with coverage
 ```
+
+GitHub Actions runs the tests with coverage on Python 3.11 and 3.13 for every pull request and push to `main`, and uploads the report to [Codecov](https://codecov.io/gh/jc214809/Peloton-LED) (the badges at the top).
 
 `--cycles 1` stops after one full rotation. Omit it to run continuously. Durations come from configuration; `--display-duration` overrides only the username screen. The PNG preview uses the same emulator text drawing and screen code, without starting a browser server.
 
@@ -467,6 +471,24 @@ PELOTON_PASSWORD_RIDER_TWO="second password"
 ```
 
 `peloton-token-refresh.timer` checks every configured token hourly and renews each one when fewer than 12 hours remain, using its saved refresh token (no browser) when it has one. One user's failed login does not mix or overwrite another user's token. The installer stores each token and cache under `/var/lib/peloton-led/` with restricted permissions.
+
+If Peloton rejects a saved refresh token (`invalid_grant`, e.g. after a password change), a board that has Chromium and the rider's credentials tries one browser login and then waits a day before trying again, so a slow board never fails the same login every hour. A board installed with `--no-browser` keeps its current token until you [seed it again](docs/install.md#seeding-a-board-from-another-computer---no-browser).
+
+Each refresh token belongs to a *chain* that starts at a login and continues through every renewal. The status command shows how old each rider's chain is and how many renewals it has had (`refresh chain 12.3 days old, 140 renewals`). When Peloton ends a chain (`invalid_grant`), the renewal log records its age:
+
+```bash
+sudo -u peloton-led /opt/peloton-led/venv/bin/python /opt/peloton-led/scripts/refresh_cookies.py \
+    --status --all-users --config /etc/peloton-led/config.json --cookies /var/lib/peloton-led/cookies.txt
+```
+
+To get a Pushover alert when renewal stops working, add your Pushover application token and user key to the same `auth.env`. No restart is needed; the timer reads the file on every run. `peloton-install.sh --reconfigure` rewrites `auth.env`, so add them again after reconfiguring.
+
+```bash
+PUSHOVER_APP_TOKEN="your application token"
+PUSHOVER_USER_KEY="your user key"
+```
+
+An alert goes out after two failed hourly runs in a row (one Wi-Fi blip stays quiet), or at once when Peloton rejects the refresh token (`invalid_grant`), since that only heals by re-seeding the board. While the failure lasts it repeats at most once a day, and the first good run afterwards sends one "recovered" notice. Each message starts with the board's hostname. Without these keys the timer just logs failures to the journal.
 
 ## Phase 5 validation
 
