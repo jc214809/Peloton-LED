@@ -468,6 +468,13 @@ PELOTON_PASSWORD_RIDER_TWO="second password"
 
 `peloton-token-refresh.timer` checks every configured token hourly and renews each one when fewer than 12 hours remain, using its saved refresh token (no browser) when it has one. One user's failed login does not mix or overwrite another user's token. The installer stores each token and cache under `/var/lib/peloton-led/` with restricted permissions.
 
+Each refresh token belongs to a *chain* that starts at a login and continues through every renewal. The status command shows how old each rider's chain is and how many renewals it has had (`refresh chain 12.3 days old, 140 renewals`). When Peloton ends a chain (`invalid_grant`), the renewal log records its age:
+
+```bash
+sudo -u peloton-led /opt/peloton-led/venv/bin/python /opt/peloton-led/scripts/refresh_cookies.py \
+    --status --all-users --config /etc/peloton-led/config.json --cookies /var/lib/peloton-led/cookies.txt
+```
+
 ## Phase 5 validation
 
 See [Phase 5 managed-installation status](docs/phase-5-status.md). Native matrix access, Pi Chromium login, and boot/restart behavior still require one on-device acceptance run because the development host is macOS.
