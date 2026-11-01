@@ -27,9 +27,11 @@ import binascii
 import getpass
 import importlib.util
 import json
+import logging
 import math
 import os
 import re
+import socket
 import sys
 import tempfile
 import time
@@ -43,6 +45,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from peloton.api import make_session
 from peloton.config import default_token_path, load_dotenv
+from peloton.notify import report_outcome
 
 LOGIN_URL = "https://www.onepeloton.com/login"
 # Generous limits: a Pi Zero 2 W takes minutes to load the members app.
@@ -52,6 +55,8 @@ TOKEN_TIMEOUT_MS = 180_000
 AUTH0_TOKEN_URL = "https://auth.onepeloton.com/oauth/token"
 AUTH0_CLIENT_ID = "WVoJxVDdPoFx4RNewvvg6ch2mZ7bwnsM"
 REFRESH_TIMEOUT_SECONDS = 30
+# Beside the token files; remembers an ongoing failure so alerts aren't hourly.
+ALERT_STATE_NAME = 'token-alert-state.json'
 
 
 class RefreshTokenRejected(RuntimeError):
@@ -508,6 +513,7 @@ def seed_tokens(seed_dir: Path, config_path: Path, headless: bool = True) -> lis
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
     load_dotenv()
     parser = argparse.ArgumentParser(description="Refresh Peloton access token via browser login.")
     parser.add_argument("--cookies", default="cookies.txt", help="Output token file path (default: cookies.txt)")
@@ -588,11 +594,14 @@ a second machine using the same files breaks both. Install them, then delete {se
 
     config_path = Path(parsed.config)
     if parsed.ensure:
+        alert_state = token_path.parent / ALERT_STATE_NAME
+        source = socket.gethostname()
         try:
             if parsed.all_users:
                 results = ensure_all_tokens(config_path,
                     renew_before_seconds=parsed.renew_before_hours * 60 * 60,
                     fallback_token=token_path)
+                report_outcome(alert_state, None, time.time(), source)
                 for profile, username, refreshed in results:
                     action = "refreshed" if refreshed else "already valid"
                     print(f"{profile}: token {action} — logged in as: {username}")
@@ -600,7 +609,9 @@ a second machine using the same files breaks both. Install them, then delete {se
             username, refreshed = ensure_token(token_path, config_path, headless=True,
                 renew_before_seconds=parsed.renew_before_hours * 60 * 60)
         except Exception as exc:
+            report_outcome(alert_state, str(exc), time.time(), source)
             sys.exit(f"Token maintenance failed: {exc}")
+        report_outcome(alert_state, None, time.time(), source)
         action = "refreshed" if refreshed else "already valid"
         print(f"Token {action} — logged in as: {username}")
         return

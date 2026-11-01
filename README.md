@@ -469,6 +469,15 @@ PELOTON_PASSWORD_RIDER_TWO="second password"
 
 `peloton-token-refresh.timer` checks every configured token hourly and renews each one when fewer than 12 hours remain, using its saved refresh token (no browser) when it has one. One user's failed login does not mix or overwrite another user's token. The installer stores each token and cache under `/var/lib/peloton-led/` with restricted permissions.
 
+To get a Pushover alert when renewal stops working, add your Pushover application token and user key to the same `auth.env`. No restart is needed; the timer reads the file on every run. `peloton-install.sh --reconfigure` rewrites `auth.env`, so add them again after reconfiguring.
+
+```bash
+PUSHOVER_APP_TOKEN="your application token"
+PUSHOVER_USER_KEY="your user key"
+```
+
+An alert goes out after two failed hourly runs in a row (one Wi-Fi blip stays quiet), or at once when Peloton rejects the refresh token (`invalid_grant`), since that only heals by re-seeding the board. While the failure lasts it repeats at most once a day, and the first good run afterwards sends one "recovered" notice. Each message starts with the board's hostname. Without these keys the timer just logs failures to the journal.
+
 ## Phase 5 validation
 
 See [Phase 5 managed-installation status](docs/phase-5-status.md). Native matrix access, Pi Chromium login, and boot/restart behavior still require one on-device acceptance run because the development host is macOS.
