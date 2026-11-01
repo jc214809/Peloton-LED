@@ -469,6 +469,7 @@ def main() -> None:
     parser.add_argument("--seed-dir", metavar="DIR",
                         help="Log in every rider in --config and write fresh token + refresh-token "
                              "files into DIR, for copying to one board.")
+    parser.add_argument("--no-install-hint", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--no-headless", action="store_true", help="Show the browser window during login.")
     parsed = parser.parse_args()
     if parsed.seed_dir and (parsed.ensure or parsed.verify_only or parsed.status or parsed.all_users):
@@ -506,6 +507,8 @@ def main() -> None:
             seeded = seed_tokens(seed_dir, Path(parsed.config), headless=not parsed.no_headless)
         except Exception as exc:
             sys.exit(f"Seeding failed: {exc}")
+        if parsed.no_install_hint:  # scripts/seed_board.sh installs them itself.
+            return
         names = ' '.join(name for _, token in seeded
                          for name in (token.name, refresh_token_path(token).name))
         print(f"""

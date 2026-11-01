@@ -137,3 +137,47 @@ def test_installer_copies_seeded_refresh_tokens_without_overwriting():
 
 def test_refresh_token_files_are_gitignored():
     assert '*.refresh.json' in (ROOT / '.gitignore').read_text().splitlines()
+
+
+def _run_install_ending(tmp_path, tokens, no_browser, sudo_user='admin'):
+    """Run the installer's closing seeding hint with stand-in variables."""
+    import os
+    text = (ROOT / 'peloton-install.sh').read_text()
+    ending = text[text.index('# Checked last:'):]
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / 'hostname').write_text('#!/bin/sh\necho PelotonPi\n')
+    (bin_dir / 'hostname').chmod(0o755)
+    setup = (f'set -Eeuo pipefail\nNO_BROWSER={str(no_browser).lower()}\n'
+             f'configured_tokens=({" ".join(str(t) for t in tokens)})\n')
+    env = {**os.environ, 'PATH': f'{bin_dir}:{os.environ["PATH"]}'}
+    env.pop('SUDO_USER', None)
+    if sudo_user:
+        env['SUDO_USER'] = sudo_user
+    result = subprocess.run(['bash', '-c', setup + ending], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stderr
+    return result.stdout
+
+
+def test_installer_ends_with_the_seed_command_when_a_rider_has_no_token(tmp_path):
+    joel, jen = tmp_path / 'cookies-joel.txt', tmp_path / 'cookies-jen.txt'
+    joel.write_text('token')
+    for no_browser in (True, False):
+        out = _run_install_ending(tmp_path, [joel, jen], no_browser)
+        assert 'NEXT STEP' in out and str(jen) in out and str(joel) not in out
+        assert 'scripts/seed_board.sh admin@PelotonPi.local' in out
+
+
+def test_installer_only_reminds_no_browser_boards_once_tokens_exist(tmp_path):
+    joel = tmp_path / 'cookies-joel.txt'
+    joel.write_text('token')
+    out = _run_install_ending(tmp_path, [joel], no_browser=True, sudo_user=None)
+    assert 'NEXT STEP' not in out
+    assert 'scripts/seed_board.sh <user>@PelotonPi.local' in out
+    assert _run_install_ending(tmp_path, [joel], no_browser=False) == ''
+
+
+def test_installer_lists_token_paths_even_with_no_start():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    # The closing hint needs the token list whether or not services start.
+    assert text.index('mapfile -t configured_tokens') < text.index('if [[ "$NO_START" == false ]]; then\n    for token_file')

@@ -209,14 +209,14 @@ else
     fi
 fi
 
-if [[ "$NO_START" == false ]]; then
-    mapfile -t configured_tokens < <("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" <<'PY'
+mapfile -t configured_tokens < <("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" <<'PY'
 import json, sys
 config=json.load(open(sys.argv[1], encoding='utf-8'))
 users=config.get('users') or []
 print('\n'.join(user['token_path'] for user in users) if users else '/var/lib/peloton-led/cookies.txt')
 PY
 )
+if [[ "$NO_START" == false ]]; then
     for token_file in "${configured_tokens[@]}"; do
         if [[ -f "$token_file" ]]; then
             if ! runuser -u "$APP_USER" -- "$APP_DIR/venv/bin/python" \
@@ -269,10 +269,27 @@ if [[ "$AUTO_TOKEN" == true ]]; then
   Auth log: journalctl -u peloton-token-refresh.service -n 100
 EOF
 fi
-if [[ "$NO_BROWSER" == true ]]; then
+# Checked last: on a board with Chromium, the renewal run above has already
+# tried to log riders in. Whoever is still missing needs seeding from a computer.
+missing_tokens=()
+for token_file in "${configured_tokens[@]}"; do
+    [[ -f "$token_file" ]] || missing_tokens+=("$token_file")
+done
+seed_command="scripts/seed_board.sh ${SUDO_USER:-<user>}@$(hostname).local"
+if ((${#missing_tokens[@]})); then
     cat <<EOF
-  Seeding:  no browser here; on another computer run
-            python scripts/refresh_cookies.py --seed-dir ~/peloton-seed
-            and follow its install instructions (one seed per board)
+
+  NEXT STEP: no Peloton login yet for ${missing_tokens[*]}
+  The display shows a padlock until you run this from the Peloton-LED
+  checkout on your computer (it logs the riders in there and installs
+  their tokens here):
+
+      $seed_command
+
+EOF
+elif [[ "$NO_BROWSER" == true ]]; then
+    cat <<EOF
+  Seeding:  no browser here; to log in again, run from your computer's checkout
+            $seed_command   (one seed per board)
 EOF
 fi

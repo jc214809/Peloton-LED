@@ -64,9 +64,15 @@ def load_dotenv(path='.env'):
     except local dev (Pi installs use /etc/peloton-led/auth.env instead).
     """
     path = Path(path)
-    if not path.is_file():
+    try:
+        if not path.is_file():
+            return
+        text = path.read_text(encoding='utf-8')
+    except (OSError, UnicodeError) as exc:
+        # E.g. run as the service account from a directory it can't read.
+        logger.warning('Ignoring %s: %s', path, exc)
         return
-    for line in path.read_text(encoding='utf-8').splitlines():
+    for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith('#') or '=' not in line:
             continue

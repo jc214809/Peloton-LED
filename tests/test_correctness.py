@@ -281,6 +281,40 @@ def test_load_dotenv_is_a_noop_when_file_missing(tmp_path):
     load_dotenv(tmp_path / 'missing.env')  # Should not raise.
 
 
+def test_load_dotenv_skips_a_dotenv_it_cannot_check(tmp_path, caplog):
+    # The service account running from admin's private temp dir hit
+    # PermissionError just checking whether .env existed (Python 3.13;
+    # 3.14's is_file() returns False instead).
+    locked = tmp_path / 'locked'
+    locked.mkdir()
+    (locked / '.env').write_text('PELOTON_TEST_LOCKED=1')
+    locked.chmod(0o000)
+    try:
+        load_dotenv(locked / '.env')
+    finally:
+        locked.chmod(0o700)
+    assert 'PELOTON_TEST_LOCKED' not in os.environ
+
+
+def test_load_dotenv_skips_an_unreadable_dotenv(tmp_path, caplog):
+    env_file = tmp_path / '.env'
+    env_file.write_text('PELOTON_TEST_UNREADABLE=1')
+    env_file.chmod(0o000)
+    try:
+        load_dotenv(env_file)
+    finally:
+        env_file.chmod(0o600)
+    assert 'PELOTON_TEST_UNREADABLE' not in os.environ
+    assert 'Ignoring' in caplog.text
+
+
+def test_load_dotenv_survives_is_file_raising(tmp_path, caplog):
+    from unittest.mock import patch
+    with patch('peloton.config.Path.is_file', side_effect=PermissionError(13, 'Permission denied')):
+        load_dotenv(tmp_path / '.env')
+    assert 'Ignoring' in caplog.text
+
+
 def test_user_weekly_goals_rejects_unsupported_keys(tmp_path):
     import json
     path = tmp_path / 'config.json'

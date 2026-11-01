@@ -324,16 +324,24 @@ sudo ./peloton-install.sh --no-browser   # implies --auto-token
 That skips Chromium and Playwright (and uninstalls Playwright on an upgrade)
 and renews only with refresh tokens. Give the board its own login from a
 computer that can run the login helper, using a `config.json` with the
-board's riders:
+board's riders. One command does it all:
 
 ```bash
-python scripts/refresh_cookies.py --seed-dir ~/peloton-seed-pelotonpi
+scripts/seed_board.sh admin@pelotonpi.local          # --config PATH for another config
 ```
 
-It logs each rider in, writes each token + refresh-token pair under the
-board's file names, and prints the `scp` and `sudo install` commands to put
-them in `/var/lib/peloton-led/`. Delete the seed folder afterward, and seed
-each board separately. Repeat this if the renewal log reports
+It logs each rider in on this computer, copies each token + refresh-token
+pair to the board, installs them into `/var/lib/peloton-led/` (asking for
+the board's sudo password if it needs one), prints `--status`, and deletes
+every other copy on both machines, even when a step fails. The display picks
+up the new tokens within seconds. Seed each board separately. When a rider
+still has no token at the end of an install (always the case on a first
+`--no-browser` install), the installer ends with a **NEXT STEP** showing
+this command with the board's user and hostname filled in.
+
+To do it by hand instead, `python scripts/refresh_cookies.py --seed-dir
+~/peloton-seed-pelotonpi` writes the files and prints the `scp` and `sudo
+install` commands; delete the seed folder afterward. Repeat this if the renewal log reports
 `invalid_grant` (for example after a Peloton password change). Check which
 riders have refresh tokens with:
 
