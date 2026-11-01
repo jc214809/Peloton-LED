@@ -637,3 +637,14 @@ def test_seed_tokens_fails_when_login_gives_no_refresh_token(tmp_path, monkeypat
     with patch('scripts.refresh_cookies.browser_login', return_value='demo'):
         with pytest.raises(RuntimeError, match='no refresh token'):
             seed_tokens(tmp_path / 'seed', tmp_path / 'missing.json')
+
+
+def test_seed_dir_install_hint_can_be_suppressed_for_seed_board(tmp_path, monkeypatch, capsys):
+    import sys as _sys
+    from scripts import refresh_cookies
+    seeded = [('Joel', tmp_path / 'cookies-joel.txt')]
+    for hint, expected in ((['--no-install-hint'], False), ([], True)):
+        monkeypatch.setattr(_sys, 'argv', ['refresh_cookies.py', '--seed-dir', str(tmp_path), *hint])
+        with patch('scripts.refresh_cookies.seed_tokens', return_value=seeded):
+            refresh_cookies.main()
+        assert ('sudo install' in capsys.readouterr().out) is expected
