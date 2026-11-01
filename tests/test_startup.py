@@ -550,8 +550,9 @@ def test_username_profile_includes_top_three_instructors_when_present():
     snapshot = {'me': {'username': 'Rider'}, 'summaries': [], 'status': 'ready',
                 'totals': {'Total Workouts': 100, 'Cycling': 60},
                 'weekly_progress': {'workouts': 3, 'minutes': 75},
-                'instructor_counts': {'Cody Rigsby': 10, 'Robin Arzon': 7, 'Ally Love': 4,
-                                      'Denis Morton': 1}}
+                'instructor_counts': {'c': 10, 'r': 7, 'a': 4, 'd': 1, 'group-only': 12},
+                'instructor_names': {'c': 'Cody Rigsby', 'r': 'Robin Arzon', 'a': 'Ally Love',
+                                     'd': 'Denis Morton'}}
     display = {'rotation': ['username'], 'screen_durations': {'username': 1},
                'duration': 1, 'overview_duration': 1, 'last_workout_duration': 1,
                'color': 'white'}

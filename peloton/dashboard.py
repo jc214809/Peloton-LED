@@ -29,7 +29,8 @@ logger = logging.getLogger('peloton-led.dashboard')
 RENEWAL_MARKER_CHECK_SECONDS = 30
 # Bump to recount the instructor and distance tallies from scratch once.
 # 2: tallies used to step past workouts still in progress, so those never counted.
-TALLY_VERSION = 2
+# 3: instructors keyed by ID; placeholders (Just Walk, ...) dropped, group classes split.
+TALLY_VERSION = 3
 
 
 class Dashboard:
@@ -64,7 +65,7 @@ class Dashboard:
                       'consecutive_failures': 0,
                       'celebrated_pr_ids': [], 'celebrated_milestones': [],
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
-                      'instructor_counts': {}, 'instructor_tally_cursor': None, 'streaks': {},
+                      'instructor_counts': {}, 'instructor_names': {}, 'instructor_tally_cursor': None, 'streaks': {},
                       'distance_totals': {}, 'distance_tally_cursor': None,
                       'distance_tally_since': None, 'tally_version': None,
                       'personal_records': {}}
@@ -279,6 +280,7 @@ class Dashboard:
             with self._lock:
                 generation = self._data['generation'] + 1
                 prior_counts = self._data.get('instructor_counts', {})
+                prior_names = self._data.get('instructor_names', {})
                 cursor = self._data.get('instructor_tally_cursor')
                 prior_distance = self._data.get('distance_totals', {})
                 distance_cursor = self._data.get('distance_tally_cursor')
@@ -287,7 +289,8 @@ class Dashboard:
             if tally_version != TALLY_VERSION:
                 logger.info('Tally format changed (%s -> %s); recounting instructors and distance',
                             tally_version, TALLY_VERSION)
-                prior_counts, cursor, prior_distance, distance_cursor = {}, None, {}, None
+                prior_counts, prior_names, cursor = {}, {}, None
+                prior_distance, distance_cursor = {}, None
                 tallied_since = since = (self.config.get('journey') or {}).get('start_date')
             since = (self.config.get('journey') or {}).get('start_date')
             if since != tallied_since:
@@ -299,7 +302,8 @@ class Dashboard:
                 page_size=self.config.get('history_page_size', 50),
                 max_pages=self.config.get('instructor_tally_max_pages', 200),
                 stop_at_id=cursor))
-            instructor_counts = merge_instructor_counts(prior_counts, new_workouts)
+            instructor_counts, instructor_names = merge_instructor_counts(
+                prior_counts, prior_names, new_workouts)
             newest_id = new_workouts[0].get('id') if new_workouts else cursor
             # The distance tally shares the instructor tally's pages whenever
             # the two cursors agree (including a first run, when both page the
@@ -322,7 +326,8 @@ class Dashboard:
                 me=me, totals=extract_discipline_totals(overview), summaries=summaries,
                 streaks=parse_streaks(overview),
                 weekly_progress=progress,
-                instructor_counts=instructor_counts, instructor_tally_cursor=newest_id,
+                instructor_counts=instructor_counts, instructor_names=instructor_names,
+                instructor_tally_cursor=newest_id,
                 distance_totals=distance_totals, distance_tally_cursor=distance_newest,
                 distance_tally_since=since, tally_version=TALLY_VERSION,
                 personal_records=personal_records,
