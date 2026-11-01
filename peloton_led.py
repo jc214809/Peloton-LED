@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from peloton.config import load_config, default_token_path, load_dotenv
 from peloton.dashboard import Dashboard
-from peloton.goals import next_milestone, week_day
+from peloton.goals import next_milestone, week_day, week_start
 from peloton.journey import journey_progress
 from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
@@ -22,7 +22,7 @@ from display.ui.streak_screen import streak_lines
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
 DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                    'next_milestone', 'lifetime', 'journey',
+                    'next_milestone', 'lifetime', 'journey', 'heatmap',
                     'milestones', 'goals')
 
 
@@ -128,9 +128,19 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                                    username_duration))
 
     # 64 rows fit a 2x2 grid of icon tiles per page; 32 rows fit one row of two.
+    zone = display.get('timezone') or (snapshot.get('me') or {}).get('timezone')
     if 'streaks' in groups and streak_lines(snapshot.get('streaks')):
-        groups['streaks'].append(('streak', snapshot['streaks'],
-                                  _duration(display, 'streaks', display['overview_duration'])))
+        streak_duration = _duration(display, 'streaks', display['overview_duration'])
+        weekday = week_day(zone)
+        reminder_day = display.get('streak_reminder_day', 5)
+        if (reminder_day is not None and weekday >= reminder_day
+                and snapshot.get('streak_week_workouts') == 0):
+            # Late in the week with nothing that counts yet: one workout keeps the streak.
+            groups['streaks'].append(('streak_risk', {
+                'current': snapshot['streaks']['current_weekly'], 'days_left': 7 - weekday},
+                streak_duration))
+        else:
+            groups['streaks'].append(('streak', snapshot['streaks'], streak_duration))
 
     if 'versus' in groups and rivals and len(rivals) >= 2:
         from display.ui.versus_screen import DETAIL_INTERVAL_SECONDS, STATS
@@ -138,7 +148,6 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         if versus_duration > 0 and matrix_height < 64:
             # 32 rows show one stat at a time; give each its full turn.
             versus_duration = max(versus_duration, len(STATS) * DETAIL_INTERVAL_SECONDS)
-        zone = display.get('timezone') or (snapshot.get('me') or {}).get('timezone')
         groups['versus'].append(('versus', {'riders': rivals, 'weekday': week_day(zone)},
                                  versus_duration))
 
@@ -171,6 +180,13 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         if progress and progress['miles'] > 0:
             groups['journey'].append(('journey', progress,
                                       _duration(display, 'journey', display['overview_duration'])))
+
+    if 'heatmap' in groups and snapshot.get('activity_days'):
+        from peloton.activity import HEATMAP_WEEKS
+        today = week_start(zone)[1].date().isoformat()
+        groups['heatmap'].append(('heatmap', {'days': snapshot['activity_days'], 'today': today,
+                                              'weeks': HEATMAP_WEEKS},
+                                  _duration(display, 'heatmap', display['overview_duration'])))
 
     goal_duration = _duration(display, 'goals', display['overview_duration'])
     if 'goals' in groups:
@@ -325,6 +341,8 @@ def main():
     from display.ui.versus_screen import VersusScreen
     from display.ui.countdown_screen import CountdownScreen
     from display.ui.journey_screen import JourneyScreen
+    from display.ui.heatmap_screen import HeatmapScreen
+    from display.ui.streak_risk_screen import StreakRiskScreen
 
     matrix = RGBMatrix(options=led_matrix_options(options, config['matrix']))
     try:
@@ -349,6 +367,8 @@ def main():
     manager.register('versus', VersusScreen())
     manager.register('countdown', CountdownScreen())
     manager.register('journey', JourneyScreen())
+    manager.register('heatmap', HeatmapScreen())
+    manager.register('streak_risk', StreakRiskScreen())
     configured_logo = display.get('logo_path')
     logo = Path(configured_logo) if configured_logo else None
     for profile in profiles:

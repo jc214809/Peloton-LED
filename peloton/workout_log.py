@@ -99,6 +99,7 @@ def as_workout(identity, row, instructors):
             'status': row.get('status'), 'fitness_discipline': row.get('discipline'),
             'distance': row.get('distance'), 'total_work': row.get('total_work_j'),
             'duration': row.get('class_length_s'),
+            'is_3p_fit_feed_workout_excluded_from_streaks': row.get('counts_for_streaks') is False,
             'ride': {'instructor': instructor}}
 
 
@@ -236,18 +237,23 @@ class WorkoutLog:
     def derived(self, journey=None, metric=False, tzname=None, now=None):
         """Figures the screens read, computed from the whole log.
 
-        Instructor counts and journey miles stay empty until the backfill has
-        the full history, so a partial log never shows a too-small total.
+        Instructor counts, journey miles and the heatmap stay empty until the
+        backfill has the full history, so a partial log never shows a
+        too-small total. This week's figures are always complete: refreshes
+        fetch back to Monday while the log is still filling.
         """
+        from .activity import daily_minutes, streak_week_workouts
         workouts = self.as_workouts()
-        result = {'weekly_progress': weekly_progress(workouts, tzname, now=now)}
+        result = {'weekly_progress': weekly_progress(workouts, tzname, now=now),
+                  'streak_week_workouts': streak_week_workouts(workouts, tzname, now=now)}
         if self.complete:
             counts, names = merge_instructor_counts({}, {}, workouts)
             since = (journey or {}).get('start_date')
             result.update(instructor_counts=counts, instructor_names=names,
-                          distance_totals=merge_distance_totals({}, workouts, metric, since=since, tzname=tzname))
+                          distance_totals=merge_distance_totals({}, workouts, metric, since=since, tzname=tzname),
+                          activity_days=daily_minutes(workouts, tzname, now=now))
         else:
-            result.update(instructor_counts={}, instructor_names={}, distance_totals={})
+            result.update(instructor_counts={}, instructor_names={}, distance_totals={}, activity_days={})
         return result
 
 

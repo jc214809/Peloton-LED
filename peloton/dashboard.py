@@ -95,7 +95,8 @@ class Dashboard:
                       'celebrated_pr_ids': [], 'celebrated_milestones': [],
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
-                      'distance_totals': {}, 'personal_records': {}}
+                      'distance_totals': {}, 'personal_records': {},
+                      'streak_week_workouts': None, 'activity_days': {}}
         self.demo = demo
         if demo:
             data = demo_data()

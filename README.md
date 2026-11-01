@@ -56,19 +56,20 @@ Default order:
 
 ```json
 "rotation": ["latest_workouts", "username", "streaks", "versus", "total_workouts",
-             "next_milestone", "lifetime", "journey", "milestones", "goals"]
+             "next_milestone", "lifetime", "journey", "heatmap", "milestones", "goals"]
 ```
 
 | Section | What it shows | Shown when | Time on screen |
 |---|---|---|---|
 | [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats), plus 1 s each for the graph and zone bar, per workout |
 | [`username`](#username--rider-name-and-highlights) | Your name over rotating highlights: total workouts, this week, top discipline, top 3 instructors | Always | `duration`, extended to 4 s per highlight |
-| [`streaks`](#streaks--weekly-streak) | Current weekly streak and your best | Current weekly streak is above 0 | `overview_duration` |
+| [`streaks`](#streaks--weekly-streak) | Current weekly streak and your best, or a weekend reminder when this week has no workout yet | Current weekly streak is above 0 | `overview_duration` |
 | [`versus`](#versus--household-head-to-head) | Two riders side by side for this week | 2+ riders configured under `users` | `overview_duration` (64×32: at least 12 s) |
 | [`total_workouts`](#total_workouts--lifetime-total) | Lifetime total workout count | Profile totals available | Same as `lifetime` (at least 5 s) |
 | [`next_milestone`](#next_milestone--countdown-to-the-next-milestone) | Workouts left until your next milestone | A milestone is ahead of you | `overview_duration` |
 | [`lifetime`](#lifetime--per-discipline-totals) | Every discipline's lifetime count, with icons | Profile totals available | `overview_duration` per page (at least 5 s) |
 | [`journey`](#journey--lifetime-miles-as-a-trip) | Lifetime miles plotted as a trip between two places | Some distance has been tallied | `overview_duration` |
+| [`heatmap`](#heatmap--last-12-weeks) | One cell per day for the last 12 weeks, shaded by minutes | The full history is in the workout log and has a workout in those weeks | `overview_duration` |
 | [`milestones`](#milestones--milestone-celebration) | Celebration for a lifetime milestone you just reached | A milestone is reached and not yet celebrated | `overview_duration` |
 | [`goals`](#goals--weekly-goals) | Progress bar toward each weekly goal | `weekly_goals.workouts` and/or `.minutes` is above 0 | `overview_duration` per goal |
 
@@ -167,6 +168,10 @@ Options: `duration` (or `screen_durations.username`) is the minimum time on scre
 
 A pixel flame, your current **weekly streak**, and either `PERSONAL BEST` (when the current streak is your best) or `BEST N WEEKS`. This comes from Peloton's profile overview, so it costs no extra API calls. The screen is skipped while the streak is 0.
 
+![Streak reminder](docs/screenshots/rotation/streak-risk.png)
+
+**Streak reminder.** From Saturday on, if this week (since Monday, display timezone) has no workout that counts toward Peloton's streak, the page becomes a reminder instead: `1 WORKOUT KEEPS YOUR N-WEEK STREAK`, with `2 DAYS LEFT` or `LAST DAY`. Like Peloton, it ignores workouts synced from other apps (for example Apple Watch walks), so those don't hide the reminder. `streak_reminder_day` sets the first day to remind (`0` Monday … `6` Sunday, default `5` Saturday); `null` turns the reminder off.
+
 ### `versus` — household head-to-head
 
 ![This week head-to-head](docs/screenshots/rotation/versus.png)
@@ -194,6 +199,12 @@ Shows how many workouts are left (`12 TO GO`) until your next lifetime milestone
 Every discipline you've done gets its own colored pixel-icon tile with its exact lifetime count, biggest first. That's four tiles per page on 64×64 and two on 64×32, with as many pages as needed. Disciplines are never merged: Bike, Tread and Row Bootcamp each keep their own tile, and their icons alternate with a strength dumbbell. All tiles on a page appear in the same frame.
 
 Options: `screen_durations.lifetime` / `overview_duration`, per page, minimum 5 s.
+
+### `heatmap` — last 12 weeks
+
+![Activity heatmap](docs/screenshots/rotation/heatmap.png)
+
+A GitHub-style grid: one column per week (oldest on the left, this week on the right), one row per day (Monday at the top), each day shaded by its workout minutes: grey for none, then darker to brighter green at under 20, 20–44, 45–89 and 90+ minutes. Days after today are left blank. It comes from the [workout log](#refresh-behavior), so it costs no API calls, and it appears once the first full-history download has finished. Options: `screen_durations.heatmap` / `overview_duration`.
 
 ### `journey` — lifetime miles as a trip
 
@@ -328,13 +339,14 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `screen_durations` | `{}` | Per-section seconds, overriding the individual duration settings above |
 | `weekly_goals` | `{"workouts": 0, "minutes": 0}` | Weekly workout/minute targets; `0` disables that goal. See [Phase 6 customization](#phase-6-customization) |
 | `milestones` | `[]` | Lifetime Total Workouts thresholds that celebrate once each, e.g. `[100, 250, 500]` |
+| `streak_reminder_day` | `5` (Saturday) | First weekday (`0` Monday … `6` Sunday) the [streak reminder](#streaks--weekly-streak) can replace the streak page; `null` turns it off |
 | `milestone_step` | `100` | Also count down to (and celebrate) every Nth lifetime workout, e.g. 2,200 after 2,100; `0` turns this off |
 | `journey` | Columbus → Disney World, 880 mi, every workout with a distance | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880}`. Any places and distance; optional `"disciplines"` list narrows which workouts count (see [`journey`](#journey--lifetime-miles-as-a-trip)); also settable per rider under `users[]`. Optional `"start_date": "YYYY-MM-DD"` counts only miles from that day on (display timezone); changing it recounts the full history once on the next refresh |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |
 | `compact_workout_pages` | `false` | On 32-row panels, use the older two-page compact workout layout instead of the rotating one |
 
-`rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `milestones`, `goals`, each at most once. See [Screens and rotation](#screens-and-rotation) for what each one shows. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
+`rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `heatmap`, `milestones`, `goals`, each at most once. See [Screens and rotation](#screens-and-rotation) for what each one shows. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `heatmap`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
 
 Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds, with one extra second for the graph and the zone bar. The page lasts exactly that long (`last_workout_detail_interval * (1 + stat count)`, plus 1 s per graph or zone bar), so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. `last_workout_duration` (or `screen_durations.latest_workouts`) only sets the page length with `compact_workout_pages` on 32-row panels, where pages are static; `0` still disables the section.
 

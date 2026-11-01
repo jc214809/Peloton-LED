@@ -23,7 +23,7 @@ import unittest  # noqa: F401,E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 SCALE = 4
-ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'next_milestone', 'lifetime', 'journey', 'milestones', 'goals']
+ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'next_milestone', 'lifetime', 'journey', 'heatmap', 'milestones', 'goals']
 
 
 class PreviewDashboard:
@@ -62,7 +62,8 @@ def add_log_figures(snapshot, options):
     log = WorkoutLog.load(path)
     derived = log.derived(journey=preview_journey(options), metric=uses_metric(me),
                           tzname=me.get('timezone'))
-    snapshot.update({key: derived[key] for key in ('instructor_counts', 'instructor_names', 'distance_totals')})
+    snapshot.update({key: derived[key] for key in ('instructor_counts', 'instructor_names', 'distance_totals',
+                                                   'activity_days', 'streak_week_workouts')})
 
 
 def load_snapshot_for(options):
@@ -125,6 +126,8 @@ def render(options):
     from display.ui.versus_screen import VersusScreen
     from display.ui.countdown_screen import CountdownScreen
     from display.ui.journey_screen import JourneyScreen
+    from display.ui.heatmap_screen import HeatmapScreen
+    from display.ui.streak_risk_screen import StreakRiskScreen
     from display.ui.username import UsernameScreen
     from display.ui.login_indicator import draw_login_indicator
     from display.ui.stale_indicator import draw_stale_indicator
@@ -141,7 +144,8 @@ def render(options):
                'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
                'pr': PrCelebrationScreen(), 'status': StatusScreen(), 'goal': GoalScreen(),
                'logo': LogoMaskScreen(), 'streak': StreakScreen(), 'versus': VersusScreen(),
-               'countdown': CountdownScreen(), 'journey': JourneyScreen()}
+               'countdown': CountdownScreen(), 'journey': JourneyScreen(),
+               'heatmap': HeatmapScreen(), 'streak_risk': StreakRiskScreen()}
     snapshot = load_snapshot_for(options)
     username = options.username or (snapshot.get('me') or {}).get('username') or 'Rider'
     pages = [('logo', None, 1.0)]
