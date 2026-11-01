@@ -292,7 +292,10 @@ python peloton_led.py --emulated --demo --demo-login-needed --cycles 1
 python scripts/render_demo.py /tmp/peloton-demo.png
 python -m pip install -r requirements-dev.txt
 python -m pytest tests/ -q
+python -m pytest tests/ --cov --cov-report=term-missing   # with coverage
 ```
+
+GitHub Actions runs the tests with coverage on Python 3.11 and 3.13 for every pull request and push to `main`, and uploads the report to [Codecov](https://codecov.io/gh/jc214809/Peloton-LED) (the badges at the top).
 
 `--cycles 1` stops after one full rotation. Omit it to run continuously. Durations come from configuration; `--display-duration` overrides only the username screen. The PNG preview uses the same emulator text drawing and screen code, without starting a browser server.
 
