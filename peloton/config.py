@@ -19,12 +19,13 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'refresh_interval': 300, 'history_batch_size': 100, 'recent_fetch_size': 20,
             'performance_cache_size': 32,
             'rotation': ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                         'next_milestone', 'lifetime', 'journey',
+                         'next_milestone', 'lifetime', 'journey', 'heatmap',
                          'milestones', 'goals'],
             'screen_durations': {},
             'weekly_goals': {'workouts': 0, 'minutes': 0},
             'milestones': [],
             'milestone_step': 100,
+            'streak_reminder_day': 5,
             'journey': DEFAULT_JOURNEY,
             'brightness_schedule': None,
             'refresh_schedule': None,
@@ -44,9 +45,9 @@ RETIRED_DISPLAY_KEYS = ('history_days', 'history_limit', 'history_page_size',
                         'history_max_pages', 'instructor_tally_max_pages')
 
 ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                     'next_milestone', 'lifetime', 'journey', 'milestones', 'goals'}
+                     'next_milestone', 'lifetime', 'journey', 'heatmap', 'milestones', 'goals'}
 DURATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'next_milestone',
-                     'lifetime', 'journey', 'milestones', 'goals'}
+                     'lifetime', 'journey', 'heatmap', 'milestones', 'goals'}
 
 
 def user_slug(name):
@@ -279,6 +280,10 @@ def load_config(path='config', allow_missing=False):
     _validate_weekly_goals(path, display.get('weekly_goals'), 'display.')
     display['milestones'] = _validate_milestones(path, display.get('milestones'), 'display.')
     display['journey'] = _validate_journey(path, display.get('journey'), 'display.')
+    reminder = display.get('streak_reminder_day')
+    if reminder is not None and (isinstance(reminder, bool) or not isinstance(reminder, int)
+                                 or not 0 <= reminder <= 6):
+        raise ValueError(f'{path}: display.streak_reminder_day must be 0 (Monday) to 6 (Sunday), or null')
     step = display.get('milestone_step')
     if isinstance(step, bool) or not isinstance(step, int) or step < 0:
         raise ValueError(f'{path}: display.milestone_step must be a non-negative integer')

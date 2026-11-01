@@ -1,6 +1,7 @@
 # Workout log: plan
 
-Status: **PR A implemented** (branch `workout-log`); PR B not started.
+Status: **PR A implemented** (branch `workout-log`, PR #29); **PR B implemented** (branch
+`streak-risk-heatmap`, stacked on PR A).
 Replaces the cursor-based instructor and distance tallies with a slim
 per-workout log, cuts refresh traffic by 4–7×, and stores what the planned
 screens need. Ships as two PRs: A (storage, no visible change) and B (first
@@ -319,6 +320,20 @@ Sims 148).
 
 "Streak at risk" (uses `counts_for_streaks`) and the activity heatmap. Then
 the rest of the ideas list as chosen.
+
+**Done:**
+
+- **Streak reminder:** from `streak_reminder_day` (default Saturday), if this
+  week has no streak-eligible workout (`streak_week_workouts == 0`), the
+  `streaks` page becomes `streak_risk`: "1 WORKOUT KEEPS YOUR N-WEEK
+  STREAK", plus days left. Synced third-party workouts don't count, matching
+  Peloton. An unknown count (no log yet) never triggers it.
+- **Heatmap:** new `heatmap` rotation section, 12 Monday-aligned weeks of
+  daily minutes (`activity.daily_minutes`), shown once the log is complete.
+- No new API calls. Verified against PR A on the re-recorded real data: with
+  the existing rotation, every page state and all 142 frames are identical
+  and traffic is unchanged. The new screens were checked on real data at
+  both board sizes (Joel's week emptied to force the reminder).
 
 ## Verification (PR A)
 
