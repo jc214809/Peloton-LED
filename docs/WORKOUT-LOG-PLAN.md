@@ -1,7 +1,7 @@
 # Workout log: plan
 
-Status: **PR A implemented** (branch `workout-log`, PR #29); **PR B implemented** (branch
-`streak-risk-heatmap`, stacked on PR A).
+Status: **done.** PR A (#29) and PR B (#30) merged 2026-11-01; Disneypi
+upgraded and its cold-start backfill timed the same day.
 Replaces the cursor-based instructor and distance tallies with a slim
 per-workout log, cuts refresh traffic by 4–7×, and stores what the planned
 screens need. Ships as two PRs: A (storage, no visible change) and B (first
@@ -41,6 +41,21 @@ rider per day, down from ~1,100–1,560 calls and ~230–475 MB.
 The live log matched the audit exactly: Joel 2,127 and Jen 2,192 workouts
 (Peloton's own totals); Jess Sims 205 / Adrian Williams 179 / Denis Morton
 151 and Cody Rigsby 423 / Robin Arzón 150 / Jess Sims 148.
+
+**On a board (Disneypi, first start after the upgrade, both riders
+downloading at once):**
+
+| Rider | Log / Peloton total | Full history |
+|---|---|---|
+| Joel | 2,127 / 2,127 | 47 s |
+| Jen | 2,192 / 2,192 | 51 s |
+
+About 15% slower than the Mac (~42 s), with nothing removed and the
+non-history screens showing throughout. The `seed_board.sh` log copy isn't
+needed.
+
+The upgrade also turned up an installer crash when a rider had no
+`token_path` (`KeyError`); fixed in #31.
 
 **Estimates this plan got wrong** (corrected below):
 
@@ -217,7 +232,7 @@ of mixing two people's history.
 - Complete only when it reaches the oldest workout **and** the count check
   (section 4) passes.
 - Optional, only if Pi backfills prove slow: `seed_board.sh` copies a log
-  built on the Mac.
+  built on the Mac. Not needed: about 50 s per rider on Disneypi.
 
 ### 3. Each refresh
 
@@ -369,7 +384,7 @@ cd ~/Peloton-LED && git pull && sudo ./peloton-install.sh --skip-matrix
 sudo systemctl restart peloton-led
 ```
 
-The first start backfills each rider (about 22 calls and about 20 s each)
+The first start backfills each rider (about 22 calls and about 50 s each on a Pi)
 while the board keeps showing the non-history screens.
 
 **Rollback:** the previous version ignores the log file. With the old
