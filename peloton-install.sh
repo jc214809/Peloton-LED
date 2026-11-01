@@ -13,7 +13,9 @@ NO_BROWSER=false
 SKIP_MATRIX=false
 SKIP_PACKAGES=false
 NO_START=false
-MANUAL=false
+# Empty until resolve_start_mode: --manual / --start-at-boot, or the default.
+MANUAL=""
+KEPT_BOOT_START=false
 RECONFIGURE=false
 
 usage() {
@@ -36,12 +38,32 @@ Options:
   --skip-matrix         Skip the native rpi-rgb-led-matrix build
   --skip-packages       Skip apt package installation
   --driver REF          Matrix driver branch, tag, or commit (default: master)
-  --no-start            Install and enable units without starting them now
-  --manual              Don't start at boot or now; run on demand with
-                         systemctl start/stop peloton-led (token renewal,
-                         with --auto-token, only runs while the display does)
+  --no-start            With --start-at-boot: enable units without starting now
+  --manual              The default: don't start at boot or now; run on demand
+                         with systemctl start/stop peloton-led (token renewal,
+                         with --auto-token, only runs while the display does).
+                         Upgrades of a board that already starts at boot keep
+                         doing so unless --manual is given.
+  --start-at-boot       Start the display at boot and now (a dedicated board)
   -h, --help            Show this help
 USAGE
+}
+
+# Manual (start on demand) is the default. An upgrade with no mode flag keeps a
+# board that already starts at boot that way, so it doesn't go dark on its
+# next reboot.
+resolve_start_mode() {
+    if [[ -z "$MANUAL" ]]; then
+        if systemctl is-enabled --quiet peloton-led.service 2>/dev/null; then
+            MANUAL=false
+            KEPT_BOOT_START=true
+        else
+            MANUAL=true
+        fi
+    fi
+    if [[ "$MANUAL" == true ]]; then
+        NO_START=true
+    fi
 }
 
 while (($#)); do
@@ -55,7 +77,8 @@ while (($#)); do
             [[ $# -ge 2 ]] || { echo "--driver requires a value" >&2; exit 2; }
             DRIVER_REF="$2"; shift 2 ;;
         --no-start) NO_START=true; shift ;;
-        --manual) MANUAL=true; NO_START=true; shift ;;
+        --manual) MANUAL=true; shift ;;
+        --start-at-boot) MANUAL=false; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -65,6 +88,7 @@ done
 [[ $EUID -eq 0 ]] || { echo "Run this installer with sudo." >&2; exit 1; }
 [[ -f "$SOURCE_DIR/peloton_led.py" ]] || { echo "Run the installer from the project checkout." >&2; exit 1; }
 command -v systemctl >/dev/null || { echo "systemd is required." >&2; exit 1; }
+resolve_start_mode
 
 echo "Installing Peloton LED from $SOURCE_DIR"
 
@@ -260,6 +284,12 @@ if [[ "$MANUAL" == true ]]; then
     cat <<EOF
   Manual:   not started at boot; stop whatever else drives the panel, then
             sudo systemctl start peloton-led   (and stop peloton-led when done)
+            For a dedicated board, re-run with --start-at-boot.
+EOF
+elif [[ "$KEPT_BOOT_START" == true ]]; then
+    cat <<EOF
+  Boot:     starts at boot, as before (manual is now the default for new
+            installs; re-run with --manual to switch this board)
 EOF
 fi
 if [[ "$AUTO_TOKEN" == true ]]; then

@@ -181,8 +181,14 @@ the Pi itself and run the installer from the checkout:
 ```bash
 git clone https://github.com/jc214809/Peloton-LED.git
 cd Peloton-LED
-sudo ./peloton-install.sh
+sudo ./peloton-install.sh                    # manual: you start/stop the display
+sudo ./peloton-install.sh --start-at-boot    # dedicated board: runs at boot
 ```
+
+By default the display is **not** started at boot or during install; start it
+with `sudo systemctl start peloton-led` (see [Manual mode](#manual-mode-the-default)).
+Pass `--start-at-boot` if the Pi drives nothing else and should show Peloton
+whenever it's on.
 
 This is safe to re-run — it's also how you [upgrade](#upgrading) later.
 
@@ -267,8 +273,8 @@ want to reclaim the space.
 | Refresh token(s) | `/var/lib/peloton-led/cookies*.refresh.json` |
 | Persistent snapshot/cache | `/var/lib/peloton-led/dashboard-cache*.json` |
 
-The display runs as `peloton-led.service`: it starts at boot, restarts on
-failure, and is granted only the GPIO-related capabilities the matrix driver
+The display runs as `peloton-led.service`: it starts when you start it (or
+at boot with `--start-at-boot`), restarts on failure, and is granted only the GPIO-related capabilities the matrix driver
 needs — it does not run as root. The installer validates configuration and
 the systemd units before enabling the service, so a bad config fails the
 install rather than producing a crash-looping service.
@@ -355,17 +361,17 @@ sudo -u peloton-led /opt/peloton-led/venv/bin/python /opt/peloton-led/scripts/re
     --status --all-users --config /etc/peloton-led/config.json --cookies /var/lib/peloton-led/cookies.txt
 ```
 
-### Sharing the panel with another app (`--manual`)
+### Manual mode (the default)
 
-If the Pi already runs another display (say, a baseball scoreboard) that
-should stay the boot default, install in manual mode:
+Unless you pass `--start-at-boot`, nothing is enabled at boot and nothing is
+started during install. This suits a Pi that already runs another display
+(say, a baseball scoreboard) that should stay the boot default:
 
 ```bash
-sudo ./peloton-install.sh --auto-token --manual
+sudo ./peloton-install.sh --auto-token
 ```
 
-Nothing is enabled at boot and nothing is started during install. Only one
-program can drive the matrix at a time, so swap them by hand:
+Only one program can drive the matrix at a time, so swap them by hand:
 
 ```bash
 sudo systemctl stop <other-display>.service && sudo systemctl start peloton-led
@@ -375,8 +381,12 @@ sudo systemctl stop peloton-led && sudo systemctl start <other-display>.service
 With `--auto-token`, token renewal follows the display instead of running
 all the time: starting `peloton-led` runs one token check (logging in if the
 token expired while it was off) and starts the hourly timer, and stopping
-`peloton-led` stops the timer. Pass `--manual` again on upgrades; a run
-without it switches back to starting at boot.
+`peloton-led` stops the timer.
+
+On an **upgrade**, a board that already starts at boot keeps doing so when
+you pass neither flag (so it doesn't go dark on its next reboot), and the
+installer says so. Pass `--manual` to switch such a board to manual, or
+`--start-at-boot` to switch a manual board to starting at boot.
 
 ## Installer options reference
 
@@ -392,8 +402,9 @@ sudo ./peloton-install.sh [options]
 | `--skip-matrix` | Skip building/installing the native `rpi-rgb-led-matrix` bindings — use when they're already installed, or when preparing a Pi with no panel attached yet |
 | `--skip-packages` | Skip the `apt-get install` step — use when you manage system packages yourself or they're already present |
 | `--driver REF` | Git branch, tag, or commit of `rpi-rgb-led-matrix` to build (default: `master`) |
-| `--no-start` | Install and enable the systemd units but don't start them yet — useful when staging a config before going live |
-| `--manual` | Never start at boot or during install; you start/stop the display yourself (see [below](#sharing-the-panel-with-another-app---manual)) |
+| `--manual` | The default: never start at boot or during install; you start/stop the display yourself (see [above](#manual-mode-the-default)). Needed on upgrade only to switch a board that currently starts at boot |
+| `--start-at-boot` | Enable the display at boot and start it now — for a Pi that drives nothing else |
+| `--no-start` | With `--start-at-boot`: enable the units but don't start them yet — useful when staging a config before going live |
 | `-h`, `--help` | Print usage and exit |
 
 ### Editing the config
@@ -438,7 +449,7 @@ setup):
 
 ```bash
 git pull
-sudo ./peloton-install.sh --auto-token   # match your original flags
+sudo ./peloton-install.sh --auto-token   # match your original flags (boot vs. manual is kept)
 ```
 
 This upgrades the application code in `/opt/peloton-led` while preserving

@@ -1,5 +1,7 @@
 import json
 import subprocess
+
+import pytest
 from pathlib import Path
 
 from peloton.config import load_config
@@ -79,7 +81,10 @@ def test_systemd_units_have_managed_runtime_and_token_safety():
 
 def test_installer_manual_mode_never_enables_at_boot():
     text = (ROOT / 'peloton-install.sh').read_text()
-    assert '--manual) MANUAL=true; NO_START=true; shift ;;' in text
+    assert '--manual) MANUAL=true; shift ;;' in text
+    assert '--start-at-boot) MANUAL=false; shift ;;' in text
+    # Decided after argument parsing, before any unit is installed or enabled.
+    assert text.index('resolve_start_mode\n') < text.index('systemctl daemon-reload')
     enable_block = text.split('if [[ "$MANUAL" == true ]]; then\n    # Undo boot-time', 1)[1]
     manual_branch, default_branch = enable_block.split('else', 1)
     assert 'systemctl disable peloton-led.service peloton-token-refresh.timer' in manual_branch
@@ -181,3 +186,39 @@ def test_installer_lists_token_paths_even_with_no_start():
     text = (ROOT / 'peloton-install.sh').read_text()
     # The closing hint needs the token list whether or not services start.
     assert text.index('mapfile -t configured_tokens') < text.index('if [[ "$NO_START" == false ]]; then\n    for token_file')
+
+
+def _start_mode(tmp_path, flag_value, enabled_now):
+    """Run resolve_start_mode with a fake systemctl; return MANUAL, NO_START, KEPT_BOOT_START."""
+    import os
+    text = (ROOT / 'peloton-install.sh').read_text()
+    start = text.index('resolve_start_mode() {')
+    function = text[start:text.index('\n}\n', start) + 3]
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / 'systemctl').write_text(f'#!/bin/sh\nexit {0 if enabled_now else 1}\n')
+    (bin_dir / 'systemctl').chmod(0o755)
+    script = (f'set -Eeuo pipefail\nMANUAL="{flag_value}"\nNO_START=false\nKEPT_BOOT_START=false\n'
+              f'{function}resolve_start_mode\necho "$MANUAL $NO_START $KEPT_BOOT_START"\n')
+    env = {**os.environ, 'PATH': f'{bin_dir}:{os.environ["PATH"]}'}
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stderr
+    return result.stdout.split()
+
+
+@pytest.mark.parametrize('flag,enabled_now,expected', [
+    ('', False, ['true', 'true', 'false']),    # fresh install or a manual board: manual
+    ('', True, ['false', 'false', 'true']),    # upgrade of a boot-start board: keep it
+    ('true', True, ['true', 'true', 'false']),   # --manual switches a boot-start board
+    ('false', False, ['false', 'false', 'false']),  # --start-at-boot
+    ('false', True, ['false', 'false', 'false']),
+])
+def test_manual_is_the_default_but_upgrades_keep_boot_start(tmp_path, flag, enabled_now, expected):
+    assert _start_mode(tmp_path, flag, enabled_now) == expected
+
+
+def test_installer_summary_explains_a_kept_boot_start():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    assert 'elif [[ "$KEPT_BOOT_START" == true ]]; then' in text
+    assert 're-run with --manual to switch this board' in text
+    assert 'For a dedicated board, re-run with --start-at-boot.' in text
