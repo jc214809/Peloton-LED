@@ -359,7 +359,8 @@ def test_all_user_renewal_failure_message_is_not_just_the_exception_type(tmp_pat
 # --- Refresh-token renewal (no browser) ---------------------------------------
 
 import json as _json
-from scripts.refresh_cookies import (AUTH0_CLIENT_ID, AUTH0_TOKEN_URL, RefreshTokenRejected,
+from scripts.refresh_cookies import (AUTH0_CLIENT_ID, AUTH0_TOKEN_URL, BROWSER_FALLBACK_INTERVAL_SECONDS,
+                                     RefreshTokenRejected, browser_attempt_path, browser_fallback_due,
                                      browser_login_available, load_refresh_token,
                                      refresh_token_path, renew_with_refresh_token,
                                      save_refresh_token, seed_tokens)
@@ -536,20 +537,75 @@ def test_ensure_renews_near_expiry_with_refresh_token(tmp_path):
     login.assert_not_called()
 
 
-def test_ensure_never_falls_back_to_browser_after_invalid_grant(tmp_path, monkeypatch):
-    # A slow board would just fail a Chromium login every hour; keep the old
-    # token and tell the user to re-seed instead.
+def _rejected_refresh(token, tmp_path, monkeypatch, available=True, credentials=True):
+    if credentials:
+        monkeypatch.setenv('PELOTON_EMAIL', 'rider@example.com')
+        monkeypatch.setenv('PELOTON_PASSWORD', 'secret')
+    else:
+        monkeypatch.delenv('PELOTON_EMAIL', raising=False)
+        monkeypatch.delenv('PELOTON_PASSWORD', raising=False)
+    return (patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()),
+            patch('scripts.refresh_cookies.renew_with_refresh_token',
+                  side_effect=RefreshTokenRejected('invalid_grant; seed-dir')),
+            patch('scripts.refresh_cookies.browser_login_available', return_value=available))
+
+
+def test_ensure_without_a_browser_never_falls_back_after_invalid_grant(tmp_path, monkeypatch):
+    # A --no-browser board keeps the old token and asks to be seeded again.
     token = _seeded(tmp_path)
-    monkeypatch.setenv('PELOTON_EMAIL', 'rider@example.com')
-    monkeypatch.setenv('PELOTON_PASSWORD', 'secret')
-    with patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()), \
-         patch('scripts.refresh_cookies.renew_with_refresh_token',
-               side_effect=RefreshTokenRejected('invalid_grant; seed-dir')), \
-         patch('scripts.refresh_cookies.browser_login') as login:
+    verify, renew, available = _rejected_refresh(token, tmp_path, monkeypatch, available=False)
+    with verify, renew, available, patch('scripts.refresh_cookies.browser_login') as login:
         with pytest.raises(RefreshTokenRejected):
             ensure_token(token, tmp_path / 'config.json')
     login.assert_not_called()
     assert token.read_text() == 'access-old'
+    assert not browser_attempt_path(token).exists()
+
+
+def test_ensure_without_credentials_never_falls_back_after_invalid_grant(tmp_path, monkeypatch):
+    token = _seeded(tmp_path)
+    verify, renew, available = _rejected_refresh(token, tmp_path, monkeypatch, credentials=False)
+    with verify, renew, available, patch('scripts.refresh_cookies.browser_login') as login:
+        with pytest.raises(RefreshTokenRejected):
+            ensure_token(token, tmp_path / 'config.json')
+    login.assert_not_called()
+
+
+def test_ensure_with_a_browser_logs_in_once_after_invalid_grant(tmp_path, monkeypatch):
+    token = _seeded(tmp_path)
+    verify, renew, available = _rejected_refresh(token, tmp_path, monkeypatch)
+    with verify, renew, available,          patch('scripts.refresh_cookies.browser_login', return_value='demo') as login:
+        assert ensure_token(token, tmp_path / 'config.json') == ('demo', True)
+    login.assert_called_once_with('rider@example.com', 'secret', token, headless=True)
+    assert browser_attempt_path(token).exists()
+
+
+def test_failed_browser_fallback_waits_a_day_before_trying_again(tmp_path, monkeypatch):
+    token = _seeded(tmp_path)
+    verify, renew, available = _rejected_refresh(token, tmp_path, monkeypatch)
+    with verify, renew, available,          patch('scripts.refresh_cookies.browser_login', side_effect=RuntimeError('too slow')) as login:
+        with pytest.raises(RefreshTokenRejected, match='fallback also failed: too slow'):
+            ensure_token(token, tmp_path / 'config.json')
+        with pytest.raises(RefreshTokenRejected, match='already tried'):
+            ensure_token(token, tmp_path / 'config.json')
+        assert login.call_count == 1
+        with patch('scripts.refresh_cookies.time.time',
+                   return_value=time.time() + BROWSER_FALLBACK_INTERVAL_SECONDS + 1):
+            with pytest.raises(RefreshTokenRejected, match='fallback also failed'):
+                ensure_token(token, tmp_path / 'config.json')
+        assert login.call_count == 2
+    assert token.read_text() == 'access-old'
+
+
+@pytest.mark.parametrize('content', ['', 'garbage', 'nan'])
+def test_unreadable_browser_attempt_marker_allows_a_try(tmp_path, content):
+    token = tmp_path / 'cookies.txt'
+    browser_attempt_path(token).write_text(content)
+    assert browser_fallback_due(token)
+
+
+def test_browser_attempt_marker_sits_beside_the_token(tmp_path):
+    assert browser_attempt_path(tmp_path / 'cookies-joel.txt') == tmp_path / 'cookies-joel.browser-attempt'
 
 
 def test_ensure_without_refresh_token_or_browser_asks_for_a_seed(tmp_path, monkeypatch):
