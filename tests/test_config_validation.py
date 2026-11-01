@@ -95,11 +95,16 @@ def test_settings_the_workout_log_replaced_still_load_with_a_warning(tmp_path, c
     assert 'no longer do anything' not in caplog.text
 
 
-def test_shipped_example_configs_load_without_retired_settings(caplog):
+def test_shipped_example_configs_load_without_retired_settings(tmp_path, caplog):
     import logging
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
     for name in ('config.json-example', 'packaging/config.pi.json'):
+        # load_config reads config.json beside the given path, so load a copy.
+        copy = tmp_path / name.replace('/', '-') / 'config.json'
+        copy.parent.mkdir()
+        copy.write_text((root / name).read_text())
         with caplog.at_level(logging.WARNING):
-            load_config(root / name)
+            display = load_config(copy)['display']
         assert 'no longer do anything' not in caplog.text, name
+        assert display['history_batch_size'] == 100 and display['recent_fetch_size'] == 20, name
