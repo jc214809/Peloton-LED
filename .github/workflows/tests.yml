@@ -36,6 +36,4 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
-          # Until CODECOV_TOKEN is added to the repo secrets the upload is
-          # refused; don't fail the test job for it.
-          fail_ci_if_error: false
+          fail_ci_if_error: true
