@@ -1,12 +1,9 @@
 """Consistent completed-workout selection and discipline matching."""
 import logging
-import time
 from datetime import datetime, timezone
 from .timestamps import workout_timestamp, workout_date
 
 logger = logging.getLogger('peloton-led.selection')
-# A workout not yet COMPLETE this long after it started is treated as abandoned.
-UNFINISHED_SETTLE_SECONDS = 6 * 3600
 ALIASES = {'bike': 'cycling', 'ride': 'cycling', 'caesar': 'rowing',
            'caesar_bootcamp': 'row_bootcamp', 'circuit': 'tread_bootcamp',
            'outdoor_run': 'running_outdoor', 'outdoor_running': 'running_outdoor',
@@ -30,25 +27,6 @@ def is_completed(workout):
     # statuses must never displace a completed workout on the dashboard.
     status = workout.get('status')
     return status is None or str(status).lower() in ('complete', 'completed')
-
-
-def settled_rows(rows, now=None):
-    """Newest-first history rows that are safe to tally once, behind a cursor.
-
-    Rows from the newest still-running workout upward are held back: the
-    cursor must not pass a workout that has not finished yet, or it is never
-    counted once it does. Unfinished rows older than the settle window (or
-    with no readable start) are treated as final and skipped by the tally.
-    """
-    now = time.time() if now is None else now
-    cut = 0
-    for index, workout in enumerate(rows):
-        if is_completed(workout):
-            continue
-        started = workout_timestamp(workout)
-        if started is not None and now - started.timestamp() < UNFINISHED_SETTLE_SECONDS:
-            cut = index + 1
-    return rows[cut:]
 
 
 def ordered_workouts(workouts, tzname=None):

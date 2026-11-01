@@ -12,12 +12,19 @@ def week_day(timezone_name=None, now=None):
     return (now or datetime.now(timezone.utc)).astimezone(zone).weekday()
 
 
-def weekly_progress(workouts, timezone_name=None, now=None):
-    """Return completed workouts, minutes and output (kJ) since local Monday."""
+def week_start(timezone_name=None, now=None):
+    """Monday 00:00 of the current week in the display timezone, and now."""
     zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
     current = (now or datetime.now(timezone.utc)).astimezone(zone)
     monday = (current - timedelta(days=current.weekday())).replace(
         hour=0, minute=0, second=0, microsecond=0)
+    return monday, current
+
+
+def weekly_progress(workouts, timezone_name=None, now=None):
+    """Return completed workouts, minutes and output (kJ) since local Monday."""
+    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
+    monday, current = week_start(timezone_name, now)
     count = 0
     seconds = 0
     joules = 0

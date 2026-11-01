@@ -23,7 +23,13 @@ def _load(tmp_path, config):
      'names and token paths must be unique'),
     ({'users': [{'name': 'Joel', 'username': 5}]}, r'users\[0\].username must be a string'),
     ({'users': [{'name': 'A', 'cache_path': 'c.json'}, {'name': 'B', 'cache_path': 'c.json'}]},
-     'cache paths must be unique'),
+     'cache and log paths must be unique'),
+    ({'users': [{'name': 'A', 'log_path': 'l.json'}, {'name': 'B', 'log_path': 'l.json'}]},
+     'cache and log paths must be unique'),
+    ({'users': [{'name': 'A', 'cache_path': 'x.json'}, {'name': 'B', 'log_path': 'x.json'}]},
+     'cache and log paths must be unique'),
+    ({'users': [{'name': 'A', 'log_path': 5}]}, r'users\[0\].log_path must be a string'),
+    ({'display': {'log_path': 5}}, 'display.log_path must be a string'),
     ({'users': [{'name': 'Joel', 'email_env': 'lower-case'}]}, 'must be an environment variable name'),
     ({'users': [{'name': 'Joel', 'weekly_goals': {'workouts': -1}}]}, 'weekly_goals values must be non-negative'),
     ({'display': {'weekly_goals': {'workouts': True}}}, 'weekly_goals values must be non-negative'),
@@ -75,3 +81,30 @@ def test_valid_brightness_and_refresh_schedules_load(tmp_path):
         'refresh_schedule': {'quiet_start': '23:00', 'quiet_end': '06:00', 'quiet_interval': 3600,
                              'timezone': 'America/New_York'}}})
     assert config['display']['brightness_schedule']['day'] == 80
+
+
+def test_settings_the_workout_log_replaced_still_load_with_a_warning(tmp_path, caplog):
+    import logging
+    with caplog.at_level(logging.WARNING):
+        display = _load(tmp_path, {'display': {'history_days': 90, 'instructor_tally_max_pages': 200}})['display']
+    assert 'display.history_days, display.instructor_tally_max_pages no longer do anything' in caplog.text
+    assert display['history_batch_size'] == 100 and display['recent_fetch_size'] == 20
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        _load(tmp_path, {'display': {}})
+    assert 'no longer do anything' not in caplog.text
+
+
+def test_shipped_example_configs_load_without_retired_settings(tmp_path, caplog):
+    import logging
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    for name in ('config.json-example', 'packaging/config.pi.json'):
+        # load_config reads config.json beside the given path, so load a copy.
+        copy = tmp_path / name.replace('/', '-') / 'config.json'
+        copy.parent.mkdir()
+        copy.write_text((root / name).read_text())
+        with caplog.at_level(logging.WARNING):
+            display = load_config(copy)['display']
+        assert 'no longer do anything' not in caplog.text, name
+        assert display['history_batch_size'] == 100 and display['recent_fetch_size'] == 20, name

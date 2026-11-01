@@ -6,15 +6,12 @@ import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.journey_screen import CASTLE_COLORS, JourneyScreen, journey_text
-from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import load_config
-from peloton.dashboard import TALLY_VERSION
 from peloton.journey import (DEFAULT_JOURNEY, DISTANCE_DISCIPLINES, journey_progress,
                              merge_distance_totals, uses_metric, workout_miles)
 from peloton.selection import normalize_discipline
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
-from tests.test_dashboard import setup_dashboard
 
 
 def row(discipline, distance, workout_id='w', status='COMPLETE'):
@@ -152,82 +149,6 @@ def test_config_accepts_a_journey_start_date_for_display_and_riders(tmp_path):
 def test_config_rejects_bad_routes(tmp_path, journey, message):
     with pytest.raises(ValueError, match=message):
         load_config(write_config(tmp_path, {'display': {'journey': journey}}))
-
-
-def test_dashboard_backfills_distance_once_then_reuses_the_instructor_pages(tmp_path):
-    dashboard, client, _ = setup_dashboard(tmp_path)
-    history = [row('cycling', 5, 'w2'), row('caesar', 1609.344, 'w1')]
-    client.get_all_workouts.return_value = history
-    dashboard.refresh()
-    # First run: both tallies start empty, so one full-history fetch serves both.
-    assert client.get_all_workouts.call_count == 1
-    snap = dashboard.snapshot()
-    assert snap['distance_totals'] == {'cycling': 5, 'rowing': pytest.approx(1)}
-    assert snap['distance_tally_cursor'] == 'w2'
-    client.get_all_workouts.return_value = [row('cycling', 2, 'w3')]
-    dashboard.refresh()
-    assert client.get_all_workouts.call_count == 2  # still one call per refresh
-    assert dashboard.snapshot()['distance_totals']['cycling'] == 7
-
-
-def test_dashboard_backfills_distance_for_caches_from_before_the_journey(tmp_path):
-    dashboard, client, _ = setup_dashboard(tmp_path)
-    dashboard._publish(instructor_tally_cursor='w2', instructor_counts={'Cody': 2},
-                       tally_version=TALLY_VERSION)
-    client.get_all_workouts.side_effect = [
-        [],                                              # instructor: nothing new
-        [row('cycling', 5, 'w2'), row('running', 1, 'w1')],  # distance: full backfill
-    ]
-    dashboard.refresh()
-    calls = client.get_all_workouts.call_args_list
-    assert calls[0].kwargs['stop_at_id'] == 'w2' and calls[1].kwargs['stop_at_id'] is None
-    snap = dashboard.snapshot()
-    assert snap['distance_totals'] == {'cycling': 5, 'running': 1}
-    assert snap['distance_tally_cursor'] == 'w2' == snap['instructor_tally_cursor']
-
-
-def test_dashboard_recounts_distance_once_when_the_start_date_changes(tmp_path):
-    dashboard, client, _ = setup_dashboard(tmp_path)
-    history = [{**row('cycling', 5, 'w2'), 'created_at': 1767268800},   # 2026-01-01
-               {**row('cycling', 7, 'w1'), 'created_at': 1735732800}]   # 2025-01-01
-    client.get_all_workouts.return_value = history
-    dashboard.refresh()
-    assert dashboard.snapshot()['distance_totals'] == {'cycling': 12}
-    assert dashboard.snapshot()['distance_tally_since'] is None
-
-    dashboard.config['journey'] = {**DEFAULT_JOURNEY, 'start_date': '2025-06-01'}
-    client.get_all_workouts.reset_mock()
-    client.get_all_workouts.side_effect = [[], history]  # instructor: nothing new; distance: full recount
-    dashboard.refresh()
-    calls = client.get_all_workouts.call_args_list
-    assert calls[0].kwargs['stop_at_id'] == 'w2' and calls[1].kwargs['stop_at_id'] is None
-    snap = dashboard.snapshot()
-    assert snap['distance_totals'] == {'cycling': 5} and snap['distance_tally_since'] == '2025-06-01'
-
-    # Same date next time: back to sharing the instructor pages, no recount.
-    client.get_all_workouts.reset_mock()
-    client.get_all_workouts.side_effect = None
-    client.get_all_workouts.return_value = [{**row('cycling', 2, 'w3'), 'created_at': 1767355200}]
-    dashboard.refresh()
-    assert client.get_all_workouts.call_count == 1
-    assert dashboard.snapshot()['distance_totals'] == {'cycling': 7}
-
-
-def test_distance_tally_survives_the_cache_and_bad_entries_rebuild(tmp_path):
-    path = tmp_path / 'cache.json'
-    base = {'me': None, 'totals': {}, 'summaries': [], 'last_updated': 1.0}
-    save_snapshot(path, {**base, 'distance_totals': {'cycling': 5.5}, 'distance_tally_cursor': 'w1'})
-    restored = load_snapshot(path)
-    assert restored['distance_totals'] == {'cycling': 5.5} and restored['distance_tally_cursor'] == 'w1'
-    save_snapshot(path, {**base, 'distance_totals': {'cycling': 5.5}, 'distance_tally_cursor': 'w1',
-                         'distance_tally_since': '2026-01-01'})
-    assert load_snapshot(path)['distance_tally_since'] == '2026-01-01'
-    save_snapshot(path, {**base, 'distance_totals': {'cycling': 5.5}, 'distance_tally_cursor': 'w1',
-                         'distance_tally_since': 7})
-    assert 'distance_totals' not in load_snapshot(path)
-    save_snapshot(path, {**base, 'distance_totals': {'cycling': 'far'}, 'distance_tally_cursor': 'w1'})
-    restored = load_snapshot(path)
-    assert 'distance_totals' not in restored and 'distance_tally_cursor' not in restored
 
 
 @pytest.mark.parametrize('height', [32, 64])

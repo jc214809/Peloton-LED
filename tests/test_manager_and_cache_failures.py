@@ -91,27 +91,27 @@ def _cache(tmp_path, **changes):
 @pytest.mark.parametrize('changes', [
     {'me': 'not a dict'}, {'celebrated_pr_ids': [1]}, {'celebrated_milestones': ['x']},
     {'weekly_progress': []}, {'last_updated': True}, {'last_updated': None},
-    {'instructor_counts': {'Ally': True}}, {'instructor_tally_cursor': 5},
 ])
 def test_damaged_cache_fields_reject_the_cache(tmp_path, changes):
     assert load_snapshot(_cache(tmp_path, **changes)) is None
 
 
-def test_damaged_instructor_names_drop_the_instructor_tally_so_it_rebuilds(tmp_path):
-    snapshot = load_snapshot(_cache(tmp_path, instructor_names={'cody': 5}, instructor_counts={'cody': 1},
-                                    instructor_tally_cursor='w1'))
+def test_tally_keys_from_before_the_workout_log_are_ignored(tmp_path):
+    # Instructor and distance figures now come from the workout log; old caches
+    # still load, without their (possibly wrong) tallies.
+    snapshot = load_snapshot(_cache(tmp_path, instructor_counts={'Ally': True}, instructor_tally_cursor=5,
+                                    distance_totals={'cycling': 'far'}, tally_version=3,
+                                    history_truncated=False))
     assert snapshot is not None
-    for key in ('instructor_names', 'instructor_counts', 'instructor_tally_cursor'):
+    for key in ('instructor_counts', 'instructor_tally_cursor', 'distance_totals', 'tally_version',
+                'history_truncated'):
         assert key not in snapshot
-    assert load_snapshot(_cache(tmp_path, instructor_names={'cody': 'Cody Rigsby'}))['instructor_names'] == {
-        'cody': 'Cody Rigsby'}
 
 
 def test_damaged_optional_tables_are_dropped_not_the_cache(tmp_path):
-    snapshot = load_snapshot(_cache(tmp_path, personal_records={'x': 'bad'}, streaks={'current': 'x'},
-                                    distance_totals={'cycling': 'far'}, distance_tally_cursor='w'))
+    snapshot = load_snapshot(_cache(tmp_path, personal_records={'x': 'bad'}, streaks={'current': 'x'}))
     assert snapshot is not None
-    for key in ('personal_records', 'streaks', 'distance_totals', 'distance_tally_cursor'):
+    for key in ('personal_records', 'streaks'):
         assert key not in snapshot
 
 

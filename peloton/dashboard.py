@@ -13,24 +13,41 @@ from .api import PelotonClient, make_session
 from .cache import load_snapshot, save_snapshot
 from .config import renewal_failed_path
 from .demo import demo_data
-from .selection import last_active_day, settled_rows
+from .selection import last_active_day
 from .summaries import summarize_workout
-from .timestamps import workout_timestamp
+from .timestamps import workout_date, workout_timestamp
 from .totals import extract_discipline_totals, parse_streaks
-from .goals import reached_milestones, weekly_progress
-from .instructors import merge_instructor_counts
-from .journey import merge_distance_totals, uses_metric
-from .schedule import scheduled_refresh_interval
+from .goals import reached_milestones, week_start, weekly_progress
+from .journey import uses_metric
+from .schedule import in_quiet_hours, scheduled_refresh_interval
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
+from .workout_log import WorkoutLog, default_log_path
 
 logger = logging.getLogger('peloton-led.dashboard')
 
 # The padlock reads a file the renewal job writes; checking it every frame is waste.
 RENEWAL_MARKER_CHECK_SECONDS = 30
-# Bump to recount the instructor and distance tallies from scratch once.
-# 2: tallies used to step past workouts still in progress, so those never counted.
-# 3: instructors keyed by ID; placeholders (Just Walk, ...) dropped, group classes split.
-TALLY_VERSION = 3
+# The only profile fields the board reads; the rest of /api/me (email,
+# birthday, phone, weight, ...) is never stored.
+PROFILE_KEYS = ('id', 'username', 'timezone', 'height_unit')
+# id never changes and the rest rarely does, so the profile is fetched at
+# startup and then once a day.
+PROFILE_REFRESH_SECONDS = 24 * 3600
+# Each refresh reads the newest page; more only to finish the latest day, cover
+# this week while the log is still filling, or close a gap after downtime.
+MAX_RECENT_PAGES = 10
+# History walks: pause between batches, and a safety limit on batches.
+HISTORY_BATCH_PAUSE_SECONDS = 1.0
+MAX_HISTORY_BATCHES = 500
+# The log's workout count must disagree with Peloton's this many refreshes in
+# a row (riding out a lag right after a workout) before a full re-walk, which
+# runs at most once a day and, with a refresh_schedule, in quiet hours.
+MISMATCH_LIMIT = 3
+REWALK_INTERVAL_SECONDS = 24 * 3600
+
+
+def slim_profile(me):
+    return {key: me[key] for key in PROFILE_KEYS if key in me}
 
 
 class Dashboard:
@@ -56,6 +73,18 @@ class Dashboard:
         self._failures = 0
         self._renewal_checked_at = None
         self._renewal_failed = False
+        configured_log = config.get('log_path')
+        self.log_path = (Path(configured_log).expanduser() if configured_log else
+                         default_log_path(self.cache_path))
+        self._log = None
+        self._log_lock = threading.Lock()
+        self._history_thread = None
+        self._profile_checked_at = None
+        self._derive_args = None
+        # Log figures are computed under the log lock but published later; the
+        # sequence keeps an older computation from overwriting a newer one.
+        self._derived_computed = 0
+        self._derived_published = 0
         self._data = {'me': None, 'totals': {}, 'summaries': [], 'login_required': False,
                       'status': 'loading', 'refresh_in_progress': False,
                       'last_attempt': None, 'last_updated': None,
@@ -65,10 +94,8 @@ class Dashboard:
                       'consecutive_failures': 0,
                       'celebrated_pr_ids': [], 'celebrated_milestones': [],
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
-                      'instructor_counts': {}, 'instructor_names': {}, 'instructor_tally_cursor': None, 'streaks': {},
-                      'distance_totals': {}, 'distance_tally_cursor': None,
-                      'distance_tally_since': None, 'tally_version': None,
-                      'personal_records': {}}
+                      'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
+                      'distance_totals': {}, 'personal_records': {}}
         self.demo = demo
         if demo:
             data = demo_data()
@@ -83,7 +110,14 @@ class Dashboard:
         else:
             cached = load_snapshot(self.cache_path)
             if cached is not None:
+                if isinstance(cached.get('me'), dict):
+                    cached['me'] = slim_profile(cached['me'])
                 self._publish(**cached, status='cached', data_stale=True, cache_loaded=True)
+            self._log = WorkoutLog.load(self.log_path)
+            # Lifetime figures come from the log, so they show at once after a restart.
+            me = (cached or {}).get('me') or {}
+            if self._log.user_id and self._log.user_id == me.get('id'):
+                self._publish_derived(*self._compute_derived(self._derive(me)))
 
     def snapshot(self):
         with self._lock:
@@ -243,12 +277,19 @@ class Dashboard:
                 self._client = candidate
                 self._token_stamp = stamp
                 self._failures = 0
+                # A replaced token may be a different account: re-read the profile.
+                self._profile_checked_at = None
             elif self.login_required:
                 # Rejected token: wait for a replacement instead of retrying it.
                 return self._finish_attempt(started, interval,
                     login_required=True, status='login_needed', last_error='authentication', data_stale=True)
             client = self._client
-            me = client.get_me()
+            with self._lock:
+                me = self._data.get('me') or {}
+            if (not me.get('id') or self._profile_checked_at is None
+                    or time.monotonic() - self._profile_checked_at >= PROFILE_REFRESH_SECONDS):
+                me = slim_profile(client.get_me())
+                self._profile_checked_at = time.monotonic()
             user_id = me.get('id')
             if not user_id:
                 raise ValueError('Profile response has no user ID')
@@ -256,10 +297,11 @@ class Dashboard:
             with self._lock:
                 stored_records = self._data.get('personal_records', {})
             personal_records = merge_personal_records(stored_records, parse_personal_records(overview))
-            workouts = client.get_recent_workouts(user_id,
-                limit=self.config.get('history_limit', 200), days=self.config.get('history_days', 90),
-                page_size=self.config.get('history_page_size', 50), max_pages=self.config.get('history_max_pages', 10))
             tz = self.config.get('timezone') or me.get('timezone')
+            with self._log_lock:
+                if self._log.claim(user_id):
+                    self._log.save()
+            workouts, total = self._fetch_recent(client, user_id, tz)
             active_day = last_active_day(workouts, tz)
             summaries = []
             for workout in active_day:
@@ -277,65 +319,27 @@ class Dashboard:
                 summary = summarize_workout(workout, perf)
                 summary['previous_best_kj'] = previous_best_kj(identity, personal_records)
                 summaries.append(summary)
+            self._derive_args = self._derive(me)
+            with self._log_lock:
+                if self._log.merge(workouts):
+                    self._save_log()
+                walk = self._check_count(total, tz)
+                derived = self._compute_derived(self._derive_args)
+            if walk is not None:
+                self._start_history_walk(client, user_id, rewalk=walk)
             with self._lock:
                 generation = self._data['generation'] + 1
-                prior_counts = self._data.get('instructor_counts', {})
-                prior_names = self._data.get('instructor_names', {})
-                cursor = self._data.get('instructor_tally_cursor')
-                prior_distance = self._data.get('distance_totals', {})
-                distance_cursor = self._data.get('distance_tally_cursor')
-                tallied_since = self._data.get('distance_tally_since')
-                tally_version = self._data.get('tally_version')
-            if tally_version != TALLY_VERSION:
-                logger.info('Tally format changed (%s -> %s); recounting instructors and distance',
-                            tally_version, TALLY_VERSION)
-                prior_counts, prior_names, cursor = {}, {}, None
-                prior_distance, distance_cursor = {}, None
-                tallied_since = since = (self.config.get('journey') or {}).get('start_date')
-            since = (self.config.get('journey') or {}).get('start_date')
-            if since != tallied_since:
-                # The journey start date changed: recount distance from scratch, once.
-                logger.info('Journey start date changed (%s -> %s); recounting distance',
-                            tallied_since, since)
-                prior_distance, distance_cursor = {}, None
-            new_workouts = settled_rows(client.get_all_workouts(user_id,
-                page_size=self.config.get('history_page_size', 50),
-                max_pages=self.config.get('instructor_tally_max_pages', 200),
-                stop_at_id=cursor))
-            instructor_counts, instructor_names = merge_instructor_counts(
-                prior_counts, prior_names, new_workouts)
-            newest_id = new_workouts[0].get('id') if new_workouts else cursor
-            # The distance tally shares the instructor tally's pages whenever
-            # the two cursors agree (including a first run, when both page the
-            # full history). Caches from before the journey feature have only
-            # an instructor cursor, so they backfill distance once.
-            if distance_cursor == cursor:
-                distance_rows = new_workouts
-            else:
-                distance_rows = settled_rows(client.get_all_workouts(user_id,
-                    page_size=self.config.get('history_page_size', 50),
-                    max_pages=self.config.get('instructor_tally_max_pages', 200),
-                    stop_at_id=distance_cursor))
-            distance_totals = merge_distance_totals(prior_distance, distance_rows, uses_metric(me),
-                                                    since=since, tzname=tz)
-            distance_newest = distance_rows[0].get('id') if distance_rows else distance_cursor
             refreshed_at = time.time()
-            progress = weekly_progress(workouts, tz)
             self._failures = 0
             delay = self._finish_attempt(started, interval,
                 me=me, totals=extract_discipline_totals(overview), summaries=summaries,
                 streaks=parse_streaks(overview),
-                weekly_progress=progress,
-                instructor_counts=instructor_counts, instructor_names=instructor_names,
-                instructor_tally_cursor=newest_id,
-                distance_totals=distance_totals, distance_tally_cursor=distance_newest,
-                distance_tally_since=since, tally_version=TALLY_VERSION,
                 personal_records=personal_records,
                 login_required=False, status='ready', last_updated=refreshed_at,
                 last_error=None, generation=generation,
                 active_day_count=len(active_day),
-                history_truncated=bool(getattr(client, 'history_truncated', False)),
                 data_stale=False, cache_loaded=False, consecutive_failures=0)
+            self._publish_derived(*derived)
             try:
                 self._persist_snapshot()
             except (OSError, TypeError, ValueError) as exc:
@@ -365,6 +369,163 @@ class Dashboard:
             return self._finish_attempt(started, delay, status='offline',
                                         last_error=type(exc).__name__, data_stale=True,
                                         consecutive_failures=self._failures)
+
+    def _derive(self, me):
+        return {'journey': self.config.get('journey'), 'metric': uses_metric(me),
+                'tzname': self.config.get('timezone') or me.get('timezone')}
+
+    def _compute_derived(self, args):
+        """Log figures plus their sequence number. Call with the log lock held
+        (or before the refresh thread starts)."""
+        self._derived_computed += 1
+        return self._log.derived(**args), self._derived_computed
+
+    def _publish_derived(self, derived, sequence):
+        with self._lock:
+            if sequence > self._derived_published:
+                self._data.update(derived)
+                self._derived_published = sequence
+
+    def _save_log(self):
+        try:
+            self._log.save()
+        except (OSError, TypeError, ValueError) as exc:
+            logger.warning('Could not save the workout log (%s)', type(exc).__name__)
+
+    def _fetch_recent(self, client, user_id, tz):
+        """The newest workouts, raw, plus Peloton's total workout count.
+
+        One page normally. More only while the latest active day continues
+        past it, while a still-filling log needs the rest of this week, or
+        when none of the page is in the log yet (the board was off a while).
+        """
+        size = self.config.get('recent_fetch_size', 20)
+        monday, _ = week_start(tz)
+        workouts, total = [], None
+        for page_number, rows, page in client.iter_workout_pages(user_id, size, max_pages=MAX_RECENT_PAGES):
+            if page_number == 0:
+                count = page.get('total')
+                total = count if isinstance(count, int) and not isinstance(count, bool) else None
+            workouts.extend(rows)
+            if not self._needs_more(workouts, rows, tz, monday):
+                break
+        return workouts, total
+
+    def _needs_more(self, workouts, rows, tz, monday):
+        if not rows:
+            return False
+        oldest = rows[-1]
+        active = last_active_day(workouts, tz)
+        if not active or workout_date(oldest, tz) == workout_date(active[0], tz):
+            return True
+        with self._log_lock:
+            complete = self._log.complete
+            gap = complete and bool(self._log.workouts) and not any(
+                self._log.knows(w.get('id')) for w in rows)
+        if gap:
+            return True
+        stamp = workout_timestamp(oldest, tz)
+        return not complete and stamp is not None and stamp >= monday
+
+    def _check_count(self, total, tz):
+        """Compare the log with Peloton's workout count. Returns None, or
+        whether a history walk should start (False: backfill, True: re-walk).
+        Call with the log lock held."""
+        log = self._log
+        if self._history_running():
+            return None
+        if not log.complete:
+            return False
+        if total is None:
+            return None
+        count = len(log.workouts)
+        if count == total:
+            if log.check['mismatches']:
+                log.check['mismatches'] = 0
+                self._save_log()
+            return None
+        log.check['mismatches'] += 1
+        self._save_log()
+        logger.warning('Workout log has %d workouts but Peloton reports %d (%d refresh(es) in a row)',
+                       count, total, log.check['mismatches'])
+        last = log.check['last_rewalk']
+        due = (log.check['mismatches'] >= MISMATCH_LIMIT
+               and (last is None or time.time() - last >= REWALK_INTERVAL_SECONDS)
+               and (not self.refresh_schedule or in_quiet_hours(self.refresh_schedule, timezone_name=tz)))
+        return True if due else None
+
+    def _history_running(self):
+        return self._history_thread is not None and self._history_thread.is_alive()
+
+    def _start_history_walk(self, client, user_id, rewalk):
+        if self._history_running() or self._stop.is_set():
+            return
+        self._history_thread = threading.Thread(target=self._walk_history, args=(client, user_id, rewalk),
+                                                name='peloton-history', daemon=True)
+        self._history_thread.start()
+
+    def wait_for_history(self, timeout=None):
+        """Wait for a running history download or re-walk. True once none is running."""
+        thread = self._history_thread
+        if thread is not None:
+            thread.join(timeout)
+        return not self._history_running()
+
+    def _walk_history(self, client, user_id, rewalk):
+        """Download the full history in batches into the log (backfill), or
+        walk it again to repair it (re-walk). Saves after every batch, so an
+        interrupted backfill resumes where it stopped."""
+        batch = self.config.get('history_batch_size', 100)
+        with self._log_lock:
+            if rewalk:
+                self._log.check['last_rewalk'] = time.time()
+            start = 0 if rewalk else self._log.backfill['next_page']
+            full = start == 0
+            if full:
+                self._log.begin_walk()
+        kind = 're-walk' if rewalk else 'download'
+        logger.info('Workout history %s started for %s (batches of %d, from batch %d)',
+                    kind, self.log_path.name, batch, start)
+        started = time.monotonic()
+        finished = False
+        try:
+            last = None
+            for page_number, rows, page in client.iter_workout_pages(
+                    user_id, batch, start_page=start, max_pages=MAX_HISTORY_BATCHES):
+                with self._log_lock:
+                    if self._log.user_id != user_id:
+                        return
+                    self._log.merge(rows)
+                    if not rewalk:
+                        self._log.backfill['next_page'] = page_number + 1
+                    self._save_log()
+                last = page
+                if not self._log_pause():
+                    return
+            with self._log_lock:
+                removed = self._log.end_walk(remove_unseen=full)
+                self._log.backfill = {'complete': True, 'next_page': 0, 'finished_at': time.time()}
+                self._log.check['mismatches'] = 0
+                self._save_log()
+                count = len(self._log.workouts)
+                derived = self._compute_derived(self._derive_args) if self._derive_args else None
+            finished = True
+            total = last.get('total') if last else None
+            logger.info('Workout history %s finished: %d workouts in the log, Peloton reports %s, '
+                        '%d removed, %.0fs', kind, count, total, removed, time.monotonic() - started)
+            if derived:
+                self._publish_derived(*derived)
+        except (OSError, ValueError, requests.RequestException) as exc:
+            logger.warning('Workout history %s paused (%s); it resumes on a later refresh',
+                           kind, type(exc).__name__)
+        finally:
+            if not finished:
+                with self._log_lock:
+                    self._log.end_walk(remove_unseen=False)
+
+    def _log_pause(self):
+        """Pause between batches. False if the dashboard is stopping."""
+        return not self._stop.wait(HISTORY_BATCH_PAUSE_SECONDS)
 
     def start(self):
         if not self.demo and (self._thread is None or not self._thread.is_alive()):
@@ -398,6 +559,8 @@ class Dashboard:
         """Request shutdown and return whether the refresh worker stopped."""
         self._stop.set()
         self._wake.set()
+        if self._history_thread is not None:
+            self._history_thread.join(timeout=timeout)
         if self._thread is not None:
             self._thread.join(timeout=timeout)
             stopped = not self._thread.is_alive()

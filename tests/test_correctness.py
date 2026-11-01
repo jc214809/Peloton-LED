@@ -1,6 +1,5 @@
 import os
 from datetime import datetime, timezone
-from unittest.mock import Mock
 
 import pytest
 
@@ -8,7 +7,6 @@ from peloton.timestamps import parse_timestamp, workout_date
 from peloton.selection import latest_workout, last_active_day, select_latest, normalize_discipline
 from peloton.summaries import summarize_workout
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count
-from peloton.api import PelotonClient
 from peloton.config import load_config, load_dotenv
 from peloton.records import is_pr_workout
 from display.ui.last_workout_screen import _fmt_pace, _fmt_split, _middle_stats
@@ -142,60 +140,10 @@ def test_lifetime_totals_preserve_each_discipline_and_exact_count():
     assert total_workout_count(totals) == 158
 
 
-def test_pagination_deduplicates_and_respects_last_page():
-    now = datetime.now(timezone.utc).timestamp()
-    rows = [{'id': str(i), 'start_time': now - i} for i in range(3)]
-    client = PelotonClient(Mock())
-    client.get_workouts_page = Mock(side_effect=[{'data': rows[:2], 'show_next': True},
-                                                {'data': rows[1:], 'show_next': False}])
-    assert len(client.get_recent_workouts('u', page_size=2)) == 3
-    assert not client.history_truncated
-    assert client.get_workouts_page.call_count == 2
-
-
-def test_pagination_stops_repeated_page_and_exposes_limit():
-    client = PelotonClient(Mock())
-    client.get_workouts_page = Mock(return_value={'data': [{'id': '1', 'start_time': datetime.now(timezone.utc).timestamp()}], 'show_next': True})
-    assert len(client.get_recent_workouts('u', page_size=1)) == 1
-    assert client.history_truncated
-    assert client.get_workouts_page.call_count == 2
-
-
-def test_pagination_stops_old_page():
-    client = PelotonClient(Mock())
-    client.get_workouts_page = Mock(return_value={'data': [{'id': 'old', 'start_time': 1}], 'show_next': True})
-    assert client.get_recent_workouts('u', page_size=1) == []
-    assert client.get_workouts_page.call_count == 1
-
-
-def test_get_all_workouts_walks_every_page_with_no_date_cutoff():
-    rows = [{'id': str(i)} for i in range(5)]
-    client = PelotonClient(Mock())
-    client.get_workouts_page = Mock(side_effect=[
-        {'data': rows[:2], 'show_next': True},
-        {'data': rows[2:4], 'show_next': True},
-        {'data': rows[4:], 'show_next': False},
-    ])
-    result = client.get_all_workouts('u', page_size=2)
-    assert [w['id'] for w in result] == ['0', '1', '2', '3', '4']
-    assert not client.history_truncated
-
-
-def test_get_all_workouts_stops_at_known_id_without_paging_further():
-    rows = [{'id': str(i)} for i in range(5)]
-    client = PelotonClient(Mock())
-    client.get_workouts_page = Mock(side_effect=[
-        {'data': rows[4:1:-1], 'show_next': True},  # newest-first: ids 4, 3, 2
-        {'data': rows[1::-1], 'show_next': False},  # ids 1, 0
-    ])
-    result = client.get_all_workouts('u', page_size=3, stop_at_id='2')
-    assert [w['id'] for w in result] == ['4', '3']
-    assert client.get_workouts_page.call_count == 1
-
-
 @pytest.mark.parametrize('display', [{'duration': -1}, {'color': 'unknown'}, {'font': 'missing'},
     {'timezone': 'Invalid/Zone'}, {'refresh_interval': 0}, {'performance_cache_size': 0},
-    {'duration': True}, {'instructor_tally_max_pages': 0}, {'last_workout_detail_interval': -1}])
+    {'duration': True}, {'history_batch_size': 0}, {'recent_fetch_size': True},
+    {'last_workout_detail_interval': -1}])
 def test_config_validation(tmp_path, display):
     import json
     path = tmp_path / 'config.json'

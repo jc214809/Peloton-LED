@@ -96,98 +96,72 @@ def test_perf_graph_success():
     assert session.get.call_args.kwargs['params'] == {'every_n': 5}
 
 
-# get_recent_workouts
+# iter_workout_pages
 
-@pytest.mark.parametrize('kwargs', [{'limit': 0}, {'days': 0}, {'page_size': 0}, {'max_pages': -1}])
-def test_recent_rejects_non_positive_limits(kwargs):
+def _pages(client, **kwargs):
+    return [(number, [w['id'] for w in rows]) for number, rows, _ in client.iter_workout_pages('u', **kwargs)]
+
+
+@pytest.mark.parametrize('kwargs', [{'page_size': 0}, {'page_size': 5, 'max_pages': 0},
+                                    {'page_size': 5, 'start_page': -1}])
+def test_pages_reject_bad_limits(kwargs):
     client, session = _client()
     with pytest.raises(ValueError, match='positive'):
-        client.get_recent_workouts('u', **kwargs)
+        list(client.iter_workout_pages('u', **kwargs))
     session.get.assert_not_called()
 
 
 @pytest.mark.parametrize('rows', [{'not': 'a list'}, ['not a dict']])
-def test_recent_rejects_malformed_pages(rows):
+def test_pages_reject_malformed_pages(rows):
     client, _ = _client({'data': rows})
     with pytest.raises(ValueError, match='Malformed'):
-        client.get_recent_workouts('u')
+        list(client.iter_workout_pages('u', page_size=5))
 
 
-def test_recent_empty_history():
+def test_pages_empty_history_is_one_empty_page():
     client, _ = _client({'data': []})
-    assert client.get_recent_workouts('u') == []
-    assert client.history_truncated is False
+    assert _pages(client, page_size=5) == [(0, [])]
 
 
-def test_recent_skips_undated_and_old_workouts_but_keeps_paging():
-    client, _ = _client({'data': [_w('a'), {'id': 'undated'}, _w('old', 200)], 'show_next': True},
-                        {'data': [_w('b', 1)], 'show_next': False})
-    assert [w['id'] for w in client.get_recent_workouts('u', days=90, page_size=3)] == ['a', 'b']
+def test_pages_walk_until_show_next_is_false_with_the_page_sent():
+    client, session = _client({'data': [_w('a'), _w('b')], 'show_next': True},
+                              {'data': [_w('c')], 'show_next': False})
+    assert _pages(client, page_size=2) == [(0, ['a', 'b']), (1, ['c'])]
+    assert [c.kwargs['params'] for c in session.get.call_args_list] == [
+        {'joins': 'ride,ride.instructor', 'limit': 2, 'page': 0},
+        {'joins': 'ride,ride.instructor', 'limit': 2, 'page': 1}]
 
 
-def test_recent_stops_at_the_workout_limit():
-    client, _ = _client({'data': [_w('a'), _w('b'), _w('c')], 'show_next': True})
-    assert [w['id'] for w in client.get_recent_workouts('u', limit=2)] == ['a', 'b']
-    assert client.history_truncated is True
+def test_pages_resume_from_a_start_page():
+    client, session = _client({'data': [_w('c')], 'show_next': False})
+    assert _pages(client, page_size=2, start_page=3) == [(3, ['c'])]
+    assert session.get.call_args.kwargs['params']['page'] == 3
 
 
-def test_recent_stops_at_page_count():
+def test_pages_stop_at_page_count_and_short_pages():
     client, session = _client({'data': [_w('a'), _w('b')], 'page_count': 1, 'show_next': True})
-    assert len(client.get_recent_workouts('u', page_size=2)) == 2
-    assert session.get.call_count == 1
-
-
-def test_recent_short_page_without_show_next_is_the_end():
+    assert _pages(client, page_size=2) == [(0, ['a', 'b'])]
     client, session = _client({'data': [_w('a')]})
-    assert len(client.get_recent_workouts('u', page_size=50)) == 1
+    assert _pages(client, page_size=50) == [(0, ['a'])]
     assert session.get.call_count == 1
 
 
-def test_recent_page_limit_marks_history_truncated():
-    client, _ = _client({'data': [_w('a')], 'show_next': True}, {'data': [_w('b')], 'show_next': True})
-    assert len(client.get_recent_workouts('u', page_size=1, max_pages=2)) == 2
-    assert client.history_truncated is True
-
-
-def test_recent_workouts_without_ids_are_kept():
-    anonymous = {'created_at': NOW, 'status': 'COMPLETE'}
-    client, _ = _client({'data': [anonymous, dict(anonymous)], 'show_next': False})
-    assert len(client.get_recent_workouts('u')) == 2
-
-
-# get_all_workouts
-
-@pytest.mark.parametrize('kwargs', [{'page_size': 0}, {'max_pages': 0}])
-def test_all_rejects_non_positive_limits(kwargs):
-    client, _ = _client()
-    with pytest.raises(ValueError, match='positive'):
-        client.get_all_workouts('u', **kwargs)
-
-
-def test_all_rejects_malformed_pages():
-    client, _ = _client({'data': 'nope'})
-    with pytest.raises(ValueError, match='Malformed'):
-        client.get_all_workouts('u')
-
-
-def test_all_empty_and_short_pages_end_the_walk():
-    client, _ = _client({'data': []})
-    assert client.get_all_workouts('u') == []
-    client, session = _client({'data': [_w('a')]})
-    assert len(client.get_all_workouts('u', page_size=50)) == 1
-    assert session.get.call_count == 1
-
-
-def test_all_stops_at_page_count_and_deduplicates():
-    client, _ = _client({'data': [_w('a'), _w('a')], 'page_count': 1, 'show_next': True})
-    assert [w['id'] for w in client.get_all_workouts('u', page_size=2)] == ['a']
-
-
-def test_all_repeated_page_and_page_limit_mark_truncated():
+def test_pages_stop_when_peloton_repeats_a_page(caplog):
     page = {'data': [_w('a')], 'show_next': True}
     client, _ = _client(page, page)
-    assert len(client.get_all_workouts('u', page_size=1, max_pages=5)) == 1
-    assert client.history_truncated is True
-    client, _ = _client({'data': [_w('a')], 'show_next': True})
-    client.get_all_workouts('u', page_size=1, max_pages=1)
-    assert client.history_truncated is True
+    assert _pages(client, page_size=1, max_pages=5) == [(0, ['a'])]
+    assert 'repeated workout page' in caplog.text
+
+
+def test_pages_stop_at_the_page_limit(caplog):
+    client, session = _client({'data': [_w('a')], 'show_next': True})
+    assert _pages(client, page_size=1, max_pages=1) == [(0, ['a'])]
+    assert session.get.call_count == 1
+    assert '1-page limit' in caplog.text
+
+
+def test_pages_are_fetched_lazily():
+    client, session = _client({'data': [_w('a')], 'show_next': True}, {'data': [_w('b')], 'show_next': False})
+    for _ in client.iter_workout_pages('u', page_size=1):
+        break
+    assert session.get.call_count == 1
