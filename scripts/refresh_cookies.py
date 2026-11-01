@@ -159,11 +159,17 @@ def refresh_token_path(token_path: Path) -> Path:
     return token_path.with_name(f'{token_path.stem}.refresh.json')
 
 
-def save_refresh_token(path: Path, refresh_token: str, client_id: str) -> None:
+def save_refresh_token(path: Path, refresh_token: str, client_id: str,
+                       chain: dict | None = None) -> None:
     """Atomically replace the refresh file, fsynced, owner-only. Auth0 rotates
-    refresh tokens on every use, so a lost write would strand the board."""
+    refresh tokens on every use, so a lost write would strand the board.
+
+    `chain` carries the login's history forward through rotations (see
+    load_refresh_chain); without it, this token starts a new chain."""
+    now = datetime.now(timezone.utc).isoformat()
+    chain = chain or {'chain_started_at': now, 'chain_start_exact': True, 'renewals': 0}
     payload = json.dumps({'client_id': client_id, 'refresh_token': refresh_token,
-                          'saved_at': datetime.now(timezone.utc).isoformat()})
+                          'saved_at': now, **chain})
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
@@ -198,6 +204,51 @@ def load_refresh_token(path: Path) -> tuple[str, str]:
     return refresh_token, client_id if isinstance(client_id, str) and client_id else AUTH0_CLIENT_ID
 
 
+def load_refresh_chain(path: Path) -> dict:
+    """How long this login's refresh chain has lived, to learn Auth0's real
+    lifetime: {'chain_started_at', 'chain_start_exact', 'renewals'}. Files written
+    before chains were tracked fall back to their last save time, an upper bound
+    on the start (so the age is "at least"). Never raises."""
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        data = None
+    if not isinstance(data, dict):
+        data = {}
+    started = data.get('chain_started_at')
+    renewals = data.get('renewals')
+    renewals = renewals if isinstance(renewals, int) and not isinstance(renewals, bool) and renewals >= 0 else None
+    if isinstance(started, str) and _parse_time(started) is not None:
+        return {'chain_started_at': started, 'chain_start_exact': data.get('chain_start_exact') is True,
+                'renewals': renewals}
+    saved = data.get('saved_at')
+    return {'chain_started_at': saved if isinstance(saved, str) and _parse_time(saved) is not None else None,
+            'chain_start_exact': False, 'renewals': renewals}
+
+
+def _parse_time(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def describe_chain(chain: dict, now: datetime | None = None) -> str:
+    """'refresh chain 3.2 days old, 14 renewals' (or 'at least ...' / 'age unknown')."""
+    started = _parse_time(chain.get('chain_started_at') or '')
+    if started is None:
+        age = 'refresh chain age unknown'
+    else:
+        days = max(0.0, ((now or datetime.now(timezone.utc)) - started).total_seconds() / 86400)
+        age = f"refresh chain {'' if chain.get('chain_start_exact') else 'at least '}{days:.1f} days old"
+    renewals = chain.get('renewals')
+    if renewals is None:
+        return age
+    more = '' if chain.get('chain_start_exact') else '+'
+    return f"{age}, {renewals}{more} renewal{'' if renewals == 1 and not more else 's'}"
+
+
 def renew_with_refresh_token(token_path: Path) -> str:
     """Trade the saved refresh token for a new access token without a browser.
 
@@ -207,6 +258,7 @@ def renew_with_refresh_token(token_path: Path) -> str:
     current access token in place."""
     refresh_path = refresh_token_path(token_path)
     refresh_token, client_id = load_refresh_token(refresh_path)
+    chain = load_refresh_chain(refresh_path)
     response = requests.post(AUTH0_TOKEN_URL, timeout=REFRESH_TIMEOUT_SECONDS, json={
         'grant_type': 'refresh_token', 'client_id': client_id, 'refresh_token': refresh_token})
     try:
@@ -217,8 +269,8 @@ def renew_with_refresh_token(token_path: Path) -> str:
         error = data.get('error') if isinstance(data, dict) else None
         if error == 'invalid_grant':
             raise RefreshTokenRejected(
-                f"Peloton rejected the refresh token in {refresh_path} (invalid_grant); "
-                "the existing token was not changed. Seed this board again from another "
+                f"Peloton rejected the refresh token in {refresh_path} (invalid_grant; "
+                f"{describe_chain(chain)}); the existing token was not changed. Seed this board again from another "
                 "computer: refresh_cookies.py --seed-dir.")
         raise RuntimeError(f"Token endpoint returned HTTP {response.status_code}"
                            f"{f' ({error})' if error else ''}; the existing token was not changed.")
@@ -227,7 +279,10 @@ def renew_with_refresh_token(token_path: Path) -> str:
         raise RuntimeError("Token endpoint returned a non-JSON response; the existing token was not changed.")
     new_refresh = data.get('refresh_token')
     if isinstance(new_refresh, str) and new_refresh:
-        save_refresh_token(refresh_path, new_refresh, client_id)
+        chain['renewals'] = (chain['renewals'] or 0) + 1
+        if chain['chain_started_at'] is None:
+            chain['chain_started_at'] = datetime.now(timezone.utc).isoformat()
+        save_refresh_token(refresh_path, new_refresh, client_id, chain)
     access_token = data.get('access_token')
     if not isinstance(access_token, str) or not access_token:
         raise RuntimeError("Token endpoint response had no access_token; the existing token was not changed.")
@@ -496,7 +551,9 @@ def main() -> None:
                 continue
             expires_at = datetime.fromtimestamp(status['expires_at'], tz=timezone.utc)
             state = 'EXPIRED' if status['expired'] else 'valid'
-            renewal = ('refresh token saved' if refresh_token_path(path).exists()
+            refresh_path = refresh_token_path(path)
+            renewal = (f'refresh token saved ({describe_chain(load_refresh_chain(refresh_path))})'
+                       if refresh_path.exists()
                        else 'no refresh token (renewal needs a browser login)')
             print(f"{name}: {status['path']} — {state}, expires {expires_at.isoformat()}; {renewal}")
         return
