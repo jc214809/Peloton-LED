@@ -13,3 +13,5 @@ __pycache__/
 config.json
 cookies-joel-dashboard-cache.json
 cookies-jen-dashboard-cache.json
+.DS_Store
+perf_graphs/
