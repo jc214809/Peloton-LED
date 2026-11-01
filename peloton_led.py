@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from peloton.config import load_config, default_token_path, load_dotenv
 from peloton.dashboard import Dashboard
-from peloton.goals import next_milestone
+from peloton.goals import next_milestone, week_day
 from peloton.journey import journey_progress
 from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
@@ -137,7 +137,9 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         if versus_duration > 0 and matrix_height < 64:
             # 32 rows show one stat at a time; give each its full turn.
             versus_duration = max(versus_duration, len(STATS) * DETAIL_INTERVAL_SECONDS)
-        groups['versus'].append(('versus', {'riders': rivals}, versus_duration))
+        zone = display.get('timezone') or (snapshot.get('me') or {}).get('timezone')
+        groups['versus'].append(('versus', {'riders': rivals, 'weekday': week_day(zone)},
+                                 versus_duration))
 
     overview_pages = lifetime_overview_pages(snapshot['totals'],
                                              page_size=4 if matrix_height >= 64 else 2)

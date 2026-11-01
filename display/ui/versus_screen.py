@@ -11,6 +11,10 @@ RIDER_COLORS = (graphics.Color(0, 150, 255), graphics.Color(255, 80, 150))
 _GREY = graphics.Color(145, 165, 190)
 _GOLD = graphics.Color(255, 215, 0)
 _WHITE = graphics.Color(255, 255, 255)
+# Week strip: finished days, today, days still to come.
+DAY_DONE = (145, 165, 190)
+DAY_TODAY = (235, 30, 30)
+DAY_AHEAD = (25, 25, 25)
 
 
 def weekly_leader(riders):
@@ -26,6 +30,19 @@ def _fit(font, text, width):
     while text and get_text_width(font, text) > width:
         text = text[:-1]
     return text
+
+
+def draw_week_dashes(matrix, weekday, top, thickness):
+    """Seven dashes, Monday first: lit once a day is over, dim for today."""
+    gap = 2
+    width = (matrix.width - 2 - gap * 6) // 7
+    left = (matrix.width - (width * 7 + gap * 6)) // 2
+    for day in range(7):
+        color = DAY_DONE if day < weekday else DAY_TODAY if day == weekday else DAY_AHEAD
+        x0 = left + day * (width + gap)
+        for x in range(x0, x0 + width):
+            for y in range(top, top + thickness):
+                matrix.SetPixel(x, y, *color)
 
 
 class VersusScreen(Screen):
@@ -77,7 +94,10 @@ class VersusScreen(Screen):
         short = matrix.height < 64
 
         # Names across the top, each in its rider color; trophy by the leader.
-        name_y = 6 if short else 16
+        weekday = (state or {}).get('weekday')
+        has_week = isinstance(weekday, int) and 0 <= weekday <= 6
+        # 64 rows: the week strip replaces the THIS WEEK title, so all moves up.
+        name_y = 6 if short else 9 if has_week else 16
         room = half - 2 - (_TROPHY_W + 1)
         for i, rider in enumerate(riders):
             name = _fit(name_font, str(rider.get('name') or f'RIDER {i + 1}').upper(), room)
@@ -92,13 +112,20 @@ class VersusScreen(Screen):
             graphics.DrawText(matrix, small, max((w - get_text_width(small, label)) // 2, 1), 15, _GREY, label)
             # Big digits when they fit; smaller fonts keep 4-5 digit values apart.
             self._values(matrix, (big, loaded_fonts.get('countdown'), small), riders, key, 29)
+            if has_week:
+                draw_week_dashes(matrix, weekday, matrix.height - 1, 1)
             return True
 
-        title = 'THIS WEEK'
-        graphics.DrawText(matrix, small, (w - get_text_width(small, title)) // 2, 6, _GREY, title)
+        if has_week:
+            draw_week_dashes(matrix, weekday, matrix.height - 4, 2)
+            first_label_y = 17
+        else:
+            title = 'THIS WEEK'
+            graphics.DrawText(matrix, small, (w - get_text_width(small, title)) // 2, 6, _GREY, title)
+            first_label_y = 24
         # 15-row pitch: 5-row label, 2 blank, 6-row value, 2 blank.
         for row, (key, label) in enumerate(STATS):
-            label_y = 24 + row * 15
+            label_y = first_label_y + row * 15
             graphics.DrawText(matrix, small, (w - get_text_width(small, label)) // 2, label_y, _GREY, label)
             self._values(matrix, (value_font, small), riders, key, label_y + 8)
         return True
