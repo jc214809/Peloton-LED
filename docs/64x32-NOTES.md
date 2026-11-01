@@ -135,6 +135,15 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   boards. A custom `display.logo_path` image is unaffected.
 - The PR celebration screen keeps its star burst.
 
+### Versus week strip (both boards, requested 2026-10-31)
+- Seven dashes along the bottom of the versus page, Monday first: finished
+  days grey-blue, today red, days to come near-black.
+- 64x64 deliberately changes here: the strip is 2 rows (60-61) and replaces
+  the `THIS WEEK` title, so names and stats move up 7 rows. Every other
+  64x64 page is byte-for-byte unchanged.
+- 64x32: the strip is 1 row (31), under the big values with row 30 left
+  blank. Nothing above it moved.
+
 ## Open questions for Joel
 
 1. **`compact_workout_pages`**: the new 32-row layout makes this option

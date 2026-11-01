@@ -6,6 +6,12 @@ from .selection import is_completed
 from .timestamps import workout_timestamp
 
 
+def week_day(timezone_name=None, now=None):
+    """Today's index in the weekly-goal week: 0 for Monday through 6 for Sunday."""
+    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
+    return (now or datetime.now(timezone.utc)).astimezone(zone).weekday()
+
+
 def weekly_progress(workouts, timezone_name=None, now=None):
     """Return completed workouts, minutes and output (kJ) since local Monday."""
     zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc

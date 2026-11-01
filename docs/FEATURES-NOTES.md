@@ -101,11 +101,18 @@ A new rotation section, `versus` (default position: after `streaks`).
 - **Leader:** most workouts, then minutes, then output as tie-breakers.
   The leader gets a gold trophy by their name. For each stat the higher
   value is gold. A full tie has no trophy.
-- **64x64:** `THIS WEEK`, both names (Joel blue, Jen pink), and all three
-  stats in rows.
-- **64x32:** names on top, one stat per slide rotating every 4s. The page
-  lasts at least 12s so each stat gets its turn. Big values drop to a smaller
-  font when they'd run into each other.
+- **Week strip:** seven dashes along the bottom, Monday first. Finished
+  days are lit grey-blue, today is red, days still to come are near-black.
+  Today follows the same timezone as the weekly totals (`display.timezone`,
+  else the Peloton profile's). Red rather than gold because gold already
+  means "leader" on this page. Days aren't scored per rider on purpose.
+- **64x64:** both names (Joel blue, Jen pink), all three stats in rows, and
+  a 2-row week strip at the bottom. The strip replaces the old `THIS WEEK`
+  title, which only appears if the weekday is unknown.
+- **64x32:** names on top, one stat per slide rotating every 4s, and a
+  1-row week strip on the bottom row. The page lasts at least 12s so each
+  stat gets its turn. Big values drop to a smaller font when they'd run
+  into each other.
 - Caches written before this change have no weekly output, so output shows
   0 for both riders until the first refresh.
 - Timing: `screen_durations.versus`, falling back to `overview_duration`.
