@@ -3,6 +3,10 @@
     python scripts/render_rotation.py --height 32 --cache cookies-joel-dashboard-cache.json
     python scripts/render_rotation.py --height 64 --demo --out /tmp/demo-64.png
 
+With --cache, instructor counts and journey miles come from the workout log
+beside it (cookies-joel-dashboard-cache.workouts.json; override with --log).
+--config uses that file's journey route instead of the default.
+
 Pages come from the app's own build_rotation_pages, so the sheet shows what the
 panel would actually cycle through. Animated pages get one frame per phase
 (intro, each stat, each username detail, PR burst and card).
@@ -36,6 +40,31 @@ class PreviewDashboard:
         return [m for m in self.milestones if total >= m][-1:]
 
 
+def preview_journey(options):
+    from peloton.config import DEFAULTS, load_config
+    config = getattr(options, 'config', None)
+    if not config:
+        return DEFAULTS['journey']
+    try:
+        return load_config(config)['display']['journey']
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def add_log_figures(snapshot, options):
+    """Instructor counts and journey miles live in the workout log, not the cache."""
+    from peloton.journey import uses_metric
+    from peloton.workout_log import WorkoutLog, default_log_path
+    path = Path(getattr(options, 'log', None) or default_log_path(options.cache))
+    if not path.exists():
+        return
+    me = snapshot.get('me') or {}
+    log = WorkoutLog.load(path)
+    derived = log.derived(journey=preview_journey(options), metric=uses_metric(me),
+                          tzname=me.get('timezone'))
+    snapshot.update({key: derived[key] for key in ('instructor_counts', 'instructor_names', 'distance_totals')})
+
+
 def load_snapshot_for(options):
     if options.demo:
         from peloton.demo import demo_data
@@ -54,6 +83,7 @@ def load_snapshot_for(options):
     if snapshot is None:
         raise SystemExit(f'Could not read a dashboard cache from {options.cache}')
     snapshot.setdefault('status', 'ready')
+    add_log_figures(snapshot, options)
     return snapshot
 
 
@@ -102,7 +132,7 @@ def render(options):
     from peloton_led import build_rotation_pages
     from scripts.render_demo import ImageMatrix
 
-    display = {**DEFAULTS, 'rotation': ALL_SECTIONS, 'color': 'white',
+    display = {**DEFAULTS, 'rotation': ALL_SECTIONS, 'color': 'white', 'journey': preview_journey(options),
                'milestones': [100, 250, 500, 1000, 2000], 'weekly_goals': {'workouts': 5, 'minutes': 150}}
     detail_interval = display['last_workout_detail_interval']
     initialize_fonts(options.height)
@@ -167,6 +197,8 @@ def main(argv=None):
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument('--cache', help='Dashboard cache JSON, e.g. cookies-joel-dashboard-cache.json')
     source.add_argument('--demo', action='store_true', help='Use built-in demo data')
+    parser.add_argument('--log', help='Workout log JSON (default: beside --cache)')
+    parser.add_argument('--config', help="config.json whose journey route to show (default: built-in route)")
     parser.add_argument('--height', type=int, choices=(32, 64), default=32)
     parser.add_argument('--username', help='Name to show on the username page')
     parser.add_argument('--rival', help="Second rider's dashboard cache, for the versus page")

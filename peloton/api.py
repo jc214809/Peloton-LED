@@ -1,13 +1,11 @@
 """Peloton API helpers (session management and workout fetch)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import requests
 import logging
-from .timestamps import workout_timestamp
 
 logger = logging.getLogger("peloton-led.api")
 
@@ -59,95 +57,46 @@ class PelotonClient:
         resp.raise_for_status()
         return self._object(resp)
 
-    def get_recent_workouts(self, user_id: str, limit: int = 200, days: int = 90,
-                            page_size: int = 50, max_pages: int = 10) -> List[Dict[str, Any]]:
-        if min(limit, days, page_size, max_pages) <= 0:
-            raise ValueError("History limits must be positive")
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        recent, seen, pages_seen = [], set(), set()
-        self.history_truncated = False
-        for page_number in range(max_pages):
-            page = self.get_workouts_page(user_id, limit=page_size, page=page_number)
-            rows = page.get("data") or []
-            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
-                raise ValueError("Malformed workout page")
-            if not rows:
-                return recent
-            fingerprint = tuple(str(w.get('id') or w) for w in rows)
-            if fingerprint in pages_seen:
-                break
-            pages_seen.add(fingerprint)
-            timestamps = []
-            for workout in rows:
-                stamp = workout_timestamp(workout)
-                if stamp is not None:
-                    timestamps.append(stamp)
-                identity = workout.get("id")
-                if not stamp or stamp < cutoff or (identity and identity in seen):
-                    continue
-                if identity:
-                    seen.add(identity)
-                recent.append(workout)
-                if len(recent) >= limit:
-                    self.history_truncated = True
-                    logger.warning("Workout history reached the %d-workout limit", limit)
-                    return recent
-            # Only stop on the date cutoff when the entire page is older.
-            if timestamps and len(timestamps) == len(rows) and max(timestamps) < cutoff:
-                return recent
-            if page.get("show_next") is False:
-                return recent
-            count = page.get("page_count")
-            if isinstance(count, int) and page_number + 1 >= count:
-                return recent
-            if len(rows) < page_size and page.get("show_next") is not True:
-                return recent
-        self.history_truncated = True
-        logger.warning("Workout history search stopped at a repeated page or page limit")
-        return recent
+    @staticmethod
+    def page_rows(page: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """The workouts on one history page; raises ValueError if malformed."""
+        rows = page.get("data") or []
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise ValueError("Malformed workout page")
+        return rows
 
-    def get_all_workouts(self, user_id: str, page_size: int = 50, max_pages: int = 200,
-                        stop_at_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Walk the full workout history, oldest cutoff-free, for one-time or incremental pulls.
+    @staticmethod
+    def is_last_page(page: Dict[str, Any], page_number: int, rows: List[Dict[str, Any]], page_size: int) -> bool:
+        if not rows or page.get("show_next") is False:
+            return True
+        count = page.get("page_count")
+        if isinstance(count, int) and page_number + 1 >= count:
+            return True
+        return len(rows) < page_size and page.get("show_next") is not True
 
-        With stop_at_id, paging stops as soon as that workout is seen again,
-        so a caller who already counted everything up to a known newest
-        workout only pays for the pages of workouts newer than it.
+    def iter_workout_pages(self, user_id: str, page_size: int, start_page: int = 0,
+                           max_pages: int = 500) -> Iterator[Tuple[int, List[Dict[str, Any]], Dict[str, Any]]]:
+        """Yield (page_number, rows, page) newest first, one page at a time.
+
+        Callers keep only what they need from each page, so a full-history
+        walk never holds every raw row at once. Stops at the oldest workout,
+        or if Peloton repeats a page.
         """
-        if min(page_size, max_pages) <= 0:
+        if min(page_size, max_pages) <= 0 or start_page < 0:
             raise ValueError("History limits must be positive")
-        workouts, seen, pages_seen = [], set(), set()
-        self.history_truncated = False
-        for page_number in range(max_pages):
+        previous = None
+        for page_number in range(start_page, start_page + max_pages):
             page = self.get_workouts_page(user_id, limit=page_size, page=page_number)
-            rows = page.get("data") or []
-            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
-                raise ValueError("Malformed workout page")
-            if not rows:
-                return workouts
+            rows = self.page_rows(page)
             fingerprint = tuple(str(w.get('id') or w) for w in rows)
-            if fingerprint in pages_seen:
-                break
-            pages_seen.add(fingerprint)
-            for workout in rows:
-                identity = workout.get("id")
-                if identity and identity == stop_at_id:
-                    return workouts
-                if identity and identity in seen:
-                    continue
-                if identity:
-                    seen.add(identity)
-                workouts.append(workout)
-            if page.get("show_next") is False:
-                return workouts
-            count = page.get("page_count")
-            if isinstance(count, int) and page_number + 1 >= count:
-                return workouts
-            if len(rows) < page_size and page.get("show_next") is not True:
-                return workouts
-        self.history_truncated = True
-        logger.warning("Full workout history walk stopped at the %d-page limit", max_pages)
-        return workouts
+            if rows and fingerprint == previous:
+                logger.warning("Peloton repeated workout page %d; stopping the walk", page_number)
+                return
+            previous = fingerprint
+            yield page_number, rows, page
+            if self.is_last_page(page, page_number, rows, page_size):
+                return
+        logger.warning("Workout history walk stopped at the %d-page limit", max_pages)
 
     def get_perf_graph(self, workout_id: str) -> Optional[Dict[str, Any]]:
         resp = self._get(f"{BASE}/api/workout/{workout_id}/performance_graph", params={"every_n": 5}, timeout=30)

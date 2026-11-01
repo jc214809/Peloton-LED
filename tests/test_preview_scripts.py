@@ -44,6 +44,36 @@ def test_cache_rotation_with_a_rival_and_no_overlays(tmp_path, capsys):
     assert '-> ' + str(out) in capsys.readouterr().out
 
 
+def test_cache_rotation_reads_the_workout_log_and_config_route(tmp_path, capsys):
+    from peloton.workout_log import WorkoutLog, default_log_path
+    snapshot = {**load_snapshot_for(SimpleNamespace(demo=True)), 'last_updated': 1773496800}
+    cache = tmp_path / 'joel-cache.json'
+    save_snapshot(cache, snapshot)
+    log = WorkoutLog(default_log_path(cache))
+    log.claim('demo')
+    log.merge([{'id': f'w{i}', 'status': 'COMPLETE', 'start_time': 1773496800 - i * 86400, 'distance': 10.0,
+                'fitness_discipline': 'cycling', 'ride': {'instructor': {'id': 'jess', 'name': 'Jess Sims'}}}
+               for i in range(3)])
+    log.backfill['complete'] = True
+    log.save()
+    config = tmp_path / 'config.json'
+    config.write_text(json.dumps({'display': {'journey': {'from': 'Home', 'to': 'Gym', 'miles': 50}}}))
+    options = SimpleNamespace(demo=False, cache=str(cache), log=None, config=str(config))
+    loaded = load_snapshot_for(options)
+    assert loaded['instructor_counts'] == {'jess': 3} and loaded['distance_totals'] == {'cycling': 30.0}
+    assert render_rotation.preview_journey(options)['to'] == 'Gym'
+    out = tmp_path / 'sheet.png'
+    render_rotation.main(['--cache', str(cache), '--config', str(config), '--out', str(out)])
+    _sheet_tiles(out, 32)
+    # Without a log the cache still renders (no instructor or journey pages).
+    log.path.unlink()
+    assert 'instructor_counts' not in load_snapshot_for(SimpleNamespace(demo=False, cache=str(cache)))
+    bad = tmp_path / 'bad.json'
+    bad.write_text('{"display": {"color": "plaid"}}')
+    with pytest.raises(SystemExit, match='unsupported display.color'):
+        render_rotation.preview_journey(SimpleNamespace(config=str(bad)))
+
+
 def test_unreadable_cache_is_a_clear_error(tmp_path):
     with pytest.raises(SystemExit, match='Could not read a dashboard cache'):
         render_rotation.main(['--cache', str(tmp_path / 'missing.json'), '--out', str(tmp_path / 'x.png')])

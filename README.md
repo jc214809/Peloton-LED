@@ -30,14 +30,16 @@ An **amber padlock in the bottom-right** means the token is missing, empty, unre
 
 ## Refresh behavior
 
-- Profile, overview totals, and recent history refresh in the background every **300 seconds** by default, measured after the previous successful refresh finishes.
+- Overview totals and your newest workouts refresh in the background every **300 seconds** by default, measured after the previous successful refresh finishes. A normal refresh is 2 API calls (overview plus the newest 20 workouts, about 0.3 MB); the profile is read at startup and then once a day.
+- **Workout log.** Each rider has a log of every workout (`<cache name>.workouts.json` beside the cache, about 1 MB for 2,000 workouts) holding only what the screens need: no bios, images or profile details. The first time a rider is seen, the board downloads the full history into it in batches of 100 (`history_batch_size`), about one a second, in the background: the latest workout, totals and streaks show within seconds; instructor and journey figures appear when the download finishes. Progress is saved after every batch, so an interrupted download resumes. After that, each refresh merges the newest workouts by workout ID, so finished, edited and repeated workouts are never double counted, and instructor counts, journey miles and "this week" are recomputed from the log (changing the journey `start_date` costs no downloads).
+- **Self-check.** Every refresh compares the log with Peloton's own workout count. If they disagree three refreshes in a row, the board walks the full history again (at most once a day, and inside `refresh_schedule` quiet hours if you set them), adding anything missing and dropping workouts deleted in Peloton. Mismatches and repairs are logged.
 - New data becomes visible on the next screen rotation. Authentication indicator changes can repaint the current screen.
 - Performance data is held in a bounded in-memory LRU cache keyed by workout ID. Workouts less than one hour old are fetched each refresh to allow metrics to settle; changed workout metadata and missing performance data also cause a refetch.
 - Rendering does not make API calls. Slow requests do not pause screen rotation.
 - Each atomic snapshot includes connection state, refresh progress, last attempt/success times, refresh duration, next scheduled attempt, a sanitized error type, and a generation counter.
 - Network failures preserve the previous successful snapshot in memory and retry after 15, 30, 60 seconds, etc., up to the configured interval. Rate-limit `Retry-After` values can extend that delay.
 - A rejected token pauses further requests until the token file changes.
-- The last successful display snapshot is saved atomically in `dashboard-cache.json` beside the token by default, with owner-only permissions. It is loaded before the first network request after a restart.
+- The last successful display snapshot is saved atomically in `dashboard-cache.json` beside the token by default, with owner-only permissions. It is loaded before the first network request after a restart. Only the profile fields the board uses are kept (ID, username, timezone, unit system).
 - A **blue clock in the bottom-left** appears after three consecutive refresh failures and means the board is showing saved data. The first two failures remain quiet, and any successful refresh resets the counter and clears the clock. Corrupt, incomplete, and unsupported cache files are ignored safely.
 
 Override the interval:
@@ -149,13 +151,13 @@ Options:
 - `screen_durations.latest_workouts` / `last_workout_duration`: `0` hides the section; otherwise the value only matters with `compact_workout_pages`.
 - `compact_workout_pages` (64×32 only, default `false`): use the older layout of two static pages per workout instead of rotating stats.
 - `timezone`: decides which calendar day counts as "most recent".
-- `history_days`, `history_limit`, `history_page_size`, `history_max_pages`: how far back to look for that day.
+- `recent_fetch_size` (default `20`): workouts read per refresh. The board reads more pages only when the latest day continues past them.
 
 ### `username` — rider name and highlights
 
 ![Username screen](docs/screenshots/rotation/username.png)
 
-Your name stays fixed at the top in the largest font that fits, above a blue underline. The panel below rotates through up to six highlights, 4 s each: **Total Workouts** (in large gold digits), **This Week** (workouts and minutes since Monday), **Top Discipline**, and your **top three instructors** by class count. The instructor counts come from a one-time walk of your full history; after that, only new workouts are added. A workout still in progress is added once it finishes. Only real instructors count: workouts without a class (Just Walk, Just Ride, Lanebreak, ride goals, free outdoor sessions) are left out, and a class with two or more instructors counts once for each of them.
+Your name stays fixed at the top in the largest font that fits, above a blue underline. The panel below rotates through up to six highlights, 4 s each: **Total Workouts** (in large gold digits), **This Week** (workouts and minutes since Monday), **Top Discipline**, and your **top three instructors** by class count. The instructor counts come from the [workout log](#refresh-behavior), so a workout still in progress is counted once it finishes. Only real instructors count: workouts without a class (Just Walk, Just Ride, Lanebreak, ride goals, free outdoor sessions) are left out, and a class with two or more instructors counts once for each of them.
 
 Options: `duration` (or `screen_durations.username`) is the minimum time on screen; it's extended automatically so every highlight gets its 4 s. The name comes from `--username`, then `users[].username`, then your Peloton username, then `display.username`. `font` and `color` style the name.
 
@@ -215,7 +217,7 @@ The default route is Columbus → Disney World, 880 miles, counting every workou
 | Walking, Outdoor Walk | Cardio |
 | Rowing, Row Bootcamp (meters converted to miles) | Any class Peloton records without a distance, and incomplete workouts |
 
-To count only some of them, add `"disciplines"` with the names from the left column, e.g. `"disciplines": ["Cycling", "Running", "Outdoor Run"]`. Each name is matched exactly, so `"Running"` does not include Outdoor Run or Tread Bootcamp; list those too if you want them. Listing a type from the right column logs a warning, since it never adds miles. The optional `start_date` counts only miles from that day on; changing it recounts your whole history once on the next refresh. The journey can also be set per rider under `users[]`. Distances are tallied from your full history the first time, then incrementally after that, and the screen is skipped until there's at least some distance.
+To count only some of them, add `"disciplines"` with the names from the left column, e.g. `"disciplines": ["Cycling", "Running", "Outdoor Run"]`. Each name is matched exactly, so `"Running"` does not include Outdoor Run or Tread Bootcamp; list those too if you want them. Listing a type from the right column logs a warning, since it never adds miles. The optional `start_date` counts only miles from that day on; changing it takes effect on the next refresh with no extra downloads. The journey can also be set per rider under `users[]`. Miles come from the [workout log](#refresh-behavior); the screen is skipped until the first full-history download finishes and there's at least some distance.
 
 ### `milestones` — milestone celebration
 
@@ -242,7 +244,7 @@ When there's no workout data to show, a short status screen takes the place of t
 | Loading | Login needed | Offline | No workouts |
 |---|---|---|---|
 | ![Loading](docs/screenshots/rotation/status-loading.png) | ![Login needed](docs/screenshots/rotation/status-login-needed.png) | ![Offline](docs/screenshots/rotation/status-offline.png) | ![No workouts](docs/screenshots/rotation/status-empty.png) |
-| Before the first successful refresh, with no saved cache | Token missing, empty or rejected; see [Authentication](#authentication) | Requests are failing and there's no saved data | Logged in, but no completed workouts within `history_days` |
+| Before the first successful refresh, with no saved cache | Token missing, empty or rejected; see [Authentication](#authentication) | Requests are failing and there's no saved data | Logged in, but no completed workouts yet |
 
 ### Indicators
 
@@ -316,11 +318,10 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `logo_path` | Auto-selected | Optional logo file; missing logos are skipped |
 | `timezone` | Profile, then system local | Calendar-day grouping; explicit config must be a valid IANA zone |
 | `refresh_interval` | 300 | Positive integer seconds |
-| `history_days` | 90 | History lookback |
-| `history_limit` | 200 | Maximum recent workouts returned |
-| `history_page_size` | 50 | Workouts requested per API page |
-| `history_max_pages` | 10 | Page safety limit |
-| `instructor_tally_max_pages` | 200 | Page safety limit for the one-time full-history instructor tally |
+| `recent_fetch_size` | 20 | Workouts read per refresh |
+| `history_batch_size` | 100 | Workouts per request when downloading or re-checking the full history |
+| `history_days`, `history_limit`, `history_page_size`, `history_max_pages`, `instructor_tally_max_pages` | — | Retired by the workout log; still accepted, ignored with a warning |
+| `log_path` | Beside the cache | Workout log file (single-rider; per rider use `users[].log_path`) |
 | `performance_cache_size` | 32 | Maximum in-memory performance records |
 | `cache_path` | Beside token | Optional persistent snapshot and PR-state file |
 | `rotation` | See below | Screen sections to show, and their order |
@@ -375,11 +376,8 @@ Each refresh saves Peloton's output personal-records table (one record per disci
     "logo_path": null,
     "timezone": "America/New_York",
     "refresh_interval": 300,
-    "history_days": 90,
-    "history_limit": 200,
-    "history_page_size": 50,
-    "history_max_pages": 10,
-    "instructor_tally_max_pages": 200,
+    "recent_fetch_size": 20,
+    "history_batch_size": 100,
     "performance_cache_size": 32,
     "rotation": ["username", "latest_workouts", "total_workouts", "lifetime", "milestones", "goals"],
     "screen_durations": { "latest_workouts": 15, "username": 9, "lifetime": 5, "milestones": 4, "goals": 4 },
@@ -399,6 +397,7 @@ Top-level and per-user fields, and whether each is required:
 | `users[].name` | **Yes**, once `users` is present | Must be unique (case-insensitive) across all users |
 | `users[].token_path` | No | Defaults to `cookies-<slug of name>.txt` beside the config file |
 | `users[].cache_path` | No | Defaults to `<token file stem>-dashboard-cache.json` |
+| `users[].log_path` | No | Workout log; defaults to the cache path with `.workouts.json` in place of `.json` |
 | `users[].username` | No | Defaults to the account's real Peloton username |
 | `users[].email_env` | No | Only used for unattended token renewal (`refresh_cookies.py --ensure`) |
 | `users[].password_env` | No | Only used for unattended token renewal |

@@ -16,9 +16,7 @@ logger = logging.getLogger('peloton-led.config')
 DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration': 4,
             'per_workout_duration': 4, 'last_workout_duration': 30, 'logo_duration': 3,
             'last_workout_detail_interval': 4.0,
-            'refresh_interval': 300, 'history_days': 90, 'history_limit': 200,
-            'history_page_size': 50, 'history_max_pages': 10,
-            'instructor_tally_max_pages': 200,
+            'refresh_interval': 300, 'history_batch_size': 100, 'recent_fetch_size': 20,
             'performance_cache_size': 32,
             'rotation': ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
                          'next_milestone', 'lifetime', 'journey',
@@ -39,6 +37,11 @@ MATRIX_DEFAULTS = {'rows': 64, 'cols': 64, 'chain': 1, 'parallel': 1, 'pwm_bits'
                    'no_hardware_pulse': False, 'rgb_sequence': 'RGB', 'pixel_mapper': '',
                    'row_addr_type': 0, 'multiplexing': 0, 'limit_refresh': 0, 'pwm_dither_bits': 0}
 GPIO_MAPPINGS = ('regular', 'adafruit-hat', 'adafruit-hat-pwm')
+
+# Settings the workout log replaced (docs/WORKOUT-LOG-PLAN.md). Still accepted
+# so older config files load, but they no longer do anything.
+RETIRED_DISPLAY_KEYS = ('history_days', 'history_limit', 'history_page_size',
+                        'history_max_pages', 'instructor_tally_max_pages')
 
 ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
                      'next_milestone', 'lifetime', 'journey', 'milestones', 'goals'}
@@ -210,14 +213,16 @@ def load_config(path='config', allow_missing=False):
                 raise ValueError(f'{path}: user names and token paths must be unique')
             seen_names.add(name.casefold())
             seen_tokens.add(token)
-            for key in ('cache_path', 'username'):
+            for key in ('cache_path', 'log_path', 'username'):
                 if user.get(key) is not None and not isinstance(user[key], str):
                     raise ValueError(f'{path}: users[{index}].{key} must be a string')
-            cache = user.get('cache_path')
-            if cache and cache in seen_caches:
-                raise ValueError(f'{path}: user cache paths must be unique')
-            if cache:
-                seen_caches.add(cache)
+            for key in ('cache_path', 'log_path'):
+                # Two riders sharing a cache or log would overwrite each other.
+                value = user.get(key)
+                if value and value in seen_caches:
+                    raise ValueError(f'{path}: user cache and log paths must be unique')
+                if value:
+                    seen_caches.add(value)
             for key in ('email_env', 'password_env'):
                 value = user.get(key)
                 if value is not None and (not isinstance(value, str) or
@@ -236,11 +241,14 @@ def load_config(path='config', allow_missing=False):
         value = display[key]
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
             raise ValueError(f'{path}: display.{key} must be a non-negative number')
-    for key in ('refresh_interval', 'history_days', 'history_limit', 'history_page_size',
-                'history_max_pages', 'instructor_tally_max_pages', 'performance_cache_size'):
+    for key in ('refresh_interval', 'history_batch_size', 'recent_fetch_size', 'performance_cache_size'):
         value = display[key]
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise ValueError(f'{path}: display.{key} must be a positive integer')
+    retired = [key for key in RETIRED_DISPLAY_KEYS if key in display]
+    if retired:
+        logger.warning('%s: display.%s no longer do anything (the workout log replaced them); '
+                       'they can be removed', path, ', display.'.join(retired))
     if display['font'] not in ('discipline', 'info', 'titles', 'stats', 'countdown'):
         # Legacy names appeared in the original example config.
         if display['font'] in ('ride', 'park'):
@@ -255,7 +263,7 @@ def load_config(path='config', allow_missing=False):
             ZoneInfo(tz)
         except (ZoneInfoNotFoundError, TypeError, ValueError) as exc:
             raise ValueError(f'{path}: invalid display.timezone') from exc
-    for key in ('username', 'logo_path', 'cache_path'):
+    for key in ('username', 'logo_path', 'cache_path', 'log_path'):
         if display.get(key) is not None and not isinstance(display[key], str):
             raise ValueError(f'{path}: display.{key} must be a string')
     rotation = display.get('rotation')

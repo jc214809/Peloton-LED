@@ -2,24 +2,42 @@ from unittest.mock import Mock
 import json
 import stat
 import requests
-import time
 
-from peloton.dashboard import TALLY_VERSION, Dashboard
-from peloton.selection import settled_rows
+from peloton.api import PelotonClient
+from peloton.dashboard import Dashboard
 from peloton.demo import demo_data
 
 
-def setup_dashboard(tmp_path):
+def serve_history(client):
+    """Answer get_workouts_page from client.history (newest first), with the
+    real paging logic, so tests can change history between refreshes."""
+    def page(user_id, limit, page=0):
+        rows = client.history[page * limit:(page + 1) * limit]
+        pages = max(1, -(-len(client.history) // limit))
+        return {'data': rows, 'total': len(client.history), 'page_count': pages,
+                'show_next': page < pages - 1}
+    client.get_workouts_page.side_effect = page
+    client.page_rows = PelotonClient.page_rows
+    client.is_last_page = PelotonClient.is_last_page
+    client.iter_workout_pages.side_effect = lambda *a, **k: PelotonClient.iter_workout_pages(client, *a, **k)
+
+
+def recent_fetches(client):
+    """Newest-page fetches made by refreshes (history walks use 100-row batches)."""
+    return sum(1 for c in client.get_workouts_page.call_args_list if c.kwargs['limit'] == 20)
+
+
+def setup_dashboard(tmp_path, config=None):
     token = tmp_path / 'token'
     token.write_text('synthetic-token')
     data = demo_data()
-    client = Mock(history_truncated=False)
+    client = Mock()
     client.get_me.return_value = data['me']
     client.get_overview.return_value = data['overview']
-    client.get_recent_workouts.return_value = [data['workouts'][0]]
+    client.history = [data['workouts'][0]]
     client.get_perf_graph.return_value = data['performance']['demo-cycling']
-    client.get_all_workouts.return_value = []
-    dashboard = Dashboard(token, {}, client_factory=lambda _: client)
+    serve_history(client)
+    dashboard = Dashboard(token, dict(config or {}), client_factory=lambda _: client)
     return dashboard, client, token
 
 
@@ -29,47 +47,15 @@ def test_refresh_updates_history_but_caches_old_performance(tmp_path):
     before = dashboard.snapshot()
     assert before['summaries'][0]['workout_id'] == 'demo-cycling'
     dashboard.refresh()
-    assert client.get_recent_workouts.call_count == 2
+    assert recent_fetches(client) == 2
     assert client.get_perf_graph.call_count == 1
-    client.get_recent_workouts.return_value = [dict(client.get_recent_workouts.return_value[0], id='new')]
+    client.history = [dict(client.history[0], id='new')]
     dashboard.refresh()
     assert dashboard.snapshot()['summaries'][0]['workout_id'] == 'new'
     assert client.get_perf_graph.call_count == 2
-    client.get_recent_workouts.return_value = [client.get_recent_workouts.return_value[0] | {'id': 'demo-cycling'}]
+    client.history = [client.history[0] | {'id': 'demo-cycling'}]
     dashboard.refresh()
     assert client.get_perf_graph.call_count == 2
-
-
-def test_instructor_tally_accumulates_incrementally_across_refreshes(tmp_path):
-    dashboard, client, _ = setup_dashboard(tmp_path)
-    client.get_all_workouts.return_value = [
-        {'id': 'w2', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'cody', 'name': 'Cody Rigsby'}}},
-        {'id': 'w1', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'cody', 'name': 'Cody Rigsby'}}},
-    ]
-    dashboard.refresh()
-    assert dashboard.snapshot()['instructor_counts'] == {'cody': 2}
-    assert dashboard.snapshot()['instructor_tally_cursor'] == 'w2'
-    # get_all_workouts is called with the cursor from the previous refresh,
-    # so only genuinely new workouts need to be walked.
-    client.get_all_workouts.return_value = [
-        {'id': 'w3', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'robin', 'name': 'Robin Arzon'}}},
-    ]
-    dashboard.refresh()
-    assert client.get_all_workouts.call_args.kwargs['stop_at_id'] == 'w2'
-    assert dashboard.snapshot()['instructor_counts'] == {'cody': 2, 'robin': 1}
-    assert dashboard.snapshot()['instructor_tally_cursor'] == 'w3'
-
-
-def test_instructor_tally_cursor_persists_when_no_new_workouts(tmp_path):
-    dashboard, client, _ = setup_dashboard(tmp_path)
-    client.get_all_workouts.return_value = [
-        {'id': 'w1', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'cody', 'name': 'Cody Rigsby'}}},
-    ]
-    dashboard.refresh()
-    client.get_all_workouts.return_value = []
-    dashboard.refresh()
-    assert dashboard.snapshot()['instructor_tally_cursor'] == 'w1'
-    assert dashboard.snapshot()['instructor_counts'] == {'cody': 1}
 
 
 def test_offline_retains_snapshot_and_does_not_set_login(tmp_path):
@@ -111,7 +97,7 @@ def test_successful_snapshot_survives_offline_restart(tmp_path):
     assert cache_path.exists()
     assert stat.S_IMODE(cache_path.stat().st_mode) == 0o600
 
-    offline = Mock(history_truncated=False)
+    offline = Mock()
     offline.get_me.side_effect = requests.ConnectionError('offline')
     restarted = Dashboard(token, {}, client_factory=lambda _: offline)
     loaded = restarted.snapshot()
@@ -125,21 +111,6 @@ def test_successful_snapshot_survives_offline_restart(tmp_path):
     assert recovered['status'] == 'offline'
     assert recovered['summaries'] == loaded['summaries']
     assert recovered['last_updated'] == loaded['last_updated']
-
-
-def test_instructor_tally_survives_restart(tmp_path):
-    dashboard, client, token = setup_dashboard(tmp_path)
-    client.get_all_workouts.return_value = [
-        {'id': 'w1', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'cody', 'name': 'Cody Rigsby'}}},
-    ]
-    dashboard.refresh()
-    offline = Mock(history_truncated=False)
-    offline.get_me.side_effect = requests.ConnectionError('offline')
-    restarted = Dashboard(token, {}, client_factory=lambda _: offline)
-    loaded = restarted.snapshot()
-    assert loaded['instructor_counts'] == {'cody': 1}
-    assert loaded['instructor_names'] == {'cody': 'Cody Rigsby'}
-    assert loaded['instructor_tally_cursor'] == 'w1'
 
 
 def test_corrupt_or_wrong_version_cache_is_ignored(tmp_path):
@@ -246,9 +217,9 @@ def test_refresh_health_is_published_atomically(tmp_path):
 def test_lru_performance_cache_is_bounded(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path)
     dashboard._performance_cache_size = 2
-    original = client.get_recent_workouts.return_value[0]
+    original = client.history[0]
     for identity in ('one', 'two', 'three'):
-        client.get_recent_workouts.return_value = [dict(original, id=identity)]
+        client.history = [dict(original, id=identity)]
         dashboard.refresh()
     assert list(dashboard._performance) == ['two', 'three']
 
@@ -259,7 +230,7 @@ def test_refresh_summarizes_every_workout_on_latest_active_day(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path)
     latest_day = datetime.now(timezone.utc) - timedelta(days=7)
     older_day = latest_day - timedelta(days=1)
-    client.get_recent_workouts.return_value = [
+    client.history = [
         {'id': 'older', 'status': 'COMPLETE', 'start_time': older_day.timestamp(),
          'fitness_discipline': 'strength'},
         {'id': 'morning', 'status': 'COMPLETE', 'start_time': latest_day.replace(hour=9).timestamp(),
@@ -329,7 +300,7 @@ def test_worker_refreshes_automatically_without_screen_calls(tmp_path):
         assert refreshed.wait(2)
     finally:
         dashboard.stop()
-    assert client.get_recent_workouts.call_count >= 2
+    assert client.get_workouts_page.call_count >= 2
 
 
 def test_request_refresh_wakes_sleeping_worker(tmp_path):
@@ -378,7 +349,8 @@ def test_screen_rotation_continues_during_slow_refresh(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path)
     dashboard.refresh()
     entered, release = threading.Event(), threading.Event()
-    client.get_me.side_effect = lambda: (entered.set(), release.wait(2), demo_data()['me'])[-1]
+    # The profile is cached for a day, so the second refresh blocks on the overview.
+    client.get_overview.side_effect = lambda _: (entered.set(), release.wait(2), demo_data()['overview'])[-1]
     dashboard.start()
     assert entered.wait(1)
     manager = Mock()
@@ -411,7 +383,7 @@ def test_new_pr_gets_the_record_it_beat_and_survives_restart(tmp_path):
     assert dashboard.snapshot()['summaries'][0]['previous_best_kj'] is None
     # The rider sets a new 30 min record with the latest workout.
     pr_ride = dict(data['workouts'][0], id='pr-ride', is_total_work_personal_record=True)
-    client.get_recent_workouts.return_value = [pr_ride]
+    client.history = [pr_ride]
     client.get_overview.return_value = _overview_with_record(data, 262900.0, 'pr-ride')
     dashboard.refresh()
     snap = dashboard.snapshot()
@@ -430,7 +402,7 @@ def test_new_pr_gets_the_record_it_beat_and_survives_restart(tmp_path):
 def test_pr_set_before_first_capture_has_no_previous_best(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path)
     data = demo_data()
-    client.get_recent_workouts.return_value = [dict(data['workouts'][0], id='pr-ride')]
+    client.history = [dict(data['workouts'][0], id='pr-ride')]
     client.get_overview.return_value = _overview_with_record(data, 262900.0, 'pr-ride')
     dashboard.refresh()
     assert dashboard.snapshot()['summaries'][0]['previous_best_kj'] is None
@@ -446,71 +418,3 @@ def test_damaged_records_table_is_dropped_without_losing_cache(tmp_path):
     restarted = Dashboard(token, {}, client_factory=lambda _: Mock())
     assert restarted.snapshot()['summaries'][0]['workout_id'] == 'demo-cycling'
     assert restarted.snapshot()['personal_records'] == {}
-
-
-def _ride(identity, status='COMPLETE', started=None, instructor='Cody Rigsby'):
-    return {'id': identity, 'status': status, 'fitness_discipline': 'cycling', 'distance': 5,
-            'created_at': started if started is not None else time.time() - 600,
-            'ride': {'instructor': {'id': instructor.split()[0].lower(), 'name': instructor}}}
-
-
-def test_settled_rows_hold_back_everything_from_the_newest_unfinished_workout():
-    now = time.time()
-    rows = [_ride('w4'), _ride('w3', 'IN_PROGRESS', now - 1200), _ride('w2'), _ride('w1')]
-    assert [r['id'] for r in settled_rows(rows, now)] == ['w2', 'w1']
-    # Unfinished for longer than the settle window: abandoned, so final.
-    rows[1]['created_at'] = now - 7 * 3600
-    assert [r['id'] for r in settled_rows(rows, now)] == ['w4', 'w3', 'w2', 'w1']
-    assert settled_rows([_ride('w1', 'IN_PROGRESS', now)], now) == []
-    assert len(settled_rows([{'id': 'x', 'status': 'IN_PROGRESS'}], now)) == 1  # no start time
-
-
-def test_tallies_count_a_workout_that_was_in_progress_at_the_last_refresh(tmp_path):
-    # Regression: the cursor used to step past the running workout, so it
-    # never reached the instructor or distance tallies once it finished.
-    dashboard, client, _ = setup_dashboard(tmp_path)
-    client.get_all_workouts.return_value = [_ride('w2', 'IN_PROGRESS', instructor='Robin Arzon'), _ride('w1')]
-    dashboard.refresh()
-    snap = dashboard.snapshot()
-    assert snap['instructor_counts'] == {'cody': 1} and snap['distance_totals'] == {'cycling': 5}
-    assert snap['instructor_tally_cursor'] == 'w1' == snap['distance_tally_cursor']
-
-    client.get_all_workouts.return_value = [_ride('w2', instructor='Robin Arzon')]
-    dashboard.refresh()
-    assert client.get_all_workouts.call_args.kwargs['stop_at_id'] == 'w1'
-    snap = dashboard.snapshot()
-    assert snap['instructor_counts'] == {'cody': 1, 'robin': 1}
-    assert snap['distance_totals'] == {'cycling': 10} and snap['instructor_tally_cursor'] == 'w2'
-
-
-def test_older_tally_format_recounts_both_tallies_once(tmp_path):
-    dashboard, client, _ = setup_dashboard(tmp_path)
-    # A cache from before the fix: cursor already past the missed workout.
-    dashboard._publish(instructor_counts={'cody': 1}, instructor_tally_cursor='w2',
-                       distance_totals={'cycling': 5}, distance_tally_cursor='w2')
-    client.get_all_workouts.return_value = [_ride('w2', instructor='Robin Arzon'), _ride('w1')]
-    dashboard.refresh()
-    assert client.get_all_workouts.call_count == 1
-    assert client.get_all_workouts.call_args.kwargs['stop_at_id'] is None
-    snap = dashboard.snapshot()
-    assert snap['instructor_counts'] == {'cody': 1, 'robin': 1}
-    assert snap['distance_totals'] == {'cycling': 10} and snap['tally_version'] == TALLY_VERSION
-
-    client.get_all_workouts.return_value = []
-    dashboard.refresh()
-    assert client.get_all_workouts.call_args.kwargs['stop_at_id'] == 'w2'
-    assert dashboard.snapshot()['instructor_counts'] == {'cody': 1, 'robin': 1}
-
-
-def test_recount_drops_placeholder_instructors_from_an_older_cache(tmp_path):
-    dashboard, client, _ = setup_dashboard(tmp_path)
-    # A version-2 cache: name-keyed, with Peloton's "JUST WALK" placeholder ranked.
-    dashboard._publish(instructor_counts={'JUST WALK': 1, 'Cody Rigsby': 1}, instructor_tally_cursor='w2',
-                       distance_totals={}, distance_tally_cursor='w2', tally_version=2)
-    walk = {'id': 'w2', 'status': 'COMPLETE', 'ride': {'instructor': {'id': None, 'name': 'JUST WALK'}}}
-    client.get_all_workouts.return_value = [walk, _ride('w1')]
-    dashboard.refresh()
-    assert client.get_all_workouts.call_args.kwargs['stop_at_id'] is None
-    snap = dashboard.snapshot()
-    assert snap['instructor_counts'] == {'cody': 1} and snap['instructor_names'] == {'cody': 'Cody Rigsby'}
-    assert snap['tally_version'] == TALLY_VERSION == 3

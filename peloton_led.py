@@ -283,6 +283,11 @@ def configured_profiles(config, options):
         else:
             user_display['cache_path'] = str(token_path.with_name(
                 f'{token_path.stem}-dashboard-cache.json'))
+        if user.get('log_path'):
+            log_path = Path(user['log_path']).expanduser()
+            if not log_path.is_absolute():
+                log_path = config_dir / log_path
+            user_display['log_path'] = str(log_path)
         profiles.append({'name': user['name'], 'username': user.get('username'),
                          'dashboard': Dashboard(token_path, user_display,
                              demo=options.demo, demo_login_needed=options.demo_login_needed)})

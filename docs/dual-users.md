@@ -9,6 +9,7 @@ Start with `config.dual-users-example.json`. Each entry under `users` requires:
 - `name`: local profile label used in logs and credential setup.
 - `token_path` (optional): that rider's bearer-token file. Defaults to `cookies-<name>.txt` (name lowercased, slugified) beside the config file.
 - `cache_path` (optional): that rider's persisted snapshot, PR acknowledgements, and milestone state. Defaults to `<token file stem>-dashboard-cache.json` beside the token file.
+- `log_path` (optional): that rider's workout log. Defaults to the cache path with `.workouts.json` in place of `.json`.
 - `email_env` and `password_env`: environment-variable names used only for unattended token renewal.
 - `username` (optional): board name override. When omitted, the account's Peloton username is shown.
 - `weekly_goals` (optional): per-rider weekly workout/minute targets. Falls back to `display.weekly_goals` when omitted.

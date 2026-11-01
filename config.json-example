@@ -17,10 +17,8 @@
     "logo_duration": 3,
     "timezone": "America/New_York",
     "refresh_interval": 300,
-    "history_days": 90,
-    "history_limit": 200,
-    "history_page_size": 50,
-    "history_max_pages": 10,
+    "history_batch_size": 100,
+    "recent_fetch_size": 20,
     "performance_cache_size": 32,
     "cache_path": "dashboard-cache.json",
     "rotation": [

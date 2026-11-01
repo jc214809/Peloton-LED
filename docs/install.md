@@ -272,6 +272,7 @@ want to reclaim the space.
 | Access token(s) | `/var/lib/peloton-led/cookies*.txt` |
 | Refresh token(s) | `/var/lib/peloton-led/cookies*.refresh.json` |
 | Persistent snapshot/cache | `/var/lib/peloton-led/dashboard-cache*.json` |
+| Workout log (one per rider, about 1 MB; safe to delete, it re-downloads) | `/var/lib/peloton-led/dashboard-cache*.workouts.json` |
 
 The display runs as `peloton-led.service`: it starts when you start it (or
 at boot with `--start-at-boot`), restarts on failure, and is granted only the GPIO-related capabilities the matrix driver

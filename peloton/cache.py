@@ -7,10 +7,8 @@ from pathlib import Path
 CACHE_VERSION = 1
 PERSISTED_KEYS = (
     'me', 'totals', 'summaries', 'last_updated', 'generation',
-    'active_day_count', 'history_truncated', 'celebrated_pr_ids',
-    'weekly_progress', 'celebrated_milestones',
-    'instructor_counts', 'instructor_names', 'instructor_tally_cursor', 'personal_records', 'streaks',
-    'distance_totals', 'distance_tally_cursor', 'distance_tally_since', 'tally_version',
+    'active_day_count', 'celebrated_pr_ids',
+    'weekly_progress', 'celebrated_milestones', 'personal_records', 'streaks',
 )
 
 
@@ -42,13 +40,6 @@ def load_snapshot(path):
     last_updated = snapshot.get('last_updated')
     if isinstance(last_updated, bool) or not isinstance(last_updated, (int, float)):
         return None
-    counts = snapshot.get('instructor_counts', {})
-    if (not isinstance(counts, dict) or
-            not all(isinstance(v, int) and not isinstance(v, bool) for v in counts.values())):
-        return None
-    cursor = snapshot.get('instructor_tally_cursor')
-    if cursor is not None and not isinstance(cursor, str):
-        return None
     restored = {key: snapshot[key] for key in PERSISTED_KEYS if key in snapshot}
     # A damaged records table only loses PR gains, so drop it, not the cache.
     records = restored.get('personal_records')
@@ -60,23 +51,6 @@ def load_snapshot(path):
     if streaks is not None and (not isinstance(streaks, dict) or not all(
             isinstance(v, int) and not isinstance(v, bool) for v in streaks.values())):
         del restored['streaks']
-    # A damaged instructor name table is dropped with its tally so it rebuilds.
-    names = restored.get('instructor_names')
-    if names is not None and (not isinstance(names, dict) or not all(
-            isinstance(v, str) for v in names.values())):
-        for key in ('instructor_names', 'instructor_counts', 'instructor_tally_cursor'):
-            restored.pop(key, None)
-    # A damaged distance tally is dropped with its cursor so it rebuilds.
-    distance = restored.get('distance_totals')
-    distance_cursor = restored.get('distance_tally_cursor')
-    distance_since = restored.get('distance_tally_since')
-    if (distance is not None and (not isinstance(distance, dict) or not all(
-            isinstance(v, (int, float)) and not isinstance(v, bool) for v in distance.values()))) or (
-            distance_cursor is not None and not isinstance(distance_cursor, str)) or (
-            distance_since is not None and not isinstance(distance_since, str)):
-        restored.pop('distance_totals', None)
-        restored.pop('distance_tally_cursor', None)
-        restored.pop('distance_tally_since', None)
     return restored
 
 

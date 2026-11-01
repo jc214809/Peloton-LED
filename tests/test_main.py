@@ -113,7 +113,8 @@ def test_configured_profiles_apply_per_rider_settings(tmp_path):
     users = [
         {'name': 'Joel', 'username': 'JC', 'weekly_goals': {'workouts': 4}, 'milestones': [500],
          'journey': {'miles': 1000}, 'cache_path': 'caches/joel.json'},
-        {'name': 'Jen', 'token_path': '/var/lib/peloton-led/jen.txt', 'cache_path': '/tmp/jen.json'},
+        {'name': 'Jen', 'token_path': '/var/lib/peloton-led/jen.txt', 'cache_path': '/tmp/jen.json',
+         'log_path': 'logs/jen.json'},
         {'name': 'Kid'},
     ]
     joel, jen, kid = peloton_led.configured_profiles({'display': display, 'users': users}, options)
@@ -126,4 +127,8 @@ def test_configured_profiles_apply_per_rider_settings(tmp_path):
     assert jen['dashboard'].token_path == Path('/var/lib/peloton-led/jen.txt')
     assert jen['dashboard'].cache_path == Path('/tmp/jen.json')
     assert kid['dashboard'].cache_path == tmp_path / 'cookies-kid-dashboard-cache.json'
+    # The workout log sits beside the cache unless a rider sets log_path.
+    assert joel['dashboard'].log_path == tmp_path / 'caches' / 'joel.workouts.json'
+    assert jen['dashboard'].log_path == tmp_path / 'logs' / 'jen.json'
+    assert kid['dashboard'].log_path == tmp_path / 'cookies-kid-dashboard-cache.workouts.json'
     assert 'weekly_goals' not in display  # the shared display config is untouched
