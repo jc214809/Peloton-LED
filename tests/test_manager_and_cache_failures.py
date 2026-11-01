@@ -97,6 +97,16 @@ def test_damaged_cache_fields_reject_the_cache(tmp_path, changes):
     assert load_snapshot(_cache(tmp_path, **changes)) is None
 
 
+def test_damaged_instructor_names_drop_the_instructor_tally_so_it_rebuilds(tmp_path):
+    snapshot = load_snapshot(_cache(tmp_path, instructor_names={'cody': 5}, instructor_counts={'cody': 1},
+                                    instructor_tally_cursor='w1'))
+    assert snapshot is not None
+    for key in ('instructor_names', 'instructor_counts', 'instructor_tally_cursor'):
+        assert key not in snapshot
+    assert load_snapshot(_cache(tmp_path, instructor_names={'cody': 'Cody Rigsby'}))['instructor_names'] == {
+        'cody': 'Cody Rigsby'}
+
+
 def test_damaged_optional_tables_are_dropped_not_the_cache(tmp_path):
     snapshot = load_snapshot(_cache(tmp_path, personal_records={'x': 'bad'}, streaks={'current': 'x'},
                                     distance_totals={'cycling': 'far'}, distance_tally_cursor='w'))

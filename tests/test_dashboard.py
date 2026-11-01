@@ -43,33 +43,33 @@ def test_refresh_updates_history_but_caches_old_performance(tmp_path):
 def test_instructor_tally_accumulates_incrementally_across_refreshes(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path)
     client.get_all_workouts.return_value = [
-        {'id': 'w2', 'status': 'COMPLETE', 'ride': {'instructor': {'name': 'Cody Rigsby'}}},
-        {'id': 'w1', 'status': 'COMPLETE', 'ride': {'instructor': {'name': 'Cody Rigsby'}}},
+        {'id': 'w2', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'cody', 'name': 'Cody Rigsby'}}},
+        {'id': 'w1', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'cody', 'name': 'Cody Rigsby'}}},
     ]
     dashboard.refresh()
-    assert dashboard.snapshot()['instructor_counts'] == {'Cody Rigsby': 2}
+    assert dashboard.snapshot()['instructor_counts'] == {'cody': 2}
     assert dashboard.snapshot()['instructor_tally_cursor'] == 'w2'
     # get_all_workouts is called with the cursor from the previous refresh,
     # so only genuinely new workouts need to be walked.
     client.get_all_workouts.return_value = [
-        {'id': 'w3', 'status': 'COMPLETE', 'ride': {'instructor': {'name': 'Robin Arzon'}}},
+        {'id': 'w3', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'robin', 'name': 'Robin Arzon'}}},
     ]
     dashboard.refresh()
     assert client.get_all_workouts.call_args.kwargs['stop_at_id'] == 'w2'
-    assert dashboard.snapshot()['instructor_counts'] == {'Cody Rigsby': 2, 'Robin Arzon': 1}
+    assert dashboard.snapshot()['instructor_counts'] == {'cody': 2, 'robin': 1}
     assert dashboard.snapshot()['instructor_tally_cursor'] == 'w3'
 
 
 def test_instructor_tally_cursor_persists_when_no_new_workouts(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path)
     client.get_all_workouts.return_value = [
-        {'id': 'w1', 'status': 'COMPLETE', 'ride': {'instructor': {'name': 'Cody Rigsby'}}},
+        {'id': 'w1', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'cody', 'name': 'Cody Rigsby'}}},
     ]
     dashboard.refresh()
     client.get_all_workouts.return_value = []
     dashboard.refresh()
     assert dashboard.snapshot()['instructor_tally_cursor'] == 'w1'
-    assert dashboard.snapshot()['instructor_counts'] == {'Cody Rigsby': 1}
+    assert dashboard.snapshot()['instructor_counts'] == {'cody': 1}
 
 
 def test_offline_retains_snapshot_and_does_not_set_login(tmp_path):
@@ -130,14 +130,15 @@ def test_successful_snapshot_survives_offline_restart(tmp_path):
 def test_instructor_tally_survives_restart(tmp_path):
     dashboard, client, token = setup_dashboard(tmp_path)
     client.get_all_workouts.return_value = [
-        {'id': 'w1', 'status': 'COMPLETE', 'ride': {'instructor': {'name': 'Cody Rigsby'}}},
+        {'id': 'w1', 'status': 'COMPLETE', 'ride': {'instructor': {'id': 'cody', 'name': 'Cody Rigsby'}}},
     ]
     dashboard.refresh()
     offline = Mock(history_truncated=False)
     offline.get_me.side_effect = requests.ConnectionError('offline')
     restarted = Dashboard(token, {}, client_factory=lambda _: offline)
     loaded = restarted.snapshot()
-    assert loaded['instructor_counts'] == {'Cody Rigsby': 1}
+    assert loaded['instructor_counts'] == {'cody': 1}
+    assert loaded['instructor_names'] == {'cody': 'Cody Rigsby'}
     assert loaded['instructor_tally_cursor'] == 'w1'
 
 
@@ -450,7 +451,7 @@ def test_damaged_records_table_is_dropped_without_losing_cache(tmp_path):
 def _ride(identity, status='COMPLETE', started=None, instructor='Cody Rigsby'):
     return {'id': identity, 'status': status, 'fitness_discipline': 'cycling', 'distance': 5,
             'created_at': started if started is not None else time.time() - 600,
-            'ride': {'instructor': {'name': instructor}}}
+            'ride': {'instructor': {'id': instructor.split()[0].lower(), 'name': instructor}}}
 
 
 def test_settled_rows_hold_back_everything_from_the_newest_unfinished_workout():
@@ -471,31 +472,45 @@ def test_tallies_count_a_workout_that_was_in_progress_at_the_last_refresh(tmp_pa
     client.get_all_workouts.return_value = [_ride('w2', 'IN_PROGRESS', instructor='Robin Arzon'), _ride('w1')]
     dashboard.refresh()
     snap = dashboard.snapshot()
-    assert snap['instructor_counts'] == {'Cody Rigsby': 1} and snap['distance_totals'] == {'cycling': 5}
+    assert snap['instructor_counts'] == {'cody': 1} and snap['distance_totals'] == {'cycling': 5}
     assert snap['instructor_tally_cursor'] == 'w1' == snap['distance_tally_cursor']
 
     client.get_all_workouts.return_value = [_ride('w2', instructor='Robin Arzon')]
     dashboard.refresh()
     assert client.get_all_workouts.call_args.kwargs['stop_at_id'] == 'w1'
     snap = dashboard.snapshot()
-    assert snap['instructor_counts'] == {'Cody Rigsby': 1, 'Robin Arzon': 1}
+    assert snap['instructor_counts'] == {'cody': 1, 'robin': 1}
     assert snap['distance_totals'] == {'cycling': 10} and snap['instructor_tally_cursor'] == 'w2'
 
 
 def test_older_tally_format_recounts_both_tallies_once(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path)
     # A cache from before the fix: cursor already past the missed workout.
-    dashboard._publish(instructor_counts={'Cody Rigsby': 1}, instructor_tally_cursor='w2',
+    dashboard._publish(instructor_counts={'cody': 1}, instructor_tally_cursor='w2',
                        distance_totals={'cycling': 5}, distance_tally_cursor='w2')
     client.get_all_workouts.return_value = [_ride('w2', instructor='Robin Arzon'), _ride('w1')]
     dashboard.refresh()
     assert client.get_all_workouts.call_count == 1
     assert client.get_all_workouts.call_args.kwargs['stop_at_id'] is None
     snap = dashboard.snapshot()
-    assert snap['instructor_counts'] == {'Cody Rigsby': 1, 'Robin Arzon': 1}
+    assert snap['instructor_counts'] == {'cody': 1, 'robin': 1}
     assert snap['distance_totals'] == {'cycling': 10} and snap['tally_version'] == TALLY_VERSION
 
     client.get_all_workouts.return_value = []
     dashboard.refresh()
     assert client.get_all_workouts.call_args.kwargs['stop_at_id'] == 'w2'
-    assert dashboard.snapshot()['instructor_counts'] == {'Cody Rigsby': 1, 'Robin Arzon': 1}
+    assert dashboard.snapshot()['instructor_counts'] == {'cody': 1, 'robin': 1}
+
+
+def test_recount_drops_placeholder_instructors_from_an_older_cache(tmp_path):
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    # A version-2 cache: name-keyed, with Peloton's "JUST WALK" placeholder ranked.
+    dashboard._publish(instructor_counts={'JUST WALK': 1, 'Cody Rigsby': 1}, instructor_tally_cursor='w2',
+                       distance_totals={}, distance_tally_cursor='w2', tally_version=2)
+    walk = {'id': 'w2', 'status': 'COMPLETE', 'ride': {'instructor': {'id': None, 'name': 'JUST WALK'}}}
+    client.get_all_workouts.return_value = [walk, _ride('w1')]
+    dashboard.refresh()
+    assert client.get_all_workouts.call_args.kwargs['stop_at_id'] is None
+    snap = dashboard.snapshot()
+    assert snap['instructor_counts'] == {'cody': 1} and snap['instructor_names'] == {'cody': 'Cody Rigsby'}
+    assert snap['tally_version'] == TALLY_VERSION == 3

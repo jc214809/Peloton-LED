@@ -113,7 +113,8 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
             details.append({'label': 'TOP DISCIPLINE',
                             'value': f'{favorite[0]} / {favorite[1]:,}',
                             'lines': [favorite[0].upper(), f'{favorite[1]:,} WORKOUTS']})
-        instructor_ranks = top_instructors(snapshot.get('instructor_counts', {}), limit=3)
+        instructor_ranks = top_instructors(snapshot.get('instructor_counts', {}),
+                                           snapshot.get('instructor_names', {}), limit=3)
         rank_labels = ('TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR')
         for rank_label, (name, count) in zip(rank_labels, instructor_ranks):
             details.append({'label': rank_label, 'value': f'{name} / {count:,}',
