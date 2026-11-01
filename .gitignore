@@ -16,3 +16,5 @@ cookies-jen-dashboard-cache.json
 coverage.xml
 .coverage
 htmlcov/
+.DS_Store
+perf_graphs/
