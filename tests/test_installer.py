@@ -222,3 +222,22 @@ def test_installer_summary_explains_a_kept_boot_start():
     assert 'elif [[ "$KEPT_BOOT_START" == true ]]; then' in text
     assert 're-run with --manual to switch this board' in text
     assert 'For a dedicated board, re-run with --start-at-boot.' in text
+
+
+def test_every_path_the_installer_copies_exists():
+    # A folder deleted from the repo but still listed here stops the install
+    # halfway (set -e on a failed cp), as api/ once did.
+    import re
+    text = (ROOT / 'peloton-install.sh').read_text()
+    directories = re.search(r'^for directory in (.+); do$', text, re.M).group(1).split()
+    files = re.search(r'^for file in (.+); do$', text, re.M).group(1).split()
+    assert directories and files
+    # Check what git tracks, not the disk: a deleted folder's leftover
+    # __pycache__ would otherwise hide the problem on a developer's machine.
+    tracked = subprocess.run(['git', 'ls-files'], cwd=ROOT, capture_output=True, text=True,
+                             check=True).stdout.splitlines()
+    for name in directories:
+        assert any(path.startswith(f'{name}/') for path in tracked), \
+            f'installer copies folder {name}/, which the repo no longer has'
+    for name in files:
+        assert name in tracked, f'installer copies {name}, which the repo no longer has'
