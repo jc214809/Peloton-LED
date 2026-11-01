@@ -11,6 +11,7 @@ from pathlib import Path
 import requests
 from .api import PelotonClient, make_session
 from .cache import load_snapshot, save_snapshot
+from .config import renewal_failed_path
 from .demo import demo_data
 from .selection import last_active_day
 from .summaries import summarize_workout
@@ -23,6 +24,9 @@ from .schedule import scheduled_refresh_interval
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
 
 logger = logging.getLogger('peloton-led.dashboard')
+
+# The padlock reads a file the renewal job writes; checking it every frame is waste.
+RENEWAL_MARKER_CHECK_SECONDS = 30
 
 
 class Dashboard:
@@ -46,6 +50,8 @@ class Dashboard:
         self.cache_path = (Path(configured_cache).expanduser() if configured_cache else
                            self.token_path.with_name('dashboard-cache.json'))
         self._failures = 0
+        self._renewal_checked_at = None
+        self._renewal_failed = False
         self._data = {'me': None, 'totals': {}, 'summaries': [], 'login_required': False,
                       'status': 'loading', 'refresh_in_progress': False,
                       'last_attempt': None, 'last_updated': None,
@@ -82,6 +88,34 @@ class Dashboard:
     def login_required(self):
         with self._lock:
             return self._data['login_required']
+
+    @property
+    def renewal_failed(self):
+        """The renewal job reported that only a fresh login can help. A marker
+        older than the token file is ignored: the board has been re-seeded since."""
+        if self.demo:
+            return False
+        now = time.monotonic()
+        if self._renewal_checked_at is None or now - self._renewal_checked_at >= RENEWAL_MARKER_CHECK_SECONDS:
+            try:
+                marked = renewal_failed_path(self.token_path).stat().st_mtime_ns
+            except OSError:
+                failed = False
+            else:
+                try:
+                    failed = marked >= self.token_path.stat().st_mtime_ns
+                except OSError:
+                    failed = True
+            self._renewal_failed = failed
+            self._renewal_checked_at = now
+        return self._renewal_failed
+
+    @property
+    def login_indicator_required(self):
+        """Draw the padlock: the token is rejected, or renewal already knows it will be.
+        Only for display; the refresh loop keeps using login_required, so data
+        keeps updating while the old token still works."""
+        return self.login_required or self.renewal_failed
 
     @property
     def data_stale(self):

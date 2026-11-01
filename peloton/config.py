@@ -56,6 +56,13 @@ def default_token_path(name):
     return f'cookies-{user_slug(name)}.txt'
 
 
+def renewal_failed_path(token_path):
+    """cookies-joel.txt -> cookies-joel.renewal-failed: written by the token
+    renewal job when only a fresh login can help, read by the display."""
+    token_path = Path(token_path)
+    return token_path.with_name(f'{token_path.stem}.renewal-failed')
+
+
 def load_dotenv(path='.env'):
     """Populate os.environ from a local .env file, for local development only.
 
