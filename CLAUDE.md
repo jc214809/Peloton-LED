@@ -42,7 +42,7 @@ python -m pytest tests/test_username.py
 
 CI (`.github/workflows/tests.yml`) runs the suite on Python 3.11 and 3.13 for every PR and push to main. Install test deps with `pip install -r requirements-dev.txt`: it pulls in `requirements-auth.txt` because the browser-login tests import Playwright (Chromium itself is mocked).
 
-Coverage: `python -m pytest tests/ --cov --cov-report=term-missing` (sources and omits in `.coveragerc`, branch coverage on). CI uploads the 3.11 run's `coverage.xml` to Codecov using the `CODECOV_TOKEN` repo secret, the same setup as LightningLane-Live-LED.
+Coverage: `python -m pytest tests/ --cov --cov-report=term-missing` (sources and omits in `.coveragerc`, branch coverage on). `fail_under = 85` in `.coveragerc` fails the run below 85%; new code needs tests, not omits. CI uploads the 3.11 run's `coverage.xml` to Codecov using the `CODECOV_TOKEN` repo secret, the same setup as LightningLane-Live-LED.
 
 ## Pi config
 
@@ -91,11 +91,10 @@ All screens implement the `Screen` ABC (`display/ui/screen.py`):
 
 ### Peloton API Layer
 
-Two layers:
-- `peloton/api.py` — `PelotonClient`: raw HTTP calls to `api.onepeloton.com`. Requires a `requests.Session` initialized from `cookies.txt` (Netscape/semicolon-delimited cookie format).
-- `api/peloton_api.py` — `PelotonAPI`: thin safety wrapper around `PelotonClient` that handles `None` client (when cookies are missing) and catches exceptions, returning safe defaults.
+- `peloton/api.py` — `PelotonClient`: raw HTTP calls to `api.onepeloton.com`, using a `requests.Session` from `make_session(token_path)` (Bearer token; the file is called `cookies*.txt` for history). Records `login_required` on HTTP 401.
+- `peloton/dashboard.py` — `Dashboard`: background refresh thread, cache, failure counting and the stale/login flags the display reads.
 
-Authentication is cookie-based — no username/password login. Extract cookies from a browser session after logging in at onepeloton.com.
+Tokens come from `scripts/refresh_cookies.py` (browser login once, then Auth0 refresh tokens; see Pi config above).
 
 ### Config (`config.json`)
 
