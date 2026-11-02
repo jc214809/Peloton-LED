@@ -190,6 +190,17 @@ with `sudo systemctl start peloton-led` (see [Manual mode](#manual-mode-the-defa
 Pass `--start-at-boot` if the Pi drives nothing else and should show Peloton
 whenever it's on.
 
+The installer also picks how tokens are renewed, so most boards need no
+token flag. A fresh install of a 64-bit board with 768 MB or more of RAM gets
+[automatic renewal with Chromium](#automatic-token-renewal---auto-token); a
+32-bit board, or one with under 768 MB (a Pi Zero 2 W, say), gets
+[`--no-browser`](#seeding-a-board-from-another-computer---no-browser). The
+choice is saved in `/etc/peloton-led/token-mode`, and an upgrade keeps it.
+Boards installed before the installer saved a mode keep theirs too: it's read
+off the board's timer, drop-ins, and venv. The installer's summary prints the
+mode and where it came from (`detected`, `kept`, or `flag`); pass
+`--auto-token`, `--no-browser`, or `--no-auto-token` to change it.
+
 This is safe to re-run — it's also how you [upgrade](#upgrading) later.
 
 **On first install**, since there's no `/etc/peloton-led/config.json` yet,
@@ -220,8 +231,8 @@ exits with an error rather than hanging if it can't prompt you.
 What the full run does, in order:
 
 1. Installs required `apt` packages (`python3`, build tools, `cmake`,
-   `libopenjp2-7`, and `chromium` if `--auto-token` is set without
-   `--no-browser`). Skippable with
+   `libopenjp2-7`, and `chromium` when renewal uses a browser (`--auto-token`,
+   not `--no-browser`). Skippable with
    `--skip-packages` if you manage packages yourself.
 2. Creates a dedicated, unprivileged `peloton-led` system account (home
    `/var/lib/peloton-led`, shell `/usr/sbin/nologin`), and adds it to the
@@ -243,9 +254,11 @@ What the full run does, in order:
    `github.com/hzeller/rpi-rgb-led-matrix` into
    `/opt/peloton-led/vendor/rpi-rgb-led-matrix` at the ref given by
    `--driver` (default: `master`).
-8. Installs and enables `peloton-led.service` (and, with `--auto-token`,
-   `peloton-token-refresh.timer` / `.service`), starting them immediately
-   unless `--no-start` is given.
+8. Installs `peloton-led.service` (and, with automatic renewal,
+   `peloton-token-refresh.timer` / `.service`). With `--start-at-boot` it
+   enables and starts them, unless `--no-start` is given. In manual mode it
+   starts nothing, but a display that was running when the install began is
+   restarted, so it picks up the new code.
 
 ### Changing riders later (`--reconfigure`)
 
@@ -286,8 +299,10 @@ install rather than producing a crash-looping service.
 sudo ./peloton-install.sh --auto-token
 ```
 
-Add this if you want the Pi to keep your Peloton token fresh without you
-manually re-running the login helper. It:
+The default on a fresh install of a 64-bit board with 768 MB or more of RAM.
+It keeps your Peloton token fresh without you re-running the login helper.
+Pass the flag to switch an existing board to it, or
+`--no-auto-token` to turn renewal off. It:
 
 - Installs the Pi distribution's Chromium build, for logins when a rider has
   no refresh token yet (skip it with `--no-browser`, below).
@@ -327,7 +342,9 @@ dashboard's amber padlock signals that a manual login is needed. The padlock app
 ### Seeding a board from another computer (`--no-browser`)
 
 Chromium isn't available for 32-bit Raspberry Pi OS and is too slow on 512 MB
-boards like the Pi Zero 2 W. Install those with:
+boards like the Pi Zero 2 W. The installer picks this mode itself on a fresh
+install when it finds a 32-bit userland or under 768 MB of RAM. To pick it
+yourself, for example to move an existing board to it:
 
 ```bash
 sudo ./peloton-install.sh --no-browser   # implies --auto-token
@@ -369,7 +386,7 @@ started during install. This suits a Pi that already runs another display
 (say, a baseball scoreboard) that should stay the boot default:
 
 ```bash
-sudo ./peloton-install.sh --auto-token
+sudo ./peloton-install.sh
 ```
 
 Only one program can drive the matrix at a time, so swap them by hand:
@@ -379,7 +396,7 @@ sudo systemctl stop <other-display>.service && sudo systemctl start peloton-led
 sudo systemctl stop peloton-led && sudo systemctl start <other-display>.service
 ```
 
-With `--auto-token`, token renewal follows the display instead of running
+With automatic renewal, token renewal follows the display instead of running
 all the time: starting `peloton-led` runs one token check (logging in if the
 token expired while it was off) and starts the hourly timer, and stopping
 `peloton-led` stops the timer.
@@ -387,7 +404,9 @@ token expired while it was off) and starts the hourly timer, and stopping
 On an **upgrade**, a board that already starts at boot keeps doing so when
 you pass neither flag (so it doesn't go dark on its next reboot), and the
 installer says so. Pass `--manual` to switch such a board to manual, or
-`--start-at-boot` to switch a manual board to starting at boot.
+`--start-at-boot` to switch a manual board to starting at boot. If the display
+is running when you upgrade, the installer restarts it on the new code. If it's
+stopped, the installer leaves it stopped.
 
 ## Installer options reference
 
@@ -397,15 +416,16 @@ sudo ./peloton-install.sh [options]
 
 | Option | Effect |
 |---|---|
-| `--auto-token` | Install Chromium and enable hourly token verification/renewal (see above) |
-| `--no-browser` | Renew only with seeded refresh tokens; no Chromium or Playwright. Implies `--auto-token` (see [above](#seeding-a-board-from-another-computer---no-browser)) |
+| `--auto-token` | Install Chromium and enable hourly token verification/renewal (see above). Picked automatically on a fresh 64-bit board with 768 MB+ |
+| `--no-browser` | Renew only with seeded refresh tokens; no Chromium or Playwright. Implies `--auto-token` (see [above](#seeding-a-board-from-another-computer---no-browser)). Picked automatically on a fresh 32-bit or under-768 MB board |
+| `--no-auto-token` | No scheduled token renewal; disables the timer on a board that had it |
 | `--reconfigure` | Re-run the interactive rider setup, overwriting `config.json` and `auth.env` (see [above](#changing-riders-later---reconfigure)) |
 | `--skip-matrix` | Skip building/installing the native `rpi-rgb-led-matrix` bindings — use when they're already installed, or when preparing a Pi with no panel attached yet |
 | `--skip-packages` | Skip the `apt-get install` step — use when you manage system packages yourself or they're already present |
 | `--driver REF` | Git branch, tag, or commit of `rpi-rgb-led-matrix` to build (default: `master`) |
 | `--manual` | The default: never start at boot or during install; you start/stop the display yourself (see [above](#manual-mode-the-default)). Needed on upgrade only to switch a board that currently starts at boot |
 | `--start-at-boot` | Enable the display at boot and start it now — for a Pi that drives nothing else |
-| `--no-start` | With `--start-at-boot`: enable the units but don't start them yet — useful when staging a config before going live |
+| `--no-start` | With `--start-at-boot`: enable the units but don't start them yet — useful when staging a config before going live. A display that is already running is still restarted on the new code |
 | `-h`, `--help` | Print usage and exit |
 
 ### Editing the config
@@ -444,13 +464,13 @@ since the mapping records its path.
 
 ## Upgrading
 
-Pull the latest code into your checkout, then re-run the same installer
-command you used originally (with or without `--auto-token`, matching your
-setup):
+Pull the latest code into your checkout, then re-run the installer. You
+don't need any flags: it keeps the board's token mode and its boot or manual
+setting, and restarts the display if it's running:
 
 ```bash
 git pull
-sudo ./peloton-install.sh --auto-token   # match your original flags (boot vs. manual is kept)
+sudo ./peloton-install.sh
 ```
 
 This upgrades the application code in `/opt/peloton-led` while preserving

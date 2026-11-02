@@ -124,7 +124,6 @@ def test_installer_builds_the_driver_against_matching_pillow_headers():
 
 def test_installer_no_browser_mode_skips_chromium_and_playwright():
     text = (ROOT / 'peloton-install.sh').read_text()
-    assert '--no-browser) AUTO_TOKEN=true; NO_BROWSER=true; shift ;;' in text
     assert 'if [[ "$AUTO_TOKEN" == true && "$NO_BROWSER" == false ]]; then\n        packages+=(chromium)' in text
     no_browser, rest = text.split('if [[ "$NO_BROWSER" == true ]]; then\n    # Renewal', 1)[1].split('elif', 1)
     assert 'pip uninstall -y playwright' in no_browser
@@ -185,7 +184,7 @@ def test_installer_only_reminds_no_browser_boards_once_tokens_exist(tmp_path):
 def test_installer_lists_token_paths_even_with_no_start():
     text = (ROOT / 'peloton-install.sh').read_text()
     # The closing hint needs the token list whether or not services start.
-    assert text.index('mapfile -t configured_tokens') < text.index('if [[ "$NO_START" == false ]]; then\n    for token_file')
+    assert text.index('mapfile -t configured_tokens') < text.index('\nstart_or_restart_display\n')
 
 
 def _start_mode(tmp_path, flag_value, enabled_now):
@@ -264,3 +263,235 @@ def test_installer_rider_snippets_resolve_default_token_paths_like_the_app(tmp_p
                                     'Jen (/var/lib/peloton-led/cookies-jen.txt)')
     config.write_text('{}')
     assert run(tokens).strip() == '/var/lib/peloton-led/cookies.txt'
+
+
+def _installer_function(name):
+    text = (ROOT / 'peloton-install.sh').read_text()
+    start = text.index(f'{name}() {{')
+    return text[start:text.index('\n}\n', start) + 3]
+
+
+def _fake_bin(tmp_path, **scripts):
+    import os
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir(exist_ok=True)
+    for name, body in scripts.items():
+        (bin_dir / name).write_text(f'#!/bin/sh\n{body}\n')
+        (bin_dir / name).chmod(0o755)
+    return {**os.environ, 'PATH': f'{bin_dir}:{os.environ["PATH"]}'}
+
+
+def _token_mode(tmp_path, flag='', saved=None, installed=False, venv_only=False, timer_enabled=False,
+                manual_conf=False, playwright=False, long_bit=64, mem_kb=3884000):
+    """Run resolve_token_mode against a fake board; return (stdout fields, stderr, exit code)."""
+    app_dir, unit_dir, config_dir = tmp_path / 'opt', tmp_path / 'units', tmp_path / 'etc'
+    for directory in (app_dir, unit_dir, config_dir):
+        directory.mkdir(exist_ok=True)
+    if saved is not None:
+        (config_dir / 'token-mode').write_text(saved + '\n')
+    if installed:
+        (unit_dir / 'peloton-led.service').write_text('[Service]\n')
+    if installed or venv_only:
+        (app_dir / 'venv' / 'bin').mkdir(parents=True)
+        python = app_dir / 'venv' / 'bin' / 'python'
+        python.write_text(f'#!/bin/sh\nexit {0 if playwright else 1}\n')
+        python.chmod(0o755)
+    if manual_conf:
+        (unit_dir / 'peloton-led.service.d').mkdir()
+        (unit_dir / 'peloton-led.service.d' / 'manual.conf').write_text('[Unit]\n')
+    meminfo = tmp_path / 'meminfo'
+    meminfo.write_text(f'MemTotal:       {mem_kb} kB\nMemFree:          100000 kB\n')
+    env = _fake_bin(tmp_path,
+                    systemctl=f'[ "$3" = peloton-token-refresh.timer ] && exit {0 if timer_enabled else 1}; exit 1',
+                    getconf=f'echo {long_bit}')
+    env['MEMINFO'] = str(meminfo)
+    script = (f'set -Eeuo pipefail\nAPP_DIR="{app_dir}"\nUNIT_DIR="{unit_dir}"\n'
+              f'TOKEN_MODE_FILE="{config_dir}/token-mode"\nTOKEN_MODE="{flag}"\nTOKEN_MODE_SOURCE=""\n'
+              f'AUTO_TOKEN=unset\nNO_BROWSER=unset\n'
+              f'{_installer_function("low_spec_board")}{_installer_function("resolve_token_mode")}'
+              'resolve_token_mode\necho "$TOKEN_MODE $TOKEN_MODE_SOURCE $AUTO_TOKEN $NO_BROWSER"\n')
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
+    return result.stdout.split(), result.stderr, result.returncode
+
+
+@pytest.mark.parametrize('board,expected', [
+    ({}, 'browser detected true false'),                          # 64-bit, 4 GB
+    ({'long_bit': 32}, 'no-browser detected true true'),          # 32-bit userland
+    ({'mem_kb': 443000}, 'no-browser detected true true'),        # 512 MB board
+    ({'mem_kb': 786431}, 'no-browser detected true true'),
+    ({'mem_kb': 908000}, 'browser detected true false'),          # 1 GB board
+])
+def test_fresh_install_picks_token_mode_from_the_hardware(tmp_path, board, expected):
+    out, err, code = _token_mode(tmp_path, **board)
+    assert code == 0, err
+    assert ' '.join(out) == expected
+
+
+def test_unreadable_meminfo_on_a_64_bit_board_means_browser(tmp_path):
+    script = _installer_function('low_spec_board') + 'low_spec_board && echo low || echo ok\n'
+    env = _fake_bin(tmp_path, getconf='exit 1')
+    env['MEMINFO'] = str(tmp_path / 'missing')
+    result = subprocess.run(['bash', '-c', 'set -Eeuo pipefail\n' + script],
+                            capture_output=True, text=True, env=env)
+    assert result.stdout.strip() == 'ok', result.stderr
+
+
+@pytest.mark.parametrize('board,expected', [
+    # Saved by this installer: kept even on hardware that would pick otherwise.
+    ({'saved': 'browser', 'installed': True, 'long_bit': 32}, 'browser kept true false'),
+    ({'saved': 'no-browser', 'installed': True}, 'no-browser kept true true'),
+    ({'saved': 'none', 'installed': True}, 'none kept false false'),
+    # Installed by an older installer that saved no mode: read it off the board.
+    ({'installed': True, 'timer_enabled': True, 'playwright': True}, 'browser kept true false'),
+    ({'installed': True, 'timer_enabled': True}, 'no-browser kept true true'),
+    ({'installed': True, 'manual_conf': True, 'playwright': True}, 'browser kept true false'),
+    ({'installed': True, 'manual_conf': True}, 'no-browser kept true true'),
+    ({'installed': True, 'playwright': True}, 'none kept false false'),
+    ({'installed': True, 'mem_kb': 443000}, 'none kept false false'),
+    # A first install that died after building the venv (say, in the driver
+    # build) never wrote its units: still a fresh install.
+    ({'venv_only': True}, 'browser detected true false'),
+    ({'venv_only': True, 'long_bit': 32}, 'no-browser detected true true'),
+])
+def test_upgrade_without_flags_keeps_the_boards_token_mode(tmp_path, board, expected):
+    out, err, code = _token_mode(tmp_path, **board)
+    assert code == 0, err
+    assert ' '.join(out) == expected
+
+
+@pytest.mark.parametrize('flag,expected', [
+    ('browser', 'browser flag true false'),
+    ('no-browser', 'no-browser flag true true'),
+    ('none', 'none flag false false'),
+])
+def test_token_mode_flags_override_the_saved_mode(tmp_path, flag, expected):
+    out, err, code = _token_mode(tmp_path, flag=flag, saved='no-browser' if flag != 'no-browser' else 'browser',
+                                 installed=True, timer_enabled=True)
+    assert code == 0, err
+    assert ' '.join(out) == expected
+    assert 'Warning' not in err
+
+
+def test_auto_token_on_a_small_board_warns_but_obeys(tmp_path):
+    out, err, code = _token_mode(tmp_path, flag='browser', mem_kb=443000)
+    assert code == 0
+    assert ' '.join(out) == 'browser flag true false'
+    assert 'too small for Chromium' in err
+
+
+def test_unknown_saved_token_mode_stops_the_install(tmp_path):
+    out, err, code = _token_mode(tmp_path, saved='chromium', installed=True)
+    assert code == 2
+    assert "Unknown token mode 'chromium'" in err
+
+
+@pytest.mark.parametrize('args,expected', [
+    ([], ''),
+    (['--auto-token'], 'browser'),
+    (['--no-browser'], 'no-browser'),
+    (['--no-auto-token'], 'none'),
+    (['--no-browser', '--auto-token'], 'browser'),   # last one wins
+])
+def test_token_flags_set_the_mode(args, expected):
+    text = (ROOT / 'peloton-install.sh').read_text()
+    start = text.index('while (($#)); do')
+    loop = text[start:text.index('\ndone\n', start) + 6]
+    script = ('set -Eeuo pipefail\nusage() { :; }\nTOKEN_MODE=""\nRECONFIGURE=false\nSKIP_MATRIX=false\n'
+              'SKIP_PACKAGES=false\nNO_START=false\nMANUAL=""\n' + loop + 'echo "$TOKEN_MODE"\n')
+    result = subprocess.run(['bash', '-c', script, 'installer', *args], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == expected
+
+
+def test_installer_resolves_and_saves_the_token_mode_in_order():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    resolve = text.index('\nresolve_token_mode\n')
+    running = text.index('if systemctl is-active --quiet peloton-led.service')
+    # Packages (Chromium) depend on the mode; whether the display ran is noted
+    # before the install touches it.
+    assert text.index('resolve_start_mode\n') < resolve < running < text.index('apt-get update')
+    assert running < text.index('rm -rf "$APP_DIR/$directory"')
+    # Saved as soon as its directory exists, before the steps that tend to
+    # fail (venv, driver build), so a re-run keeps the mode instead of
+    # mistaking the half-built install for something else.
+    save = text.index('printf \'%s\\n\' "$TOKEN_MODE" > "$TOKEN_MODE_FILE"')
+    assert text.count('> "$TOKEN_MODE_FILE"') == 1
+    assert text.index('install -d -m 0755 -o root -g root "$APP_DIR" "$CONFIG_DIR"') < save
+    assert save < text.index('python3 -m venv "$APP_DIR/venv"') < text.index('pip install "$driver_dir"')
+    assert 'TOKEN_MODE_FILE="$CONFIG_DIR/token-mode"' in text
+    assert 'Tokens:   $TOKEN_MODE ($TOKEN_MODE_SOURCE' in text
+
+
+def _enable_units(tmp_path, manual, auto_token):
+    """Run the installer's enable/disable block with a logging systemctl."""
+    text = (ROOT / 'peloton-install.sh').read_text()
+    block = text.split('systemctl daemon-reload\n', 1)[1].split('\n# Token paths as', 1)[0]
+    log = tmp_path / 'calls.log'
+    env = _fake_bin(tmp_path, systemctl=f'echo "systemctl $*" >> "{log}"')
+    script = (f'set -Eeuo pipefail\nMANUAL={str(manual).lower()}\nAUTO_TOKEN={str(auto_token).lower()}\n'
+              + block + '\n')
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stderr
+    return log.read_text().splitlines() if log.exists() else []
+
+
+@pytest.mark.parametrize('manual,auto_token,expected', [
+    (True, True, ['systemctl disable peloton-led.service peloton-token-refresh.timer']),
+    # Renewal off in manual mode: the PartOf= drop-in is gone, so nothing else
+    # would ever stop a timer the display had started.
+    (True, False, ['systemctl disable peloton-led.service peloton-token-refresh.timer',
+                   'systemctl disable --now peloton-token-refresh.timer']),
+    (False, True, ['systemctl enable peloton-led.service',
+                   'systemctl enable peloton-token-refresh.timer']),
+    (False, False, ['systemctl enable peloton-led.service',
+                    'systemctl disable --now peloton-token-refresh.timer']),
+])
+def test_installer_enables_units_and_stops_renewal_when_switched_off(tmp_path, manual, auto_token, expected):
+    assert _enable_units(tmp_path, manual, auto_token) == expected
+
+
+def _start_or_restart(tmp_path, no_start, was_running, auto_token=False, tokens=()):
+    """Run start_or_restart_display with logging fakes; return the logged commands."""
+    log = tmp_path / 'calls.log'
+    env = _fake_bin(tmp_path,
+                    systemctl=f'echo "systemctl $*" >> "{log}"',
+                    runuser=f'echo "runuser $*" >> "{log}"')
+    script = (f'set -Eeuo pipefail\nAPP_USER=peloton-led\nAPP_DIR=/opt/peloton-led\nCONFIG_DIR=/etc/peloton-led\n'
+              f'NO_START={str(no_start).lower()}\nDISPLAY_WAS_RUNNING={str(was_running).lower()}\n'
+              f'AUTO_TOKEN={str(auto_token).lower()}\n'
+              f'configured_tokens=({" ".join(str(t) for t in tokens)})\n'
+              f'{_installer_function("start_or_restart_display")}start_or_restart_display\n')
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stderr
+    return log.read_text().splitlines() if log.exists() else [], result.stdout
+
+
+@pytest.mark.parametrize('was_running', [True, False])
+def test_manual_upgrade_restarts_only_a_running_display(tmp_path, was_running):
+    calls, out = _start_or_restart(tmp_path, no_start=True, was_running=was_running, auto_token=True,
+                                   tokens=[tmp_path / 'cookies.txt'])
+    if was_running:
+        assert calls == ['systemctl restart peloton-led.service']
+        assert 'Restarting the running display' in out
+    else:
+        assert calls == []
+
+
+def test_starting_install_verifies_tokens_then_starts_display_and_renewal(tmp_path):
+    token = tmp_path / 'cookies-joel.txt'
+    token.write_text('token')
+    calls, _ = _start_or_restart(tmp_path, no_start=False, was_running=True, auto_token=True,
+                                 tokens=[token, tmp_path / 'cookies-jen.txt'])
+    assert len(calls) == 4
+    assert calls[0].startswith('runuser -u peloton-led -- /opt/peloton-led/venv/bin/python')
+    assert f'--verify-only --cookies {token}' in calls[0]
+    assert calls[1:] == ['systemctl restart peloton-led.service',
+                         'systemctl start peloton-token-refresh.timer',
+                         'systemctl start peloton-token-refresh.service']
+
+
+def test_starting_install_without_auto_token_starts_only_the_display(tmp_path):
+    token = tmp_path / 'cookies.txt'
+    token.write_text('token')
+    calls, _ = _start_or_restart(tmp_path, no_start=False, was_running=False, tokens=[token])
+    assert calls[1:] == ['systemctl restart peloton-led.service']

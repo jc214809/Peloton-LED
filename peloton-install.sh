@@ -10,6 +10,12 @@ SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DRIVER_REF="master"
 AUTO_TOKEN=false
 NO_BROWSER=false
+# none, browser or no-browser; empty until resolve_token_mode: a flag, the
+# board's saved mode, or the hardware's.
+TOKEN_MODE=""
+TOKEN_MODE_SOURCE=""
+TOKEN_MODE_FILE="$CONFIG_DIR/token-mode"
+DISPLAY_WAS_RUNNING=false
 SKIP_MATRIX=false
 SKIP_PACKAGES=false
 NO_START=false
@@ -28,20 +34,27 @@ configuration, token, login environment, cache, and PR state are preserved.
 On first install (no /etc/peloton-led/config.json yet), you'll be prompted
 to add one rider for a single-user board, or two or more for a shared board.
 
+Token renewal is picked automatically: an upgrade keeps the board's current
+mode; a fresh install uses --no-browser on a 32-bit or under-768 MB board and
+--auto-token otherwise. The flags below override that and are remembered.
+
 Options:
-  --auto-token          Verify hourly; renew within 12 hours of expiry or after 401
+  --auto-token          Verify hourly; renew within 12 hours of expiry or after
+                         401, logging in with Chromium when a refresh token fails
   --no-browser          With --auto-token (implied): renew only with refresh
                          tokens seeded from another computer; skip Chromium and
-                         Playwright (32-bit or 512 MB boards)
+                         Playwright (32-bit or under-768 MB boards)
+  --no-auto-token       No scheduled renewal; replace tokens by hand
   --reconfigure         Re-prompt for riders, replacing the existing config and
                          auth.env (e.g. to switch between single- and dual-user)
   --skip-matrix         Skip the native rpi-rgb-led-matrix build
   --skip-packages       Skip apt package installation
   --driver REF          Matrix driver branch, tag, or commit (default: master)
   --no-start            With --start-at-boot: enable units without starting now
+                         (an upgrade still restarts a display that is running)
   --manual              The default: don't start at boot or now; run on demand
-                         with systemctl start/stop peloton-led (token renewal,
-                         with --auto-token, only runs while the display does).
+                         with systemctl start/stop peloton-led (automatic token
+                         renewal only runs while the display does).
                          Upgrades of a board that already starts at boot keep
                          doing so unless --manual is given.
   --start-at-boot       Start the display at boot and now (a dedicated board)
@@ -66,10 +79,89 @@ resolve_start_mode() {
     fi
 }
 
+# Too small for Chromium: a 32-bit userland (Playwright ships no wheels for
+# it) or under 768 MB of RAM.
+low_spec_board() {
+    local mem_kb
+    [[ "$(getconf LONG_BIT 2>/dev/null)" == 32 ]] && return 0
+    mem_kb="$(awk '/^MemTotal:/ {print $2}' "${MEMINFO:-/proc/meminfo}" 2>/dev/null || true)"
+    [[ -n "$mem_kb" && "$mem_kb" -lt 786432 ]]
+}
+
+# A flag wins. Otherwise an upgrade keeps the board's mode: the one this
+# installer saved, or, from older installers that saved none, the one their
+# units and venv show. A fresh install (or a first install that failed before
+# its units were written) goes by the hardware.
+resolve_token_mode() {
+    if [[ -n "$TOKEN_MODE" ]]; then
+        TOKEN_MODE_SOURCE=flag
+        if [[ "$TOKEN_MODE" == browser ]] && low_spec_board; then
+            echo "Warning: this board looks too small for Chromium (32-bit or under 768 MB); --no-browser suits it better." >&2
+        fi
+    elif [[ -f "$TOKEN_MODE_FILE" ]]; then
+        TOKEN_MODE="$(<"$TOKEN_MODE_FILE")"
+        TOKEN_MODE_SOURCE=kept
+    elif [[ -f "$UNIT_DIR/peloton-led.service" ]]; then
+        TOKEN_MODE_SOURCE=kept
+        if systemctl is-enabled --quiet peloton-token-refresh.timer 2>/dev/null \
+            || [[ -f "$UNIT_DIR/peloton-led.service.d/manual.conf" ]]; then
+            if [[ -x "$APP_DIR/venv/bin/python" ]] \
+                && "$APP_DIR/venv/bin/python" -c 'import playwright' 2>/dev/null; then
+                TOKEN_MODE=browser
+            else
+                TOKEN_MODE=no-browser
+            fi
+        else
+            TOKEN_MODE=none
+        fi
+    elif low_spec_board; then
+        TOKEN_MODE=no-browser
+        TOKEN_MODE_SOURCE=detected
+    else
+        TOKEN_MODE=browser
+        TOKEN_MODE_SOURCE=detected
+    fi
+    case "$TOKEN_MODE" in
+        none) AUTO_TOKEN=false; NO_BROWSER=false ;;
+        browser) AUTO_TOKEN=true; NO_BROWSER=false ;;
+        no-browser) AUTO_TOKEN=true; NO_BROWSER=true ;;
+        *) echo "Unknown token mode '$TOKEN_MODE' in $TOKEN_MODE_FILE; pass --auto-token, --no-browser or --no-auto-token." >&2
+           exit 2 ;;
+    esac
+}
+
+# Starts the display unless manual mode or --no-start says not to. Either way
+# a display that was running when the install began is restarted, so it never
+# keeps running the old code.
+start_or_restart_display() {
+    if [[ "$NO_START" == false ]]; then
+        for token_file in "${configured_tokens[@]}"; do
+            if [[ -f "$token_file" ]]; then
+                if ! runuser -u "$APP_USER" -- "$APP_DIR/venv/bin/python" \
+                    "$APP_DIR/scripts/refresh_cookies.py" --verify-only \
+                    --cookies "$token_file" --config "$CONFIG_DIR/config.json"; then
+                    echo "Warning: $token_file could not be verified." >&2
+                fi
+            else
+                echo "No token installed at $token_file; that user will show a login indicator." >&2
+            fi
+        done
+        systemctl restart peloton-led.service
+        if [[ "$AUTO_TOKEN" == true ]]; then
+            systemctl start peloton-token-refresh.timer
+            systemctl start peloton-token-refresh.service || true
+        fi
+    elif [[ "$DISPLAY_WAS_RUNNING" == true ]]; then
+        echo "Restarting the running display on the new version"
+        systemctl restart peloton-led.service
+    fi
+}
+
 while (($#)); do
     case "$1" in
-        --auto-token) AUTO_TOKEN=true; shift ;;
-        --no-browser) AUTO_TOKEN=true; NO_BROWSER=true; shift ;;
+        --auto-token) TOKEN_MODE=browser; shift ;;
+        --no-browser) TOKEN_MODE=no-browser; shift ;;
+        --no-auto-token) TOKEN_MODE=none; shift ;;
         --reconfigure) RECONFIGURE=true; shift ;;
         --skip-matrix) SKIP_MATRIX=true; shift ;;
         --skip-packages) SKIP_PACKAGES=true; shift ;;
@@ -89,6 +181,11 @@ done
 [[ -f "$SOURCE_DIR/peloton_led.py" ]] || { echo "Run the installer from the project checkout." >&2; exit 1; }
 command -v systemctl >/dev/null || { echo "systemd is required." >&2; exit 1; }
 resolve_start_mode
+resolve_token_mode
+# Before anything changes, so a display that crashes mid-upgrade still counts.
+if systemctl is-active --quiet peloton-led.service 2>/dev/null; then
+    DISPLAY_WAS_RUNNING=true
+fi
 
 echo "Installing Peloton LED from $SOURCE_DIR"
 
@@ -111,6 +208,9 @@ for group in gpio video; do
 done
 
 install -d -m 0755 -o root -g root "$APP_DIR" "$CONFIG_DIR"
+# Saved now, so a re-run after a failure further down keeps this mode.
+printf '%s\n' "$TOKEN_MODE" > "$TOKEN_MODE_FILE"
+chmod 0644 "$TOKEN_MODE_FILE"
 install -d -m 0750 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR"
 
 for directory in assets display driver models peloton prepared_logos scripts utils packaging; do
@@ -234,6 +334,11 @@ else
         systemctl enable peloton-token-refresh.timer
     fi
 fi
+# Switching renewal off: stop the timer too. In manual mode nothing else
+# would, since the PartOf= drop-in that tied it to the display is gone.
+if [[ "$AUTO_TOKEN" == false ]]; then
+    systemctl disable --now peloton-token-refresh.timer 2>/dev/null || true
+fi
 
 # Token paths as the service resolves them: a rider without token_path uses
 # cookies-<name>.txt beside the config the service reads ($CONFIG_DIR).
@@ -246,24 +351,7 @@ users=config.get('users') or []
 print('\n'.join(str(user_token_path(user, sys.argv[3])) for user in users) if users else '/var/lib/peloton-led/cookies.txt')
 PY
 )
-if [[ "$NO_START" == false ]]; then
-    for token_file in "${configured_tokens[@]}"; do
-        if [[ -f "$token_file" ]]; then
-            if ! runuser -u "$APP_USER" -- "$APP_DIR/venv/bin/python" \
-                "$APP_DIR/scripts/refresh_cookies.py" --verify-only \
-                --cookies "$token_file" --config "$CONFIG_DIR/config.json"; then
-                echo "Warning: $token_file could not be verified." >&2
-            fi
-        else
-            echo "No token installed at $token_file; that user will show a login indicator." >&2
-        fi
-    done
-    systemctl restart peloton-led.service
-    if [[ "$AUTO_TOKEN" == true ]]; then
-        systemctl start peloton-token-refresh.timer
-        systemctl start peloton-token-refresh.service || true
-    fi
-fi
+start_or_restart_display
 
 rider_summary="$("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" "$APP_DIR" "$CONFIG_DIR" <<'PY'
 import json, sys
@@ -287,6 +375,8 @@ Peloton LED installation complete.
   Logs:     journalctl -u peloton-led.service -n 100
   Config:   $LIVE_CONFIG (edit, then restart peloton-led)
   Riders:   $rider_summary
+  Tokens:   $TOKEN_MODE ($TOKEN_MODE_SOURCE; override with --auto-token,
+            --no-browser or --no-auto-token)
 EOF
 if [[ "$MANUAL" == true ]]; then
     cat <<EOF
