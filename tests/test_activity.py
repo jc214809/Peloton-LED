@@ -47,13 +47,15 @@ def test_daily_minutes_covers_twelve_monday_aligned_weeks_through_today():
 
 
 def test_log_derives_both_and_keeps_the_heatmap_for_a_complete_log():
+    # A fixed clock: "30 minutes ago" from the real one is last week for the
+    # first half hour of every Monday.
     log = WorkoutLog('unused')
-    now = datetime.now(timezone.utc)
-    log.merge([_w('today', now - timedelta(minutes=30)), _w('synced', now - timedelta(minutes=20), synced=True)])
-    partial = log.derived(tzname=ZONE)
+    log.merge([_w('today', SATURDAY - timedelta(minutes=30)),
+               _w('synced', SATURDAY - timedelta(minutes=20), synced=True)])
+    partial = log.derived(tzname=ZONE, now=SATURDAY)
     assert partial['streak_week_workouts'] == 1 and partial['activity_days'] == {}
     log.backfill['complete'] = True
-    full = log.derived(tzname=ZONE)
+    full = log.derived(tzname=ZONE, now=SATURDAY)
     assert sum(full['activity_days'].values()) == 40
     row = log.workouts['synced']
     assert row['counts_for_streaks'] is False

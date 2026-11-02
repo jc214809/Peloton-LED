@@ -8,6 +8,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 import requests
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from peloton.goals import weekly_progress
 from peloton.instructors import merge_instructor_counts
@@ -18,6 +20,12 @@ from tests.test_dashboard import recent_fetches, setup_dashboard
 
 NOW = time.time()
 DAY = 86400
+NEW_YORK = ZoneInfo('America/New_York')
+
+
+def _age_of(moment):
+    """_w's age_days for a moment, so tests can place workouts on a chosen date."""
+    return (NOW - moment.timestamp()) / DAY
 
 
 def _w(identity, age_days=0.0, status='COMPLETE', discipline='cycling', distance=None, instructor=('cody', 'Cody Rigsby'),
@@ -379,20 +387,36 @@ def test_downtime_gap_is_closed_on_the_next_refresh(tmp_path):
 
 
 def test_latest_day_longer_than_one_page_is_shown_whole(tmp_path):
-    busy_day = [_w(f'today{i}', 0.001 * (i + 1), instructor=('jess', 'Jess Sims')) for i in range(25)]
+    # Noon yesterday, New York: the 25 rides share one date at any hour (just
+    # before now, they'd straddle midnight for the first half hour of a day).
+    noon = (datetime.fromtimestamp(NOW, NEW_YORK) - timedelta(days=1)).replace(
+        hour=12, minute=0, second=0, microsecond=0)
+    busy_day = [_w(f'today{i}', _age_of(noon - timedelta(minutes=i)), instructor=('jess', 'Jess Sims'))
+                for i in range(25)]
     dashboard, client, _ = _dashboard(tmp_path, busy_day + _history(10, start_age=3))
     client.get_perf_graph.return_value = None
     _refresh(dashboard)
     assert dashboard.snapshot()['active_day_count'] == 25
 
 
-def test_this_week_is_complete_before_the_backfill_finishes(tmp_path):
-    from peloton.goals import week_start
-    monday, now = week_start('America/New_York')
-    hours = max(1.0, (now - monday).total_seconds() / 3600 - 1)
-    week = [_w(f'wk{i}', (hours * (i + 1) / 31) / 24, duration=600, instructor=('jess', 'Jess Sims'))
+def test_this_week_is_complete_before_the_backfill_finishes(tmp_path, monkeypatch):
+    # A frozen clock, Wednesday noon of last week: on the real one, the first
+    # hour of a Monday has no room for 30 rides this week.
+    import peloton.goals as goals
+    last_week = datetime.fromtimestamp(NOW, NEW_YORK) - timedelta(days=7)
+    monday = (last_week - timedelta(days=last_week.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    frozen = monday + timedelta(days=2, hours=12)
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen.astimezone(tz or timezone.utc)
+
+    monkeypatch.setattr(goals, 'datetime', FrozenDatetime)
+    span = frozen - monday
+    week = [_w(f'wk{i}', _age_of(frozen - span * (i + 1) / 31), duration=600, instructor=('jess', 'Jess Sims'))
             for i in range(30)]
-    dashboard, client, _ = _dashboard(tmp_path, week + _history(10, start_age=8))
+    dashboard, client, _ = _dashboard(tmp_path, week + _history(10, start_age=_age_of(monday) + 1))
     dashboard.config['timezone'] = 'America/New_York'
     with patch.object(dashboard_module.Dashboard, '_start_history_walk'):
         dashboard.refresh()
