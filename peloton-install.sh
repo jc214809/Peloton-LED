@@ -14,6 +14,8 @@ NO_BROWSER=false
 # board's saved mode, or the hardware's.
 TOKEN_MODE=""
 TOKEN_MODE_SOURCE=""
+# flag when a token flag chose the mode, on this run or an earlier one.
+TOKEN_MODE_ORIGIN=auto
 TOKEN_MODE_FILE="$CONFIG_DIR/token-mode"
 DISPLAY_WAS_RUNNING=false
 SKIP_MATRIX=false
@@ -34,9 +36,10 @@ configuration, token, login environment, cache, and PR state are preserved.
 On first install (no /etc/peloton-led/config.json yet), you'll be prompted
 to add one rider for a single-user board, or two or more for a shared board.
 
-Token renewal is picked automatically: an upgrade keeps the board's current
-mode; a fresh install uses --no-browser on a 32-bit or under-768 MB board and
---auto-token otherwise. The flags below override that and are remembered.
+Token renewal is picked automatically: a board that already renews tokens
+keeps its mode; otherwise a 32-bit or under-768 MB board gets --no-browser
+and any other board --auto-token. The flags below override that and are
+remembered; renewal stays off only after --no-auto-token.
 
 Options:
   --auto-token          Verify hourly; renew within 12 hours of expiry or after
@@ -88,38 +91,45 @@ low_spec_board() {
     [[ -n "$mem_kb" && "$mem_kb" -lt 786432 ]]
 }
 
-# A flag wins. Otherwise an upgrade keeps the board's mode: the one this
-# installer saved, or, from older installers that saved none, the one their
-# units and venv show. A fresh install (or a first install that failed before
-# its units were written) goes by the hardware.
+# A flag wins. Otherwise a board that already renews tokens keeps its mode
+# (saved by this installer, or read off an older install's units and venv),
+# and everything else goes by the hardware. Renewal stays off only when
+# --no-auto-token said so: before that flag existed, "off" just meant an
+# upgrade had been run without --auto-token.
 resolve_token_mode() {
+    local saved_mode="" saved_origin=""
     if [[ -n "$TOKEN_MODE" ]]; then
         TOKEN_MODE_SOURCE=flag
+        TOKEN_MODE_ORIGIN=flag
         if [[ "$TOKEN_MODE" == browser ]] && low_spec_board; then
             echo "Warning: this board looks too small for Chromium (32-bit or under 768 MB); --no-browser suits it better." >&2
         fi
-    elif [[ -f "$TOKEN_MODE_FILE" ]]; then
-        TOKEN_MODE="$(<"$TOKEN_MODE_FILE")"
-        TOKEN_MODE_SOURCE=kept
-    elif [[ -f "$UNIT_DIR/peloton-led.service" ]]; then
-        TOKEN_MODE_SOURCE=kept
-        if systemctl is-enabled --quiet peloton-token-refresh.timer 2>/dev/null \
-            || [[ -f "$UNIT_DIR/peloton-led.service.d/manual.conf" ]]; then
+    else
+        if [[ -f "$TOKEN_MODE_FILE" ]]; then
+            read -r saved_mode saved_origin < "$TOKEN_MODE_FILE" || true
+        elif [[ -f "$UNIT_DIR/peloton-led.service" ]] \
+            && { systemctl is-enabled --quiet peloton-token-refresh.timer 2>/dev/null \
+                 || [[ -f "$UNIT_DIR/peloton-led.service.d/manual.conf" ]]; }; then
             if [[ -x "$APP_DIR/venv/bin/python" ]] \
                 && "$APP_DIR/venv/bin/python" -c 'import playwright' 2>/dev/null; then
-                TOKEN_MODE=browser
+                saved_mode=browser
             else
-                TOKEN_MODE=no-browser
+                saved_mode=no-browser
             fi
-        else
-            TOKEN_MODE=none
         fi
-    elif low_spec_board; then
-        TOKEN_MODE=no-browser
-        TOKEN_MODE_SOURCE=detected
-    else
-        TOKEN_MODE=browser
-        TOKEN_MODE_SOURCE=detected
+        if [[ -n "$saved_mode" && ( "$saved_mode" != none || "$saved_origin" == flag ) ]]; then
+            TOKEN_MODE="$saved_mode"
+            TOKEN_MODE_SOURCE=kept
+            if [[ "$saved_origin" == flag ]]; then
+                TOKEN_MODE_ORIGIN=flag
+            fi
+        elif low_spec_board; then
+            TOKEN_MODE=no-browser
+            TOKEN_MODE_SOURCE=detected
+        else
+            TOKEN_MODE=browser
+            TOKEN_MODE_SOURCE=detected
+        fi
     fi
     case "$TOKEN_MODE" in
         none) AUTO_TOKEN=false; NO_BROWSER=false ;;
@@ -128,6 +138,11 @@ resolve_token_mode() {
         *) echo "Unknown token mode '$TOKEN_MODE' in $TOKEN_MODE_FILE; pass --auto-token, --no-browser or --no-auto-token." >&2
            exit 2 ;;
     esac
+}
+
+save_token_mode() {
+    printf '%s %s\n' "$TOKEN_MODE" "$TOKEN_MODE_ORIGIN" > "$TOKEN_MODE_FILE"
+    chmod 0644 "$TOKEN_MODE_FILE"
 }
 
 # Starts the display unless manual mode or --no-start says not to. Either way
@@ -209,8 +224,7 @@ done
 
 install -d -m 0755 -o root -g root "$APP_DIR" "$CONFIG_DIR"
 # Saved now, so a re-run after a failure further down keeps this mode.
-printf '%s\n' "$TOKEN_MODE" > "$TOKEN_MODE_FILE"
-chmod 0644 "$TOKEN_MODE_FILE"
+save_token_mode
 install -d -m 0750 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR"
 
 for directory in assets display driver models peloton prepared_logos scripts utils packaging; do
