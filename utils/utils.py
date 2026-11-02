@@ -1,5 +1,6 @@
 import argparse
 import math
+import os
 
 from utils import debug
 
@@ -176,6 +177,21 @@ def matrix_settings(args, configured=None):
                               drop_privileges=getattr(args, 'drop_privileges', False))
 
 
+def matrix_user():
+    """The account the matrix driver drops to after setup (PELOTON_MATRIX_USER), or None."""
+    return os.environ.get('PELOTON_MATRIX_USER', '').strip() or None
+
+
+def ensure_privileges_dropped():
+    """Refuse to run as root once the matrix exists, if a drop was asked for.
+
+    The driver ignores a failed drop (an unknown user, say) and carries on as
+    root, which would leave a network-facing app with full rights."""
+    run_as = matrix_user()
+    if run_as and hasattr(os, 'geteuid') and os.geteuid() == 0:
+        raise SystemExit(f'Still root after creating the matrix; could not drop to {run_as!r}')
+
+
 def led_matrix_options(args, configured=None):
     from driver import RGBMatrixOptions
 
@@ -197,6 +213,13 @@ def led_matrix_options(args, configured=None):
     options.pwm_lsb_nanoseconds = args.led_pwm_lsb_nanoseconds
     options.led_rgb_sequence = args.led_rgb_sequence
     options.drop_privileges = args.drop_privileges
+    # The Pi service starts as root so the driver can map the PWM, clock and
+    # timer registers (/dev/mem), then names the account to drop to here.
+    run_as = matrix_user()
+    if run_as:
+        options.drop_privileges = True
+        options.drop_priv_user = run_as
+        options.drop_priv_group = run_as
 
     try:
         options.pixel_mapper_config = args.led_pixel_mapper

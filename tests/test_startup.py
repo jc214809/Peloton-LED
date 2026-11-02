@@ -737,3 +737,61 @@ def test_bootcamp_tiles_keep_distinct_svg_icons():
 def test_static_lifetime_page_is_still_composed_atomically():
     assert LifetimeOverviewScreen.atomic_frames is True
     assert LifetimeOverviewScreen.animated is False
+
+
+class _HardwareOptions:
+    """Stands in for rgbmatrix.RGBMatrixOptions, which has drop_priv_user/group."""
+
+
+def _options_with(monkeypatch, run_as):
+    import utils.utils as utils_module
+    from utils.utils import args, led_matrix_options
+    if run_as is None:
+        monkeypatch.delenv('PELOTON_MATRIX_USER', raising=False)
+    else:
+        monkeypatch.setenv('PELOTON_MATRIX_USER', run_as)
+    monkeypatch.setattr('driver.RGBMatrixOptions', _HardwareOptions, raising=False)
+    return led_matrix_options(args([]), {'gpio_mapping': 'adafruit-hat-pwm'})
+
+
+def test_matrix_drops_to_the_service_account_when_asked(monkeypatch):
+    options = _options_with(monkeypatch, 'peloton-led')
+    assert options.drop_privileges is True
+    assert (options.drop_priv_user, options.drop_priv_group) == ('peloton-led', 'peloton-led')
+    assert options.hardware_mapping == 'adafruit-hat-pwm'
+
+
+@pytest.mark.parametrize('run_as', [None, '', '  '])
+def test_matrix_keeps_its_privileges_without_an_account(monkeypatch, run_as):
+    # Desktop/emulator runs and `sudo ./peloton_led.py` behave as before.
+    options = _options_with(monkeypatch, run_as)
+    assert options.drop_privileges is False
+    assert not hasattr(options, 'drop_priv_user')
+
+
+@pytest.mark.parametrize('run_as,euid,stops', [
+    ('peloton-led', 0, True),       # the driver couldn't drop: refuse to run as root
+    ('peloton-led', 1001, False),   # dropped
+    (None, 0, False),               # no drop asked for (sudo by hand)
+])
+def test_app_refuses_to_stay_root_after_a_failed_drop(monkeypatch, run_as, euid, stops):
+    import os
+    from utils.utils import ensure_privileges_dropped
+    if run_as is None:
+        monkeypatch.delenv('PELOTON_MATRIX_USER', raising=False)
+    else:
+        monkeypatch.setenv('PELOTON_MATRIX_USER', run_as)
+    monkeypatch.setattr(os, 'geteuid', lambda: euid)
+    if stops:
+        with pytest.raises(SystemExit, match="could not drop to 'peloton-led'"):
+            ensure_privileges_dropped()
+    else:
+        ensure_privileges_dropped()
+
+
+def test_privileges_are_checked_right_after_the_matrix_is_created():
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / 'peloton_led.py').read_text()
+    create = text.index("matrix = RGBMatrix(options=led_matrix_options(options, config['matrix']))")
+    check = text.index('    ensure_privileges_dropped()\n')
+    assert create < check < text.index('profiles = configured_profiles(config, options)')

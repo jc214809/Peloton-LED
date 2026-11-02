@@ -145,6 +145,43 @@ save_token_mode() {
     chmod 0644 "$TOKEN_MODE_FILE"
 }
 
+# The display service passes no --led-gpio-mapping (it used to force
+# adafruit-hat), so the panel wiring comes from the config the service reads.
+# Stop before touching a board whose config doesn't say, rather than let its
+# panel fall back to the "regular" mapping and go dark.
+check_gpio_mapping() {
+    local config="$CONFIG_DIR/config.json" status=0
+    if [[ -f "$SOURCE_DIR/config.json" ]]; then
+        config="$SOURCE_DIR/config.json"
+    elif [[ "$RECONFIGURE" == true || ! -f "$config" ]]; then
+        return 0    # rewritten from packaging/config.pi.json, which sets it
+    fi
+    python3 - "$config" <<'PY' || status=$?
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as handle:
+        matrix = json.load(handle).get('matrix') or {}
+    mapping = matrix.get('gpio_mapping')
+except (OSError, ValueError, AttributeError) as exc:
+    sys.exit(f'Could not read {sys.argv[1]}: {exc}')
+sys.exit(0 if mapping else 3)
+PY
+    if ((status == 3)); then
+        cat >&2 <<EOF
+$config has no matrix.gpio_mapping. The display service no longer sets it,
+so add it to the "matrix" section before upgrading (nothing has changed yet):
+
+    "matrix": {"gpio_mapping": "adafruit-hat"}
+
+Use "adafruit-hat-pwm" if the HAT has the GPIO4-GPIO18 jumper, or "regular"
+for a panel wired straight to the GPIO header.
+EOF
+        exit 1
+    elif ((status != 0)); then
+        exit 1
+    fi
+}
+
 # Starts the display unless manual mode or --no-start says not to. Either way
 # a display that was running when the install began is restarted, so it never
 # keeps running the old code.
@@ -197,6 +234,7 @@ done
 command -v systemctl >/dev/null || { echo "systemd is required." >&2; exit 1; }
 resolve_start_mode
 resolve_token_mode
+check_gpio_mapping
 # Before anything changes, so a display that crashes mid-upgrade still counts.
 if systemctl is-active --quiet peloton-led.service 2>/dev/null; then
     DISPLAY_WAS_RUNNING=true
@@ -226,6 +264,9 @@ install -d -m 0755 -o root -g root "$APP_DIR" "$CONFIG_DIR"
 # Saved now, so a re-run after a failure further down keeps this mode.
 save_token_mode
 install -d -m 0750 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR"
+# The display opens its log while still root (see peloton-led.service); owning
+# the folder lets it rotate the log after dropping to $APP_USER.
+install -d -m 0755 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR/logs"
 
 for directory in assets display driver models peloton prepared_logos scripts utils packaging; do
     rm -rf "$APP_DIR/$directory"

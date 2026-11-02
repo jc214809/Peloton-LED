@@ -52,6 +52,8 @@ def test_pi_config_uses_writable_state_cache():
     parsed = load_config(path)
     assert parsed['display']['cache_path'] == '/var/lib/peloton-led/dashboard-cache.json'
     assert json.loads(path.read_text())['debug'] is False
+    # Fresh installs get the HAT wiring from the config, not the service.
+    assert parsed['matrix']['gpio_mapping'] == 'adafruit-hat'
 
 
 def test_systemd_units_have_managed_runtime_and_token_safety():
@@ -59,9 +61,22 @@ def test_systemd_units_have_managed_runtime_and_token_safety():
     display = (unit_dir / 'peloton-led.service').read_text()
     refresh = (unit_dir / 'peloton-token-refresh.service').read_text()
     timer = (unit_dir / 'peloton-token-refresh.timer').read_text()
-    assert 'User=peloton-led' in display
+    # Starts as root only to map the panel's hardware registers, then the
+    # driver drops to peloton-led (PELOTON_MATRIX_USER) before any token or
+    # cache is touched; every extra right goes with root.
+    assert 'User=root' in display and 'Group=peloton-led' in display
+    assert 'Environment=PELOTON_MATRIX_USER=peloton-led' in display
+    assert 'AmbientCapabilities' not in display
+    bounding = display.split('CapabilityBoundingSet=', 1)[1].split('\n', 1)[0].split()
+    assert sorted(bounding) == sorted(['CAP_SYS_RAWIO', 'CAP_SYS_NICE', 'CAP_IPC_LOCK',
+                                       'CAP_SETUID', 'CAP_SETGID', 'CAP_DAC_OVERRIDE'])
+    assert 'NoNewPrivileges=true' in display and 'ProtectSystem=strict' in display
+    assert 'ProtectHome=true' in display
     assert 'Restart=on-failure' in display
     assert '--cookies /var/lib/peloton-led/cookies.txt' in display
+    # A command-line flag beats config.json, so the service must not set the
+    # wiring: each board's config chooses adafruit-hat or adafruit-hat-pwm.
+    assert '--led-' not in display
     assert 'ReadWritePaths=/var/lib/peloton-led' in display
     # ProtectSystem=strict makes /opt/peloton-led read-only, so utils/debug.py's
     # default log location (next to the code) must be redirected somewhere
@@ -526,3 +541,69 @@ def test_starting_install_without_auto_token_starts_only_the_display(tmp_path):
     token.write_text('token')
     calls, _ = _start_or_restart(tmp_path, no_start=False, was_running=False, tokens=[token])
     assert calls[1:] == ['systemctl restart peloton-led.service']
+
+
+def _check_gpio_mapping(tmp_path, checkout=None, etc=None, reconfigure=False):
+    """Run check_gpio_mapping with optional checkout and /etc configs; return the result."""
+    source_dir, config_dir = tmp_path / 'checkout', tmp_path / 'etc'
+    source_dir.mkdir(exist_ok=True)
+    config_dir.mkdir(exist_ok=True)
+    for directory, content in ((source_dir, checkout), (config_dir, etc)):
+        if content is not None:
+            (directory / 'config.json').write_text(content if isinstance(content, str) else json.dumps(content))
+    script = (f'set -Eeuo pipefail\nSOURCE_DIR="{source_dir}"\nCONFIG_DIR="{config_dir}"\n'
+              f'RECONFIGURE={str(reconfigure).lower()}\n'
+              f'{_installer_function("check_gpio_mapping")}check_gpio_mapping\necho checked\n')
+    return subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'checkout': {'matrix': {'gpio_mapping': 'adafruit-hat'}}},
+    {'checkout': {'matrix': {'gpio_mapping': 'adafruit-hat-pwm'}}, 'etc': {}},
+    {'etc': {'matrix': {'gpio_mapping': 'regular'}}},
+    {},                                    # fresh install: written from the template
+    {'etc': {}, 'reconfigure': True},      # /etc config rewritten from the template
+])
+def test_gpio_mapping_check_passes_when_the_live_config_sets_it(tmp_path, kwargs):
+    result = _check_gpio_mapping(tmp_path, **kwargs)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'checked'
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'checkout': {'matrix': {'rows': 64}}},
+    {'checkout': {'matrix': {'gpio_mapping': None}}},
+    {'checkout': {}, 'etc': {'matrix': {'gpio_mapping': 'adafruit-hat'}}},   # the checkout's is live
+    {'etc': {'display': {}}},
+    {'checkout': {}, 'reconfigure': True},  # --reconfigure leaves the checkout's config alone
+])
+def test_gpio_mapping_check_stops_a_board_that_would_lose_its_wiring(tmp_path, kwargs):
+    result = _check_gpio_mapping(tmp_path, **kwargs)
+    assert result.returncode == 1
+    assert 'checked' not in result.stdout
+    assert 'has no matrix.gpio_mapping' in result.stderr
+    assert '"matrix": {"gpio_mapping": "adafruit-hat"}' in result.stderr
+
+
+def test_gpio_mapping_check_reports_an_unreadable_config(tmp_path):
+    result = _check_gpio_mapping(tmp_path, checkout='{not json')
+    assert result.returncode == 1
+    assert 'Could not read' in result.stderr
+    assert 'has no matrix.gpio_mapping' not in result.stderr
+
+
+def test_gpio_mapping_is_checked_before_the_install_changes_anything():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    check = text.index('\ncheck_gpio_mapping\n')
+    assert text.index('[[ $EUID -eq 0 ]]') < check < text.index('apt-get update')
+    assert check < text.index('rm -rf "$APP_DIR/$directory"') < text.index('install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-led.service"')
+
+
+def test_installer_gives_the_display_its_log_folder():
+    # The display opens its log while still root; peloton-led must own the
+    # folder to rotate that log after the drop.
+    text = (ROOT / 'peloton-install.sh').read_text()
+    logs = 'install -d -m 0755 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR/logs"'
+    assert logs in text
+    assert text.index('install -d -m 0750 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR"') < text.index(logs)
+    assert text.index(logs) < text.index('\nstart_or_restart_display\n')

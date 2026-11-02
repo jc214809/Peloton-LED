@@ -1,5 +1,6 @@
 {
   "debug": false,
+  "matrix": {"gpio_mapping": "adafruit-hat"},
   "display": {
     "username": "Peloton Member",
     "font": "stats",
