@@ -18,6 +18,10 @@ TOKEN_MODE_SOURCE=""
 TOKEN_MODE_ORIGIN=auto
 TOKEN_MODE_FILE="$CONFIG_DIR/token-mode"
 DISPLAY_WAS_RUNNING=false
+# The live config's matrix.gpio_mapping (check_gpio_mapping), and whether the
+# onboard audio stays loaded until a reboot (check_pwm_audio).
+GPIO_MAPPING=""
+AUDIO_REBOOT=false
 SKIP_MATRIX=false
 SKIP_PACKAGES=false
 NO_START=false
@@ -145,6 +149,93 @@ save_token_mode() {
     chmod 0644 "$TOKEN_MODE_FILE"
 }
 
+# The display service passes no --led-gpio-mapping (it used to force
+# adafruit-hat), so the panel wiring comes from the config the service reads.
+# Stop before touching a board whose config doesn't say, rather than let its
+# panel fall back to the "regular" mapping and go dark.
+check_gpio_mapping() {
+    local config="$CONFIG_DIR/config.json" status=0
+    if [[ -f "$SOURCE_DIR/config.json" ]]; then
+        config="$SOURCE_DIR/config.json"
+    elif [[ "$RECONFIGURE" == true || ! -f "$config" ]]; then
+        return 0    # rewritten from packaging/config.pi.json, which sets it
+    fi
+    GPIO_MAPPING="$(python3 - "$config" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as handle:
+        matrix = json.load(handle).get('matrix') or {}
+    mapping = matrix.get('gpio_mapping')
+except (OSError, ValueError, AttributeError) as exc:
+    sys.exit(f'Could not read {sys.argv[1]}: {exc}')
+if not mapping:
+    sys.exit(3)
+print(mapping)
+PY
+)" || status=$?
+    if ((status == 3)); then
+        cat >&2 <<EOF
+$config has no matrix.gpio_mapping. The display service no longer sets it,
+so add it to the "matrix" section before upgrading (nothing has changed yet):
+
+    "matrix": {"gpio_mapping": "adafruit-hat"}
+
+Use "adafruit-hat-pwm" if the HAT has the GPIO4-GPIO18 jumper, or "regular"
+for a panel wired straight to the GPIO header.
+EOF
+        exit 1
+    elif ((status != 0)); then
+        exit 1
+    fi
+}
+
+is_interactive() {
+    [[ -t 0 ]]
+}
+
+# adafruit-hat-pwm drives the panel with the PWM hardware the onboard audio
+# also uses; with snd_bcm2835 loaded the driver exits at start. Turning the
+# audio off edits the boot config, so ask first: no answer, no change.
+check_pwm_audio() {
+    [[ "$GPIO_MAPPING" == adafruit-hat-pwm ]] || return 0
+    grep -q '^snd_bcm2835 ' "${PROC_MODULES:-/proc/modules}" 2>/dev/null || return 0
+    local boot_config="${BOOT_CONFIG:-}" answer updated
+    if [[ -z "$boot_config" ]]; then
+        boot_config=/boot/firmware/config.txt
+        [[ -f "$boot_config" ]] || boot_config=/boot/config.txt
+    fi
+    cat <<EOF
+
+The config uses "adafruit-hat-pwm", but the Pi's onboard audio (snd_bcm2835)
+is loaded. It shares the PWM hardware the jumper uses, so the display would
+exit at start. Turning it off sets dtparam=audio=off in $boot_config
+(backed up first) and blacklists snd_bcm2835; the Pi's 3.5 mm and HDMI
+sound stop working. The panel doesn't use either.
+EOF
+    if ! is_interactive; then
+        echo "Run this in an interactive terminal to answer, or set \"gpio_mapping\": \"adafruit-hat\". Nothing has changed." >&2
+        exit 1
+    fi
+    read -r -p "Turn the onboard audio off? [y/N] " answer || answer=""
+    case "$answer" in
+        [yY]|[yY][eE][sS]) ;;
+        *) echo "Nothing has changed. Answer y to use the jumper, or set \"gpio_mapping\": \"adafruit-hat\" to run without it." >&2
+           exit 1 ;;
+    esac
+    # Plain cp: the boot partition is FAT, where -p's ownership fails as root.
+    cp "$boot_config" "$boot_config.peloton-led.bak"
+    updated="$(awk '/^dtparam=audio=/ {print "dtparam=audio=off"; done = 1; next} {print}
+                    END {if (!done) print "dtparam=audio=off"}' "$boot_config")"
+    printf '%s\n' "$updated" > "$boot_config"
+    printf 'blacklist snd_bcm2835\n' > "${MODPROBE_DIR:-/etc/modprobe.d}/blacklist-rgb-matrix.conf"
+    if modprobe -r snd_bcm2835 2>/dev/null; then
+        echo "Onboard audio is off."
+    else
+        AUDIO_REBOOT=true
+        echo "Onboard audio turns off at the next reboot; the display can't start until then." >&2
+    fi
+}
+
 # Starts the display unless manual mode or --no-start says not to. Either way
 # a display that was running when the install began is restarted, so it never
 # keeps running the old code.
@@ -197,6 +288,8 @@ done
 command -v systemctl >/dev/null || { echo "systemd is required." >&2; exit 1; }
 resolve_start_mode
 resolve_token_mode
+check_gpio_mapping
+check_pwm_audio
 # Before anything changes, so a display that crashes mid-upgrade still counts.
 if systemctl is-active --quiet peloton-led.service 2>/dev/null; then
     DISPLAY_WAS_RUNNING=true
@@ -226,6 +319,9 @@ install -d -m 0755 -o root -g root "$APP_DIR" "$CONFIG_DIR"
 # Saved now, so a re-run after a failure further down keeps this mode.
 save_token_mode
 install -d -m 0750 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR"
+# The display opens its log while still root (see peloton-led.service); owning
+# the folder lets it rotate the log after dropping to $APP_USER.
+install -d -m 0755 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR/logs"
 
 for directory in assets display driver models peloton prepared_logos scripts utils packaging; do
     rm -rf "$APP_DIR/$directory"
@@ -409,6 +505,13 @@ if [[ "$AUTO_TOKEN" == true ]]; then
   Timer:    systemctl list-timers peloton-token-refresh.timer
   Refresh:  systemctl start peloton-token-refresh.service
   Auth log: journalctl -u peloton-token-refresh.service -n 100
+EOF
+fi
+if [[ "$AUDIO_REBOOT" == true ]]; then
+    cat <<EOF
+
+  REBOOT: the onboard audio couldn't be unloaded now; the display (using
+  adafruit-hat-pwm) won't start until you run   sudo reboot
 EOF
 fi
 # Checked last: on a board with Chromium, the renewal run above has already

@@ -12,7 +12,7 @@ from peloton.goals import next_milestone, week_day, week_start
 from peloton.journey import journey_progress
 from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
-from utils.utils import args, led_matrix_options
+from utils.utils import args, ensure_privileges_dropped, led_matrix_options
 from utils.username import resolve_display_username
 from display.ui.last_workout_screen import (LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details,
                                            stats_phase_seconds)
@@ -343,6 +343,7 @@ def main():
     from display.ui.streak_risk_screen import StreakRiskScreen
 
     matrix = RGBMatrix(options=led_matrix_options(options, config['matrix']))
+    ensure_privileges_dropped()
     try:
         matrix.Clear()
     except Exception as exc:

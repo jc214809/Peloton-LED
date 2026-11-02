@@ -5,18 +5,24 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=peloton-led
+# Starts as root only so the matrix driver can map the PWM, clock and timer
+# registers (/dev/mem: the hardware pulse adafruit-hat-pwm needs, and steadier
+# timing on every mapping); the driver then drops to PELOTON_MATRIX_USER before
+# any token or cache is touched, and the app exits if it is still root.
+User=root
 Group=peloton-led
 WorkingDirectory=/opt/peloton-led
+Environment=PELOTON_MATRIX_USER=peloton-led
 Environment=PYTHONUNBUFFERED=1
 Environment=PELOTON_LOG_DIR=/var/lib/peloton-led/logs
-ExecStart=/opt/peloton-led/venv/bin/python /opt/peloton-led/peloton_led.py --config /etc/peloton-led/config.json --cookies /var/lib/peloton-led/cookies.txt --led-gpio-mapping adafruit-hat
+ExecStart=/opt/peloton-led/venv/bin/python /opt/peloton-led/peloton_led.py --config /etc/peloton-led/config.json --cookies /var/lib/peloton-led/cookies.txt
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=45
 NoNewPrivileges=true
-AmbientCapabilities=CAP_SYS_RAWIO CAP_SYS_NICE CAP_IPC_LOCK
-CapabilityBoundingSet=CAP_SYS_RAWIO CAP_SYS_NICE CAP_IPC_LOCK
+# All dropped with root: /dev/mem, the realtime refresh thread, switching
+# user, and opening the log in /var/lib/peloton-led (owned by peloton-led).
+CapabilityBoundingSet=CAP_SYS_RAWIO CAP_SYS_NICE CAP_IPC_LOCK CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE
 LimitRTPRIO=99
 LimitMEMLOCK=infinity
 PrivateTmp=true

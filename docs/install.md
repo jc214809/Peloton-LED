@@ -83,6 +83,23 @@ Matrix hardware settings (passed straight through to `rpi-rgb-led-matrix` /
 config value for that run. The panel can't report its own size, so a 64×32
 board needs `"rows": 32`.
 
+On a Pi installed with `peloton-install.sh`, `gpio_mapping` must be set in
+`config.json`: the service passes no `--led-*` flags, and the installer stops
+before changing anything if the config the service reads leaves it out. Use
+`"adafruit-hat"` for an Adafruit HAT or Bonnet, or `"adafruit-hat-pwm"` if
+you've soldered the GPIO4–GPIO18 jumper (the PWM mod), which reduces
+flicker. Fresh installs start with `"adafruit-hat"`.
+
+`adafruit-hat-pwm` drives the panel with the Pi's PWM hardware, which the
+onboard audio also uses, so the audio has to be off or the display exits
+with a `snd_bcm2835` message. When the config says `adafruit-hat-pwm` and the
+audio is loaded, the installer explains this and asks before turning it off
+(it backs up the boot config to `config.txt.peloton-led.bak`, sets
+`dtparam=audio=off`, blacklists `snd_bcm2835`, and unloads it, or tells you
+to reboot if it can't). Answer no, or run it without a terminal, and it
+stops with nothing changed. `lsmod | grep snd_bcm2835` printing nothing means
+the audio is off.
+
 ```json
 "matrix": {"rows": 32, "cols": 64, "gpio_mapping": "adafruit-hat", "slowdown_gpio": 2}
 ```
@@ -237,7 +254,11 @@ What the full run does, in order:
    `--skip-packages` if you manage packages yourself.
 2. Creates a dedicated, unprivileged `peloton-led` system account (home
    `/var/lib/peloton-led`, shell `/usr/sbin/nologin`), and adds it to the
-   `gpio` and `video` groups if they exist.
+   `gpio` and `video` groups if they exist. The display service starts as
+   root only long enough for the matrix driver to map the panel's hardware
+   registers (`/dev/mem`), then switches to `peloton-led` before it reads
+   any token or cache; it refuses to run if that switch fails. The token
+   renewal service runs as `peloton-led` throughout.
 3. Copies the application into `/opt/peloton-led`, owned by `root` so the
    service account can't modify its own code.
 4. Prompts for riders and writes `/etc/peloton-led/config.json` +
@@ -476,6 +497,11 @@ git pull
 sudo ./peloton-install.sh
 ```
 
+Boards installed before the display service stopped passing
+`--led-gpio-mapping adafruit-hat` need `"gpio_mapping"` in their config's
+`"matrix"` section first ([above](#every-peloton_ledpy-command-line-flag)); the installer
+says so and stops, with nothing changed, if it's missing.
+
 This upgrades the application code in `/opt/peloton-led` while preserving
 configuration, tokens, credentials, cached display data, and PR/milestone
 state — none of that lives in `/opt/peloton-led`, so it's never touched.
@@ -521,6 +547,26 @@ and create each rider's token with
   `journalctl -u peloton-led.service -n 100` for the actual error;
   configuration is validated at startup, so a bad `config.json` value will
   show up there before the display initializes.
+- **Panel blank with `adafruit-hat-pwm`, service restarting** — the PWM
+  jumper mapping needs two things, and each has its own error in
+  `journalctl -u peloton-led.service -n 30`:
+  - `Need root. You are configured to use the hardware pulse generator` —
+    the driver couldn't open `/dev/mem`. The managed service starts as root
+    for this and then drops to `peloton-led`; re-run
+    `sudo ./peloton-install.sh` if the board's `peloton-led.service` predates
+    that (`systemctl cat peloton-led` shows `User=root` once it's current).
+    Don't work around it with `--led-no-hardware-pulse`: that turns off the
+    very pulse the jumper is for.
+  - `snd_bcm2835: found that the Pi sound module is loaded` — the onboard
+    audio shares the PWM hardware. Re-running `sudo ./peloton-install.sh`
+    offers to turn it off; to do it by hand, set `dtparam=audio=off` in
+    `/boot/firmware/config.txt`, add `blacklist snd_bcm2835` to
+    `/etc/modprobe.d/blacklist-rgb-matrix.conf`, and reboot;
+    `lsmod | grep snd_bcm2835` should then print nothing.
+
+  The jumper itself is rarely the problem: these errors appear before the
+  panel is driven at all. Set `"gpio_mapping": "adafruit-hat"` to get the
+  panel back while you fix them.
 - **Wrong number of riders / stuck on an old config** — if your checkout has a
   `config.json`, that's the one the services run (see
   [Editing the config](#editing-the-config)); remember to restart after
@@ -533,7 +579,7 @@ and create each rider's token with
 - **`git pull` doesn't fix a bug you just pulled** — the systemd services run
   code copied into `/opt/peloton-led`, not your `~/Peloton-LED` checkout.
   `git pull` only updates the checkout; re-run `sudo ./peloton-install.sh`
-  (with whatever flags you originally used) to sync the fix into the
+  (no flags needed; it keeps the board's modes) to sync the fix into the
   deployed copy the services actually execute.
 - **A specific rider's login times out waiting for the login form** — if
   `journalctl` shows `Could not reach or fill in the login form` or `No
