@@ -191,15 +191,16 @@ Pass `--start-at-boot` if the Pi drives nothing else and should show Peloton
 whenever it's on.
 
 The installer also picks how tokens are renewed, so most boards need no
-token flag. A fresh install of a 64-bit board with 768 MB or more of RAM gets
+token flag. A 64-bit board with 768 MB or more of RAM gets
 [automatic renewal with Chromium](#automatic-token-renewal---auto-token); a
 32-bit board, or one with under 768 MB (a Pi Zero 2 W, say), gets
-[`--no-browser`](#seeding-a-board-from-another-computer---no-browser). The
-choice is saved in `/etc/peloton-led/token-mode`, and an upgrade keeps it.
-Boards installed before the installer saved a mode keep theirs too: it's read
-off the board's timer, drop-ins, and venv. The installer's summary prints the
-mode and where it came from (`detected`, `kept`, or `flag`); pass
-`--auto-token`, `--no-browser`, or `--no-auto-token` to change it.
+[`--no-browser`](#seeding-a-board-from-another-computer---no-browser). That
+covers fresh installs and upgrades of boards that had no renewal. A board
+that already renews tokens keeps its mode (saved in
+`/etc/peloton-led/token-mode`, or read off an older install's timer,
+drop-ins, and venv). Renewal stays off only if you pass `--no-auto-token`,
+which is remembered like the other token flags. The installer's summary
+prints the mode and where it came from (`detected`, `kept`, or `flag`).
 
 This is safe to re-run — it's also how you [upgrade](#upgrading) later.
 
@@ -299,7 +300,8 @@ install rather than producing a crash-looping service.
 sudo ./peloton-install.sh --auto-token
 ```
 
-The default on a fresh install of a 64-bit board with 768 MB or more of RAM.
+The default on a 64-bit board with 768 MB or more of RAM that doesn't
+already renew tokens some other way.
 It keeps your Peloton token fresh without you re-running the login helper.
 Pass the flag to switch an existing board to it, or
 `--no-auto-token` to turn renewal off. It:
@@ -418,7 +420,7 @@ sudo ./peloton-install.sh [options]
 |---|---|
 | `--auto-token` | Install Chromium and enable hourly token verification/renewal (see above). Picked automatically on a fresh 64-bit board with 768 MB+ |
 | `--no-browser` | Renew only with seeded refresh tokens; no Chromium or Playwright. Implies `--auto-token` (see [above](#seeding-a-board-from-another-computer---no-browser)). Picked automatically on a fresh 32-bit or under-768 MB board |
-| `--no-auto-token` | No scheduled token renewal; disables the timer on a board that had it |
+| `--no-auto-token` | No scheduled token renewal; disables the timer on a board that had it. The only way renewal stays off: without it the installer turns renewal on |
 | `--reconfigure` | Re-run the interactive rider setup, overwriting `config.json` and `auth.env` (see [above](#changing-riders-later---reconfigure)) |
 | `--skip-matrix` | Skip building/installing the native `rpi-rgb-led-matrix` bindings — use when they're already installed, or when preparing a Pi with no panel attached yet |
 | `--skip-packages` | Skip the `apt-get install` step — use when you manage system packages yourself or they're already present |
@@ -465,8 +467,9 @@ since the mapping records its path.
 ## Upgrading
 
 Pull the latest code into your checkout, then re-run the installer. You
-don't need any flags: it keeps the board's token mode and its boot or manual
-setting, and restarts the display if it's running:
+don't need any flags: it keeps the board's token mode (turning renewal on
+for a board that had none), keeps its boot or manual setting, and restarts
+the display if it's running:
 
 ```bash
 git pull

@@ -283,21 +283,24 @@ def _fake_bin(tmp_path, **scripts):
 
 def _token_mode(tmp_path, flag='', saved=None, installed=False, venv_only=False, timer_enabled=False,
                 manual_conf=False, playwright=False, long_bit=64, mem_kb=3884000):
-    """Run resolve_token_mode against a fake board; return (stdout fields, stderr, exit code)."""
+    """Run resolve_token_mode then save_token_mode against a fake board.
+
+    Returns (stdout fields, stderr, exit code); the saved file is left at
+    tmp_path/etc/token-mode for a second run to read."""
     app_dir, unit_dir, config_dir = tmp_path / 'opt', tmp_path / 'units', tmp_path / 'etc'
     for directory in (app_dir, unit_dir, config_dir):
         directory.mkdir(exist_ok=True)
     if saved is not None:
-        (config_dir / 'token-mode').write_text(saved + '\n')
+        (config_dir / 'token-mode').write_text(saved + '\n' if saved else '')
     if installed:
         (unit_dir / 'peloton-led.service').write_text('[Service]\n')
-    if installed or venv_only:
+    if (installed or venv_only) and not (app_dir / 'venv').exists():
         (app_dir / 'venv' / 'bin').mkdir(parents=True)
         python = app_dir / 'venv' / 'bin' / 'python'
         python.write_text(f'#!/bin/sh\nexit {0 if playwright else 1}\n')
         python.chmod(0o755)
     if manual_conf:
-        (unit_dir / 'peloton-led.service.d').mkdir()
+        (unit_dir / 'peloton-led.service.d').mkdir(exist_ok=True)
         (unit_dir / 'peloton-led.service.d' / 'manual.conf').write_text('[Unit]\n')
     meminfo = tmp_path / 'meminfo'
     meminfo.write_text(f'MemTotal:       {mem_kb} kB\nMemFree:          100000 kB\n')
@@ -307,9 +310,10 @@ def _token_mode(tmp_path, flag='', saved=None, installed=False, venv_only=False,
     env['MEMINFO'] = str(meminfo)
     script = (f'set -Eeuo pipefail\nAPP_DIR="{app_dir}"\nUNIT_DIR="{unit_dir}"\n'
               f'TOKEN_MODE_FILE="{config_dir}/token-mode"\nTOKEN_MODE="{flag}"\nTOKEN_MODE_SOURCE=""\n'
-              f'AUTO_TOKEN=unset\nNO_BROWSER=unset\n'
+              f'TOKEN_MODE_ORIGIN=auto\nAUTO_TOKEN=unset\nNO_BROWSER=unset\n'
               f'{_installer_function("low_spec_board")}{_installer_function("resolve_token_mode")}'
-              'resolve_token_mode\necho "$TOKEN_MODE $TOKEN_MODE_SOURCE $AUTO_TOKEN $NO_BROWSER"\n')
+              f'{_installer_function("save_token_mode")}'
+              'resolve_token_mode\nsave_token_mode\necho "$TOKEN_MODE $TOKEN_MODE_SOURCE $AUTO_TOKEN $NO_BROWSER"\n')
     result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
     return result.stdout.split(), result.stderr, result.returncode
 
@@ -337,17 +341,27 @@ def test_unreadable_meminfo_on_a_64_bit_board_means_browser(tmp_path):
 
 
 @pytest.mark.parametrize('board,expected', [
-    # Saved by this installer: kept even on hardware that would pick otherwise.
-    ({'saved': 'browser', 'installed': True, 'long_bit': 32}, 'browser kept true false'),
-    ({'saved': 'no-browser', 'installed': True}, 'no-browser kept true true'),
-    ({'saved': 'none', 'installed': True}, 'none kept false false'),
-    # Installed by an older installer that saved no mode: read it off the board.
+    # Saved by this installer: a renewing mode is kept even on hardware that
+    # would pick otherwise.
+    ({'saved': 'browser auto', 'installed': True, 'long_bit': 32}, 'browser kept true false'),
+    ({'saved': 'no-browser auto', 'installed': True}, 'no-browser kept true true'),
+    ({'saved': 'no-browser', 'installed': True}, 'no-browser kept true true'),   # first version: no origin
+    # Renewal off is kept only when --no-auto-token chose it.
+    ({'saved': 'none flag', 'installed': True}, 'none kept false false'),
+    ({'saved': 'none auto', 'installed': True}, 'browser detected true false'),
+    # First version, inferred from a board an upgrade had left without renewal
+    # (Disneypi): turned on from the hardware.
+    ({'saved': 'none', 'installed': True}, 'browser detected true false'),
+    ({'saved': 'none', 'installed': True, 'mem_kb': 443000}, 'no-browser detected true true'),
+    ({'saved': '', 'installed': True}, 'browser detected true false'),
+    # Installed by an older installer that saved no mode: renewal it had is kept.
     ({'installed': True, 'timer_enabled': True, 'playwright': True}, 'browser kept true false'),
     ({'installed': True, 'timer_enabled': True}, 'no-browser kept true true'),
     ({'installed': True, 'manual_conf': True, 'playwright': True}, 'browser kept true false'),
     ({'installed': True, 'manual_conf': True}, 'no-browser kept true true'),
-    ({'installed': True, 'playwright': True}, 'none kept false false'),
-    ({'installed': True, 'mem_kb': 443000}, 'none kept false false'),
+    # ...and renewal it lacked (no flag could choose that then) is turned on.
+    ({'installed': True, 'playwright': True}, 'browser detected true false'),
+    ({'installed': True, 'mem_kb': 443000}, 'no-browser detected true true'),
     # A first install that died after building the venv (say, in the driver
     # build) never wrote its units: still a fresh install.
     ({'venv_only': True}, 'browser detected true false'),
@@ -370,6 +384,23 @@ def test_token_mode_flags_override_the_saved_mode(tmp_path, flag, expected):
     assert code == 0, err
     assert ' '.join(out) == expected
     assert 'Warning' not in err
+
+
+@pytest.mark.parametrize('first,saved,second', [
+    ({'flag': 'none'}, 'none flag', 'none kept false false'),
+    ({'flag': 'no-browser'}, 'no-browser flag', 'no-browser kept true true'),
+    ({}, 'browser auto', 'browser kept true false'),
+    ({'mem_kb': 443000}, 'no-browser auto', 'no-browser kept true true'),
+    ({'saved': 'none flag'}, 'none flag', 'none kept false false'),   # stays a flag choice
+])
+def test_saved_mode_round_trips_with_its_origin(tmp_path, first, saved, second):
+    _, err, code = _token_mode(tmp_path, installed=True, **first)
+    assert code == 0, err
+    assert (tmp_path / 'etc' / 'token-mode').read_text() == saved + '\n'
+    out, err, code = _token_mode(tmp_path, installed=True, mem_kb=first.get('mem_kb', 3884000))
+    assert code == 0, err
+    assert ' '.join(out) == second
+    assert (tmp_path / 'etc' / 'token-mode').read_text() == saved + '\n'
 
 
 def test_auto_token_on_a_small_board_warns_but_obeys(tmp_path):
@@ -414,8 +445,8 @@ def test_installer_resolves_and_saves_the_token_mode_in_order():
     # Saved as soon as its directory exists, before the steps that tend to
     # fail (venv, driver build), so a re-run keeps the mode instead of
     # mistaking the half-built install for something else.
-    save = text.index('printf \'%s\\n\' "$TOKEN_MODE" > "$TOKEN_MODE_FILE"')
-    assert text.count('> "$TOKEN_MODE_FILE"') == 1
+    save = text.index('\nsave_token_mode\n')
+    assert text.count('\nsave_token_mode\n') == 1
     assert text.index('install -d -m 0755 -o root -g root "$APP_DIR" "$CONFIG_DIR"') < save
     assert save < text.index('python3 -m venv "$APP_DIR/venv"') < text.index('pip install "$driver_dir"')
     assert 'TOKEN_MODE_FILE="$CONFIG_DIR/token-mode"' in text
