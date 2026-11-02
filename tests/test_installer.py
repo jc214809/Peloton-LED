@@ -607,3 +607,104 @@ def test_installer_gives_the_display_its_log_folder():
     assert logs in text
     assert text.index('install -d -m 0750 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR"') < text.index(logs)
     assert text.index(logs) < text.index('\nstart_or_restart_display\n')
+
+
+def _pwm_audio(tmp_path, mapping='adafruit-hat-pwm', loaded=True, interactive=True, answer='y\n',
+               boot='# Enable audio (loads snd_bcm2835)\ndtparam=audio=on\n', unload_ok=True):
+    """Run check_pwm_audio on a fake board; return (result, boot config path, modprobe dir)."""
+    modules = tmp_path / 'modules'
+    modules.write_text(('snd_bcm2835 24576 0 - Live 0x0\n' if loaded else '') + 'vc4 300000 4 - Live 0x0\n')
+    boot_config = tmp_path / 'config.txt'
+    boot_config.write_text(boot)
+    modprobe_dir = tmp_path / 'modprobe.d'
+    modprobe_dir.mkdir(exist_ok=True)
+    log = tmp_path / 'modprobe.log'
+    env = _fake_bin(tmp_path, modprobe=f'echo "$*" >> "{log}"; exit {0 if unload_ok else 1}')
+    env.update(PROC_MODULES=str(modules), BOOT_CONFIG=str(boot_config), MODPROBE_DIR=str(modprobe_dir))
+    script = (f'set -Eeuo pipefail\nGPIO_MAPPING="{mapping}"\nAUDIO_REBOOT=false\n'
+              f'is_interactive() {{ {"true" if interactive else "false"}; }}\n'
+              f'{_installer_function("check_pwm_audio")}check_pwm_audio\necho "reboot=$AUDIO_REBOOT"\n')
+    result = subprocess.run(['bash', '-c', script], input=answer, capture_output=True, text=True, env=env)
+    return result, boot_config, modprobe_dir
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'mapping': 'adafruit-hat'},     # no PWM pulse, no conflict
+    {'mapping': ''},
+    {'loaded': False},               # already off
+])
+def test_pwm_audio_check_asks_nothing_without_a_conflict(tmp_path, kwargs):
+    result, boot_config, modprobe_dir = _pwm_audio(tmp_path, answer='', **kwargs)
+    assert result.returncode == 0, result.stderr
+    assert 'Turn the onboard audio off' not in result.stdout + result.stderr
+    assert 'dtparam=audio=on' in boot_config.read_text()
+    assert not list(modprobe_dir.iterdir())
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'answer': 'n\n'},
+    {'answer': '\n'},                # the default is no
+    {'answer': ''},                  # end of input
+    {'interactive': False},          # nobody to ask
+])
+def test_pwm_audio_is_only_turned_off_when_the_user_accepts(tmp_path, kwargs):
+    result, boot_config, modprobe_dir = _pwm_audio(tmp_path, **kwargs)
+    assert result.returncode == 1
+    assert 'reboot=' not in result.stdout
+    assert 'Nothing has changed' in result.stderr
+    assert '"gpio_mapping": "adafruit-hat"' in result.stderr
+    assert boot_config.read_text() == '# Enable audio (loads snd_bcm2835)\ndtparam=audio=on\n'
+    assert not (tmp_path / 'config.txt.peloton-led.bak').exists()
+    assert not list(modprobe_dir.iterdir())
+
+
+@pytest.mark.parametrize('answer', ['y\n', 'Y\n', 'yes\n', 'YES\n'])
+def test_accepting_turns_the_audio_off_and_unloads_it(tmp_path, answer):
+    result, boot_config, modprobe_dir = _pwm_audio(tmp_path, answer=answer)
+    assert result.returncode == 0, result.stderr
+    assert 'shares the PWM hardware' in result.stdout
+    assert boot_config.read_text() == '# Enable audio (loads snd_bcm2835)\ndtparam=audio=off\n'
+    assert (tmp_path / 'config.txt.peloton-led.bak').read_text() == \
+        '# Enable audio (loads snd_bcm2835)\ndtparam=audio=on\n'
+    assert (modprobe_dir / 'blacklist-rgb-matrix.conf').read_text() == 'blacklist snd_bcm2835\n'
+    assert (tmp_path / 'modprobe.log').read_text() == '-r snd_bcm2835\n'
+    assert 'Onboard audio is off.' in result.stdout
+    assert result.stdout.strip().endswith('reboot=false')
+
+
+def test_accepting_adds_the_audio_line_when_the_boot_config_has_none(tmp_path):
+    result, boot_config, _ = _pwm_audio(tmp_path, boot='[all]\narm_boost=1\n')
+    assert result.returncode == 0, result.stderr
+    assert boot_config.read_text() == '[all]\narm_boost=1\ndtparam=audio=off\n'
+
+
+def test_audio_that_cannot_be_unloaded_asks_for_a_reboot(tmp_path):
+    result, boot_config, _ = _pwm_audio(tmp_path, unload_ok=False)
+    assert result.returncode == 0, result.stderr
+    assert 'dtparam=audio=off' in boot_config.read_text()
+    assert result.stdout.strip().endswith('reboot=true')
+    assert 'turns off at the next reboot' in result.stderr
+
+
+def test_installer_ends_with_a_reboot_step_when_the_audio_is_still_loaded():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    block = text[text.index('if [[ "$AUDIO_REBOOT" == true ]]; then'):text.index('# Checked last:')]
+    for reboot, shown in ((True, True), (False, False)):
+        out = subprocess.run(['bash', '-c', f'set -Eeuo pipefail\nAUDIO_REBOOT={str(reboot).lower()}\n' + block],
+                             capture_output=True, text=True, check=True).stdout
+        assert ('sudo reboot' in out) == shown
+
+
+def test_gpio_mapping_check_records_the_mapping_for_the_audio_check(tmp_path):
+    source_dir, config_dir = tmp_path / 'checkout', tmp_path / 'etc'
+    source_dir.mkdir()
+    config_dir.mkdir()
+    (source_dir / 'config.json').write_text(json.dumps({'matrix': {'gpio_mapping': 'adafruit-hat-pwm'}}))
+    script = (f'set -Eeuo pipefail\nSOURCE_DIR="{source_dir}"\nCONFIG_DIR="{config_dir}"\nRECONFIGURE=false\n'
+              f'GPIO_MAPPING=""\n{_installer_function("check_gpio_mapping")}check_gpio_mapping\necho "$GPIO_MAPPING"\n')
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'adafruit-hat-pwm'
+    text = (ROOT / 'peloton-install.sh').read_text()
+    # Asked right after the mapping is known, before the install changes anything.
+    assert text.index('\ncheck_gpio_mapping\n') < text.index('\ncheck_pwm_audio\n') < text.index('apt-get update')
