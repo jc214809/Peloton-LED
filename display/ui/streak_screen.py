@@ -1,5 +1,5 @@
-"""Streaks: a pixel flame over the weekly streak and the best one, alternating
-with the daily streak and the day it started."""
+"""Streaks: a pixel flame over the weekly streak and the best one, or the
+daily streak and the day it started (one per rotation pass)."""
 from datetime import date
 
 from driver import graphics
@@ -27,7 +27,6 @@ FLAME_ROWS = (
     "....RRRRR...",
 )
 FLAME_W, FLAME_H = 12, 16
-DETAIL_INTERVAL_SECONDS = 4.0
 # A one-day "streak" is just today's workout; show the daily view from two.
 MIN_DAILY_STREAK = 2
 FLAME_COLORS = {'R': (235, 45, 20), 'O': (255, 140, 0), 'Y': (255, 225, 60)}
@@ -83,30 +82,22 @@ def daily_streak_lines(streaks):
 
 
 def streak_views(streaks):
-    """The views the streak page alternates between: weekly first, then daily."""
-    return [lines for lines in (streak_lines(streaks), daily_streak_lines(streaks)) if lines]
+    """[(view, lines)] for the views there is something to show: 'weekly'
+    first, then 'daily'. The rotation shows one per pass, alternating."""
+    views = (('weekly', streak_lines(streaks)), ('daily', daily_streak_lines(streaks)))
+    return [(view, lines) for view, lines in views if lines]
 
 
 class StreakScreen(Screen):
     """state is the snapshot's 'streaks' dict (see peloton.totals.parse_streaks),
-    plus 'daily_start' and 'today' for the daily footer. Weekly and daily
-    streaks alternate every DETAIL_INTERVAL_SECONDS when both are showing."""
-
-    animated = True
-    atomic_frames = True
-
-    def __init__(self):
-        self.elapsed = 0.0
-
-    def on_enter(self, matrix, state=None):
-        self.elapsed = 0.0
-
-    def update(self, dt):
-        self.elapsed += max(0, dt)
+    plus 'daily_start' and 'today' for the daily footer and 'view' ('weekly'
+    or 'daily'). Without a 'view', or when that one has nothing to show, the
+    first available view is drawn."""
 
     def render(self, matrix, state=None):
-        views = streak_views(state if isinstance(state, dict) else {})
-        lines = views[int(self.elapsed / DETAIL_INTERVAL_SECONDS) % len(views)] if views else None
+        state = state if isinstance(state, dict) else {}
+        views = dict(streak_views(state))
+        lines = views.get(state.get('view')) or next(iter(views.values()), None)
         big = loaded_fonts.get('big')
         small = loaded_fonts.get('stats') or loaded_fonts.get('info')
         label_font = loaded_fonts.get('titles') or small

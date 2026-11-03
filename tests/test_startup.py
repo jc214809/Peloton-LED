@@ -355,10 +355,14 @@ def test_multi_user_loop_runs_complete_rotations_in_configured_order():
     active = {'dashboard': first}
     with patch('peloton_led.run_display_loop') as run:
         run_multi_user_loop(Mock(), profiles, {}, active, cycles=1)
-    assert [(call.args[1], call.args[3], call.kwargs['cycles'])
+    assert [(call.args[1], call.args[3], call.kwargs['cycles'], call.kwargs['first_pass'])
             for call in run.call_args_list] == [
-                (first, None, 1), (second, 'Second Rider', 1)]
+                (first, None, 1, 0), (second, 'Second Rider', 1, 0)]
     assert active['dashboard'] is second
+    # Each cycle is the next pass for every rider, so their streak views alternate.
+    with patch('peloton_led.run_display_loop') as run:
+        run_multi_user_loop(Mock(), profiles, {}, active, cycles=2)
+    assert [call.kwargs['first_pass'] for call in run.call_args_list] == [0, 0, 1, 1]
 
 
 def test_configured_profiles_isolates_relative_tokens_and_caches(tmp_path):
@@ -411,6 +415,18 @@ def test_pr_celebration_only_appears_once_across_rotations(tmp_path):
                'color': 'white'}
     run_display_loop(manager, dashboard, display, cycles=2)
     assert [call.args[0] for call in manager.show.call_args_list].count('pr') == 1
+
+
+def test_display_loop_alternates_the_streak_view_each_pass(tmp_path):
+    from peloton_led import run_display_loop
+
+    dashboard = Dashboard(tmp_path / 'missing-token', {}, demo=True)
+    manager = Mock(matrix=Mock(height=64))
+    display = {'duration': 0, 'overview_duration': 0, 'last_workout_duration': 0,
+               'color': 'white', 'rotation': ['streaks'], 'streak_reminder_day': None}
+    run_display_loop(manager, dashboard, display, cycles=3)
+    assert [call.args[1]['view'] for call in manager.show.call_args_list
+            if call.args[0] == 'streak'] == ['weekly', 'daily', 'weekly']
 
 
 def test_64_row_rotation_keeps_total_separate_from_compact_lifetime_pages(tmp_path):

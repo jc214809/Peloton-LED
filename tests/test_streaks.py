@@ -5,8 +5,8 @@ from unittest.mock import Mock
 import pytest
 
 from display.display import initialize_fonts
-from display.ui.streak_screen import (DETAIL_INTERVAL_SECONDS, FLAME_COLORS, StreakScreen, daily_streak_lines,
-                                      since_text, streak_lines, streak_views)
+from display.ui.streak_screen import (FLAME_COLORS, StreakScreen, daily_streak_lines, since_text, streak_lines,
+                                      streak_views)
 from peloton.activity import daily_streak_start
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import load_config
@@ -40,19 +40,17 @@ def test_streak_lines_mark_a_tied_record_and_skip_zero():
 
 
 @pytest.mark.parametrize('height', [32, 64])
-@pytest.mark.parametrize('streaks, elapsed', [
-    ({'current_weekly': 2, 'best_weekly': 74}, 0),
-    ({'current_weekly': 1234, 'best_weekly': 1500}, 0),
+@pytest.mark.parametrize('streaks', [
+    {'current_weekly': 2, 'best_weekly': 74},
+    {'current_weekly': 1234, 'best_weekly': 1500},
     # The widest daily footers: 4-digit count, a three-wide month and a year.
-    ({'current_daily': 1234, 'daily_start': '2023-11-30', 'today': '2026-11-02'}, 0),
-    ({'current_weekly': 103, 'current_daily': 703, 'daily_start': '2024-11-30', 'today': '2026-11-02'},
-     DETAIL_INTERVAL_SECONDS)])
-def test_streak_screen_fits_the_panel(height, streaks, elapsed):
+    {'current_daily': 1234, 'daily_start': '2023-11-30', 'today': '2026-11-02'},
+    {'current_weekly': 103, 'current_daily': 703, 'daily_start': '2024-11-30', 'today': '2026-11-02',
+     'view': 'daily'}])
+def test_streak_screen_fits_the_panel(height, streaks):
     matrix = ImageMatrix(height=height)
     initialize_fonts(height)
-    screen = StreakScreen()
-    screen.update(elapsed)
-    assert screen.render(matrix, streaks)
+    assert StreakScreen().render(matrix, streaks)
     found = {c for _, c in matrix.image.getcolors(64 * 64)}
     assert set(FLAME_COLORS.values()) <= found
     # Nothing is drawn in the 1-px side margins, so no text ran off the edge.
@@ -88,39 +86,38 @@ def test_since_text_switches_to_the_year_after_a_year():
 
 def test_streak_views_put_weekly_first_and_skip_empty_ones():
     both = {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12}
-    assert [v[1] for v in streak_views(both)] == ['WEEK STREAK', 'DAY STREAK']
-    assert [v[1] for v in streak_views({**both, 'current_daily': 1})] == ['WEEK STREAK']
-    assert [v[1] for v in streak_views({**both, 'current_weekly': 0})] == ['DAY STREAK']
+    assert [(view, lines[1]) for view, lines in streak_views(both)] == [
+        ('weekly', 'WEEK STREAK'), ('daily', 'DAY STREAK')]
+    assert [view for view, _ in streak_views({**both, 'current_daily': 1})] == ['weekly']
+    assert [view for view, _ in streak_views({**both, 'current_weekly': 0})] == ['daily']
     assert streak_views({'current_weekly': 0, 'current_daily': 1}) == []
 
 
-def _render_at(screen, state, elapsed):
+def _render(state):
     matrix = ImageMatrix(height=64)
-    screen.update(elapsed)
-    assert screen.render(matrix, state)
+    assert StreakScreen().render(matrix, state)
     return matrix.image.tobytes()
 
 
-def test_streak_screen_alternates_weekly_and_daily():
+def test_streak_screen_draws_the_view_it_is_given():
     initialize_fonts(64)
     both = {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12}
-    weekly = _render_at(StreakScreen(), {'current_weekly': 3, 'best_weekly': 9}, 0)
-    daily = _render_at(StreakScreen(), {'current_daily': 12}, 0)
+    weekly = _render({'current_weekly': 3, 'best_weekly': 9})
+    daily = _render({'current_daily': 12})
     assert weekly != daily
-    screen = StreakScreen()
-    assert _render_at(screen, both, 0) == weekly
-    assert _render_at(screen, both, DETAIL_INTERVAL_SECONDS) == daily
-    assert _render_at(screen, both, DETAIL_INTERVAL_SECONDS) == weekly
-    # A new turn on the page starts from the weekly view again.
-    screen.on_enter(None, both)
-    assert _render_at(screen, both, 0) == weekly
+    assert _render({**both, 'view': 'weekly'}) == weekly
+    assert _render({**both, 'view': 'daily'}) == daily
+    # No view, an unknown one, or one with nothing to show: the first available.
+    assert _render(both) == weekly
+    assert _render({**both, 'view': 'monthly'}) == weekly
+    assert _render({'current_daily': 12, 'view': 'weekly'}) == daily
 
 
 def _pin_today(monkeypatch, day):
     monkeypatch.setattr('peloton_led.week_start', lambda zone=None: (None, datetime(*day, 12)))
 
 
-def test_rotation_adds_the_daily_start_and_time_for_both_views(monkeypatch):
+def test_rotation_alternates_weekly_and_daily_across_passes(monkeypatch):
     _pin_today(monkeypatch, (2026, 11, 2))
     display = {'rotation': ['streaks'], 'last_workout_duration': 15, 'overview_duration': 4,
                'screen_durations': {'streaks': 6}}
@@ -128,19 +125,23 @@ def test_rotation_adds_the_daily_start_and_time_for_both_views(monkeypatch):
                 'streaks': {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12},
                 'activity_days': {'2026-11-01': 30}}
     # Nothing logged today yet: the streak runs through yesterday.
-    assert build_rotation_pages(snapshot, Mock(), display, 'R', 64) == [
-        ('streak', {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12,
-                    'today': '2026-11-02', 'daily_start': '2026-10-21'}, 2 * DETAIL_INTERVAL_SECONDS)]
-    # Weekly alone keeps its configured time.
+    expected = {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12,
+                'today': '2026-11-02', 'daily_start': '2026-10-21'}
+    # One streak per pass, each for the configured time: weekly, daily, weekly.
+    for pass_index, view in enumerate(('weekly', 'daily', 'weekly')):
+        assert build_rotation_pages(snapshot, Mock(), display, 'R', 64, pass_index=pass_index) == [
+            ('streak', {**expected, 'view': view}, 6)]
+    # Weekly alone shows on every pass.
     snapshot['streaks']['current_daily'] = 1
-    assert build_rotation_pages(snapshot, Mock(), display, 'R', 64)[0][2] == 6
+    assert build_rotation_pages(snapshot, Mock(), display, 'R', 64, pass_index=1)[0][1]['view'] == 'weekly'
     # A daily streak still shows when the weekly one is over, and never
     # turns into the weekend reminder for a zero-week streak.
     snapshot['streaks'] = {'current_weekly': 0, 'best_weekly': 9, 'current_daily': 5}
     snapshot['streak_week_workouts'] = 0
     monkeypatch.setattr('peloton_led.week_day', lambda zone: 6)
     pages = build_rotation_pages(snapshot, Mock(), display, 'R', 64)
-    assert [(name, state['daily_start']) for name, state, _ in pages] == [('streak', '2026-10-28')]
+    assert [(name, state['view'], state['daily_start']) for name, state, _ in pages] == [
+        ('streak', 'daily', '2026-10-28')]
     # Peloton's own start date wins over counting back.
     snapshot['streaks']['start_date_of_current_daily'] = int(
         datetime(2026, 10, 27, 15, tzinfo=timezone.utc).timestamp())
@@ -174,7 +175,7 @@ def test_rotation_includes_streaks_only_when_there_is_one():
     snapshot = {'summaries': [], 'totals': {}, 'status': 'ready',
                 'streaks': {'current_weekly': 3, 'best_weekly': 9}}
     assert build_rotation_pages(snapshot, Mock(), display, 'R', 64) == [
-        ('streak', {'current_weekly': 3, 'best_weekly': 9}, 6)]
+        ('streak', {'current_weekly': 3, 'best_weekly': 9, 'view': 'weekly'}, 6)]
     snapshot['streaks'] = {'current_weekly': 0}
     assert build_rotation_pages(snapshot, Mock(), display, 'R', 64) == []
     snapshot['streaks'] = {'current_weekly': 0, 'current_daily': 1}

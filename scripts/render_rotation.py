@@ -104,9 +104,6 @@ def frame_times(name, state, duration, detail_interval, height=64):
     if name == 'versus' and state and 'riders' in state:
         from display.ui.versus_screen import DETAIL_INTERVAL_SECONDS
         return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, round(duration / DETAIL_INTERVAL_SECONDS)))]
-    if name == 'streak':
-        from display.ui.streak_screen import DETAIL_INTERVAL_SECONDS, streak_views
-        return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, len(streak_views(state))))]
     if name == 'username':
         from display.ui.username import DETAIL_INTERVAL_SECONDS
         return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, len(state.get('details', []))))]
@@ -164,6 +161,15 @@ def render(options):
                   {'name': 'Rival', 'workouts': 4, 'minutes': 80, 'output_kj': 540}]
     pages += build_rotation_pages(snapshot, PreviewDashboard(display['milestones']),
                                   display, username, options.height, rivals=rivals)
+    # The board alternates weekly and daily streaks across passes; show both.
+    from display.ui.streak_screen import streak_views
+    expanded = []
+    for name, state, duration in pages:
+        if name == 'streak':
+            expanded += [(name, {**state, 'view': view}, duration) for view, _ in streak_views(state)]
+        else:
+            expanded.append((name, state, duration))
+    pages = expanded
     if options.overlays and snapshot['summaries']:
         pages.append(('last_workout', {**snapshot['summaries'][0], 'login_required': True,
                                        'data_stale': True}, detail_interval))

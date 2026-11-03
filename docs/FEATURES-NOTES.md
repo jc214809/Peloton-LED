@@ -206,8 +206,8 @@ Code: `peloton/journey.py`, `display/ui/journey_screen.py`, the tally in
    already show. I haven't edited your config. The full list now:
    `["latest_workouts", "username", "streaks", "versus", "total_workouts", "next_milestone", "lifetime", "journey", "milestones", "goals"]`.
 2. ~~Peloton also reports a **daily** streak.~~ Done (2026-11-02): the
-   flame page alternates weekly and daily (4 s each) once the daily streak
-   is 2 days or more; the footer is `SINCE <date>` because the overview has
+   flame page shows weekly on one rotation pass and daily on the next once
+   the daily streak is 2 days or more; the footer is `SINCE <date>` because the overview has
    no best daily streak. The date is the overview's
    `start_date_of_current_daily`, with a count-back estimate if it's missing.
 
