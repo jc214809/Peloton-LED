@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from peloton.activity import daily_streak_start
 from peloton.config import load_config, load_dotenv, user_token_path
 from peloton.dashboard import Dashboard
 from peloton.goals import next_milestone, week_day, week_start
@@ -17,7 +18,7 @@ from utils.username import resolve_display_username
 from display.ui.last_workout_screen import (LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details,
                                            stats_phase_seconds)
 from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
-from display.ui.streak_screen import streak_lines
+from display.ui.streak_screen import DETAIL_INTERVAL_SECONDS as STREAK_INTERVAL_SECONDS, streak_views
 
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
@@ -129,18 +130,28 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
 
     # 64 rows fit a 2x2 grid of icon tiles per page; 32 rows fit one row of two.
     zone = display.get('timezone') or (snapshot.get('me') or {}).get('timezone')
-    if 'streaks' in groups and streak_lines(snapshot.get('streaks')):
+    if 'streaks' in groups and streak_views(snapshot.get('streaks')):
+        streaks = snapshot['streaks']
         streak_duration = _duration(display, 'streaks', display['overview_duration'])
         weekday = week_day(zone)
         reminder_day = display.get('streak_reminder_day', 5)
         if (reminder_day is not None and weekday >= reminder_day
-                and snapshot.get('streak_week_workouts') == 0):
+                and snapshot.get('streak_week_workouts') == 0 and streaks.get('current_weekly', 0) > 0):
             # Late in the week with nothing that counts yet: one workout keeps the streak.
             groups['streaks'].append(('streak_risk', {
-                'current': snapshot['streaks']['current_weekly'], 'days_left': 7 - weekday},
+                'current': streaks['current_weekly'], 'days_left': 7 - weekday},
                 streak_duration))
         else:
-            groups['streaks'].append(('streak', snapshot['streaks'], streak_duration))
+            state = dict(streaks)
+            if streaks.get('current_daily', 0) > 0:
+                today = week_start(zone)[1].date()
+                state.update(today=today.isoformat(), daily_start=daily_streak_start(
+                    streaks['current_daily'], today, snapshot.get('activity_days'),
+                    streaks.get('start_date_of_current_daily'), zone).isoformat())
+            if streak_duration > 0 and len(streak_views(state)) > 1:
+                # Weekly and daily each get a full turn.
+                streak_duration = max(streak_duration, 2 * STREAK_INTERVAL_SECONDS)
+            groups['streaks'].append(('streak', state, streak_duration))
 
     if 'versus' in groups and rivals and len(rivals) >= 2:
         from display.ui.versus_screen import DETAIL_INTERVAL_SECONDS, STATS

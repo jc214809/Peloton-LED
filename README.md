@@ -50,7 +50,7 @@ python peloton_led.py --emulated --refresh-interval 300
 
 ## Screens and rotation
 
-The board shows the startup logo once, then loops through the sections listed in `display.rotation`, in that order, forever. Each section is one or more screens. A section with nothing to show is skipped for that pass; for example, `streaks` is skipped while your streak is 0. Leave a section out of `rotation` to hide it.
+The board shows the startup logo once, then loops through the sections listed in `display.rotation`, in that order, forever. Each section is one or more screens. A section with nothing to show is skipped for that pass; for example, `streaks` is skipped while you have no weekly or daily streak. Leave a section out of `rotation` to hide it.
 
 Default order:
 
@@ -63,7 +63,7 @@ Default order:
 |---|---|---|---|
 | [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats), plus 1 s each for the graph and zone bar, per workout |
 | [`username`](#username--rider-name-and-highlights) | Your name over rotating highlights: total workouts, this week, top discipline, top 3 instructors | Always | `duration`, extended to 4 s per highlight |
-| [`streaks`](#streaks--weekly-streak) | Current weekly streak and your best, or a weekend reminder when this week has no workout yet | Current weekly streak is above 0 | `overview_duration` |
+| [`streaks`](#streaks--weekly-and-daily-streaks) | Current weekly streak and your best, alternating with your daily streak; or a weekend reminder when this week has no workout yet | Weekly streak above 0 or daily streak of 2+ days | `overview_duration` |
 | [`versus`](#versus--household-head-to-head) | Two riders side by side for this week | 2+ riders configured under `users` | `overview_duration` (64×32: at least 12 s) |
 | [`total_workouts`](#total_workouts--lifetime-total) | Lifetime total workout count | Profile totals available | Same as `lifetime` (at least 5 s) |
 | [`next_milestone`](#next_milestone--countdown-to-the-next-milestone) | Workouts left until your next milestone | A milestone is ahead of you | `overview_duration` |
@@ -162,11 +162,11 @@ Your name stays fixed at the top in the largest font that fits, above a blue und
 
 Options: `duration` (or `screen_durations.username`) is the minimum time on screen; it's extended automatically so every highlight gets its 4 s. The name comes from `--username`, then `users[].username`, then your Peloton username, then `display.username`. `font` and `color` style the name.
 
-### `streaks` — weekly streak
+### `streaks` — weekly and daily streaks
 
-![Weekly streak](docs/screenshots/rotation/streaks.png)
+![Weekly and daily streak](docs/screenshots/rotation/streaks.png)
 
-A pixel flame, your current **weekly streak**, and either `PERSONAL BEST` (when the current streak is your best) or `BEST N WEEKS`. This comes from Peloton's profile overview, so it costs no extra API calls. The screen is skipped while the streak is 0.
+A pixel flame, your current **weekly streak**, and either `PERSONAL BEST` (when the current streak is your best) or `BEST N WEEKS`. When you also have a **daily streak** of 2 days or more, the page switches to it after 4 s: `N DAY STREAK` and the day it started (`SINCE OCT 30`, or `SINCE DEC 2024` once it's over a year old; Peloton reports no best daily streak). The start date is Peloton's own (`start_date_of_current_daily`), on the display timezone's calendar; if the overview doesn't include it, it's counted back from today, or from yesterday when the workout log has nothing for today yet. With both showing, the page stays up at least 8 s. Both come from Peloton's profile overview, so they cost no extra API calls. A daily streak shows alone if the weekly streak is 0; the page is skipped when neither is showing.
 
 ![Streak reminder](docs/screenshots/rotation/streak-risk.png)
 
@@ -339,7 +339,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `screen_durations` | `{}` | Per-section seconds, overriding the individual duration settings above |
 | `weekly_goals` | `{"workouts": 0, "minutes": 0}` | Weekly workout/minute targets; `0` disables that goal. See [Phase 6 customization](#phase-6-customization) |
 | `milestones` | `[]` | Lifetime Total Workouts thresholds that celebrate once each, e.g. `[100, 250, 500]` |
-| `streak_reminder_day` | `5` (Saturday) | First weekday (`0` Monday … `6` Sunday) the [streak reminder](#streaks--weekly-streak) can replace the streak page; `null` turns it off |
+| `streak_reminder_day` | `5` (Saturday) | First weekday (`0` Monday … `6` Sunday) the [streak reminder](#streaks--weekly-and-daily-streaks) can replace the streak page; `null` turns it off |
 | `milestone_step` | `100` | Also count down to (and celebrate) every Nth lifetime workout, e.g. 2,200 after 2,100; `0` turns this off |
 | `journey` | Columbus → Disney World, 880 mi, every workout with a distance | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880}`. Any places and distance; optional `"disciplines"` list narrows which workouts count (see [`journey`](#journey--lifetime-miles-as-a-trip)); also settable per rider under `users[]`. Optional `"start_date": "YYYY-MM-DD"` counts only miles from that day on (display timezone); changing it recounts the full history once on the next refresh |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |

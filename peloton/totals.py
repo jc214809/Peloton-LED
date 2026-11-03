@@ -59,11 +59,12 @@ def lifetime_overview_pages(totals, page_size=4):
     return [items[index:index + page_size] for index in range(0, len(items), page_size)]
 
 
-STREAK_KEYS = ('current_weekly', 'best_weekly', 'current_daily')
+# start_date_of_current_daily is a Unix timestamp: the daily streak's first day.
+STREAK_KEYS = ('current_weekly', 'best_weekly', 'current_daily', 'start_date_of_current_daily')
 
 
 def parse_streaks(overview):
-    """Weekly/daily streak counts from the profile overview; {} when absent.
+    """Weekly/daily streak counts (and the daily start) from the profile overview; {} when absent.
 
     Only non-negative whole numbers are kept, so a malformed field just
     drops that one count instead of the whole screen.

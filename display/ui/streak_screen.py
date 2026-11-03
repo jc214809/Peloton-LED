@@ -1,4 +1,7 @@
-"""Weekly streak: a pixel flame, the current streak, and the best one."""
+"""Streaks: a pixel flame over the weekly streak and the best one, alternating
+with the daily streak and the day it started."""
+from datetime import date
+
 from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
@@ -24,6 +27,9 @@ FLAME_ROWS = (
     "....RRRRR...",
 )
 FLAME_W, FLAME_H = 12, 16
+DETAIL_INTERVAL_SECONDS = 4.0
+# A one-day "streak" is just today's workout; show the daily view from two.
+MIN_DAILY_STREAK = 2
 FLAME_COLORS = {'R': (235, 45, 20), 'O': (255, 140, 0), 'Y': (255, 225, 60)}
 _ORANGE = graphics.Color(255, 140, 0)
 _GREY = graphics.Color(145, 165, 190)
@@ -52,11 +58,55 @@ def streak_lines(streaks):
     return current, label, '', False
 
 
+def since_text(start, today):
+    """'SINCE OCT 30' within the last year, 'SINCE DEC 2024' before that."""
+    month = start.strftime('%b').upper()
+    if (today - start).days < 365:
+        return f'SINCE {month} {start.day}'
+    return f'SINCE {month} {start.year}'
+
+
+def daily_streak_lines(streaks):
+    """(current, label, footer, False) for a daily streak of MIN_DAILY_STREAK
+    days or more, else None. The footer needs 'daily_start' and 'today'
+    (ISO dates) in the dict; Peloton reports no best daily streak."""
+    current = (streaks or {}).get('current_daily')
+    if not isinstance(current, int) or isinstance(current, bool) or current < MIN_DAILY_STREAK:
+        return None
+    footer = ''
+    try:
+        footer = since_text(date.fromisoformat(streaks['daily_start']),
+                            date.fromisoformat(streaks['today']))
+    except (KeyError, TypeError, ValueError):
+        pass
+    return current, 'DAY STREAK', footer, False
+
+
+def streak_views(streaks):
+    """The views the streak page alternates between: weekly first, then daily."""
+    return [lines for lines in (streak_lines(streaks), daily_streak_lines(streaks)) if lines]
+
+
 class StreakScreen(Screen):
-    """state is the snapshot's 'streaks' dict (see peloton.totals.parse_streaks)."""
+    """state is the snapshot's 'streaks' dict (see peloton.totals.parse_streaks),
+    plus 'daily_start' and 'today' for the daily footer. Weekly and daily
+    streaks alternate every DETAIL_INTERVAL_SECONDS when both are showing."""
+
+    animated = True
+    atomic_frames = True
+
+    def __init__(self):
+        self.elapsed = 0.0
+
+    def on_enter(self, matrix, state=None):
+        self.elapsed = 0.0
+
+    def update(self, dt):
+        self.elapsed += max(0, dt)
 
     def render(self, matrix, state=None):
-        lines = streak_lines(state if isinstance(state, dict) else {})
+        views = streak_views(state if isinstance(state, dict) else {})
+        lines = views[int(self.elapsed / DETAIL_INTERVAL_SECONDS) % len(views)] if views else None
         big = loaded_fonts.get('big')
         small = loaded_fonts.get('stats') or loaded_fonts.get('info')
         label_font = loaded_fonts.get('titles') or small
@@ -82,7 +132,7 @@ class StreakScreen(Screen):
         graphics.DrawText(matrix, label_font, x, y_label, _ORANGE, label)
         if footer:
             if get_text_width(small, footer) > w - 2:
-                footer = footer.replace(' WEEKS', '')
+                footer = footer.replace(' WEEKS', '').replace('SINCE ', '')
             x = max((w - get_text_width(small, footer)) // 2, 1)
             graphics.DrawText(matrix, small, x, y_footer, _GOLD if record else _GREY, footer)
         return True
