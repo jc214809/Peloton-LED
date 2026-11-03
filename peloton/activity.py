@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from .goals import week_start
 from .selection import is_completed
-from .timestamps import workout_date, workout_timestamp
+from .timestamps import display_timezone, parse_timestamp, workout_date, workout_timestamp
 from .workout_log import length_seconds
 
 HEATMAP_WEEKS = 12
@@ -41,3 +41,21 @@ def daily_minutes(workouts, timezone_name=None, now=None, weeks=HEATMAP_WEEKS):
             continue
         seconds[day] = seconds.get(day, 0) + max(0, length_seconds(workout))
     return {day.isoformat(): int(round(total / 60)) for day, total in sorted(seconds.items())}
+
+
+def daily_streak_start(current_daily, today, days=None, started_at=None, timezone_name=None):
+    """First day of a `current_daily`-day streak: Peloton's own start
+    (`started_at`, a timestamp) on the display calendar when it has one.
+    Otherwise counted back from today, or from yesterday when the workout
+    log has nothing for today yet (Peloton keeps the streak until the day is
+    over); without a log, today is assumed to count."""
+    stamp = parse_timestamp(started_at)
+    if stamp is not None:
+        zone = display_timezone(timezone_name)
+        start = (stamp.astimezone(zone) if zone else stamp.astimezone()).date()
+        if start <= today:
+            return start
+    ends = today
+    if days and not days.get(today.isoformat()):
+        ends = today - timedelta(days=1)
+    return ends - timedelta(days=current_daily - 1)

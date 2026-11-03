@@ -205,9 +205,11 @@ Code: `peloton/journey.py`, `display/ui/journey_screen.py`, the tally in
    The workout graph and zone slides are part of `latest_workouts`, so those
    already show. I haven't edited your config. The full list now:
    `["latest_workouts", "username", "streaks", "versus", "total_workouts", "next_milestone", "lifetime", "journey", "milestones", "goals"]`.
-2. Peloton also reports a **daily** streak (`current_daily`, 0 for you
-   right now). It's parsed and saved but not shown. Say if you want it
-   on the flame screen when it's 2 days or more.
+2. ~~Peloton also reports a **daily** streak.~~ Done (2026-11-02): the
+   flame page alternates weekly and daily (4 s each) once the daily streak
+   is 2 days or more; the footer is `SINCE <date>` because the overview has
+   no best daily streak. The date is the overview's
+   `start_date_of_current_daily`, with a count-back estimate if it's missing.
 
 
 ## Overnight quiet-hours refresh schedule (requested 2026-09-25, off-queue)

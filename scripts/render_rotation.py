@@ -104,6 +104,9 @@ def frame_times(name, state, duration, detail_interval, height=64):
     if name == 'versus' and state and 'riders' in state:
         from display.ui.versus_screen import DETAIL_INTERVAL_SECONDS
         return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, round(duration / DETAIL_INTERVAL_SECONDS)))]
+    if name == 'streak':
+        from display.ui.streak_screen import DETAIL_INTERVAL_SECONDS, streak_views
+        return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, len(streak_views(state))))]
     if name == 'username':
         from display.ui.username import DETAIL_INTERVAL_SECONDS
         return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, len(state.get('details', []))))]
