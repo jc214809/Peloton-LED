@@ -18,7 +18,7 @@ from utils.username import resolve_display_username
 from display.ui.last_workout_screen import (LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details,
                                            stats_phase_seconds)
 from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
-from display.ui.streak_screen import DETAIL_INTERVAL_SECONDS as STREAK_INTERVAL_SECONDS, streak_views
+from display.ui.streak_screen import streak_views
 
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
@@ -57,11 +57,14 @@ def _duration(display, section, fallback):
     return display.get('screen_durations', {}).get(section, fallback)
 
 
-def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, rivals=None):
+def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, rivals=None,
+                         pass_index=0):
     """Build one rotation from configured named sections.
 
     rivals: every configured rider's weekly progress, passed for only one
     rider per multi-user cycle so the head-to-head page shows once.
+    pass_index: which rotation pass this is; the streak page shows the
+    weekly streak on even passes and the daily one on odd passes.
     """
     rotation = display.get('rotation', DEFAULT_ROTATION)
     groups = {name: [] for name in rotation}
@@ -148,9 +151,9 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                 state.update(today=today.isoformat(), daily_start=daily_streak_start(
                     streaks['current_daily'], today, snapshot.get('activity_days'),
                     streaks.get('start_date_of_current_daily'), zone).isoformat())
-            if streak_duration > 0 and len(streak_views(state)) > 1:
-                # Weekly and daily each get a full turn.
-                streak_duration = max(streak_duration, 2 * STREAK_INTERVAL_SECONDS)
+            # One streak per pass: weekly, then daily on the next pass.
+            views = streak_views(state)
+            state['view'] = views[pass_index % len(views)][0]
             groups['streaks'].append(('streak', state, streak_duration))
 
     if 'versus' in groups and rivals and len(rivals) >= 2:
@@ -232,7 +235,8 @@ def show_and_wait(manager, name, state, duration, dashboard=None):
             manager.tick(state)
 
 
-def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None):
+def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None,
+                     first_pass=0):
     completed = 0
     while not cycles or completed < cycles:
         snapshot = dashboard.snapshot()
@@ -244,7 +248,7 @@ def run_display_loop(manager, dashboard, display, username_override=None, cycles
         apply_scheduled_brightness(manager.matrix, display,
                                    timezone_name=profile.get('timezone'))
         pages = build_rotation_pages(snapshot, dashboard, display, username, matrix_height,
-                                     rivals=rivals)
+                                     rivals=rivals, pass_index=first_pass + completed)
         for name, state, duration in pages:
             show_and_wait(manager, name, state, duration, dashboard)
             if name == 'pr':
@@ -266,7 +270,7 @@ def run_multi_user_loop(manager, profiles, display, active, cycles=0):
             # The head-to-head page covers everyone, so show it once per cycle.
             run_display_loop(manager, profile['dashboard'], display,
                              profile.get('username'), cycles=1,
-                             rivals=rivals if index == 0 else None)
+                             rivals=rivals if index == 0 else None, first_pass=completed)
         completed += 1
 
 

@@ -63,7 +63,7 @@ Default order:
 |---|---|---|---|
 | [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats), plus 1 s each for the graph and zone bar, per workout |
 | [`username`](#username--rider-name-and-highlights) | Your name over rotating highlights: total workouts, this week, top discipline, top 3 instructors | Always | `duration`, extended to 4 s per highlight |
-| [`streaks`](#streaks--weekly-and-daily-streaks) | Current weekly streak and your best, alternating with your daily streak; or a weekend reminder when this week has no workout yet | Weekly streak above 0 or daily streak of 2+ days | `overview_duration` |
+| [`streaks`](#streaks--weekly-and-daily-streaks) | Current weekly streak and your best, or your daily streak on alternate passes; or a weekend reminder when this week has no workout yet | Weekly streak above 0 or daily streak of 2+ days | `overview_duration` |
 | [`versus`](#versus--household-head-to-head) | Two riders side by side for this week | 2+ riders configured under `users` | `overview_duration` (64×32: at least 12 s) |
 | [`total_workouts`](#total_workouts--lifetime-total) | Lifetime total workout count | Profile totals available | Same as `lifetime` (at least 5 s) |
 | [`next_milestone`](#next_milestone--countdown-to-the-next-milestone) | Workouts left until your next milestone | A milestone is ahead of you | `overview_duration` |
@@ -166,7 +166,7 @@ Options: `duration` (or `screen_durations.username`) is the minimum time on scre
 
 ![Weekly and daily streak](docs/screenshots/rotation/streaks.png)
 
-A pixel flame, your current **weekly streak**, and either `PERSONAL BEST` (when the current streak is your best) or `BEST N WEEKS`. When you also have a **daily streak** of 2 days or more, the page switches to it after 4 s: `N DAY STREAK` and the day it started (`SINCE OCT 30`, or `SINCE DEC 2024` once it's over a year old; Peloton reports no best daily streak). The start date is Peloton's own (`start_date_of_current_daily`), on the display timezone's calendar; if the overview doesn't include it, it's counted back from today, or from yesterday when the workout log has nothing for today yet. With both showing, the page stays up at least 8 s. Both come from Peloton's profile overview, so they cost no extra API calls. A daily streak shows alone if the weekly streak is 0; the page is skipped when neither is showing.
+A pixel flame, your current **weekly streak**, and either `PERSONAL BEST` (when the current streak is your best) or `BEST N WEEKS`. When you also have a **daily streak** of 2 days or more, every other pass through the rotation shows it instead: `N DAY STREAK` and the day it started (`SINCE OCT 30`, or `SINCE DEC 2024` once it's over a year old; Peloton reports no best daily streak). The start date is Peloton's own (`start_date_of_current_daily`), on the display timezone's calendar; if the overview doesn't include it, it's counted back from today, or from yesterday when the workout log has nothing for today yet. Both come from Peloton's profile overview, so they cost no extra API calls. A daily streak shows alone if the weekly streak is 0; the page is skipped when neither is showing.
 
 ![Streak reminder](docs/screenshots/rotation/streak-risk.png)
 
