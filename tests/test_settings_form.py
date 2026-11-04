@@ -304,3 +304,21 @@ def test_rotation_rows_have_a_grip_and_arrow_for_the_script():
         assert 'class="move js-only" hidden' in row
     assert "screens.append(row)" in page.SCRIPT  # switched off: to the bottom
     assert "addEventListener('pointerdown'" in page.SCRIPT  # mouse and touch dragging
+
+
+def test_number_fields_show_their_units():
+    import re
+    config = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'brightness_schedule': None}}
+    html = page.settings_page(config)
+    units = dict(re.findall(r'<span class="unit"[^>]*><input [^>]*id="([^"]+)"[^>]*>'
+                            r'<span class="unit-text" aria-hidden="true">([^<]+)</span>', html))
+    expected = {'duration_goals': 's', 'overview_duration': 's', 'refresh_interval': 's', 'logo_duration': 's',
+                'last_workout_detail_interval': 's', 'quiet_interval': 's', 'goal_minutes': 'min',
+                'goal_workouts': 'workouts', 'milestone_step': 'workouts', 'rider_0_minutes': 'min',
+                'rider_1_workouts': 'workouts', 'bright_day': '%', 'bright_night': '%', 'matrix_brightness': '%',
+                'matrix_pwm_lsb_nanoseconds': 'ns', 'matrix_limit_refresh': 'Hz'}
+    assert {name: units.get(name) for name in expected} == expected
+    assert 'duration_total_workouts' not in units  # timed by Lifetime, no field
+    assert 'matrix_chain' not in units and 'matrix_slowdown_gpio' not in units  # counts, not units
+    assert 'style="--u: 8"' in html  # "workouts" gets room for its 8 letters
+    assert '(seconds)' not in html and '(ns)' not in html
