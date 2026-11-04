@@ -143,6 +143,9 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   64x64 page is byte-for-byte unchanged.
 - 64x32: the strip is 1 row (31), under the big values with row 30 left
   blank. Nothing above it moved.
+- 64x32 names sit one row lower (baseline 7, was 6). The leader's 7-row
+  trophy is bottom-aligned with the name, so at baseline 6 its rim landed on
+  row -1 and was cut off (reported 2026-11-03). It now spans rows 0-6.
 
 ## Open questions for Joel
 

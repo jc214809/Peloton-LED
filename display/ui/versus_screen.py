@@ -97,7 +97,8 @@ class VersusScreen(Screen):
         weekday = (state or {}).get('weekday')
         has_week = isinstance(weekday, int) and 0 <= weekday <= 6
         # 64 rows: the week strip replaces the THIS WEEK title, so all moves up.
-        name_y = 6 if short else 9 if has_week else 16
+        # 32 rows: baseline 7 so the 7-row trophy starts at row 0, not -1.
+        name_y = 7 if short else 9 if has_week else 16
         room = half - 2 - (_TROPHY_W + 1)
         for i, rider in enumerate(riders):
             name = _fit(name_font, str(rider.get('name') or f'RIDER {i + 1}').upper(), room)
