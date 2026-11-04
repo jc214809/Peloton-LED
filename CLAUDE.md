@@ -73,6 +73,8 @@ For Sixel support in the emulator (optional): `brew install libsixel` on macOS.
 
 The loop is intentionally network-free after startup — all data is prefetched before `run_display_loop()` is called.
 
+On a multi-rider board, `configured_profiles` gives each profile its own `display` (the shared section with the rider's `weekly_goals`, `milestones` and `journey` over it), and `run_multi_user_loop` must pass that, not the shared one, to each rider's `run_display_loop`: until 2026-11-04 it passed the shared one, so per-rider goal pages never showed. `render_rotation.py` hard-codes its own goals, so it can't catch this; `test_each_rider_rotation_uses_their_own_goals_milestones_and_journey` does.
+
 ### Driver Abstraction (`driver/`)
 
 `driver/__init__.py` replaces the `driver` module in `sys.modules` with a `DriverWrapper` instance. When `--emulated` is passed (or tests are running), it imports `RGBMatrixEmulator`; otherwise it tries to import `rgbmatrix` (the native Raspberry Pi library) and falls back to the emulator. All code imports `from driver import RGBMatrix, graphics, ...` transparently.

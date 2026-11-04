@@ -120,6 +120,7 @@ def test_configured_profiles_apply_per_rider_settings(tmp_path):
     joel, jen, kid = peloton_led.configured_profiles({'display': display, 'users': users}, options)
     assert joel['username'] == 'JC'
     assert joel['dashboard'].config['weekly_goals'] == {'workouts': 4}
+    assert joel['display'] is joel['dashboard'].config  # the rotation gets the same per-rider settings
     assert joel['dashboard'].config['milestones'] == [500]
     assert joel['dashboard'].config['journey'] == {'miles': 1000}
     assert joel['dashboard'].cache_path == tmp_path / 'caches' / 'joel.json'
