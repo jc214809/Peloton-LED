@@ -36,11 +36,11 @@ SHARED_DURATION = {'total_workouts': 'lifetime'}
 
 # Seconds settings in display: (key, label, hint). Blank is the app's default.
 TIMING = (
-    ('overview_duration', 'Each page', "Seconds per page for any screen without its own time in Rotation."),
-    ('last_workout_detail_interval', 'Each workout stat', 'Seconds per stat on a workout page.'),
-    ('logo_duration', 'Logo at start-up', 'Seconds; 0 skips it.'),
+    ('overview_duration', 'Each page', 'For any screen without its own time in Rotation.'),
+    ('last_workout_detail_interval', 'Each workout stat', 'How long each stat shows on a workout page.'),
+    ('logo_duration', 'Logo at start-up', '0 skips it.'),
     ('refresh_interval', 'Check Peloton every',
-     'Seconds between checks for new workouts. 300 (5 minutes) is plenty; much less only adds load.'),
+     'How often to look for new workouts. 300 (5 minutes) is plenty; much less only adds load.'),
 )
 
 FONTS = ('stats', 'discipline', 'info', 'titles', 'countdown')
@@ -58,7 +58,7 @@ PANEL_FIELDS = (
      'choosing it, run the installer again, which offers to turn it off.'),
     ('pixel_mapper', 'Rotation', 'Which way up the panel is mounted.'),
     ('slowdown_gpio', 'GPIO slowdown', '0 to 4: higher for a faster Pi whose panel flickers.'),
-    ('pwm_lsb_nanoseconds', 'PWM timing (ns)', 'Lower is a faster refresh; raise it if colours look wrong.'),
+    ('pwm_lsb_nanoseconds', 'PWM timing', 'Lower is a faster refresh; raise it if colours look wrong.'),
 )
 SIZE_KEYS = ('rows', 'cols')
 SWITCH_KEYS = ('show_refresh', 'no_hardware_pulse')

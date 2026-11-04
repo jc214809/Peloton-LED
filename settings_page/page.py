@@ -134,6 +134,11 @@ select { appearance: none; padding-right: 34px; background-repeat: no-repeat; ba
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b94a5' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
 input:hover, select:hover { border-color: var(--text-3); }
 input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.unit { position: relative; display: block; }
+.unit input { padding-right: calc(20px + var(--u, 1) * 1ch); -moz-appearance: textfield; appearance: textfield; }
+.unit input::-webkit-outer-spin-button, .unit input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.unit-text { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3);
+  font-size: 13.5px; pointer-events: none; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
 .pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
 .pair span { color: var(--text-3); font-size: 13px; }
@@ -462,10 +467,19 @@ def _input(name, value='', kind='text', extra=''):
     return f'<input type="{kind}" id="{name}" name="{name}" value="{_attr(value)}"{extra}>'
 
 
-def _number(name, value, placeholder='', extra=''):
+def _unit(control, unit):
+    """A field with its unit ("s", "%") inside its right edge; the label still says what it is."""
+    if not unit:
+        return control
+    return (f'<span class="unit" style="--u: {len(unit)}">{control}'
+            f'<span class="unit-text" aria-hidden="true">{escape(unit)}</span></span>')
+
+
+def _number(name, value, placeholder='', extra='', unit=None):
     """A number field: decimals allowed (step any) unless extra says otherwise."""
-    return _input(name, number_text(value), 'number',
-                  f' inputmode="decimal" step="any" min="0" placeholder="{_attr(number_text(placeholder))}"{extra}')
+    return _unit(_input(name, number_text(value), 'number',
+                        f' inputmode="decimal" step="any" min="0" placeholder="{_attr(number_text(placeholder))}"'
+                        f'{extra}'), unit)
 
 
 def _options(name, options, chosen, extra=''):
@@ -502,7 +516,7 @@ def _screen_row(name, label, hint, on, display):
         time = f'<span class="time shared">As {escape(other)}</span>'
     else:
         seconds = _number(f'duration_{name}', durations.get(name), duration_fallback(display, name),
-                          f' aria-label="{_attr(label)} seconds"')
+                          f' aria-label="{_attr(label)} seconds"', 's')
         time = f'<span class="time">{seconds}</span>'
     switch = _switch_input(f'rotation_on_{name}', on, f' aria-label="Show {_attr(label)}"')
     grip = (f'<button type="button" class="grip js-only" hidden aria-label="Drag to reorder {_attr(label)}, '
@@ -521,6 +535,10 @@ def _schedule_switch(sid, label, schedule, hint, fields):
             + ('' if schedule else '<p class="hint schedule-note">Not set up yet: these are suggested starting '
                                    'values, saved only if you turn this on.</p>')
             + fields + '</div>')
+
+
+# Units for matrix settings that have one.
+MATRIX_UNITS = {'brightness': '%', 'pwm_lsb_nanoseconds': 'ns', 'limit_refresh': 'Hz'}
 
 
 def _matrix_field(key, label, hint, value):
@@ -542,8 +560,8 @@ def _matrix_field(key, label, hint, value):
     elif isinstance(default, str):
         control = _input(name, value or '', extra=f' class="mono" placeholder="{_attr(blank)}"')
     else:
-        control = _input(name, number_text(value), 'number',
-                         f' inputmode="numeric" step="1" placeholder="{_attr(blank)}"')
+        control = _unit(_input(name, number_text(value), 'number',
+                               f' inputmode="numeric" step="1" placeholder="{_attr(blank)}"'), MATRIX_UNITS.get(key))
     return _field(name, label, control, hint)
 
 
@@ -557,10 +575,10 @@ def _rider(index, rider, display):
                      extra=' placeholder="Their Peloton username"'))
         + _mini(f'rider_{index}_workouts', 'Workouts a week',
                 _number(f'rider_{index}_workouts', goals.get('workouts'), shared.get('workouts', 0),
-                        ' step="1" inputmode="numeric"'))
+                        ' step="1" inputmode="numeric"', 'workouts'))
         + _mini(f'rider_{index}_minutes', 'Minutes a week',
                 _number(f'rider_{index}_minutes', goals.get('minutes'), shared.get('minutes', 0),
-                        ' step="1" inputmode="numeric"'))
+                        ' step="1" inputmode="numeric"', 'min'))
         + _mini(f'rider_{index}_milestones', 'Milestones',
                 _input(f'rider_{index}_milestones', milestones_text(rider.get('milestones')),
                        extra=f' placeholder="{_attr(milestones_text(display.get("milestones")) or "None")}"')))
@@ -719,7 +737,8 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     ), 'list')
 
     timing = _section('timing', 'Timing', 'How long pages last, and how often the board checks Peloton.', ''.join(
-        _field(key, label, _number(key, display.get(key), DEFAULTS[key]), hint) for key, label, hint in TIMING
+        _field(key, label, _number(key, display.get(key), DEFAULTS[key], unit='s'), hint)
+        for key, label, hint in TIMING
     ), 'clock')
 
     shared_goals = section(display, 'weekly_goals')
@@ -727,17 +746,17 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     goals = _section('goals', 'Goals', 'Weekly goals and all-time milestones.', (
         '<h3>Everyone</h3>'
         + _field('goal_workouts', 'Workouts a week',
-                 _number('goal_workouts', shared_goals.get('workouts'), 0, ' step="1" inputmode="numeric"'),
+                 _number('goal_workouts', shared_goals.get('workouts'), 0, ' step="1" inputmode="numeric"', 'workouts'),
                  '0 or blank for no workouts goal.')
         + _field('goal_minutes', 'Minutes a week',
-                 _number('goal_minutes', shared_goals.get('minutes'), 0, ' step="1" inputmode="numeric"'),
+                 _number('goal_minutes', shared_goals.get('minutes'), 0, ' step="1" inputmode="numeric"', 'min'),
                  '0 or blank for no minutes goal.')
         + _field('milestones', 'Milestones',
                  _input('milestones', milestones_text(display.get('milestones')), extra=' placeholder="100, 250, 500"'),
                  'Total workout counts to celebrate, separated by commas.')
         + _field('milestone_step', 'And every',
                  _number('milestone_step', display.get('milestone_step'), DEFAULTS['milestone_step'],
-                         ' step="1" inputmode="numeric"'),
+                         ' step="1" inputmode="numeric"', 'workouts'),
                  'Workouts between milestones past the list (100: 100, 200, 300…). 0 for none.')
         + (('<h3>Each rider</h3><p class="hint">Blank uses Everyone\'s. Setting either weekly goal gives the '
             'rider their own pair (the other blank is no goal).</p>'
@@ -772,10 +791,10 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
                'For the schedules, the week\'s start and today\'s date. Like America/New_York.')
         + _schedule_switch('brightness_schedule', 'Day and night brightness', bright, 'Dim the panel at night.',
                            '<div class="schedule">'
-                           + _mini('bright_day', 'Day brightness', _input('bright_day', b.get('day', 80), 'number', level))
+                           + _mini('bright_day', 'Day brightness', _unit(_input('bright_day', b.get('day', 80), 'number', level), '%'))
                            + _mini('day_start', 'Day starts', _input('day_start', b.get('day_start', '07:00'), 'time'))
                            + _mini('bright_night', 'Night brightness',
-                                   _input('bright_night', b.get('night', 15), 'number', level))
+                                   _unit(_input('bright_night', b.get('night', 15), 'number', level), '%'))
                            + _mini('night_start', 'Night starts',
                                    _input('night_start', b.get('night_start', '22:00'), 'time'))
                            + '</div>')
@@ -784,9 +803,9 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
                            '<div class="schedule three">'
                            + _mini('quiet_start', 'From', _input('quiet_start', q.get('quiet_start', '23:00'), 'time'))
                            + _mini('quiet_end', 'Until', _input('quiet_end', q.get('quiet_end', '05:00'), 'time'))
-                           + _mini('quiet_interval', 'Check every (seconds)',
-                                   _input('quiet_interval', q.get('quiet_interval', 3600), 'number',
-                                          ' min="1" step="1" inputmode="numeric"'))
+                           + _mini('quiet_interval', 'Check every',
+                                   _unit(_input('quiet_interval', q.get('quiet_interval', 3600), 'number',
+                                                ' min="1" step="1" inputmode="numeric"'), 's'))
                            + '</div>')
     ), 'sun')
 

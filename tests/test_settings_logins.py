@@ -250,7 +250,7 @@ def test_saving_logins_writes_auth_env_and_updates_pushover_at_once(board, monke
     import logging
     settings_log = logging.getLogger('peloton-led.settings')  # "peloton-led" may not propagate to caplog's root
     settings_log.addHandler(caplog.handler)
-    monkeypatch.setattr(settings_log, 'level', logging.INFO)
+    caplog.set_level(logging.INFO, logger='peloton-led.settings')  # setLevel clears the logger's cache
     board.sign_in()
     status, headers, _ = board.request('/credentials', {
         'cred_0_name': 'Joel', 'cred_0_password': 'brand-new-pass', 'cred_1_name': 'Jen',
