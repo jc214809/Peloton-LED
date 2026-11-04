@@ -294,8 +294,9 @@ def run_multi_user_loop(manager, profiles, display, active, cycles=0):
         rivals = weekly_rivals(profiles)
         for index, profile in enumerate(profiles):
             active['dashboard'] = profile['dashboard']
-            # The head-to-head page covers everyone, so show it once per cycle.
-            run_display_loop(manager, profile['dashboard'], display,
+            # The head-to-head page covers everyone, so show it once per cycle. Each rider's
+            # rotation uses their own display settings (weekly goals, milestones, journey).
+            run_display_loop(manager, profile['dashboard'], profile.get('display', display),
                              profile.get('username'), cycles=1,
                              rivals=rivals if index == 0 else None, first_pass=completed)
         completed += 1
@@ -317,7 +318,7 @@ def configured_profiles(config, options):
     display = config['display']
     users = config.get('users')
     if not users:
-        return [{'name': 'default', 'username': options.username,
+        return [{'name': 'default', 'username': options.username, 'display': display,
                  'dashboard': Dashboard(options.cookies, display, demo=options.demo,
                      demo_login_needed=options.demo_login_needed)}]
     config_dir = Path(options.config).with_suffix('.json').expanduser().resolve().parent
@@ -344,7 +345,7 @@ def configured_profiles(config, options):
             if not log_path.is_absolute():
                 log_path = config_dir / log_path
             user_display['log_path'] = str(log_path)
-        profiles.append({'name': user['name'], 'username': user.get('username'),
+        profiles.append({'name': user['name'], 'username': user.get('username'), 'display': user_display,
                          'dashboard': Dashboard(token_path, user_display,
                              demo=options.demo, demo_login_needed=options.demo_login_needed)})
     return profiles

@@ -358,6 +358,8 @@ def test_multi_user_loop_runs_complete_rotations_in_configured_order():
     assert [(call.args[1], call.args[3], call.kwargs['cycles'], call.kwargs['first_pass'])
             for call in run.call_args_list] == [
                 (first, None, 1, 0), (second, 'Second Rider', 1, 0)]
+    # A profile without its own display settings uses the shared ones.
+    assert all(call.args[2] == {} for call in run.call_args_list)
     assert active['dashboard'] is second
     # Each cycle is the next pass for every rider, so their streak views alternate.
     with patch('peloton_led.run_display_loop') as run:
@@ -811,3 +813,41 @@ def test_privileges_are_checked_right_after_the_matrix_is_created():
     create = text.index("matrix = RGBMatrix(options=led_matrix_options(options, config['matrix']))")
     check = text.index('    ensure_privileges_dropped()\n')
     assert create < check < text.index('profiles = configured_profiles(config, options)')
+
+
+def test_each_rider_rotation_uses_their_own_goals_milestones_and_journey(tmp_path):
+    # The loop passed the shared display to every rider, so per-rider weekly goals never showed:
+    # the shared section had none, and a 0 goal makes no goal page.
+    from types import SimpleNamespace
+    options = SimpleNamespace(config=str(tmp_path / 'config.json'), demo=True, demo_login_needed=False,
+                              cookies='cookies.txt', username=None)
+    config = load_config_for_test({'users': [
+        {'name': 'Joel', 'weekly_goals': {'workouts': 5, 'minutes': 300}, 'milestones': [100, 250, 500]},
+        {'name': 'Jen', 'weekly_goals': {'workouts': 7, 'minutes': 0}},
+        {'name': 'Kid'}]}, tmp_path)
+    joel, jen, kid = configured_profiles(config, options)
+    assert joel['display']['weekly_goals'] == {'workouts': 5, 'minutes': 300}
+    assert kid['display']['weekly_goals'] == config['display']['weekly_goals']  # the shared default
+    shown = {}
+    with patch('peloton_led.run_display_loop',
+               side_effect=lambda manager, dashboard, display, *a, **k: shown.setdefault(dashboard, display)):
+        run_multi_user_loop(Mock(), [joel, jen, kid], config['display'], {}, cycles=1)
+    assert shown[joel['dashboard']] is joel['display'] and shown[jen['dashboard']] is jen['display']
+
+    def goals(profile):
+        dashboard = Mock(should_celebrate_pr=Mock(return_value=False), pending_milestones=Mock(return_value=[]))
+        snapshot = {'summaries': [], 'status': 'ready', 'totals': {}, 'weekly_progress': {'workouts': 2, 'minutes': 90}}
+        return [(state['current'], state['target'], state['unit'])
+                for name, state, _ in build_rotation_pages(snapshot, dashboard, profile['display'], 'Rider', 32)
+                if name == 'goal' and not state.get('milestone')]
+    assert goals(joel) == [(2, 5, 'workouts'), (90, 300, 'minutes')]
+    assert goals(jen) == [(2, 7, 'workouts')]  # a 0 goal shows no page
+    assert goals(kid) == []
+
+
+def load_config_for_test(config, tmp_path):
+    import json
+    from peloton.config import load_config
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps(config))
+    return load_config(path)
