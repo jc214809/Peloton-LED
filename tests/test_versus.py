@@ -131,6 +131,14 @@ def test_versus_fits_both_boards(height, riders):
         assert GOLD in {c for _, c in matrix.image.getcolors(64 * 64)}
 
 
+@pytest.mark.parametrize('height', [32, 64])
+def test_leader_trophy_is_not_clipped_at_the_top(height):
+    matrix = render(height, [JOEL, JEN], weekday=2)
+    # The trophy's rim is a solid 7-pixel gold row; the gold values never are.
+    assert any(all(matrix.image.getpixel((x + dx, y)) == GOLD for dx in range(7))
+               for y in range(12) for x in range(57))
+
+
 def test_versus_tie_has_no_gold():
     matrix = render(64, [JEN, {**JEN, 'name': 'Joel'}])
     assert GOLD not in {c for _, c in matrix.image.getcolors(64 * 64)}
