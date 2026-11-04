@@ -708,3 +708,71 @@ def test_gpio_mapping_check_records_the_mapping_for_the_audio_check(tmp_path):
     text = (ROOT / 'peloton-install.sh').read_text()
     # Asked right after the mapping is known, before the install changes anything.
     assert text.index('\ncheck_gpio_mapping\n') < text.index('\ncheck_pwm_audio\n') < text.index('apt-get update')
+
+
+def test_settings_page_unit_runs_its_own_writable_service():
+    unit = (ROOT / 'packaging' / 'systemd' / 'peloton-settings.service').read_text()
+    # Root to save the live config whoever owns it and to restart the display; group
+    # peloton-led so the PIN in its runtime folder is readable by the display.
+    assert 'User=root' in unit and 'Group=peloton-led' in unit
+    assert ('-m settings_page.server --config ${PELOTON_CONFIG} --auth-env /etc/peloton-led/auth.env '
+            '--token-base /etc/peloton-led --cookies /var/lib/peloton-led/cookies.txt') in unit
+    assert 'Environment=PELOTON_CONFIG=/etc/peloton-led/config.json' in unit
+    assert 'RuntimeDirectory=peloton-led-settings' in unit and 'RuntimeDirectoryMode=0750' in unit
+    assert 'ProtectSystem=strict' in unit and 'ProtectHome=read-only' in unit
+    assert 'ReadWritePaths=/etc/peloton-led' in unit and 'NoNewPrivileges=true' in unit
+    # The logins are never loaded into its environment: it reads auth.env itself, in-process.
+    assert '\nEnvironmentFile=' not in unit
+    assert 'WantedBy=multi-user.target' in unit
+    from settings_page.pins import PIN_FILE
+    assert PIN_FILE == '/run/peloton-led-settings/pin'
+
+
+def test_installer_installs_verifies_and_points_the_settings_page_at_the_live_config():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    assert 'packaging/systemd/peloton-settings.service" "$UNIT_DIR/peloton-settings.service"' in text
+    assert '"$UNIT_DIR/peloton-settings.service"' in text.split('systemd-analyze verify', 1)[1].split('\n#', 1)[0]
+    assert ("printf '[Service]\\nEnvironment=PELOTON_CONFIG=%s\\nReadWritePaths=%s\\n' "
+            '"$LIVE_CONFIG" "$SOURCE_DIR"') in text
+    assert 'rm -f "$UNIT_DIR/peloton-settings.service.d/project-config.conf"' in text
+    assert text.index('resolve_settings_page\n') < text.index('apt-get update')
+    assert text.index('\nstart_or_restart_display\nstart_settings_page\n') > text.index('systemctl daemon-reload')
+    assert '--settings-page) SETTINGS_PAGE=true' in text and '--no-settings-page) SETTINGS_PAGE=false' in text
+
+
+def _settings_page_mode(tmp_path, flag, installed, enabled):
+    unit_dir = tmp_path / 'units'
+    unit_dir.mkdir(exist_ok=True)
+    if installed:
+        (unit_dir / 'peloton-settings.service').write_text('')
+    env = _fake_bin(tmp_path, systemctl=f'exit {0 if enabled else 1}')
+    script = (f'set -Eeuo pipefail\nUNIT_DIR="{unit_dir}"\nSETTINGS_PAGE="{flag}"\n'
+              f'{_installer_function("resolve_settings_page")}resolve_settings_page\necho "$SETTINGS_PAGE"\n')
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+@pytest.mark.parametrize('flag,installed,enabled,expected', [
+    ('', False, False, 'true'),   # fresh install: on
+    ('', True, True, 'true'),     # upgrade of a board with it on
+    ('', True, False, 'false'),   # an earlier --no-settings-page is kept
+    ('true', True, False, 'true'),
+    ('false', True, True, 'false'),
+])
+def test_settings_page_is_on_unless_turned_off(tmp_path, flag, installed, enabled, expected):
+    assert _settings_page_mode(tmp_path, flag, installed, enabled) == expected
+
+
+@pytest.mark.parametrize('on,expected', [
+    (True, ['systemctl enable peloton-settings.service', 'systemctl restart peloton-settings.service']),
+    (False, ['systemctl disable --now peloton-settings.service']),
+])
+def test_start_settings_page(tmp_path, on, expected):
+    log = tmp_path / 'calls.log'
+    env = _fake_bin(tmp_path, systemctl=f'echo "systemctl $*" >> "{log}"')
+    script = (f'set -Eeuo pipefail\nSETTINGS_PAGE={str(on).lower()}\n'
+              f'{_installer_function("start_settings_page")}start_settings_page\n')
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stderr
+    assert log.read_text().splitlines() == expected

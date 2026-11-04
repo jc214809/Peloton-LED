@@ -108,3 +108,12 @@ def test_shipped_example_configs_load_without_retired_settings(tmp_path, caplog)
             display = load_config(copy)['display']
         assert 'no longer do anything' not in caplog.text, name
         assert display['history_batch_size'] == 100 and display['recent_fetch_size'] == 20, name
+
+
+def test_validate_config_checks_a_dict_without_a_file():
+    from peloton.config import validate_config
+    config = {'display': {'rotation': ['goals']}}
+    checked = validate_config(config, 'from the settings page')
+    assert checked['display']['rotation'] == ['goals'] and checked['matrix']['rows'] == 64
+    with pytest.raises(ValueError, match='^from the settings page: display.rotation must contain'):
+        validate_config({'display': {'rotation': ['nope']}}, 'from the settings page')

@@ -12,6 +12,7 @@ behaves once it's running; this document is only about getting it installed.
 - [Getting a Peloton token](#getting-a-peloton-token)
 - [Raspberry Pi managed install](#raspberry-pi-managed-install)
 - [Installer options reference](#installer-options-reference)
+- [Settings page](#settings-page)
 - [Upgrading](#upgrading)
 - [Uninstalling](#uninstalling)
 - [Two users on one board](#two-users-on-one-board)
@@ -448,6 +449,8 @@ sudo ./peloton-install.sh [options]
 | `--driver REF` | Git branch, tag, or commit of `rpi-rgb-led-matrix` to build (default: `master`) |
 | `--manual` | The default: never start at boot or during install; you start/stop the display yourself (see [above](#manual-mode-the-default)). Needed on upgrade only to switch a board that currently starts at boot |
 | `--start-at-boot` | Enable the display at boot and start it now — for a Pi that drives nothing else |
+| `--no-settings-page` | Turn off the [settings page](#settings-page) (on by default). Remembered: upgrades keep it off until `--settings-page` |
+| `--settings-page` | Turn the settings page back on |
 | `--no-start` | With `--start-at-boot`: enable the units but don't start them yet — useful when staging a config before going live. A display that is already running is still restarted on the new code |
 | `-h`, `--help` | Print usage and exit |
 
@@ -484,6 +487,86 @@ file in your checkout is the one that runs.
 `config.json` isn't tracked by git, so `git pull` never overwrites it. Start
 from `config.json-example`. Re-run the installer after moving the checkout,
 since the mapping records its path.
+
+Most settings can also be changed from a browser on the
+[settings page](#settings-page).
+
+## Settings page
+
+The installer runs a small web page on every board, `peloton-settings.service`,
+at **http://&lt;board&gt;.local:8080** (the installer prints the address). It edits
+the live `config.json` from a phone or laptop:
+
+- **Rotation**: which screens show, in what order, and each one's seconds
+- **Timing**: default page time, workout stat time, logo, how often to check Peloton
+- **Goals**: everyone's weekly goals and milestones, and each rider's own
+- **Name and text**: the fallback name, its font and colour, compact 64x32
+  workout pages, the streak reminder day
+- **Schedules**: time zone, day and night brightness, quiet hours
+- **Panel**: size, brightness, GPIO mapping, rotation, slowdown, PWM timing;
+  the rest of the driver settings under **Advanced**, with debug logging
+
+- **Logins** (top of the page): each rider's login health, renewal on demand,
+  and write-only credentials (below)
+
+Riders' names, token and cache paths, login variable names and the journey
+route aren't on the page and are kept as they are.
+
+**Logins.** For each rider: whether the token works and until when, the
+refresh chain's age and renewals, whether the padlock is on and the reason
+renewal gave, the last browser-login try, and whether an email and password
+are saved (never what they are). Above them: the board's renewal mode, the
+last renewal run and its result, the next scheduled check, and how many runs
+in a row have failed. When a rider needs a fresh login on a board without a
+browser, the card shows the `scripts/seed_board.sh user@board.local` command
+to run from your computer.
+
+- *Renew now* starts `peloton-token-refresh.service` straight away (the same
+  run the hourly timer does, with its once-a-day limit on browser logins);
+  reload the page for the result.
+- *Send a test alert* sends a Pushover message, at most once a minute.
+- *Change logins* sets a rider's Peloton email or password, or the Pushover
+  keys, in `/etc/peloton-led/auth.env`. Fields are always empty; blank keeps
+  what's saved; nothing saved is ever sent back to a browser or written to a
+  log (the log names only what changed). The file stays root-only (600) and
+  every other line in it is kept; no backup copy is made. Renewal uses the new
+  values from its next run. Passwords only matter on a board with a browser
+  (`--auto-token`); a `--no-browser` board renews from seeded tokens.
+- Changing logins always takes the PIN, even on the Wi-Fi setup hotspot.
+- The page is plain HTTP: anything typed crosses your network unencrypted, so
+  only change logins on your own Wi-Fi.
+
+**Signing in.** Press *Show a PIN on the board*: a four-digit PIN appears on
+the panel for two minutes; type it in and that browser stays signed in for an
+hour. A PIN allows five guesses, and a new one comes only after the last runs
+out. With `PUSHOVER_APP_TOKEN` and `PUSHOVER_USER_KEY` in `auth.env`, *Send the
+PIN to my phone* sends it by Pushover too (at most once a minute). In manual
+mode the display may not be running, so the PIN can't show on the panel; the
+page says so (use Pushover, or `sudo systemctl start peloton-led`).
+
+**Saving** checks the whole config with the display's own rules, keeps the old
+file as `config.json.bak` beside it, writes the new one in one step with the
+old owner and mode, and restarts the display if it's running. A manual-mode
+board that's off uses the new settings the next time it starts. Because the
+settings page is its own service, a config that stops the display can still
+be fixed here.
+
+**Wi-Fi setup.** On a board set up with LightningLane-Live-LED's
+`board-setup.sh`, comitup opens an open `<board>-setup` hotspot when no known
+Wi-Fi is in range. While it's up, the display shows *Wi-Fi setup / Join
+<board>-setup*, then *Settings / Browse to 10.41.0.1:8080*, until the board is
+back on a network; comitup's own page (http://10.41.0.1) picks the network.
+Anyone on the hotspot gets the settings page with no PIN (they're in the room).
+
+Which file it edits: the checkout's `config.json` when the installer found one
+(a `project-config.conf` drop-in under
+`/etc/systemd/system/peloton-settings.service.d/` gives its path and makes that
+folder writable to this service only), else `/etc/peloton-led/config.json`.
+It runs as root, so it can write the file whoever owns it, edit `auth.env`, read the tokens in
+`/var/lib/peloton-led` and restart `peloton-led.service` and start token renewal; the PIN goes in `/run/peloton-led-settings/pin`
+(group `peloton-led`, gone when the service stops). Logs:
+`journalctl -u peloton-settings.service`. Turn it off with
+`--no-settings-page`.
 
 ## Upgrading
 

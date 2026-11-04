@@ -15,8 +15,10 @@ from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
 from utils.utils import args, ensure_privileges_dropped, led_matrix_options
 from utils.username import resolve_display_username
+from utils.wifi_setup import hotspot_name
 from display.ui.last_workout_screen import (LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details,
                                            stats_phase_seconds)
+from display.ui.settings_pin import shown_pin
 from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
 from display.ui.streak_screen import streak_views
 
@@ -25,6 +27,8 @@ ROOT = Path(__file__).resolve().parent
 DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
                     'next_milestone', 'lifetime', 'journey', 'heatmap',
                     'milestones', 'goals')
+# Seconds per Wi-Fi setup page; the hotspot is rechecked between pages.
+WIFI_SETUP_PAGE_SECONDS = 5
 
 
 def scheduled_brightness(display, now=None, timezone_name=None):
@@ -219,16 +223,22 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
     return [page for section in rotation for page in groups[section]]
 
 
+def _overlays(dashboard):
+    """What's drawn over every screen: the login padlock and the settings page's PIN."""
+    return (dashboard.login_indicator_required if dashboard else None, shown_pin())
+
+
 def show_and_wait(manager, name, state, duration, dashboard=None):
     manager.show(name, state)
     manager.tick(state)
     deadline = time.monotonic() + duration
-    previous = dashboard.login_indicator_required if dashboard else None
+    previous = _overlays(dashboard)
     while time.monotonic() < deadline:
         time.sleep(min(0.2, max(0, deadline - time.monotonic())))
-        if dashboard and dashboard.login_indicator_required != previous:
-            # Repaint when authentication changes, even during a long screen.
-            previous = dashboard.login_indicator_required
+        current = _overlays(dashboard)
+        if current != previous:
+            # Repaint when authentication or the settings PIN changes, even during a long screen.
+            previous = current
             manager.matrix.Clear()
             manager.tick(state)
         elif getattr(getattr(manager, 'current', None), 'animated', False) is True:
@@ -260,10 +270,27 @@ def run_display_loop(manager, dashboard, display, username_override=None, cycles
             time.sleep(0.05)  # Avoid a busy loop when all durations are zero.
 
 
+def show_wifi_setup_while_needed(manager):
+    """While comitup's Wi-Fi setup hotspot is up (no known Wi-Fi in range), show how to join it
+    and where the settings page is, until the board is on a network. Returns whether it showed."""
+    name = hotspot_name()
+    if not name:
+        return False
+    logger.info('No known Wi-Fi: showing the setup screen for the %s hotspot.', name)
+    page = 0
+    while name:
+        show_and_wait(manager, 'wifi_setup', {'name': name, 'page': page}, WIFI_SETUP_PAGE_SECONDS)
+        page = 1 - page
+        name = hotspot_name()
+    logger.info('Wi-Fi setup hotspot down; carrying on.')
+    return True
+
+
 def run_multi_user_loop(manager, profiles, display, active, cycles=0):
     """Show one complete rotation per user, in configured order."""
     completed = 0
     while not cycles or completed < cycles:
+        show_wifi_setup_while_needed(manager)
         rivals = weekly_rivals(profiles)
         for index, profile in enumerate(profiles):
             active['dashboard'] = profile['dashboard']
@@ -356,6 +383,7 @@ def main():
     from display.ui.journey_screen import JourneyScreen
     from display.ui.heatmap_screen import HeatmapScreen
     from display.ui.streak_risk_screen import StreakRiskScreen
+    from display.ui.wifi_setup_screen import WifiSetupScreen
 
     matrix = RGBMatrix(options=led_matrix_options(options, config['matrix']))
     ensure_privileges_dropped()
@@ -383,6 +411,7 @@ def main():
     manager.register('journey', JourneyScreen())
     manager.register('heatmap', HeatmapScreen())
     manager.register('streak_risk', StreakRiskScreen())
+    manager.register('wifi_setup', WifiSetupScreen())
     configured_logo = display.get('logo_path')
     logo = Path(configured_logo) if configured_logo else None
     for profile in profiles:

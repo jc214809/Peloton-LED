@@ -197,6 +197,13 @@ def load_config(path='config', allow_missing=False):
             config = json.loads(path.read_text(encoding='utf-8'))
         except (OSError, json.JSONDecodeError) as exc:
             raise ValueError(f'Could not read config {path}: {exc}') from exc
+    return validate_config(config, path)
+
+
+def validate_config(config, path='config.json'):
+    """Check a parsed config and fill in display defaults; raises ValueError naming
+    the first problem (prefixed with path). Changes config in place and returns it,
+    so pass a copy to check one without changing it (the settings page does)."""
     if not isinstance(config, dict) or not isinstance(config.get('display', {}), dict):
         raise ValueError(f'{path}: config and display must be JSON objects')
     users = config.get('users')

@@ -432,7 +432,8 @@ Live mode cycles through every completed workout on the latest active day. Every
 - `peloton/api.py`: authenticated requests and bounded history pagination
 - `peloton/timestamps.py`, `selection.py`, `records.py`, `totals.py`: shared data and lifetime pagination rules
 - `peloton/summaries.py`: metric normalization for screens and reports
-- `display/ui/`: screens and login indicator
+- `display/ui/`: screens, the login indicator, the settings PIN overlay and the Wi-Fi setup screen
+- `settings_page/`: the board's settings page (config form, PIN sign-in, its own service)
 - `driver/`: hardware/emulator selection
 - `scripts/refresh_cookies.py`: browser login, refresh-token renewal, board seeding, and verified token saving
 - `scripts/render_demo.py`: reproducible screen preview
@@ -454,6 +455,8 @@ See [implementation status and validation evidence](docs/phase-1-2-status.md).
 `sudo ./peloton-install.sh` installs Peloton LED as a managed systemd service under a dedicated, unprivileged account, and is also how you upgrade an existing install. See the **[Installation Guide](docs/install.md#raspberry-pi-managed-install)** for the full walkthrough: directory layout, every installer flag, automatic token renewal (`--auto-token`), upgrading, uninstalling, and diagnostic commands.
 
 On the Pi, edit `config.json` in the checkout and restart the service; the services read it directly. See [Editing the config](docs/install.md#editing-the-config).
+
+Or change it from a browser: the **[settings page](docs/install.md#settings-page)** at `http://<board>.local:8080` covers each rider's login health (with Renew now and write-only credentials), the rotation, durations, schedules, goals (per rider too) and the panel. Sign in with the PIN the board shows; saved passwords and keys are never shown.
 
 ## Two users on one board
 

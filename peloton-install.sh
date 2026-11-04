@@ -29,6 +29,9 @@ NO_START=false
 MANUAL=""
 KEPT_BOOT_START=false
 RECONFIGURE=false
+# true or false; empty until resolve_settings_page: a flag, or the board's.
+SETTINGS_PAGE=""
+SETTINGS_PORT=8080
 
 usage() {
     cat <<'USAGE'
@@ -65,8 +68,34 @@ Options:
                          Upgrades of a board that already starts at boot keep
                          doing so unless --manual is given.
   --start-at-boot       Start the display at boot and now (a dedicated board)
+  --no-settings-page    Turn off the settings page (http://<board>.local:8080),
+                         which is on by default; remembered on upgrades
+  --settings-page       Turn it back on
   -h, --help            Show this help
 USAGE
+}
+
+# The settings page (peloton-settings.service) is on unless a flag says otherwise, or an earlier
+# --no-settings-page left it installed but disabled.
+resolve_settings_page() {
+    if [[ -z "$SETTINGS_PAGE" ]]; then
+        SETTINGS_PAGE=true
+        if [[ -f "$UNIT_DIR/peloton-settings.service" ]] \
+            && ! systemctl is-enabled --quiet peloton-settings.service 2>/dev/null; then
+            SETTINGS_PAGE=false
+        fi
+    fi
+}
+
+# Started at boot whatever the display's mode (it drives no panel), and restarted for an
+# upgrade's new code; or stopped and disabled.
+start_settings_page() {
+    if [[ "$SETTINGS_PAGE" == true ]]; then
+        systemctl enable peloton-settings.service
+        systemctl restart peloton-settings.service
+    else
+        systemctl disable --now peloton-settings.service 2>/dev/null || true
+    fi
 }
 
 # Manual (start on demand) is the default. An upgrade with no mode flag keeps a
@@ -277,6 +306,8 @@ while (($#)); do
         --no-start) NO_START=true; shift ;;
         --manual) MANUAL=true; shift ;;
         --start-at-boot) MANUAL=false; shift ;;
+        --settings-page) SETTINGS_PAGE=true; shift ;;
+        --no-settings-page) SETTINGS_PAGE=false; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -288,6 +319,7 @@ done
 command -v systemctl >/dev/null || { echo "systemd is required." >&2; exit 1; }
 resolve_start_mode
 resolve_token_mode
+resolve_settings_page
 check_gpio_mapping
 check_pwm_audio
 # Before anything changes, so a display that crashes mid-upgrade still counts.
@@ -323,7 +355,7 @@ install -d -m 0750 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR"
 # the folder lets it rotate the log after dropping to $APP_USER.
 install -d -m 0755 -o "$APP_USER" -g "$APP_USER" "$STATE_DIR/logs"
 
-for directory in assets display driver models peloton prepared_logos scripts utils packaging; do
+for directory in assets display driver models peloton prepared_logos scripts settings_page utils packaging; do
     rm -rf "$APP_DIR/$directory"
     cp -a "$SOURCE_DIR/$directory" "$APP_DIR/$directory"
 done
@@ -403,6 +435,7 @@ chmod -R a+rX "$APP_DIR"
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-led.service" "$UNIT_DIR/peloton-led.service"
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-token-refresh.service" "$UNIT_DIR/peloton-token-refresh.service"
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-token-refresh.timer" "$UNIT_DIR/peloton-token-refresh.timer"
+install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-settings.service" "$UNIT_DIR/peloton-settings.service"
 
 # The checkout's config.json, when present, is the live config: the services
 # see it at $CONFIG_DIR/config.json through a read-only bind mount (below).
@@ -413,7 +446,8 @@ fi
 (cd "$APP_DIR" && "$APP_DIR/venv/bin/python" -c \
     "import sys; from peloton.config import load_config; load_config(sys.argv[1])" "$LIVE_CONFIG")
 systemd-analyze verify "$UNIT_DIR/peloton-led.service" \
-    "$UNIT_DIR/peloton-token-refresh.service" "$UNIT_DIR/peloton-token-refresh.timer"
+    "$UNIT_DIR/peloton-token-refresh.service" "$UNIT_DIR/peloton-token-refresh.timer" \
+    "$UNIT_DIR/peloton-settings.service"
 # Manual mode: tie token renewal to the display's lifetime instead of boot.
 # Starting the display runs one token check and starts the hourly timer;
 # stopping the display stops the timer.
@@ -426,6 +460,15 @@ for unit in peloton-led.service peloton-token-refresh.service; do
     printf '[Service]\nBindReadOnlyPaths=-%s:%s\n' "$SOURCE_DIR/config.json" "$CONFIG_DIR/config.json" \
         > "$UNIT_DIR/$unit.d/project-config.conf"
 done
+# The settings page writes the live config itself (no bind: a read-only bind can't be saved to),
+# so it gets the checkout's path and that folder, for the atomic write and its .bak.
+install -d -m 0755 "$UNIT_DIR/peloton-settings.service.d"
+if [[ "$LIVE_CONFIG" == "$SOURCE_DIR/config.json" ]]; then
+    printf '[Service]\nEnvironment=PELOTON_CONFIG=%s\nReadWritePaths=%s\n' "$LIVE_CONFIG" "$SOURCE_DIR" \
+        > "$UNIT_DIR/peloton-settings.service.d/project-config.conf"
+else
+    rm -f "$UNIT_DIR/peloton-settings.service.d/project-config.conf"
+fi
 if [[ "$MANUAL" == true && "$AUTO_TOKEN" == true ]]; then
     install -d -m 0755 "$UNIT_DIR/peloton-led.service.d" "$UNIT_DIR/peloton-token-refresh.timer.d"
     printf '[Unit]\nWants=peloton-token-refresh.service peloton-token-refresh.timer\n' \
@@ -462,6 +505,7 @@ print('\n'.join(str(user_token_path(user, sys.argv[3])) for user in users) if us
 PY
 )
 start_or_restart_display
+start_settings_page
 
 rider_summary="$("$APP_DIR/venv/bin/python" - "$LIVE_CONFIG" "$APP_DIR" "$CONFIG_DIR" <<'PY'
 import json, sys
@@ -488,6 +532,12 @@ Peloton LED installation complete.
   Tokens:   $TOKEN_MODE ($TOKEN_MODE_SOURCE; override with --auto-token,
             --no-browser or --no-auto-token)
 EOF
+if [[ "$SETTINGS_PAGE" == true ]]; then
+    cat <<EOF
+  Settings: http://$(hostname).local:$SETTINGS_PORT   (a PIN shows on the panel to sign in;
+            --no-settings-page turns it off)
+EOF
+fi
 if [[ "$MANUAL" == true ]]; then
     cat <<EOF
   Manual:   not started at boot; stop whatever else drives the panel, then
