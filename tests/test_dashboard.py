@@ -418,3 +418,27 @@ def test_damaged_records_table_is_dropped_without_losing_cache(tmp_path):
     restarted = Dashboard(token, {}, client_factory=lambda _: Mock())
     assert restarted.snapshot()['summaries'][0]['workout_id'] == 'demo-cycling'
     assert restarted.snapshot()['personal_records'] == {}
+
+
+def test_a_workout_under_a_minute_is_not_a_latest_workout(tmp_path):
+    # A 41-second "Just Walk" (a start tapped by accident) became the first latest-workout page.
+    from datetime import datetime, timedelta, timezone
+
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    day = datetime.now(timezone.utc) - timedelta(days=7)
+    earlier = day - timedelta(days=1)
+
+    def workout(identity, start, seconds):
+        return {'id': identity, 'status': 'COMPLETE', 'start_time': start.timestamp(),
+                'end_time': start.timestamp() + seconds if seconds is not None else None,
+                'fitness_discipline': 'walking'}
+    client.history = [workout('walk', day.replace(hour=12, minute=15), 3611),
+                      workout('tap', day.replace(hour=12, minute=14), 41),
+                      workout('unknown-length', day.replace(hour=17), None)]
+    client.get_perf_graph.return_value = {'duration': 1200}
+    dashboard.refresh()
+    assert [s['workout_id'] for s in dashboard.snapshot()['summaries']] == ['walk', 'unknown-length']
+    # Alone on its day, it doesn't make that day the latest: the day before shows.
+    client.history = [workout('tap', day.replace(hour=12), 41), workout('yesterday', earlier.replace(hour=9), 1800)]
+    dashboard.refresh()
+    assert [s['workout_id'] for s in dashboard.snapshot()['summaries']] == ['yesterday']

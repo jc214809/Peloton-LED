@@ -29,6 +29,25 @@ def is_completed(workout):
     return status is None or str(status).lower() in ('complete', 'completed')
 
 
+# Shorter than this, a workout is taken for a start tapped by accident: it isn't shown as a latest
+# workout (it still counts in totals and streaks, as Peloton counts it).
+BRIEF_WORKOUT_SECONDS = 60
+
+
+def workout_seconds(workout):
+    """How long a workout ran, from its start and end times; None when either is missing."""
+    start, end = workout.get('start_time'), workout.get('end_time')
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0 for v in (start, end)):
+        return None
+    return end - start
+
+
+def is_brief(workout):
+    """A workout that ran under BRIEF_WORKOUT_SECONDS. Unknown lengths aren't brief."""
+    seconds = workout_seconds(workout)
+    return seconds is not None and seconds < BRIEF_WORKOUT_SECONDS
+
+
 def ordered_workouts(workouts, tzname=None):
     seen, result = set(), []
     for workout in workouts:

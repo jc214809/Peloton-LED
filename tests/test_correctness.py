@@ -374,3 +374,26 @@ def test_discipline_stat_layouts_have_safe_fallbacks(discipline, expected_rows):
                'elevation_unit': 'ft', 'avg_incline': 2, 'avg_stroke_rate': 24,
                'row_split_sec_per_500m': 130, 'avg_output_w': 110, 'hr_max': 165}
     assert len(_middle_stats(summary)) == expected_rows
+
+
+@pytest.mark.parametrize('start,end,seconds,brief', [
+    (1000, 1041, 41, True), (1000, 1059, 59, True), (1000, 1060, 60, False), (1000, 4611, 3611, False),
+    (1000, None, None, False), (None, 1041, None, False), (1000, 0, None, False), (True, 1041, None, False),
+])
+def test_brief_workouts_are_under_a_minute_by_their_start_and_end(start, end, seconds, brief):
+    from peloton.selection import is_brief, workout_seconds
+    workout = {'start_time': start, 'end_time': end}
+    assert workout_seconds(workout) == seconds and is_brief(workout) is brief
+
+
+@pytest.mark.parametrize('instructor,shown', [
+    ({'id': 'abc', 'name': 'Cody Rigsby'}, 'Cody Rigsby'),
+    ({'id': 'abc', 'display_name': 'Cody'}, 'Cody'),
+    # Class-free workouts carry a placeholder named after the workout, with no ID.
+    ({'name': 'Just Walk'}, ''),
+    ({'id': '', 'name': 'Just Ride'}, ''),
+    (None, ''),
+])
+def test_a_placeholder_instructor_is_not_shown(instructor, shown):
+    summary = summarize_workout({'fitness_discipline': 'walking', 'ride': {'instructor': instructor}})
+    assert summary['instructor'] == shown

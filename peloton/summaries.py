@@ -190,7 +190,9 @@ def summarize_workout(workout, perf=None):
         'date_time': ts_to_local_str(stamp.timestamp(), workout.get('timezone')) if stamp else '',
         'tz': workout.get('timezone') or '', 'discipline': discipline,
         'title': ride.get('title') or workout.get('title') or workout.get('name') or 'Workout',
-        'instructor': instructor.get('name') or instructor.get('display_name') or '',
+        # Class-free workouts (Just Walk, Just Ride, free outdoor) carry a placeholder instructor
+        # named after the workout and with no ID; it isn't anyone, so it isn't shown.
+        'instructor': (instructor.get('name') or instructor.get('display_name') or '') if instructor.get('id') else '',
         'duration_min': round(duration / 60) if duration else None,
         'distance': distance, 'distance_unit': distance_unit,
         'avg_speed': speed, 'avg_speed_unit': speed_unit,
