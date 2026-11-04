@@ -87,7 +87,9 @@ Shown once at launch for `logo_duration` seconds (default 3), never again. The a
 
 ### `latest_workouts` — last active day's workouts
 
-One screen per completed workout on your **most recent active day**, newest first. That means the newest calendar date (in your timezone) with at least one completed workout. If you worked out today, you see today's workouts; if your last workout was a week ago, you see that whole day. In-progress workouts are left out.
+One screen per completed workout on your **most recent active day**, newest first. That means the newest calendar date (in your timezone) with at least one completed workout. If you worked out today, you see today's workouts; if your last workout was a week ago, you see that whole day. In-progress workouts are left out, and so are workouts under a minute (a start tapped by accident), which still count in your totals and streaks. A day whose only workout is under a minute doesn't count as your latest day.
+
+The intro shows the title without the length Peloton puts at its front, since the length is shown above it: "60 min 11 sec Just Walk" shows as 60 MIN / Just Walk. Class-free workouts (Just Walk, Just Ride, free outdoor sessions) have no instructor, so none is shown.
 
 Each screen opens with an **intro**: the discipline name in its color, class length, class title and instructor. It then shows **each stat once, one at a time**, finishing with the **output (or heart-rate) graph** and the **heart-rate zone bar** when the workout recorded them. Average heart rate and calories stay along the bottom. Each frame holds for `last_workout_detail_interval` seconds (default 4), and the graph and zone bar hold one second longer, so a cycling class with 8 stats (6 numbers, the graph and the zone bar) stays up for 38 s. On 64×32 there's no room for the instructor in the intro, so the instructor becomes the first stat instead.
 

@@ -216,3 +216,20 @@ def test_startup_logo_is_peloton_red(height):
     assert LogoMaskScreen().render(matrix)
     colors = {c for _, c in matrix.image.getcolors(64 * 64)}
     assert colors == {(0, 0, 0), PELOTON_RED}
+
+
+@pytest.mark.parametrize('title,expected', [
+    ('60 min 11 sec Just Walk', 'Just Walk'),           # was "11 sec Just Walk"
+    ('41 sec Just Walk', 'Just Walk'),                  # was left whole
+    ('162 min 49 sec Outdoor Walking', 'Outdoor Walking'),
+    ('20 min HIIT Ride', 'HIIT Ride'),
+    ('45 Min Power Zone Endurance Ride', 'Power Zone Endurance Ride'),
+    ('30 minutes Full Body', 'Full Body'),
+    ('10 min', '10 min'),                               # nothing but the length: kept
+    ('Minimalist Flow', 'Minimalist Flow'),
+    ('5 Minute Mindset', 'Mindset'),                    # the old pattern left "ute Mindset"
+    ('', ''), (None, ''),
+])
+def test_titles_lose_the_length_the_page_shows(title, expected):
+    from display.ui.last_workout_screen import title_without_length
+    assert title_without_length(title) == expected

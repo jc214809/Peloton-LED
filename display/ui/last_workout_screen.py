@@ -41,6 +41,17 @@ def _disc_color(discipline: str) -> graphics.Color:
     return _DISCIPLINE_COLORS.get(discipline.strip().lower(), _WHITE)
 
 
+# The length at the front of a title: "20 min HIIT Ride", and the free workouts Peloton names by their
+# exact length, "60 min 11 sec Just Walk" or "41 sec Just Walk". The page shows the length itself.
+_TITLE_LENGTH = re.compile(r'^\s*(?:\d+\s*min(?:ute)?s?\b\s*)?(?:\d+\s*sec(?:ond)?s?\b\s*)?', re.IGNORECASE)
+
+
+def title_without_length(title) -> str:
+    """A workout's title without the length it starts with; as it is when that's all there is."""
+    title = str(title or '').strip()
+    return _TITLE_LENGTH.sub('', title, count=1).strip() or title
+
+
 _SQUEEZE = {'.', ','}   # characters that get tight spacing on both sides
 _SQUEEZE_ADV = 3        # advance used for the squeeze char itself
 _SQUEEZE_PRE = 3        # advance used for the char immediately before a squeeze char
@@ -551,8 +562,7 @@ class LastWorkoutScreen(Screen):
                 _draw_text(matrix, text_font, x, 15, _BLUE, dur_text)
             if summary.get("is_pr"):
                 _draw_trophy(matrix, w - _TROPHY_W - 2, 9)
-            title = (summary.get("title") or "").strip()
-            title = re.sub(r'^\d+\s*min\s*', '', title, flags=re.IGNORECASE).strip() or title
+            title = title_without_length(summary.get("title"))
             title_lines = _wrap_two_lines(text_font, title, w - 4)
             _draw_short_lines(matrix, text_font, title_lines, 22, summary)
             if len(title_lines) < 2 and not rotating_details(summary, matrix.height):
@@ -637,7 +647,7 @@ class LastWorkoutScreen(Screen):
                 lines = [
                     (7, str(summary.get('discipline') or 'Workout'), _disc_color(discipline)),
                     (16, _fmt_duration(summary.get('duration_min')), _BLUE),
-                    (26, str(summary.get('title') or ''), _WHITE),
+                    (26, title_without_length(summary.get('title')), _WHITE),
                 ]
             for y, text, color in lines:
                 text = _truncate(text_font, text, w - (10 if summary.get('login_required') and y == 27 else 4))
@@ -689,8 +699,7 @@ class LastWorkoutScreen(Screen):
                 _draw_text(matrix, text_font, dur_x + dur_val_w + 1, dur_y, _BLUE, dur_label)
 
             # ── Lines 3–4: title below the duration with a visible gap ──────
-            title = (summary.get("title") or "").strip()
-            title_stripped = re.sub(r'^\d+\s*min\s*', '', title, flags=re.IGNORECASE).strip() or title
+            title_stripped = title_without_length(summary.get("title"))
             title_lines = _wrap_two_lines(text_font, title_stripped, w - 4)
             for i, line in enumerate(title_lines[:2]):
                 tx = max((w - _text_width(text_font, line)) // 2, 2)

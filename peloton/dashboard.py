@@ -13,7 +13,7 @@ from .api import PelotonClient, make_session
 from .cache import load_snapshot, save_snapshot
 from .config import renewal_failed_path
 from .demo import demo_data
-from .selection import last_active_day
+from .selection import is_brief, last_active_day
 from .summaries import summarize_workout
 from .timestamps import workout_date, workout_timestamp
 from .totals import extract_discipline_totals, parse_streaks
@@ -303,7 +303,9 @@ class Dashboard:
                 if self._log.claim(user_id):
                     self._log.save()
             workouts, total = self._fetch_recent(client, user_id, tz)
-            active_day = last_active_day(workouts, tz)
+            # A workout under a minute (a start tapped by accident) isn't a latest workout,
+            # and doesn't make its day the last active one on its own.
+            active_day = last_active_day([w for w in workouts if not is_brief(w)], tz)
             summaries = []
             for workout in active_day:
                 identity = workout.get('id')
