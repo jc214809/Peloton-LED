@@ -1,0 +1,34 @@
+[Unit]
+Description=Peloton LED settings page
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+# Root so it can save the live config.json (whoever owns it: the checkout's user, or
+# root:peloton-led) and restart peloton-led.service. Its own service, so a config that stops the
+# display can still be fixed here, and it runs whether or not the display does: it drives no panel.
+User=root
+Group=peloton-led
+WorkingDirectory=/opt/peloton-led
+Environment=PYTHONUNBUFFERED=1
+# The installer's project-config.conf drop-in points this at the checkout's config.json when
+# there is one, and makes that folder writable.
+Environment=PELOTON_CONFIG=/etc/peloton-led/config.json
+# auth.env is read in-process (not EnvironmentFile=), for the Pushover keys and to say which logins
+# are set; the Logins card writes new ones there, never showing a saved one. Tokens are only read,
+# where the display finds them: relative paths from /etc/peloton-led, a single rider's --cookies.
+ExecStart=/opt/peloton-led/venv/bin/python -m settings_page.server --config ${PELOTON_CONFIG} --auth-env /etc/peloton-led/auth.env --token-base /etc/peloton-led --cookies /var/lib/peloton-led/cookies.txt
+# The PIN for the display: /run/peloton-led-settings/pin, root:peloton-led, gone when this stops.
+RuntimeDirectory=peloton-led-settings
+RuntimeDirectoryMode=0750
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/etc/peloton-led
+
+[Install]
+WantedBy=multi-user.target

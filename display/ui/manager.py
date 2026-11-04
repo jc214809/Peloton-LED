@@ -5,6 +5,7 @@ from typing import Callable, Dict, Optional, Any
 from .screen import Screen
 from .login_indicator import draw_login_indicator
 from .stale_indicator import draw_stale_indicator
+from .settings_pin import draw_if_pin_shown
 from utils import debug
 
 class ScreenManager:
@@ -81,5 +82,7 @@ class ScreenManager:
             draw_login_indicator(target)
         if is_stale:
             draw_stale_indicator(target)
+        # The settings page's PIN goes over everything, indicators included.
+        draw_if_pin_shown(target)
         if atomic:
             self._frame_canvas = self.matrix.SwapOnVSync(target)
