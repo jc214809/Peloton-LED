@@ -223,7 +223,7 @@ def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
     assert f'<dt>Last run</dt><dd>{logins.when(1762264800, ZONE)} \u00b7 failed</dd>' in card  # the page, unescaped
     assert f'<dt>Next check</dt><dd>{logins.when(1762268400, ZONE)} \u00b7 then hourly</dd>' in card
     assert '<span class="pill bad">3 in a row</span><span class="hint">Jen: invalid_grant</span>' in card
-    assert 'refresh tokens only' in card
+    assert 'Automatic, with refresh tokens only.' in card
     assert 'scripts/seed_board.sh' in card and card.count('seed_board.sh') == 1  # Jen only
     assert 'Change logins' in card and 'Save logins' in card and 'Send a test alert' not in card
     alerts = html.split('id="alerts"', 1)[1].split('</section>', 1)[0]
@@ -237,7 +237,7 @@ def test_a_browser_board_needs_no_seed_command(board, tmp_path):
     board.units = {server.RENEW_UNIT: {'ActiveState': 'activating'}}
     board.sign_in()
     card = board.request('/')[2].split('id="logins"', 1)[1].split('</section>', 1)[0]
-    assert 'seed_board.sh' not in card and 'one browser login a day' in card
+    assert 'seed_board.sh' not in card and 'trying at most once a day' in card
     assert 'id="renewal" aria-live="polite" data-running>' in card, 'the script follows it'
     assert '<span class="pill now">Running now</span>' in card
     assert 'Not scheduled' in card and "the hourly timer isn't running" in card, 'the display is on'
@@ -480,3 +480,16 @@ def test_the_card_shows_the_next_check_of_a_timer_counted_from_boot(board):
     card = board.request('/')[2].split('id="logins"', 1)[1].split('</section>', 1)[0]
     assert f'<dt>Next check</dt><dd>{logins.when(1762268400, ZONE)} · then hourly</dd>' in card
     assert 'Not scheduled' not in card
+
+
+def test_a_token_problem_says_what_it_means_and_keeps_its_capitals():
+    from settings_page.logins import RiderLogin
+    import dataclasses
+    fields = {f.name: None for f in dataclasses.fields(RiderLogin)}
+    login = RiderLogin(**{**fields, 'name': 'Joel', 'token': {'ok': False, 'reason': 'JWT payload has no usable exp claim'},
+                          'chain': None, 'padlock': None, 'browser_attempt': None, 'email_set': True,
+                          'password_set': True})
+    html = page._login_status(login, {'mode': 'browser'}, None)
+    assert 'The token file can&#x27;t be used (JWT payload has no usable exp claim).' in html, 'JWT, not Jwt'
+    missing = dataclasses.replace(login, token={'ok': False, 'reason': 'file does not exist'})
+    assert 'No token on this board yet.' in page._login_status(missing, {'mode': 'browser'}, None)

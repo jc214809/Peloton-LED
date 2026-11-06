@@ -777,11 +777,11 @@ def _rider(index, rider, display):
 
 
 MODE_TEXT = {
-    'browser': 'This board renews logins by itself: with each rider\'s refresh token, and if Peloton turns '
-               'that down, with one browser login a day using the email and password saved here.',
-    'no-browser': 'This board renews logins with refresh tokens only (no browser here). If a rider\'s login '
-                  'stops working, seed the board again from your computer; passwords saved here aren\'t used.',
-    'none': 'Automatic renewal is off on this board (installed with --no-auto-token). Renew now still works.',
+    'browser': 'Automatic. Each rider\'s refresh token keeps them signed in. If Peloton rejects one, the board '
+               'signs in with their saved email and password, trying at most once a day.',
+    'no-browser': 'Automatic, with refresh tokens only. This board has no browser, so if a rider\'s login stops '
+                  'working, re-seed it from your computer. Saved passwords aren\'t used.',
+    'none': 'Off. Automatic renewal wasn\'t installed on this board (--no-auto-token). Renew now still works.',
 }
 
 
@@ -817,7 +817,10 @@ def _login_status(login, view, zone):
                             f'password {"set" if login.password_set else "not set"}'))
     lines = []
     if not login.token.get('ok'):
-        lines.append(f'{login.token.get("reason", "unreadable")}.'.capitalize())
+        reason = login.token.get('reason') or 'unreadable'
+        # refresh_cookies.py's reasons are written for its command line: say what they mean here.
+        lines.append('No token on this board yet.' if reason == 'file does not exist'
+                     else f"The token file can't be used ({reason}).")
     lines.append(login.chain.capitalize() + '.' if login.chain else 'No refresh token: renewal needs a login.')
     if login.padlock:
         lines.append(f'Renewal says: {login.padlock["reason"]}')
