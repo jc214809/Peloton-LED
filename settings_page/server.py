@@ -9,8 +9,10 @@ PIN the board shows (pins.py), which Pushover can also send to a phone when auth
 keys. Changing logins always takes the PIN, hotspot or not.
 
 The Logins card (logins.py) shows each rider's login health, renews on demand and sets the
-credentials in auth.env, write-only: nothing secret is ever sent to the browser. Standard library
-and requests (for Pushover, via peloton.notify) only.
+credentials in auth.env, write-only: nothing secret is ever sent to the browser. The Updates card
+(updates.py) checks for, starts and rolls back updates of the checkout the board installs from
+(--checkout, the installer's PELOTON_CHECKOUT). Standard library and requests (for Pushover, via
+peloton.notify) only.
 """
 import argparse
 import json
@@ -30,6 +32,7 @@ from peloton import notify
 from settings_page import logins, page
 from settings_page.form import apply_form
 from settings_page.pins import PIN_FILE, PIN_SHOWN_S, SESSION_S, PinGate
+from settings_page.updates import STARTS, Updates
 from utils import wifi_setup
 
 logger = logging.getLogger('peloton-led.settings')
@@ -47,6 +50,17 @@ TEST_ALERT_EVERY_S = 60
 MAX_BODY = 64 * 1024
 COOKIE = 'peloton_settings'
 SYSTEMCTL_TIMEOUT_S = 30
+# The checkout to update: the installer's drop-in sets it (this service runs from /opt/peloton-led,
+# which has no git); run from a checkout (development), that checkout.
+CHECKOUT_ENV = 'PELOTON_CHECKOUT'
+CODE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def default_checkout(environ=os.environ, code_dir=CODE_DIR):
+    """The checkout the Updates card updates, or None (no card): PELOTON_CHECKOUT, else the code's
+    own folder when it's a git checkout."""
+    found = environ.get(CHECKOUT_ENV) or (code_dir if os.path.isdir(os.path.join(code_dir, '.git')) else None)
+    return found if found and os.path.isdir(os.path.join(found, '.git')) else None
 
 
 def save_config(config, path):
@@ -78,12 +92,14 @@ def read_pushover_keys(path):
 
 
 class Settings:
-    """What the handlers share: where config.json is, the PIN gate, and one save at a time."""
+    """What the handlers share: where config.json is, the PIN gate, one save at a time, and the
+    Updates card's updates.Updates (None: no card)."""
 
     def __init__(self, config_path=CONFIG, gate=None, restart_unit=APP_UNIT, state_file=wifi_setup.STATE_FILE,
                  send_pushover=notify.send_pushover, auth_env=AUTH_ENV, token_base=None,
                  default_token=logins.DEFAULT_TOKEN, token_mode_file=logins.TOKEN_MODE_FILE,
-                 renew_unit=RENEW_UNIT, clock=time.time):
+                 renew_unit=RENEW_UNIT, clock=time.time, updates=None):
+        self.updates = updates
         self.config_path, self.restart_unit, self.state_file = config_path, restart_unit, state_file
         self.send_pushover, self.auth_env, self.default_token = send_pushover, auth_env, default_token
         # Where relative token paths start: the folder of the config the display reads (/etc/peloton-led).
@@ -321,6 +337,15 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_json(self, status, data):
+        body = json.dumps(data).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
     def _redirect(self, where, headers=()):
         self.send_response(303)
         self.send_header('Location', where)
@@ -338,16 +363,21 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return parse_qs(self.rfile.read(length).decode('utf-8', 'replace'), keep_blank_values=True)
 
-    def _page(self, problems=(), saved=None, config=None, login_outcome=None, login_problems=()):
+    def _page(self, problems=(), saved=None, config=None, login_outcome=None, login_problems=(), started=None):
         loaded, problem = self.settings.load()
+        updates = self.settings.updates
         return page.settings_page(config if config is not None else loaded, self._in_setup(), problems, saved,
                                   board_name(), problem, self.settings.logins(), self._signed_in(),
-                                  login_outcome, login_problems)
+                                  login_outcome, login_problems, updates.view() if updates else None, started)
 
     # --- routes
 
     def do_GET(self):
         url = urlsplit(self.path)
+        if url.path == '/update/status' and self.settings.updates:  # the page's script, following an update
+            if not self._allowed():
+                return self._send_json(403, {'running': False, 'phase': None, 'step': None})
+            return self._send_json(200, self.settings.updates.status())
         if url.path not in ('/', '/signin'):
             return self._send(404, page.message_page('Not found', "There's nothing at this address."))
         query = parse_qs(url.query, keep_blank_values=True)  # "?wrong", "?shown", "?sent=...", "?signedout"
@@ -361,8 +391,10 @@ class Handler(BaseHTTPRequestHandler):
                                                  self.settings.display_running() is not False))
         saved = query.get('saved', [None])[0]
         outcome = query.get('logins', [None])[0]
+        started = query.get('update', [None])[0]
         self._send(200, self._page(saved=saved if saved in page.SAVED else None,
-                                   login_outcome=outcome if outcome in page.LOGIN_OUTCOMES else None))
+                                   login_outcome=outcome if outcome in page.LOGIN_OUTCOMES else None,
+                                   started=started if started in STARTS else None))
 
     def do_POST(self):
         path = urlsplit(self.path).path
@@ -387,10 +419,13 @@ class Handler(BaseHTTPRequestHandler):
             self.settings.gate.sign_out(self._token())
             return self._redirect('/signin?signedout', [('Set-Cookie', f'{COOKIE}=; Max-Age=0; Path=/; '
                                                                        f'HttpOnly; SameSite=Strict')])
-        if path not in ('/save', '/credentials', '/renew', '/alert/test'):
+        updating = ('/update/check', '/update/start', '/update/rollback') if self.settings.updates else ()
+        if path not in ('/save', '/credentials', '/renew', '/alert/test', *updating):
             return self._send(404, page.message_page('Not found', "There's nothing at this address."))
         if not self._allowed():
             return self._redirect('/')
+        if path in updating:
+            return self._update(path, (form.get('channel') or [''])[0])
         if path == '/renew':
             return self._redirect(f'/?logins={self.settings.renew()}#logins')
         if path == '/alert/test':
@@ -403,6 +438,11 @@ class Handler(BaseHTTPRequestHandler):
                 logger.info('Settings page: logins not saved: %s', '; '.join(problems))
                 return self._send(400, self._page(login_problems=problems))
             return self._redirect(f'/?logins={outcome}#logins')
+        if self.settings.updates and self.settings.updates.running():
+            # A rollback would put back config.json as it was, losing the save.
+            loaded, _ = self.settings.load()
+            return self._send(409, self._page(["An update is running: save once it's done (see Updates)."],
+                                              config=apply_form(loaded, form)[0]))
         with self.settings.save_lock:
             config, _ = self.settings.load()
             new, problems = apply_form(config, form)
@@ -416,6 +456,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(500, self._page([f"Couldn't save: {exc}"], config=new))
         logger.info('Settings page: saved %s (from %s).', self.settings.config_path, self.client_address[0])
         self._redirect(f'/?saved={self.settings.restart_app()}')
+
+    def _update(self, path, channel):
+        """POST /update/check, /update/start (channel) and /update/rollback, the Updates card's buttons.
+        /update/check asking for JSON is the page's own check as it loads: a fresh one is reused, and
+        the answer is {"html": what it found, for the card}."""
+        updates = self.settings.updates
+        if path == '/update/check' and 'application/json' in (self.headers.get('Accept') or ''):
+            updates.auto_check(channel)
+            config, _ = self.settings.load()
+            zone = page._zone(config.get('display') if isinstance(config.get('display'), dict) else {})
+            return self._send_json(200, {'html': page.check_result(updates.view(), zone)})
+        if path == '/update/check':
+            updates.check(channel)
+            return self._redirect('/#updates')
+        started = updates.start('update', channel) if path == '/update/start' else updates.start('rollback')
+        self._redirect(f'/?update={started}#updates')
 
 
 def board_name():
@@ -441,12 +497,16 @@ def main(argv=None):
     parser.add_argument('--restart-unit', default=APP_UNIT, help="the display's systemd unit, restarted after a "
                                                                  "save; '' for none")
     parser.add_argument('--pin-file', default=PIN_FILE, help='where the display reads the PIN')
+    parser.add_argument('--checkout', default=default_checkout(),
+                        help=f'the git checkout the Updates card updates (default: ${CHECKOUT_ENV}, or this '
+                             "code's own checkout; none: no Updates card)")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
     for name, value in read_pushover_keys(args.auth_env).items():
         os.environ.setdefault(name, value)
     settings = Settings(args.config, PinGate(args.pin_file), restart_unit=args.restart_unit,
-                        auth_env=args.auth_env, token_base=args.token_base, default_token=args.cookies)
+                        auth_env=args.auth_env, token_base=args.token_base, default_token=args.cookies,
+                        updates=Updates(args.checkout) if args.checkout else None)
     server = make_server(settings, args.host, args.port)
     logger.info('Settings page on port %s, for %s.', args.port, os.path.abspath(args.config))
     server.serve_forever()
