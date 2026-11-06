@@ -499,21 +499,24 @@ The installer runs a small web page on every board, `peloton-settings.service`,
 at **http://&lt;board&gt;.local:8080** (the installer prints the address). It edits
 the live `config.json` from a phone or laptop:
 
+- **General**: text colour, and compact workout pages (64x32 only)
 - **Rotation**: which screens show, in what order, and each one's seconds
 - **Timing**: default page time, workout stat time, logo, how often to check Peloton
-- **Goals**: everyone's weekly goals and milestones, and each rider's own
-- **Name and text**: the fallback name, its font and colour, compact 64x32
-  workout pages, the streak reminder day
+- **Goals**: everyone's weekly goals and milestones, each rider's own, and
+  the streak reminder day
 - **Schedules**: time zone, day and night brightness, quiet hours
 - **Panel**: size, brightness, GPIO mapping, rotation, slowdown, PWM timing;
-  the rest of the driver settings under **Advanced**, with debug logging
+  the rest of the driver settings under **Advanced**, with debug logging and
+  the fallback name
 
-- **Logins** (top of the page): each rider's login health, renewal on demand,
-  and write-only credentials (below)
-- **Updates**: what's installed, a check for a newer Release or Beta with
-  what's in it, **Update now**, and **Roll back** (see
+- **Updates** (top of the page): what's installed, a check for a newer
+  Release or Beta with what's in it, **Update now**, and **Roll back** (see
   [Updating with `peloton-update`](#updating-with-peloton-update), which it
   runs for you)
+- **Logins**: token renewal's status, each rider's login health, renewal on
+  demand, and write-only credentials (below)
+- **Pushover alerts**: whether alerts are on, a test alert, and the write-only
+  Pushover keys
 
 Riders' names, token and cache paths, login variable names and the journey
 route aren't on the page and are kept as they are.
@@ -521,18 +524,20 @@ route aren't on the page and are kept as they are.
 **Logins.** For each rider: whether the token works and until when, the
 refresh chain's age and renewals, whether the padlock is on and the reason
 renewal gave, the last browser-login try, and whether an email and password
-are saved (never what they are). Above them: the board's renewal mode, the
-last renewal run and its result, the next scheduled check, and how many runs
-in a row have failed. When a rider needs a fresh login on a board without a
+are saved (never what they are). Above them, renewal's status: running now or
+how the last run went and when, the next check (on a manual board, checks run
+hourly only while the display is on), failures in a row, and the board's
+renewal mode. A run that's going updates there by itself until it finishes. When a rider needs a fresh login on a board without a
 browser, the card shows the `scripts/seed_board.sh user@board.local` command
 to run from your computer.
 
 - *Renew now* starts `peloton-token-refresh.service` straight away (the same
   run the hourly timer does, with its once-a-day limit on browser logins);
-  reload the page for the result.
-- *Send a test alert* sends a Pushover message, at most once a minute.
-- *Change logins* sets a rider's Peloton email or password, or the Pushover
-  keys, in `/etc/peloton-led/auth.env`. Fields are always empty; blank keeps
+  the status above follows it.
+- *Change logins* opens a window with each rider's Peloton email and
+  password; *Save logins* writes them to `/etc/peloton-led/auth.env`. The
+  Pushover keys are set the same way from their own card, where *Send a test
+  alert* sends a Pushover message, at most once a minute. Fields are always empty; blank keeps
   what's saved; nothing saved is ever sent back to a browser or written to a
   log (the log names only what changed). The file stays root-only (600) and
   every other line in it is kept; no backup copy is made. Renewal uses the new

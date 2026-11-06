@@ -43,7 +43,6 @@ TIMING = (
      'How often to look for new workouts. 300 (5 minutes) is plenty; much less only adds load.'),
 )
 
-FONTS = ('stats', 'discipline', 'info', 'titles', 'countdown')
 COLORS = ('white', 'gold', 'red', 'disney_blue', 'down')
 WEEKDAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
 STREAK_REMINDER_DEFAULT = 5  # peloton.config.DEFAULTS: Saturday
@@ -62,6 +61,9 @@ PANEL_FIELDS = (
 )
 SIZE_KEYS = ('rows', 'cols')
 SWITCH_KEYS = ('show_refresh', 'no_hardware_pulse')
+# Posted beside the Compact workout pages switch, which the page shows only on a 64x32 panel: without
+# it the switch wasn't on the page, so the saved value stays (an unticked switch posts nothing).
+COMPACT_SHOWN = 'compact_workout_pages_shown'
 # Rotation's choices: --led-pixel-mapper values. A saved one not here is offered as it is.
 ROTATIONS = (('Rotate:180', 'Upside down (Rotate:180)'), ('Rotate:90', 'A quarter turn (Rotate:90)'),
              ('Rotate:270', 'Three quarters (Rotate:270)'), ('Mirror:H', 'Mirrored left to right (Mirror:H)'),
@@ -170,7 +172,8 @@ def apply_form(config, form):
     set_or_drop(display, 'username', 'username', str)
     display['font'] = one('font', display.get('font', DEFAULTS['font']))
     display['color'] = one('color', display.get('color', DEFAULTS['color']))
-    display['compact_workout_pages'] = checked('compact_workout_pages')
+    if one(COMPACT_SHOWN):
+        display['compact_workout_pages'] = checked('compact_workout_pages')
     reminder = one('streak_reminder_day', str(STREAK_REMINDER_DEFAULT))
     display['streak_reminder_day'] = None if reminder == 'off' else _number(reminder)
 

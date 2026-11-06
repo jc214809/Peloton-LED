@@ -1,6 +1,7 @@
 """The settings page's form and config.json: what the page posts becomes the config to save."""
 import copy
 import json
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -322,3 +323,59 @@ def test_number_fields_show_their_units():
     assert 'matrix_chain' not in units and 'matrix_slowdown_gpio' not in units  # counts, not units
     assert 'style="--u: 8"' in html  # "workouts" gets room for its 8 letters
     assert '(seconds)' not in html and '(ns)' not in html
+
+
+def _card(html, sid):
+    return html.split(f'id="{sid}"', 1)[1].split('</section>', 1)[0]
+
+
+def test_name_and_text_is_gone_and_its_settings_live_where_they_belong():
+    html = page.settings_page(TWO_RIDERS)
+    assert 'Name and text' not in html and 'href="#display"' not in html
+    assert 'name="font"' not in html, 'the name screen fits its own font: the setting did nothing'
+    assert 'name="streak_reminder_day"' in _card(html, 'goals')
+    general = _card(html, 'general')
+    assert 'Text colour' in general and 'name="compact_workout_pages"' in general
+    assert 'Text colour' not in _card(html, 'panel')
+    assert html.index('href="#general"') < html.index('href="#rotation"'), 'first of the settings'
+    assert html.index('id="general"') < html.index('id="rotation"')
+    advanced = html.split('id="advanced"', 1)[1].split('</details>', 1)[0]
+    assert 'Fallback name' in advanced and 'name="username"' in advanced
+
+
+def test_the_text_colours_are_four_plus_an_old_configs_own():
+    colours = re.findall(r'<option value="(\w+)"', page.settings_page(TWO_RIDERS).split('id="color"', 1)[1].split('</select>', 1)[0])
+    assert colours == ['white', 'gold', 'red', 'disney_blue']
+    old = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'color': 'down'}}
+    select = page.settings_page(old).split('id="color"', 1)[1].split('</select>', 1)[0]
+    assert '<option value="down" selected>Red (darker)</option>' in select
+
+
+def test_compact_pages_show_only_on_64x32_and_a_64x64_save_keeps_them():
+    big = {**TWO_RIDERS, 'matrix': {**TWO_RIDERS['matrix'], 'rows': 64},
+           'display': {**TWO_RIDERS['display'], 'compact_workout_pages': True}}
+    assert 'compact_workout_pages' not in page.settings_page(big)
+    new, problems = apply_form(big, posted(big))
+    assert not problems and new['display']['compact_workout_pages'] is True, 'not on the page: kept'
+    small = {**big, 'matrix': TWO_RIDERS['matrix']}
+    new, _ = apply_form(small, posted(small, compact_workout_pages=None))
+    assert new['display']['compact_workout_pages'] is False, 'on the page and unticked: off'
+
+
+def test_the_font_a_config_has_is_kept_though_the_page_no_longer_shows_it():
+    config = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'font': 'titles'}}
+    new, _ = apply_form(config, posted(config))
+    assert new['display']['font'] == 'titles'
+
+
+def test_rotation_has_column_headings_with_tooltips():
+    html = page.settings_page(TWO_RIDERS)
+    rotation = _card(html, 'rotation')
+    head = rotation.split('id="screens-head">', 1)[1].split('</div>', 1)[0]
+    assert [h for h in re.findall(r'<span class="(?:grip-col|seconds-col|)">([^<]*)', head)] == ['', '#', 'Screen', 'Seconds', 'Show', '']
+    for tid, label in (('tip-rotation-order', 'Order'), ('tip-rotation-seconds', 'Seconds'), ('tip-rotation-show', 'Show')):
+        assert f'aria-label="About {label}" aria-describedby="{tid}"' in head
+        assert f'role="tooltip" id="{tid}">' in head
+    assert '0 skips the screen' in head and 'Seconds per page' not in rotation, 'the old note is in the tooltips now'
+    assert rotation.index('id="screens-head"') < rotation.index('id="screens"')
+    assert "getElementById('screens-head').classList.add('js')" in html, 'lines up with the grip column'

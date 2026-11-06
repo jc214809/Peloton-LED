@@ -138,11 +138,12 @@ class Settings:
                               timeout=SYSTEMCTL_TIMEOUT_S)
 
     def _unit_properties(self, unit, *names):
-        """{property: value} from systemctl show, or {} when there's no telling."""
+        """{property: value} from systemctl show, or {} when there's no telling. Times come as
+        "@<epoch seconds>" (--timestamp=unix: see unix_time)."""
         if not self.restart_unit:  # no systemd units at all (development)
             return {}
         try:
-            done = self._systemctl('show', *(f'--property={n}' for n in names), unit=unit)
+            done = self._systemctl('show', '--timestamp=unix', *(f'--property={n}' for n in names), unit=unit)
         except (OSError, subprocess.TimeoutExpired) as exc:
             logger.warning("Settings page: can't ask systemd about %s: %s", unit, exc)
             return {}
@@ -196,9 +197,10 @@ class Settings:
             'mode': logins.token_mode(self.token_mode_file),
             'renewing': renew.get('ActiveState') in ('activating', 'reloading'),
             'last_result': renew.get('Result') if renew.get('ExecMainExitTimestamp') else None,
-            'last_run': renew.get('ExecMainExitTimestamp') or None,
-            'timer_next': (timer.get('NextElapseUSecRealtime') or None) if timer.get('ActiveState') == 'active'
+            'last_run': unix_time(renew.get('ExecMainExitTimestamp')),
+            'timer_next': unix_time(timer.get('NextElapseUSecRealtime')) if timer.get('ActiveState') == 'active'
             else None,
+            'display_running': self.display_running(),
             'alerts': logins.alert_state(self.default_token),
             'pushover': all(auth.get(name) for name in PUSHOVER_KEYS),
             'seed': f'scripts/seed_board.sh {self.checkout_owner()}@{board_name()}.local',
@@ -363,12 +365,14 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return parse_qs(self.rfile.read(length).decode('utf-8', 'replace'), keep_blank_values=True)
 
-    def _page(self, problems=(), saved=None, config=None, login_outcome=None, login_problems=(), started=None):
+    def _page(self, problems=(), saved=None, config=None, login_outcome=None, login_problems=(), started=None,
+              alert_outcome=None, alert_problems=(), editing_logins=False):
         loaded, problem = self.settings.load()
         updates = self.settings.updates
         return page.settings_page(config if config is not None else loaded, self._in_setup(), problems, saved,
                                   board_name(), problem, self.settings.logins(), self._signed_in(),
-                                  login_outcome, login_problems, updates.view() if updates else None, started)
+                                  login_outcome, login_problems, updates.view() if updates else None, started,
+                                  alert_outcome, alert_problems, editing_logins)
 
     # --- routes
 
@@ -378,6 +382,13 @@ class Handler(BaseHTTPRequestHandler):
             if not self._allowed():
                 return self._send_json(403, {'running': False, 'phase': None, 'step': None})
             return self._send_json(200, self.settings.updates.status())
+        if url.path == '/renew/status':  # the page's script, following a renewal run
+            if not self._allowed():
+                return self._send_json(403, {'renewing': False, 'html': ''})
+            view = self.settings.logins()
+            config, _ = self.settings.load()
+            zone = page._zone(config.get('display') if isinstance(config.get('display'), dict) else {})
+            return self._send_json(200, {'renewing': bool(view['renewing']), 'html': page.renewal_status(view, zone)})
         if url.path not in ('/', '/signin'):
             return self._send(404, page.message_page('Not found', "There's nothing at this address."))
         query = parse_qs(url.query, keep_blank_values=True)  # "?wrong", "?shown", "?sent=...", "?signedout"
@@ -392,9 +403,12 @@ class Handler(BaseHTTPRequestHandler):
         saved = query.get('saved', [None])[0]
         outcome = query.get('logins', [None])[0]
         started = query.get('update', [None])[0]
+        alert = query.get('alerts', [None])[0]
         self._send(200, self._page(saved=saved if saved in page.SAVED else None,
                                    login_outcome=outcome if outcome in page.LOGIN_OUTCOMES else None,
-                                   started=started if started in STARTS else None))
+                                   started=started if started in STARTS else None,
+                                   alert_outcome=alert if alert in page.ALERT_OUTCOMES else None,
+                                   editing_logins=query.get('edit') == ['logins'] and self._signed_in()))
 
     def do_POST(self):
         path = urlsplit(self.path).path
@@ -429,14 +443,18 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/renew':
             return self._redirect(f'/?logins={self.settings.renew()}#logins')
         if path == '/alert/test':
-            return self._redirect(f'/?logins={self.settings.test_alert()}#logins')
+            return self._redirect(f'/?alerts={self.settings.test_alert()}#alerts')
         if path == '/credentials':
             if not self._signed_in():  # the hotspot alone isn't enough to change logins
                 return self._redirect('/signin')
             outcome, problems = self.settings.save_credentials(form)
+            alerts = (form.get('card') or [''])[0] == 'alerts'  # the Pushover alerts card's form
             if problems:
-                logger.info('Settings page: logins not saved: %s', '; '.join(problems))
-                return self._send(400, self._page(login_problems=problems))
+                logger.info('Settings page: %s not saved: %s', 'alert keys' if alerts else 'logins', '; '.join(problems))
+                return self._send(400, self._page(**({'alert_problems': problems} if alerts
+                                                     else {'login_problems': problems})))
+            if alerts:
+                return self._redirect(f'/?alerts={outcome.replace("logins_", "alerts_")}#alerts')
             return self._redirect(f'/?logins={outcome}#logins')
         if self.settings.updates and self.settings.updates.running():
             # A rollback would put back config.json as it was, losing the save.
@@ -472,6 +490,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._redirect('/#updates')
         started = updates.start('update', channel) if path == '/update/start' else updates.start('rollback')
         self._redirect(f'/?update={started}#updates')
+
+
+def unix_time(value):
+    """systemctl show's time ("@1762390801", with --timestamp=unix) as epoch seconds; None when
+    blank or "n/a"; any other text as it is (an older systemd ignores the flag's format)."""
+    value = (value or '').strip()
+    if not value or value == 'n/a':
+        return None
+    if value.startswith('@'):
+        try:
+            return float(value[1:])
+        except ValueError:
+            return value
+    return value
 
 
 def board_name():
