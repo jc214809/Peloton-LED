@@ -13,7 +13,9 @@ Group=peloton-led
 WorkingDirectory=/opt/peloton-led
 Environment=PYTHONUNBUFFERED=1
 # The installer's project-config.conf drop-in points this at the checkout's config.json when
-# there is one, and makes that folder writable.
+# there is one, and makes that folder writable. It also sets PELOTON_CHECKOUT, the checkout the
+# Updates card updates (its .git writable, for a check's fetch); an update itself runs as its own
+# transient unit (systemd-run --unit=peloton-update), since it restarts this service.
 Environment=PELOTON_CONFIG=/etc/peloton-led/config.json
 # auth.env is read in-process (not EnvironmentFile=), for the Pushover keys and to say which logins
 # are set; the Logins card writes new ones there, never showing a saved one. Tokens are only read,

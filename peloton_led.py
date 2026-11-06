@@ -13,6 +13,7 @@ from peloton.goals import next_milestone, week_day, week_start
 from peloton.journey import journey_progress
 from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
+from utils import heartbeat
 from utils.utils import args, ensure_privileges_dropped, led_matrix_options
 from utils.username import resolve_display_username
 from utils.wifi_setup import hotspot_name
@@ -243,6 +244,7 @@ def show_and_wait(manager, name, state, duration, dashboard=None):
             manager.tick(state)
         elif getattr(getattr(manager, 'current', None), 'animated', False) is True:
             manager.tick(state)
+    heartbeat.beat()  # for the updater's health check (self_update)
 
 
 def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None,

@@ -319,3 +319,102 @@ def test_main_reads_the_keys_and_serves(tmp_path, monkeypatch):
     settings, host, port = served[0]
     assert port == 9999 and settings.gate.pin_file == str(tmp_path / 'pin') and served[1] is True
     assert environ == {'PUSHOVER_APP_TOKEN': 'tok', 'PUSHOVER_USER_KEY': 'usr'}
+    assert settings.updates.app_dir == server.CODE_DIR, 'run from this checkout: it updates it'
+    server.main(['--config', str(tmp_path / 'config.json'), '--checkout', '', '--port', '9999'])
+    assert served[2][0].updates is None, 'no checkout: no Updates card'
+
+
+class FakeUpdates:
+    """updates.Updates, recording what the buttons asked for."""
+    def __init__(self):
+        self.asked, self.is_running = [], False
+
+    def view(self):
+        return {'version': '0.1.0', 'sha': 'a' * 40, 'branch': 'main', 'running': self.is_running, 'phase': 'idle',
+                'status': None, 'step': None, 'from': None, 'outcome': None, 'check': None, 'channel': 'releases',
+                'auto_check': False}
+
+    def running(self):
+        return self.is_running
+
+    def status(self):
+        return {'running': self.is_running, 'phase': 'Installing the new version' if self.is_running else None,
+                'step': 2 if self.is_running else None}
+
+    def check(self, channel):
+        self.asked.append(('check', channel))
+
+    def auto_check(self, channel):
+        self.asked.append(('auto_check', channel))
+
+    def start(self, command, channel=None):
+        self.asked.append((command, channel))
+        return 'started'
+
+
+@pytest.fixture
+def updating(board):
+    board.settings.updates = FakeUpdates()
+    return board
+
+
+def test_without_a_checkout_there_is_no_updates_card_or_its_routes(board):
+    board.sign_in()
+    assert 'id="updates"' not in board.request('/')[2]
+    assert board.request('/update/check', {'channel': 'beta'})[0] == 404
+    assert board.request('/update/status')[0] == 404
+
+
+def test_the_update_buttons_need_sign_in_and_the_pages_own_origin(updating):
+    for path in ('/update/check', '/update/start', '/update/rollback'):
+        status, headers, _ = updating.request(path, {'channel': 'beta'})
+        assert status == 303 and headers['Location'] == '/'
+    status, _, _ = updating.request('/update/rollback', {}, {'Origin': 'http://evil.example'})
+    assert status == 403
+    status, _, body = updating.request('/update/status')
+    assert status == 403 and json.loads(body) == {'running': False, 'phase': None, 'step': None}
+    assert updating.settings.updates.asked == []
+
+
+def test_check_update_and_roll_back_go_to_the_updates_card(updating):
+    updating.sign_in()
+    assert 'id="updates"' in updating.request('/')[2]
+    status, headers, _ = updating.request('/update/check', {'channel': 'beta'})
+    assert status == 303 and headers['Location'] == '/#updates'
+    status, headers, _ = updating.request('/update/start', {'channel': 'beta'})
+    assert headers['Location'] == '/?update=started#updates'
+    updating.request('/update/rollback', {'channel': 'beta'})
+    assert updating.settings.updates.asked == [('check', 'beta'), ('update', 'beta'), ('rollback', None)]
+    assert '<strong>Started.</strong>' in updating.request('/?update=started')[2]
+    assert '<strong>Started.</strong>' not in updating.request('/?update=whatever')[2]
+
+
+def test_the_pages_own_check_answers_with_the_cards_result(updating):
+    updating.request('/update/check', {'channel': 'beta'}, {'Accept': 'application/json'})
+    assert updating.settings.updates.asked == [], 'signed out: nothing checked'
+    updating.sign_in()
+    status, _, body = updating.request('/update/check', {'channel': 'beta'}, {'Accept': 'application/json'})
+    assert status == 200 and updating.settings.updates.asked == [('auto_check', 'beta')]
+    assert json.loads(body) == {'html': ''}, "the fake's view has no check to show"
+
+
+def test_while_an_update_runs_its_status_is_followed_and_saving_waits(updating):
+    updating.sign_in()
+    updating.settings.updates.is_running = True
+    status, _, body = updating.request('/update/status')
+    assert status == 200 and json.loads(body) == {'running': True, 'phase': 'Installing the new version', 'step': 2}
+    status, _, html = updating.request('/save', posted(TWO_RIDERS, goal_minutes='77'))
+    assert status == 409 and 'An update is running' in html
+    assert updating.saved() == TWO_RIDERS and updating.restarts == []
+    assert 'value="77"' in html, 'what was typed stays on the page'
+
+
+def test_the_checkout_is_the_installers_or_this_codes_own(tmp_path):
+    checkout = tmp_path / 'Peloton-LED'
+    (checkout / '.git').mkdir(parents=True)
+    plain = tmp_path / 'opt'
+    plain.mkdir()
+    assert server.default_checkout({'PELOTON_CHECKOUT': str(checkout)}, str(plain)) == str(checkout)
+    assert server.default_checkout({}, str(checkout)) == str(checkout), 'run from a checkout'
+    assert server.default_checkout({}, str(plain)) is None, '/opt/peloton-led: no git, no card'
+    assert server.default_checkout({'PELOTON_CHECKOUT': str(plain)}, str(plain)) is None, 'not a checkout'
