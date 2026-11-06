@@ -234,7 +234,10 @@ def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
     assert card.count('<details class="cred"') == 2 and 'Send a test alert' not in card
     assert 'This board has no browser, so it never signs in with these' in card, 'a no-browser board says so'
     alerts = html.split('id="alerts"', 1)[1].split('</section>', 1)[0]
-    assert 'Send a test alert' in alerts and 'Save alert keys' in alerts and 'Remove the Pushover keys' in alerts
+    assert 'Send a test alert' in alerts and 'Save alert keys' in alerts and 'name="pushover_clear"' in alerts
+    remove = alerts.split('action="/credentials" data-busy="Removing', 1)[1].split('</form>', 1)[0]
+    assert 'data-confirm="Remove the Pushover keys?' in remove and '<span>Remove keys</span>' in remove
+    assert 'Remove the Pushover keys</label>' not in alerts, 'a button now, not a switch'
     for secret in list(SECRETS.values()) + ['rt-secret']:
         assert secret not in html
 
@@ -580,3 +583,20 @@ def test_no_renewal_time_without_a_way_to_renew():
     assert 'Next renewal' in page.logins_card(browser), 'a browser board signs in without a refresh token'
     off = {**no_refresh, 'mode': 'none'}
     assert 'Next renewal' not in page.logins_card(off) and '<dt>Interval</dt>' not in page.logins_card(off)
+
+
+def test_the_remove_keys_button_removes_both_and_says_so(board):
+    board.auth_env.write_text(board.auth_env.read_text() + 'PUSHOVER_APP_TOKEN="t"\nPUSHOVER_USER_KEY="u"\n')
+    board.sign_in()
+    status, headers, _ = board.request('/credentials', {'card': 'alerts', 'pushover_clear': 'on'})
+    assert headers['Location'] == '/?alerts=alerts_removed#alerts'
+    saved = read_auth_env(board.auth_env)
+    assert 'PUSHOVER_APP_TOKEN' not in saved and 'PUSHOVER_USER_KEY' not in saved
+    assert saved['PELOTON_PASSWORD_RIDER_ONE'] == SECRETS['PELOTON_PASSWORD_RIDER_ONE'], 'logins untouched'
+    alerts = board.request('/?alerts=alerts_removed')[2].split('id="alerts"', 1)[1].split('</section>', 1)[0]
+    assert 'Pushover keys removed.' in alerts and 'Remove keys' not in alerts, 'nothing left to remove'
+
+
+def test_without_a_pin_session_there_is_no_remove_button():
+    html = page.alerts_card({'pushover': True}, signed_in=False)
+    assert 'Send a test alert' in html and 'Remove keys' not in html
