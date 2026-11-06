@@ -199,3 +199,8 @@ def test_outcome_and_check_times_are_in_the_boards_zone():
     html = settings_page({"display": {"timezone": "UTC"}}, updates={**UPDATES, "check": {
         "channel": "releases", "result": "current", "ok": True, "at": 0, "message": "no release newer than 2.1.0"}})
     assert "checked Thu Jan 1, 12:00 AM" in html
+
+
+def test_a_beta_from_before_the_first_release_names_no_release():
+    html = _updates(installed_channel="beta", version="0.0.1-beta-2-gaaaaaaa")
+    assert "A Beta (test) version on develop-beta</p>" in html and "release 0.0.0" not in html

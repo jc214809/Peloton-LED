@@ -913,8 +913,10 @@ def updates_card(view, started=None, zone=None):
 
     where = f'on {escape(view["branch"])}' if view['branch'] else 'as installed by an update'
     if view.get('installed_channel') == BETA:
+        release = release_of(view['version'])
+        newer = f', newer than release {escape(release)}' if release != '0.0.0' else ''  # 0.0.0: none yet
         installed = (f'<p><strong>{_installed_name(view)}</strong></p><p class="hint">A Beta (test) version '
-                     f'{where}, newer than release {escape(release_of(view["version"]))}</p>')
+                     f'{where}{newer}</p>')
     else:
         installed = (f'<p><strong>{escape(str(view["version"]))}</strong> <span class="mono">{_short(view["sha"])}'
                      f'</span></p><p class="hint">{where}</p>')

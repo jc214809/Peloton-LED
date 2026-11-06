@@ -510,6 +510,10 @@ the live `config.json` from a phone or laptop:
 
 - **Logins** (top of the page): each rider's login health, renewal on demand,
   and write-only credentials (below)
+- **Updates**: what's installed, a check for a newer Release or Beta with
+  what's in it, **Update now**, and **Roll back** (see
+  [Updating with `peloton-update`](#updating-with-peloton-update), which it
+  runs for you)
 
 Riders' names, token and cache paths, login variable names and the journey
 route aren't on the page and are kept as they are.
@@ -630,6 +634,15 @@ step errors, the updater rolls back to the saved commit, packages and
 `config.json`, and sends a Pushover alert if `auth.env` has the keys. If the
 power goes out mid-update, `peloton-update-recover.service` rolls it back at
 the next boot.
+
+The settings page's **Updates** card does the same from a browser. When the
+page loads it checks the channel you're on (at most once every 10 minutes:
+GitHub allows 60 unauthenticated calls an hour). It lists the pull requests
+an update brings with their release notes, or a Beta's tests while they run.
+**Update now** and **Roll back** run as their own `peloton-update` unit
+(`journalctl -u peloton-update` shows how it went), and the card follows each
+step. Saving settings waits until the update is done, because a rollback puts
+`config.json` back as it was.
 
 After an update the checkout is on a detached commit; `git switch main`
 (or `develop-beta`) before pulling by hand again.
