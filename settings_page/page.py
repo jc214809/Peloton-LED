@@ -17,7 +17,7 @@ from self_update.update import (BETA, BETA_BRANCH, CURRENT, RELEASES, WAITING, W
                                 release_of)
 from settings_page.logins import when
 from settings_page.updates import BUSY, START_FAILED, STARTED, STEPS
-from settings_page.form import (COLORS, FONTS, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
+from settings_page.form import (COLORS, COMPACT_SHOWN, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
                                 SHARED_DURATION, STREAK_REMINDER_DEFAULT, SWITCH_KEYS, TIMING, WEEKDAYS,
                                 advanced_keys, duration_fallback, milestones_text, number_text, panel_size,
                                 riders, rotation_rows, section)
@@ -233,7 +233,7 @@ input.pin { height: 56px; text-align: center; font-size: 26px; font-weight: 650;
 
 /* Rotation: one row per screen, numbered in the order the board shows them */
 .screens { list-style: none; margin: 0; padding: 8px 0 0; counter-reset: screen; }
-.screen-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) 7.5em auto auto; gap: 8px 14px;
+.screen-row, .screens-head { display: grid; grid-template-columns: 28px minmax(0, 1fr) 7.5em 42px 32px; gap: 8px 14px;
   align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
 .screen-row:first-child { border-top: 0; }
 .screen-row::before { content: ""; width: 24px; height: 24px; }
@@ -248,7 +248,22 @@ input.pin { height: 56px; text-align: center; font-size: 26px; font-weight: 650;
 .move svg { width: 16px; height: 16px; }
 .screen-row:first-child .move, .screen-row:not(.on) .move, .screen-row:not(.on) .grip { visibility: hidden; }
 /* With the script: a grip on the left of each row, dragged by mouse or finger (pointer events). */
-.screens.js .screen-row { grid-template-columns: 24px 28px minmax(0, 1fr) 7.5em auto auto; }
+.screens.js .screen-row, .screens-head.js { grid-template-columns: 24px 28px minmax(0, 1fr) 7.5em 42px 32px; }
+.screens-head { padding: 4px 0 8px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 650;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
+.screens-head > span { display: flex; align-items: center; gap: 4px; }
+.screens-head .grip-col { display: none; }
+.screens-head.js .grip-col { display: block; }
+.tip-wrap { position: relative; display: inline-flex; }
+.tip { width: 18px; height: 18px; padding: 0; border-radius: 50%; background: transparent; color: var(--text-3); }
+.tip:hover, .tip:focus-visible { color: var(--accent); }
+.tip svg { width: 14px; height: 14px; }
+.tip-text { display: none; position: absolute; z-index: 5; top: calc(100% + 6px); right: -8px; width: 240px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .25); color: var(--text-2); font-size: 13px; font-weight: 400;
+  text-transform: none; letter-spacing: 0; line-height: 1.45; }
+.tip-wrap:hover .tip-text, .tip:focus + .tip-text { display: block; }
+.screens-head > span:nth-child(2) .tip-text { right: auto; left: -8px; }  /* # is on the left */
 .grip { order: -1; width: 24px; height: 32px; padding: 0; border-radius: 6px; background: transparent;
   color: var(--text-3); cursor: grab; touch-action: none; }
 .grip:hover { color: var(--accent); background: var(--accent-soft); }
@@ -256,8 +271,9 @@ input.pin { height: 56px; text-align: center; font-size: 26px; font-weight: 650;
 .screen-row.dragging { background: var(--accent-soft); border-radius: 10px; box-shadow: var(--shadow); }
 .screen-row.dragging .grip { cursor: grabbing; }
 body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; }
-@media (max-width: 640px) { .screen-row { grid-template-columns: 24px minmax(0, 1fr) auto auto; }
-  .screens.js .screen-row { grid-template-columns: 24px 24px minmax(0, 1fr) auto auto; }
+@media (max-width: 640px) { .screen-row, .screens-head { grid-template-columns: 24px minmax(0, 1fr) 42px 32px; }
+  .screens.js .screen-row, .screens-head.js { grid-template-columns: 24px 24px minmax(0, 1fr) 42px 32px; }
+  .screens-head .seconds-col { display: none; }
   .screen-row .time { grid-column: 2 / -1; } .screens.js .screen-row .time { grid-column: 3 / -1; } }
 
 /* Riders */
@@ -355,7 +371,7 @@ ICONS = {
 SECTIONS = (  # id, nav title, icon
     ('updates', 'Updates', 'refresh'), ('logins', 'Logins', 'key'), ('alerts', 'Pushover alerts', 'bell'),
     ('rotation', 'Rotation', 'list'), ('timing', 'Timing', 'clock'), ('goals', 'Goals', 'target'),
-    ('display', 'Name and text', 'type'), ('schedules', 'Schedules', 'sun'), ('panel', 'Panel', 'board'),
+    ('schedules', 'Schedules', 'sun'), ('panel', 'Panel', 'board'),
     ('advanced', 'Advanced', 'sliders'),
 )
 
@@ -383,6 +399,7 @@ document.querySelectorAll('.js-only').forEach(el => { el.hidden = false; });
 // grip (dragged, or arrow keys) or one place earlier by its arrow.
 const screens = document.getElementById('screens');
 screens.classList.add('js');
+document.getElementById('screens-head').classList.add('js');
 const onRows = () => [...screens.querySelectorAll('.screen-row.on')];
 const lastOn = except => onRows().filter(r => r !== except).pop();
 screens.addEventListener('change', e => {
@@ -631,6 +648,38 @@ def _mini(name, label, control):
     return f'<div><label class="mini" for="{name}">{escape(label)}</label>{control}</div>'
 
 
+def _tip(tid, label, text):
+    """A column heading's ⓘ: its text shows on hover, keyboard focus or a tap (which focuses it), and
+    screen readers get it as the button's description."""
+    return (f'<span class="tip-wrap"><button type="button" class="tip" aria-label="About {_attr(label)}" '
+            f'aria-describedby="{tid}">{icon("info")}</button>'
+            f'<span class="tip-text" role="tooltip" id="{tid}">{escape(text)}</span></span>')
+
+
+# The Rotation list's column headings: (CSS class, heading, tooltip or None).
+ROTATION_COLUMNS = (
+    ('grip-col', '', None),
+    ('', '#', 'Switched-on screens play in this order, numbered. Drag a screen by its handle, or use its arrow, '
+              'to move it.'),
+    ('', 'Screen', None),
+    ('seconds-col', 'Seconds', 'How long each page shows. Blank uses the setting it falls back on (shown '
+                               'greyed out); 0 skips the screen.'),
+    ('', 'Show', 'Off takes the screen out of the rotation and moves it to the bottom. A screen with nothing '
+                 'to show yet is skipped either way.'),
+    ('', '', None),
+)
+
+
+def _rotation_head():
+    """The headings above the rotation's rows, in their columns (decoration for screen readers: each
+    row's controls carry their own labels)."""
+    cells = ''.join(f'<span class="{css}">{escape(heading)}'
+                    + (_tip(f'tip-rotation-{heading.lower().strip("#") or "order"}', heading if heading != '#' else 'Order', tip)
+                       if tip else '') + '</span>'
+                    for css, heading, tip in ROTATION_COLUMNS)
+    return f'<div class="screens-head" id="screens-head">{cells}</div>'
+
+
 def _screen_row(name, label, hint, on, display):
     """One rotation screen: posted as "rotation_order" in page order, with its switch and time."""
     durations = section(display, 'screen_durations')
@@ -662,6 +711,22 @@ def _schedule_switch(sid, label, schedule, hint, fields):
 
 # Units for matrix settings that have one.
 MATRIX_UNITS = {'brightness': '%', 'pwm_lsb_nanoseconds': 'ns', 'limit_refresh': 'Hz'}
+
+
+# The text colours, by config value: "disney_blue" and "down" (another red) are kept for old configs.
+COLOUR_NAMES = {'white': 'White', 'gold': 'Gold', 'red': 'Red', 'disney_blue': 'Blue', 'down': 'Red (darker)'}
+
+
+def _colour_choices(chosen):
+    """The text colours to offer: white, gold, red and blue, plus a config's own if it's another."""
+    shown = ('white', 'gold', 'red', 'disney_blue')
+    return [(c, COLOUR_NAMES[c]) for c in COLORS if c in shown or c == chosen]
+
+
+def _rows(matrix):
+    """The panel's rows, as the board reads them (MATRIX_DEFAULTS when config.json doesn't say)."""
+    rows = matrix.get('rows', MATRIX_DEFAULTS['rows'])
+    return rows if isinstance(rows, int) else MATRIX_DEFAULTS['rows']
 
 
 def _matrix_field(key, label, hint, value):
@@ -1158,9 +1223,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     rows = ''.join(_screen_row(name, *dict((n, (l, h)) for n, l, h in SCREENS)[name], on, merged)
                    for name, on in rotation_rows(display))
     rotation = _section('rotation', 'Rotation', 'Which screens the board shows, in this order, and for how long.', (
-        f'<ol class="screens" id="screens" aria-label="Screens, in order">{rows}</ol>'
-        + _notice('info', 'Seconds per page; blank uses the setting it falls back on (shown greyed out), 0 '
-                          'skips the screen. A screen with nothing to show yet is skipped either way.')
+        _rotation_head() + f'<ol class="screens" id="screens" aria-label="Screens, in order">{rows}</ol>'
     ), 'list')
 
     timing = _section('timing', 'Timing', 'How long pages last, and how often the board checks Peloton.', ''.join(
@@ -1169,6 +1232,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     ), 'clock')
 
     shared_goals = section(display, 'weekly_goals')
+    reminder = display.get('streak_reminder_day', STREAK_REMINDER_DEFAULT)
     rider_list = riders(config)
     goals = _section('goals', 'Goals', 'Weekly goals and all-time milestones.', (
         '<h3>Everyone</h3>'
@@ -1185,26 +1249,14 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
                  _number('milestone_step', display.get('milestone_step'), DEFAULTS['milestone_step'],
                          ' step="1" inputmode="numeric"', 'workouts'),
                  'Workouts between milestones past the list (100: 100, 200, 300…). 0 for none.')
-        + (('<h3>Each rider</h3><p class="hint">Blank uses Everyone\'s. Setting either weekly goal gives the '
-            'rider their own pair (the other blank is no goal).</p>'
-            + ''.join(_rider(i, rider, display) for i, rider in rider_list)) if rider_list else '')
-    ), 'target')
-
-    reminder = display.get('streak_reminder_day', STREAK_REMINDER_DEFAULT)
-    text = _section('display', 'Name and text', 'The name screen and how pages are laid out.', (
-        _field('username', 'Name on the board', _input('username', display.get('username') or '',
-                                                       extra=' placeholder="Your Peloton username"'),
-               'Shown when Peloton has no username to give. Riders have their own in Goals.')
-        + _field('font', 'Name font', _options('font', [(f, f.capitalize()) for f in FONTS], merged['font']))
-        + _field('color', 'Name colour', _options('color', [(c, c.replace('_', ' ').capitalize()) for c in COLORS],
-                                                  merged['color']))
-        + _switch('compact_workout_pages', 'Compact workout pages (64x32)', merged['compact_workout_pages'],
-                  'On a 64x32 panel, each workout in two still pages instead of one changing page.')
         + _field('streak_reminder_day', 'Streak reminder from',
                  _options('streak_reminder_day', [('off', 'Never')] + [(str(i), d) for i, d in enumerate(WEEKDAYS)],
                           'off' if reminder is None else str(reminder)),
                  'From this day, a week with no workout yet shows "keep your streak" instead of the streak.')
-    ), 'type')
+        + (('<h3>Each rider</h3><p class="hint">Blank uses Everyone\'s. Setting either weekly goal gives the '
+            'rider their own pair (the other blank is no goal).</p>'
+            + ''.join(_rider(i, rider, display) for i, rider in rider_list)) if rider_list else '')
+    ), 'target')
 
     bright = display.get('brightness_schedule') if isinstance(display.get('brightness_schedule'), dict) else None
     quiet = display.get('refresh_schedule') if isinstance(display.get('refresh_schedule'), dict) else None
@@ -1240,15 +1292,24 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     panel = _section('panel', 'Panel', "The LED panel's size, brightness and wiring.", (
         _field('panel_size', 'Panel size', _options('panel_size', [(s, s) for s in sizes], panel_size(matrix)),
                'Columns x rows, as on the panel\'s label.')
+        + _field('color', 'Text colour', _options('color', _colour_choices(merged['color']), merged['color']),
+                 'For your name and the per-discipline pages.')
+        + (f'<input type="hidden" name="{COMPACT_SHOWN}" value="1">'
+           + _switch('compact_workout_pages', 'Compact workout pages', merged['compact_workout_pages'],
+                     'Each workout in two still pages instead of one changing page.')
+           if _rows(matrix) < 64 else '')
         + ''.join(_matrix_field(key, label, hint, matrix.get(key)) for key, label, hint in PANEL_FIELDS)
     ), 'board')
 
     advanced = (
         '<details class="card" id="advanced"><summary class="card-head">'
         f'<span class="card-icon">{icon("sliders")}</span><div><h2>Advanced</h2>'
-        '<p>Logging and panel hardware. Most boards never need these.</p></div>'
+        '<p>Logging, a fallback name and panel hardware. Most boards never need these.</p></div>'
         f'<span class="chev">{icon("chevron")}</span></summary><div class="card-body">'
         + _switch('debug', 'Debug logging', config.get('debug', False), "More detail in the display's log.")
+        + _field('username', 'Fallback name', _input('username', display.get('username') or '',
+                                                     extra=' placeholder="Your Peloton username"'),
+                 'Only shown if Peloton gives no username. Riders have their own in Goals.')
         + _notice('warn', 'The wrong panel settings can leave the board dark or flickering. Blank leaves each '
                           'one to the default.')
         + ''.join(_matrix_field(key, key.replace('_', ' ').capitalize(), '', matrix.get(key))
@@ -1268,7 +1329,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
           f'{logins_card(logins, signed_in, login_outcome, login_problems, _zone(display), editing_logins)}'
           f'{alerts_card(logins, signed_in, alert_outcome, alert_problems)}</div>'
         + f'<form method="post" action="/save" id="settings"><input type="hidden" name="{FORM_FIELD}" value="1">'
-          f'<div class="stack">{rotation}{timing}{goals}{text}{schedules}{panel}{advanced}</div>'
+          f'<div class="stack">{rotation}{timing}{goals}{schedules}{panel}{advanced}</div>'
         + '<div class="savebar"><div class="savebar-in"><div class="status" id="save-status"><span class="dot"></span>'
           '<span>Everything here is saved to config.json</span></div>'
           f'<button type="submit" class="primary" id="save">{icon("check")}<span>Save and restart</span></button>'
