@@ -6,6 +6,7 @@ APP_DIR="/opt/peloton-led"
 CONFIG_DIR="/etc/peloton-led"
 STATE_DIR="/var/lib/peloton-led"
 UNIT_DIR="/etc/systemd/system"
+BIN_DIR="/usr/local/bin"
 SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DRIVER_REF="master"
 AUTO_TOKEN=false
@@ -24,6 +25,7 @@ GPIO_MAPPING=""
 AUDIO_REBOOT=false
 SKIP_MATRIX=false
 SKIP_PACKAGES=false
+SKIP_REQUIREMENTS=false
 NO_START=false
 # Empty until resolve_start_mode: --manual / --start-at-boot, or the default.
 MANUAL=""
@@ -59,6 +61,8 @@ Options:
                          auth.env (e.g. to switch between single- and dual-user)
   --skip-matrix         Skip the native rpi-rgb-led-matrix build
   --skip-packages       Skip apt package installation
+  --skip-requirements   Skip pip installing requirements*.txt (the updater's, when
+                         neither changed)
   --driver REF          Matrix driver branch, tag, or commit (default: master)
   --no-start            With --start-at-boot: enable units without starting now
                          (an upgrade still restarts a display that is running)
@@ -265,6 +269,43 @@ EOF
     fi
 }
 
+# The updater's backstops (self_update), run from this checkout with the app's venv:
+# peloton-update (status, check, update, rollback), peloton-rollback, and a boot oneshot that
+# rolls back an update a power cut stopped (enabled after daemon-reload). A oneshot, not ordered
+# before the display: rolling back restarts the display and waits for it. No time limit: a
+# rollback that reinstalls pip packages takes ages on a Pi Zero.
+setup_updater() {
+    local python="$APP_DIR/venv/bin/python"
+    cat > "$UNIT_DIR/peloton-update-recover.service" <<UNIT
+[Unit]
+Description=Peloton LED: roll back an update that stopped midway
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=$SOURCE_DIR
+ExecStart=$python -m self_update recover
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    chmod 0644 "$UNIT_DIR/peloton-update-recover.service"
+    cat > "$BIN_DIR/peloton-update" <<COMMAND
+#!/bin/sh
+# Peloton LED's updater, from the checkout it installs from (peloton-install.sh's):
+# peloton-update check [--channel beta], sudo peloton-update update [--channel beta], --help
+cd "$SOURCE_DIR" && exec "$python" -m self_update "\$@"
+COMMAND
+    cat > "$BIN_DIR/peloton-rollback" <<COMMAND
+#!/bin/sh
+# Undo Peloton LED's last update, config.json included: sudo peloton-rollback (peloton-install.sh's)
+cd "$SOURCE_DIR" && exec "$python" -m self_update rollback "\$@"
+COMMAND
+    chmod 0755 "$BIN_DIR/peloton-update" "$BIN_DIR/peloton-rollback"
+}
+
 # Starts the display unless manual mode or --no-start says not to. Either way
 # a display that was running when the install began is restarted, so it never
 # keeps running the old code.
@@ -300,6 +341,7 @@ while (($#)); do
         --reconfigure) RECONFIGURE=true; shift ;;
         --skip-matrix) SKIP_MATRIX=true; shift ;;
         --skip-packages) SKIP_PACKAGES=true; shift ;;
+        --skip-requirements) SKIP_REQUIREMENTS=true; shift ;;
         --driver)
             [[ $# -ge 2 ]] || { echo "--driver requires a value" >&2; exit 2; }
             DRIVER_REF="$2"; shift 2 ;;
@@ -394,8 +436,10 @@ for source_token in "$SOURCE_DIR"/cookies-*.txt "$SOURCE_DIR"/cookies*.refresh.j
 done
 
 python3 -m venv "$APP_DIR/venv"
-"$APP_DIR/venv/bin/python" -m pip install --upgrade pip
-"$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements.txt"
+if [[ "$SKIP_REQUIREMENTS" == false ]]; then
+    "$APP_DIR/venv/bin/python" -m pip install --upgrade pip
+    "$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements.txt"
+fi
 
 if [[ "$SKIP_MATRIX" == false ]]; then
     driver_dir="$APP_DIR/vendor/rpi-rgb-led-matrix"
@@ -421,7 +465,9 @@ if [[ "$NO_BROWSER" == true ]]; then
     # remove it so an upgraded board never starts Chromium.
     "$APP_DIR/venv/bin/python" -m pip uninstall -y playwright >/dev/null 2>&1 || true
 elif [[ "$AUTO_TOKEN" == true ]]; then
-    "$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements-auth.txt"
+    if [[ "$SKIP_REQUIREMENTS" == false ]]; then
+        "$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements-auth.txt"
+    fi
     if [[ ! -f "$CONFIG_DIR/auth.env" ]]; then
         echo "Warning: $CONFIG_DIR/auth.env is missing; unattended token renewal needs it." >&2
         echo "Re-run with --reconfigure to set up rider credentials." >&2
@@ -436,6 +482,7 @@ install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-led.servi
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-token-refresh.service" "$UNIT_DIR/peloton-token-refresh.service"
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-token-refresh.timer" "$UNIT_DIR/peloton-token-refresh.timer"
 install -m 0644 -o root -g root "$SOURCE_DIR/packaging/systemd/peloton-settings.service" "$UNIT_DIR/peloton-settings.service"
+setup_updater
 
 # The checkout's config.json, when present, is the live config: the services
 # see it at $CONFIG_DIR/config.json through a read-only bind mount (below).
@@ -447,7 +494,7 @@ fi
     "import sys; from peloton.config import load_config; load_config(sys.argv[1])" "$LIVE_CONFIG")
 systemd-analyze verify "$UNIT_DIR/peloton-led.service" \
     "$UNIT_DIR/peloton-token-refresh.service" "$UNIT_DIR/peloton-token-refresh.timer" \
-    "$UNIT_DIR/peloton-settings.service"
+    "$UNIT_DIR/peloton-settings.service" "$UNIT_DIR/peloton-update-recover.service"
 # Manual mode: tie token renewal to the display's lifetime instead of boot.
 # Starting the display runs one token check and starts the hourly timer;
 # stopping the display stops the timer.
@@ -478,6 +525,7 @@ if [[ "$MANUAL" == true && "$AUTO_TOKEN" == true ]]; then
 fi
 
 systemctl daemon-reload
+systemctl enable peloton-update-recover.service  # runs at each boot; nothing to do now
 if [[ "$MANUAL" == true ]]; then
     # Undo boot-time enablement from an earlier non-manual install.
     systemctl disable peloton-led.service peloton-token-refresh.timer 2>/dev/null || true
@@ -531,6 +579,8 @@ Peloton LED installation complete.
   Riders:   $rider_summary
   Tokens:   $TOKEN_MODE ($TOKEN_MODE_SOURCE; override with --auto-token,
             --no-browser or --no-auto-token)
+  Updates:  peloton-update check, then sudo peloton-update update
+            (add --channel beta for develop-beta; sudo peloton-rollback undoes one)
 EOF
 if [[ "$SETTINGS_PAGE" == true ]]; then
     cat <<EOF

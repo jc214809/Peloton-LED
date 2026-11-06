@@ -6,6 +6,7 @@ source =
     models
     peloton
     scripts
+    self_update
     settings_page
     utils
     peloton_led
