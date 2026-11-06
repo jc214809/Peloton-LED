@@ -2,7 +2,8 @@ name: Tests
 
 on:
   push:
-    branches: [main]
+    # The updater's Beta channel installs develop-beta's tip only once its CI has passed.
+    branches: [main, develop-beta]
   pull_request:
 
 permissions:

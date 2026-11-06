@@ -493,7 +493,8 @@ def _enable_units(tmp_path, manual, auto_token):
                     'systemctl disable --now peloton-token-refresh.timer']),
 ])
 def test_installer_enables_units_and_stops_renewal_when_switched_off(tmp_path, manual, auto_token, expected):
-    assert _enable_units(tmp_path, manual, auto_token) == expected
+    # The updater's boot-time recovery is on in every mode: a manual board loses power mid-update too.
+    assert _enable_units(tmp_path, manual, auto_token) == ['systemctl enable peloton-update-recover.service'] + expected
 
 
 def _start_or_restart(tmp_path, no_start, was_running, auto_token=False, tokens=()):
@@ -776,3 +777,46 @@ def test_start_settings_page(tmp_path, on, expected):
     result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
     assert result.returncode == 0, result.stderr
     assert log.read_text().splitlines() == expected
+
+
+def test_setup_updater_runs_the_updater_from_the_checkout_with_the_apps_venv(tmp_path):
+    units, bin_dir = tmp_path / 'units', tmp_path / 'local-bin'
+    units.mkdir()
+    bin_dir.mkdir()
+    script = (f'set -Eeuo pipefail\nAPP_DIR=/opt/peloton-led\nSOURCE_DIR=/home/pi/Peloton-LED\n'
+              f'UNIT_DIR={units}\nBIN_DIR={bin_dir}\n'
+              f'{_installer_function("setup_updater")}setup_updater\n')
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    unit = (units / 'peloton-update-recover.service').read_text()
+    assert 'WorkingDirectory=/home/pi/Peloton-LED\n' in unit
+    assert 'ExecStart=/opt/peloton-led/venv/bin/python -m self_update recover\n' in unit
+    assert 'Type=oneshot' in unit and 'WantedBy=multi-user.target' in unit
+    for name, command in (('peloton-update', ''), ('peloton-rollback', ' rollback')):
+        text = (bin_dir / name).read_text()
+        assert text.startswith('#!/bin/sh\n') and (bin_dir / name).stat().st_mode & 0o777 == 0o755
+        assert (f'cd "/home/pi/Peloton-LED" && exec "/opt/peloton-led/venv/bin/python" -m self_update{command} "$@"\n'
+                in text), 'arguments pass through, not expanded by the installer'
+
+
+def test_the_updater_can_skip_pip_and_its_backstops_are_installed_and_enabled():
+    text = (ROOT / 'peloton-install.sh').read_text()
+    subprocess.run(['bash', '-n', str(ROOT / 'peloton-install.sh')], check=True)
+    # --skip-requirements (the updater's, when neither requirements file changed) skips every pip
+    # install of them, the pip upgrade too: an update with nothing new to install needs no network.
+    for line in ('"$APP_DIR/venv/bin/python" -m pip install --upgrade pip',
+                 '"$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements.txt"',
+                 '"$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements-auth.txt"'):
+        guard = text.rindex('if [[ "$SKIP_REQUIREMENTS" == false ]]; then', 0, text.index(line))
+        assert 'fi\n' not in text[guard:text.index(line)], line
+    assert text.index('\nsetup_updater\n') < text.index('systemd-analyze verify')
+    assert '"$UNIT_DIR/peloton-update-recover.service"' in text[text.index('systemd-analyze verify'):]
+    assert (text.index('systemctl enable peloton-update-recover.service')
+            > text.index('\nsystemctl daemon-reload\n'))
+
+
+def test_the_display_unit_gives_the_heartbeat_a_folder_it_can_write_after_dropping_root():
+    display = (ROOT / 'packaging' / 'systemd' / 'peloton-led.service').read_text()
+    assert 'RuntimeDirectory=peloton-led\n' in display and 'RuntimeDirectoryMode=0770\n' in display
+    assert 'Group=peloton-led' in display  # the folder's group: the user the display drops to
+    assert "HEARTBEAT_FILE = '/run/peloton-led/health'\n" in (ROOT / 'utils' / 'heartbeat.py').read_text()

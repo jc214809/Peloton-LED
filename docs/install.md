@@ -14,6 +14,7 @@ behaves once it's running; this document is only about getting it installed.
 - [Installer options reference](#installer-options-reference)
 - [Settings page](#settings-page)
 - [Upgrading](#upgrading)
+  - [Updating with `peloton-update`](#updating-with-peloton-update)
 - [Uninstalling](#uninstalling)
 - [Two users on one board](#two-users-on-one-board)
 - [Troubleshooting](#troubleshooting)
@@ -446,6 +447,7 @@ sudo ./peloton-install.sh [options]
 | `--reconfigure` | Re-run the interactive rider setup, overwriting `config.json` and `auth.env` (see [above](#changing-riders-later---reconfigure)) |
 | `--skip-matrix` | Skip building/installing the native `rpi-rgb-led-matrix` bindings — use when they're already installed, or when preparing a Pi with no panel attached yet |
 | `--skip-packages` | Skip the `apt-get install` step — use when you manage system packages yourself or they're already present |
+| `--skip-requirements` | Skip `pip install` of `requirements.txt` and `requirements-auth.txt` — what the [updater](#updating-with-peloton-update) passes when neither changed |
 | `--driver REF` | Git branch, tag, or commit of `rpi-rgb-led-matrix` to build (default: `master`) |
 | `--manual` | The default: never start at boot or during install; you start/stop the display yourself (see [above](#manual-mode-the-default)). Needed on upgrade only to switch a board that currently starts at boot |
 | `--start-at-boot` | Enable the display at boot and start it now — for a Pi that drives nothing else |
@@ -589,14 +591,61 @@ This upgrades the application code in `/opt/peloton-led` while preserving
 configuration, tokens, credentials, cached display data, and PR/milestone
 state — none of that lives in `/opt/peloton-led`, so it's never touched.
 
+### Updating with `peloton-update`
+
+Once a board has a version with the updater (the first release, v0.1.0, or
+any Beta after it), it can update itself and undo a bad update. The installer
+puts `peloton-update` and `peloton-rollback` in `/usr/local/bin`; both run the
+updater from the checkout you installed from.
+
+```bash
+peloton-update check                        # what an update would install; changes nothing
+sudo peloton-update update                  # the newest release
+sudo peloton-update update --channel beta   # develop-beta's tip, once its CI has passed
+sudo peloton-update status                  # what's installed and how the last update went
+sudo peloton-rollback                       # undo the last update, config.json included
+```
+
+There are two channels. **Releases** (the default) are the `vX.Y.0` tags made
+when `develop-beta` merges into `main`; the updater never installs an older
+one than you have. **Beta** is `develop-beta`'s newest commit, installed only
+once its CI has passed; every pull request merged into `develop-beta` is
+tagged `vX.Y.N-beta`.
+
+An update checks first: at least 300 MB free, no under-voltage or throttling
+right now, no edits in the checkout (`git status` clean, untracked files like
+`config.json` don't count), and GitHub reachable. It then saves a rollback
+point in `/var/lib/peloton-update` (the commit, `pip freeze`, a copy of the
+live `config.json`), checks out the new version, and re-runs its installer with
+`--skip-packages --skip-matrix` (and `--skip-requirements` unless a
+requirements file changed). Your board's mode flags are kept, as in a manual
+upgrade.
+
+Within 5 minutes the new version must be healthy: a display that was running
+before the update must finish a screen (it writes
+`/run/peloton-led/health` after each one) without systemd restarting it, and
+the settings page, if it's on, must answer. A manual-mode board whose display
+was off stays off; only the settings page is checked. If the check fails, or any
+step errors, the updater rolls back to the saved commit, packages and
+`config.json`, and sends a Pushover alert if `auth.env` has the keys. If the
+power goes out mid-update, `peloton-update-recover.service` rolls it back at
+the next boot.
+
+After an update the checkout is on a detached commit; `git switch main`
+(or `develop-beta`) before pulling by hand again.
+
 ## Uninstalling
 
 There's no automated uninstaller. To remove a Pi installation by hand:
 
 ```bash
-sudo systemctl disable --now peloton-led.service peloton-token-refresh.timer peloton-token-refresh.service
-sudo rm -rf /opt/peloton-led /etc/peloton-led /var/lib/peloton-led
-sudo rm -f /etc/systemd/system/peloton-led.service /etc/systemd/system/peloton-token-refresh.{service,timer}
+sudo systemctl disable --now peloton-led.service peloton-token-refresh.timer peloton-token-refresh.service \
+    peloton-settings.service peloton-update-recover.service
+sudo rm -rf /opt/peloton-led /etc/peloton-led /var/lib/peloton-led /var/lib/peloton-update
+sudo rm -rf /etc/systemd/system/peloton-led.service /etc/systemd/system/peloton-token-refresh.{service,timer} \
+    /etc/systemd/system/peloton-settings.service /etc/systemd/system/peloton-update-recover.service \
+    /etc/systemd/system/peloton-*.d
+sudo rm -f /usr/local/bin/peloton-update /usr/local/bin/peloton-rollback
 sudo systemctl daemon-reload
 sudo userdel peloton-led   # optional: removes the dedicated service account
 ```

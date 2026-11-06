@@ -29,6 +29,10 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/peloton-led
+# /run/peloton-led/health: the heartbeat the updater's health check reads (utils/heartbeat.py).
+# root:peloton-led and group-writable, so the display still writes it after dropping root.
+RuntimeDirectory=peloton-led
+RuntimeDirectoryMode=0770
 
 [Install]
 WantedBy=multi-user.target
