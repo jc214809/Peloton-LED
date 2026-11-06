@@ -370,7 +370,7 @@ ICONS = {
 
 SECTIONS = (  # id, nav title, icon
     ('updates', 'Updates', 'refresh'), ('logins', 'Logins', 'key'), ('alerts', 'Pushover alerts', 'bell'),
-    ('rotation', 'Rotation', 'list'), ('timing', 'Timing', 'clock'), ('goals', 'Goals', 'target'),
+    ('general', 'General', 'type'), ('rotation', 'Rotation', 'list'), ('timing', 'Timing', 'clock'), ('goals', 'Goals', 'target'),
     ('schedules', 'Schedules', 'sun'), ('panel', 'Panel', 'board'),
     ('advanced', 'Advanced', 'sliders'),
 )
@@ -1220,6 +1220,15 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
                               'can open this page while the board is in Wi-Fi setup.') if hotspot else '')
            + (_notice('warn', escape(note)) if note else ''))
 
+    general = _section('general', 'General', 'How the board\'s pages look.', (
+        _field('color', 'Text colour', _options('color', _colour_choices(merged['color']), merged['color']),
+               'For your name and the per-discipline pages.')
+        + (f'<input type="hidden" name="{COMPACT_SHOWN}" value="1">'
+           + _switch('compact_workout_pages', 'Compact workout pages', merged['compact_workout_pages'],
+                     'Each workout in two still pages instead of one changing page.')
+           if _rows(matrix) < 64 else '')
+    ), 'type')
+
     rows = ''.join(_screen_row(name, *dict((n, (l, h)) for n, l, h in SCREENS)[name], on, merged)
                    for name, on in rotation_rows(display))
     rotation = _section('rotation', 'Rotation', 'Which screens the board shows, in this order, and for how long.', (
@@ -1292,12 +1301,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     panel = _section('panel', 'Panel', "The LED panel's size, brightness and wiring.", (
         _field('panel_size', 'Panel size', _options('panel_size', [(s, s) for s in sizes], panel_size(matrix)),
                'Columns x rows, as on the panel\'s label.')
-        + _field('color', 'Text colour', _options('color', _colour_choices(merged['color']), merged['color']),
-                 'For your name and the per-discipline pages.')
-        + (f'<input type="hidden" name="{COMPACT_SHOWN}" value="1">'
-           + _switch('compact_workout_pages', 'Compact workout pages', merged['compact_workout_pages'],
-                     'Each workout in two still pages instead of one changing page.')
-           if _rows(matrix) < 64 else '')
+
         + ''.join(_matrix_field(key, label, hint, matrix.get(key)) for key, label, hint in PANEL_FIELDS)
     ), 'board')
 
@@ -1329,7 +1333,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
           f'{logins_card(logins, signed_in, login_outcome, login_problems, _zone(display), editing_logins)}'
           f'{alerts_card(logins, signed_in, alert_outcome, alert_problems)}</div>'
         + f'<form method="post" action="/save" id="settings"><input type="hidden" name="{FORM_FIELD}" value="1">'
-          f'<div class="stack">{rotation}{timing}{goals}{schedules}{panel}{advanced}</div>'
+          f'<div class="stack">{general}{rotation}{timing}{goals}{schedules}{panel}{advanced}</div>'
         + '<div class="savebar"><div class="savebar-in"><div class="status" id="save-status"><span class="dot"></span>'
           '<span>Everything here is saved to config.json</span></div>'
           f'<button type="submit" class="primary" id="save">{icon("check")}<span>Save and restart</span></button>'

@@ -334,8 +334,11 @@ def test_name_and_text_is_gone_and_its_settings_live_where_they_belong():
     assert 'Name and text' not in html and 'href="#display"' not in html
     assert 'name="font"' not in html, 'the name screen fits its own font: the setting did nothing'
     assert 'name="streak_reminder_day"' in _card(html, 'goals')
-    panel = _card(html, 'panel')
-    assert 'Text colour' in panel and 'name="compact_workout_pages"' in panel
+    general = _card(html, 'general')
+    assert 'Text colour' in general and 'name="compact_workout_pages"' in general
+    assert 'Text colour' not in _card(html, 'panel')
+    assert html.index('href="#general"') < html.index('href="#rotation"'), 'first of the settings'
+    assert html.index('id="general"') < html.index('id="rotation"')
     advanced = html.split('id="advanced"', 1)[1].split('</details>', 1)[0]
     assert 'Fallback name' in advanced and 'name="username"' in advanced
 
