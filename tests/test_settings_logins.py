@@ -7,6 +7,7 @@ import re
 import time
 from html import unescape
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -201,6 +202,10 @@ def board(tmp_path, monkeypatch, state):
     b.httpd.server_close()
 
 
+# The page shows times in the board's zone (TWO_RIDERS' display.timezone), whatever the machine's.
+ZONE = ZoneInfo(TWO_RIDERS['display']['timezone'])
+
+
 def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
     board.units = {server.RENEW_UNIT: {'ActiveState': 'inactive', 'Result': 'exit-code',
                                        'ExecMainExitTimestamp': '@1762264800'},
@@ -215,8 +220,8 @@ def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
     assert 'Email and password set' in card and 'Email not set, password not set' in card
     # Labelled rows, times in the page's own style (systemd gives them as epoch seconds).
     assert '<dt>Renewal</dt><dd><span class="pill bad">Last run failed (exit-code)</span></dd>' in card
-    assert f'<dt>Last run</dt><dd>{logins.when(1762264800)} \u00b7 failed</dd>' in card  # the page, unescaped
-    assert f'<dt>Next check</dt><dd>{logins.when(1762268400)} \u00b7 then hourly</dd>' in card
+    assert f'<dt>Last run</dt><dd>{logins.when(1762264800, ZONE)} \u00b7 failed</dd>' in card  # the page, unescaped
+    assert f'<dt>Next check</dt><dd>{logins.when(1762268400, ZONE)} \u00b7 then hourly</dd>' in card
     assert '<span class="pill bad">3 in a row</span><span class="hint">Jen: invalid_grant</span>' in card
     assert 'refresh tokens only' in card
     assert 'scripts/seed_board.sh' in card and card.count('seed_board.sh') == 1  # Jen only

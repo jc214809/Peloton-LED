@@ -877,8 +877,8 @@ def renewal_status(view, zone=None):
         count = alerts['failures']
         rows.append(('Failures', _pill('bad', f'{count} in a row')
                      + f'<span class="hint">{escape(alerts.get("last_message") or "no message")}</span>'))
-    rows.append(('Mode', f'<span class="hint">{escape(MODE_TEXT.get(mode, "Unknown (an older install): re-run the "
-                                                                          "installer to record it."))}</span>'))
+    mode_text = MODE_TEXT.get(mode, 'Unknown (an older install): re-run the installer to record it.')
+    rows.append(('Mode', f'<span class="hint">{escape(mode_text)}</span>'))
     items = ''.join(f'<dt>{label}</dt><dd>{value}</dd>' for label, value in rows)
     return f'<dl class="facts" id="renewal" aria-live="polite"{" data-running" if renewing else ""}>{items}</dl>'
 
