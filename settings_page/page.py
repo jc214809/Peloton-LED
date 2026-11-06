@@ -317,6 +317,7 @@ dialog.modal:not(:modal) { position: static; width: auto; max-height: none; marg
 .modal-head h3 { margin: 0; font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--text); }
 .modal-head button { padding: 0; width: 36px; height: 36px; }
 .add-row { display: flex; gap: 8px; }
+#update-check { margin-top: 12px; }  /* the check's result, under the channel and Check */
 .add-row select { flex: 1; min-width: 0; }
 .changes { margin: 0 0 12px; }
 .changes ul { margin: 6px 0 0; padding-left: 0; list-style: none; display: grid; gap: 4px; font-size: 14px; }
