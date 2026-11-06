@@ -469,7 +469,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, self._page(**({'alert_problems': problems} if alerts
                                                      else {'login_problems': problems, 'editing_rider': rider})))
             if alerts:
-                return self._redirect(f'/?alerts={outcome.replace("logins_", "alerts_")}#alerts')
+                removed = (form.get('pushover_clear') or [''])[0] == 'on' and outcome == 'logins_saved'
+                return self._redirect(f'/?alerts={"alerts_removed" if removed else outcome.replace("logins_", "alerts_")}'
+                                      '#alerts')
             return self._redirect(f'/?logins={outcome}#logins')
         if self.settings.updates and self.settings.updates.running():
             # A rollback would put back config.json as it was, losing the save.
