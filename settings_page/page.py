@@ -280,11 +280,6 @@ body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; 
 .rider { padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); margin-top: 12px; }
 .rider > .hint { margin: -4px 0 12px; }
 .rider h3 { margin: 0 0 10px; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--text); }
-.login { padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
-  margin-top: 12px; display: grid; gap: 6px; }
-.login-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.login-head strong { font-size: 15px; }
-.login .hint { margin: 0; }
 .pill.bad { color: var(--bad); background: var(--bad-bg); border-color: var(--bad-line); }
 .pill.warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-line); }
 .pills { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -308,14 +303,33 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .pill.now::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
   animation: beat 1.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .pill.now::before { animation: none; } }
-dialog.modal { width: min(600px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 22px;
-  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .35); }
-dialog.modal::backdrop { background: rgba(10, 12, 18, .55); }
-dialog.modal:not(:modal) { position: static; width: auto; max-height: none; margin: 16px 0 0; box-shadow: none; }
-.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.modal-head h3 { margin: 0; font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--text); }
-.modal-head button { padding: 0; width: 36px; height: 36px; }
+details.rider-card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); margin-top: 12px; }
+details.rider-card > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 14px; }
+details.rider-card > summary::-webkit-details-marker { display: none; }
+details.rider-card > summary strong { font-size: 15px; }
+details.rider-card > summary .what { color: var(--text-2); font-size: 14px; flex: 1; }
+details.rider-card > summary .chev svg { width: 16px; height: 16px; color: var(--text-3); display: block; transition: transform .15s; }
+details.rider-card[open] > summary { border-bottom: 1px solid var(--border); }
+details.rider-card[open] > summary .what { visibility: hidden; }
+details.rider-card[open] > summary .chev svg { transform: rotate(180deg); }
+.rider-body { padding: 12px 14px 14px; }
+.rider-body > .hint { margin: 10px 0 0; }
+.rider-facts { display: grid; grid-template-columns: 9.5em minmax(0, 1fr); gap: 6px 20px; font-size: 14px; }
+.rider-facts .k { color: var(--text-3); font-weight: 600; }
+details.cred { grid-column: 1 / -1; margin: 0 -8px; border-radius: 8px; }
+details.cred > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 9.5em minmax(0, 1fr);
+  gap: 20px; padding: 4px 8px; border-radius: 8px; }
+details.cred > summary::-webkit-details-marker { display: none; }
+details.cred > summary:hover { background: var(--accent-soft); }
+details.cred > summary .change { color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+details.cred > summary .change svg { width: 14px; height: 14px; }
+details.cred[open] { background: var(--surface); border: 1px solid var(--border); margin-top: 4px; }
+details.cred[open] > summary .change { display: none; }
+.cred-edit { padding: 6px 8px 12px; }
+.cred-edit .hint { margin: 0 0 8px; }
+.cred-edit .actions { margin-top: 12px; }
+@media (max-width: 640px) { .rider-facts, details.cred > summary { grid-template-columns: 1fr; gap: 2px; }
+  .rider-facts .k:not(:first-child) { margin-top: 6px; } }
 .add-row { display: flex; gap: 8px; }
 #update-check { margin-top: 12px; }  /* the check's result, under the channel and Check */
 .add-row select { flex: 1; min-width: 0; }
@@ -463,15 +477,16 @@ for (const id of ['brightness_schedule', 'refresh_schedule']) {
   on.addEventListener('change', show);
   show();
 }
-// Change logins: a modal dialog. Without the script, the button is a link that opens it in the
-// page (?edit=logins); the page also renders it open after a save that had problems.
-const loginsDialog = document.getElementById('logins-dialog');
-if (loginsDialog) {
-  if (loginsDialog.open) { loginsDialog.close(); loginsDialog.showModal(); }
-  document.querySelectorAll('[data-dialog="logins-dialog"]').forEach(b => b.addEventListener('click', () => loginsDialog.showModal()));
-  loginsDialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => loginsDialog.close()));
-  loginsDialog.addEventListener('click', e => { if (e.target === loginsDialog) loginsDialog.close(); });  // the backdrop
-}
+// A rider's Email & password row: Cancel clears what was typed and closes it again. (Without the
+// script there's no Cancel: clicking the row closes it.)
+document.addEventListener('click', e => {
+  const cancel = e.target.closest('[data-cancel]');
+  if (!cancel) return;
+  const panel = cancel.closest('details.cred');
+  panel.querySelectorAll('input:not([type=hidden])').forEach(i => { i.value = ''; });
+  panel.open = false;
+  panel.querySelector('summary').focus();
+});
 // A renewal that's running: follow it, swapping in the status block until it's done.
 const followRenewal = () => setTimeout(async () => {
   try {
@@ -809,34 +824,80 @@ def _token_pill(login, zone):
     return _pill('ok', f'Valid until {when(token["expires_at"], zone)}')
 
 
-def _login_status(login, view, zone):
-    pills = [_token_pill(login, zone)]
-    if login.padlock:
-        pills.append(_pill('warn', 'Padlock on'))
-    pills.append(_pill('ok' if login.email_set and login.password_set else '',
-                       'Email and password set' if login.email_set and login.password_set
-                       else f'Email {"set" if login.email_set else "not set"}, '
-                            f'password {"set" if login.password_set else "not set"}'))
-    lines = []
+def _rider_pill(login):
+    """A rider's state in one pill: Working, or what needs a person."""
     if not login.token.get('ok'):
-        reason = login.token.get('reason') or 'unreadable'
-        # refresh_cookies.py's reasons are written for its command line: say what they mean here.
-        lines.append('No token on this board yet.' if reason == 'file does not exist'
-                     else f"The token file can't be used ({reason}).")
-    lines.append(login.chain.capitalize() + '.' if login.chain else 'No refresh token: renewal needs a login.')
-    renews = _renews(login, view)
-    if renews is not None:
-        lines.append(f'Renews {_renewal_time(renews, view, zone)}, {RENEW_BEFORE_S // 3600} hours before it expires.')
+        return _pill('bad', 'No working token')
+    if login.token.get('expired'):
+        return _pill('bad', 'Expired')
     if login.padlock:
-        lines.append(f'Renewal says: {login.padlock["reason"]}')
+        return _pill('warn', 'Needs login')
+    return _pill('ok', 'Working')
+
+
+def _credentials_row(login, view, signed_in, problems=(), editing=False):
+    """The Email & password row: whether they're saved and, with a PIN session, "Change", which opens
+    this rider's write-only form in place (its own Save: other riders' logins aren't touched)."""
+    saved = ('Set' if login.email_set and login.password_set
+             else f'Email {"set" if login.email_set else "not set"}, password {"set" if login.password_set else "not set"}')
+    if not signed_in:
+        return f'<span class="k">Email &amp; password</span><span>{escape(saved)}</span>'
+    top = ''
+    if problems:
+        items = ''.join(f'<li>{escape(p)}</li>' for p in problems)
+        top = _notice('bad', f'<strong>Not saved.</strong><ul>{items}</ul>', 'alert')
+    unused = ('<p class="hint">This board has no browser, so it never signs in with these: to fix a login here, '
+              're-seed it from your computer.</p>' if view.get('mode') == 'no-browser' else '')
+    return (f'<details class="cred" id="cred-{login.key}"{" open" if editing or problems else ""}>'
+            f'<summary><span class="k">Email &amp; password</span><span>{escape(saved)} '
+            f'<span class="change">&middot; {icon("edit")}Change</span></span></summary>'
+            f'<form method="post" action="/credentials" class="cred-edit">'
+            f'<input type="hidden" name="cred_{login.key}_name" value="{_attr(login.name)}">'
+            + top + unused
+            + '<p class="hint">Blank keeps what\'s saved; saved values are never shown. This page isn\'t encrypted, '
+              'so only change logins on your own network.</p><div class="cred-grid">'
+            + _secret_input(f'cred_{login.key}_email', 'Peloton email', 'email', login.email_set)
+            + _secret_input(f'cred_{login.key}_password', 'Peloton password', 'password', login.password_set,
+                            'new-password')
+            + f'</div><div class="actions"><button type="submit" class="primary">{icon("lock")}Save</button>'
+              '<button type="button" class="secondary js-only" hidden data-cancel>Cancel</button></div></form></details>')
+
+
+def _login_status(login, view, zone, signed_in=True, problems=(), editing=False):
+    """One rider's card: a header line (name, when it renews, a state pill) that opens to labelled
+    rows. Closed while it works; open by itself when the rider needs a person (or their login form
+    has problems)."""
+    renews = _renews(login, view)
+    rows = []
+    token = login.token
+    if not token.get('ok'):
+        reason = token.get('reason') or 'unreadable'
+        # refresh_cookies.py's reasons are written for its command line: say what they mean here.
+        rows.append(('Token', 'No token on this board yet' if reason == 'file does not exist'
+                     else f"The token file can't be used ({reason})"))
+    elif token.get('expired'):
+        rows.append(('Token', f'Expired {when(token["expires_at"], zone)}'))
+    else:
+        rows.append(('Token', f'Valid until {when(token["expires_at"], zone)}'))
+    if renews is not None:
+        rows.append(('Renews', f'{_renewal_time(renews, view, zone)[:1].upper()}{_renewal_time(renews, view, zone)[1:]}'
+                               f' \u00b7 {RENEW_BEFORE_S // 3600} hours before it expires'))
+    rows.append(('Refresh chain', login.chain[:1].upper() + login.chain[1:] if login.chain
+                 else 'None: renewal needs a login'))
+    if login.padlock:
+        rows.append(('Renewal says', login.padlock['reason']))
     if login.browser_attempt:
-        lines.append(f'Last browser login try: {when(login.browser_attempt, zone)}.')
+        rows.append(('Last browser try', when(login.browser_attempt, zone)))
+    facts = ''.join(f'<span class="k">{escape(k)}</span><span>{escape(v)}</span>' for k, v in rows)
+    facts += _credentials_row(login, view, signed_in, problems, editing)
     needs_seed = not login.healthy and view.get('mode') != 'browser'
     seed = (f'<p class="hint">To log in again, run this from the Peloton-LED checkout on your computer: '
             f'<code>{escape(view["seed"])}</code></p>' if needs_seed else '')
-    return (f'<div class="login"><div class="login-head"><strong>{escape(login.name)}</strong>'
-            f'<span class="pills">{"".join(pills)}</span></div>'
-            + ''.join(f'<p class="hint">{escape(line)}</p>' for line in lines) + seed + '</div>')
+    what = f'Renews {_renewal_time(renews, view, zone)}' if renews is not None and login.healthy else ''
+    opened = not login.healthy or problems or editing
+    return (f'<details class="rider-card"{" open" if opened else ""}><summary><strong>{escape(login.name)}</strong>'
+            f'<span class="what">{escape(what)}</span>{_rider_pill(login)}<span class="chev">{icon("chevron")}</span>'
+            f'</summary><div class="rider-body"><div class="rider-facts">{facts}</div>{seed}</div></details>')
 
 
 def _secret_input(name, label, kind, is_set, autocomplete='off'):
@@ -928,35 +989,10 @@ def _renewal_time(at, view, zone):
     return f'at the first check after {when(at, zone)}'
 
 
-def _logins_dialog(riders, problems=(), open_=False):
-    """Change logins: each rider's email and password, write-only, in a dialog the page's script
-    opens as a modal. open_: shown in the page (no script, or after a save with problems)."""
-    top = ''
-    if problems:
-        items = ''.join(f'<li>{escape(p)}</li>' for p in problems)
-        top = _notice('bad', f'<strong>Logins not saved.</strong><ul>{items}</ul>', 'alert')
-    rows = ''.join(
-        f'<div class="rider"><h3>{escape(r.name)}</h3><input type="hidden" name="cred_{r.key}_name" '
-        f'value="{_attr(r.name)}"><div class="cred-grid">'
-        + _secret_input(f'cred_{r.key}_email', 'Peloton email', 'email', r.email_set)
-        + _secret_input(f'cred_{r.key}_password', 'Peloton password', 'password', r.password_set, 'new-password')
-        + '</div></div>' for r in riders)
-    return (f'<dialog id="logins-dialog" class="modal" aria-labelledby="logins-dialog-title"{" open" if open_ else ""}>'
-            '<form method="post" action="/credentials" id="credentials">'
-            '<div class="modal-head"><h3 id="logins-dialog-title">Change logins</h3>'
-            f'<button type="button" class="ghost js-only" hidden data-close aria-label="Close">{icon("x")}</button>'
-            '</div><p class="hint">Saved to the board\'s auth.env and never shown again, here or anywhere: blank '
-            'keeps what\'s saved. This page isn\'t encrypted, so only do this on your own network.</p>'
-            + top + rows
-            + f'<div class="actions"><button type="submit" class="primary">{icon("lock")}Save logins</button>'
-              '<button type="button" class="secondary js-only" hidden data-close>Cancel</button>'
-              '<noscript><a class="btn secondary" href="/#logins">Cancel</a></noscript></div></form></dialog>')
-
-
-def logins_card(view, signed_in=True, outcome=None, problems=(), zone=None, editing=False):
-    """Logins: renewal's status, each rider's health, Renew now, and Change logins, which opens
-    the write-only credentials dialog (only with a PIN session: the setup hotspot alone can't change
-    logins). view: Settings.logins(). editing: the dialog starts open (?edit=logins, or problems)."""
+def logins_card(view, signed_in=True, outcome=None, problems=(), zone=None, editing=None):
+    """Logins: renewal's status, a card per rider (whose Email & password row changes their login,
+    with a PIN session only: the setup hotspot alone can't), and Renew now. view: Settings.logins().
+    editing: the key of the rider whose login form was just posted, which problems belong to."""
     if not view:
         return ''
     top = ''
@@ -964,20 +1000,17 @@ def logins_card(view, signed_in=True, outcome=None, problems=(), zone=None, edit
         kind, html = LOGIN_OUTCOMES[outcome]
         top += _notice(kind, html, 'alert' if kind == 'bad' else 'status')
     riders = view.get('riders') or []
-    change = ''
-    if signed_in:
-        change = (f'<button type="button" class="secondary js-only" hidden data-dialog="logins-dialog">'
-                  f'{icon("edit")}Change logins</button>'
-                  f'<noscript><a class="btn secondary" href="/?edit=logins#logins">{icon("edit")}Change logins'
-                  '</a></noscript>')
+    if problems and not any(r.key == editing for r in riders):  # not one rider's (the riders changed)
+        items = ''.join(f'<li>{escape(p)}</li>' for p in problems)
+        top += _notice('bad', f'<strong>Logins not saved.</strong><ul>{items}</ul>', 'alert')
+    cards = ''.join(_login_status(r, view, zone, signed_in, problems if r.key == editing else (), r.key == editing)
+                    for r in riders)
     actions = ('<div class="actions"><form method="post" action="/renew"><button type="submit" class="secondary">'
-               f'{icon("refresh")}Renew now</button></form>{change}</div>')
-    if signed_in:
-        actions += _logins_dialog(riders, problems, editing or bool(problems))
-    else:
+               f'{icon("refresh")}Renew now</button></form></div>')
+    if not signed_in:
         actions += _notice('info', 'Changing logins takes the PIN, even in setup mode: '
                                    '<a href="/signin">sign in with the PIN</a>.')
-    body = top + renewal_status(view, zone) + ''.join(_login_status(r, view, zone) for r in riders) + actions
+    body = top + renewal_status(view, zone) + cards + actions
     return _section('logins', 'Logins', "Each rider's Peloton login, and how the board keeps it working.", body,
                     'key')
 
@@ -1250,14 +1283,14 @@ def check_result(view, zone=None):
 
 def settings_page(config, hotspot=None, problems=(), saved=None, board=None, note=None, logins=None,
                   signed_in=True, login_outcome=None, login_problems=(), updates=None, started=None,
-                  alert_outcome=None, alert_problems=(), editing_logins=False):
+                  alert_outcome=None, alert_problems=(), editing_rider=None):
     """The settings form, filled from config. hotspot: the Wi-Fi setup hotspot's name when this
     browser is on it (no PIN needed). note: why config.json couldn't be read, if it couldn't.
     logins: Settings.logins() for the Logins card (None leaves it off); signed_in: a PIN session,
     which changing logins needs. updates: updates.Updates.view() for the Updates card (None leaves
     it off); started: how starting an update or rollback went, one of updates.STARTS. alert_outcome
-    and alert_problems: the Pushover alerts card's (ALERT_OUTCOMES). editing_logins: the Change
-    logins dialog starts open."""
+    and alert_problems: the Pushover alerts card's (ALERT_OUTCOMES). editing_rider: the key of the
+    rider whose login form login_problems came from (their card and form start open)."""
     display = section(config, 'display')
     matrix = section(config, 'matrix')
     merged = {**DEFAULTS, **display}  # what the app uses where config.json says nothing
@@ -1377,7 +1410,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
           'and the display restarts to use them. Logins go to the board\'s auth.env and are never shown.</p></div>'
         + top
         + f'<div class="stack" style="margin-bottom:20px">{updates_card(updates, started, _zone(display))}'
-          f'{logins_card(logins, signed_in, login_outcome, login_problems, _zone(display), editing_logins)}'
+          f'{logins_card(logins, signed_in, login_outcome, login_problems, _zone(display), editing_rider)}'
           f'{alerts_card(logins, signed_in, alert_outcome, alert_problems)}</div>'
         + f'<form method="post" action="/save" id="settings"><input type="hidden" name="{FORM_FIELD}" value="1">'
           f'<div class="stack">{general}{rotation}{timing}{goals}{schedules}{panel}{advanced}</div>'

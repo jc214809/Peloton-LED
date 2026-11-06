@@ -534,8 +534,11 @@ to run from your computer.
 - *Renew now* starts `peloton-token-refresh.service` straight away (the same
   run the hourly timer does, with its once-a-day limit on browser logins);
   the status above follows it.
-- *Change logins* opens a window with each rider's Peloton email and
-  password; *Save logins* writes them to `/etc/peloton-led/auth.env`. The
+- Each rider has a card: closed to one line (name, when their token renews,
+  and a pill saying Working) while their login works, and open by itself when
+  it needs you. Click a rider's *Email & password* row (*Change*) to set their
+  Peloton email or password; *Save* writes just that rider's to
+  `/etc/peloton-led/auth.env`, and *Cancel* clears and closes it. The
   Pushover keys are set the same way from their own card, where *Send a test
   alert* sends a Pushover message, at most once a minute. Fields are always empty; blank keeps
   what's saved; nothing saved is ever sent back to a browser or written to a
