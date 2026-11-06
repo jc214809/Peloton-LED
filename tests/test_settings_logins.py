@@ -451,3 +451,32 @@ def test_renewal_rows_for_each_state():
     html = page.renewal_status({'last_run': 'Wed 09:00', 'last_result': None})
     assert 'Last run failed</span>' in html and '<dd>Wed 09:00 &middot; failed</dd>' in html, "an old systemd's text"
     assert re.search(r'id="logins"', page.settings_page({}, logins={'riders': [], 'seed': 'x'}))
+
+
+@pytest.mark.parametrize('value, seconds', [
+    ('2h 5min 3.5s', 7503.5), ('1d 30min', 88200.0), ('1w', 604800.0), ('750ms', 0.75), ('3min 200us', 180.0002),
+    ('', None), (None, None), ('0', None), ('infinity', None), ('n/a', None), ('5 parsecs', None),
+])
+def test_systemd_timespans_become_seconds(value, seconds):
+    found = server.timespan_seconds(value)
+    assert found == pytest.approx(seconds) if seconds is not None else found is None
+
+
+def test_a_timer_counted_from_boot_still_says_when_it_next_runs(tmp_path):
+    # PelotonPi, 2026-11-05: OnBootSec/OnUnitActiveSec timers leave NextElapseUSecRealtime blank, so
+    # the card said "Not scheduled" while the timer ran. Monotonic time since boot + boot's wall time.
+    settings = server.Settings(str(tmp_path / 'config.json'), clock=lambda: 1_000_000.0, monotonic=lambda: 3600.0)
+    assert settings.next_elapse({'NextElapseUSecRealtime': '', 'NextElapseUSecMonotonic': '1h 30min'}) == 1_001_800.0
+    assert settings.next_elapse({'NextElapseUSecRealtime': '@1762268400'}) == 1762268400.0, 'a calendar timer'
+    assert settings.next_elapse({'NextElapseUSecRealtime': '@0', 'NextElapseUSecMonotonic': '0'}) is None
+    assert settings.next_elapse({}) is None
+
+
+def test_the_card_shows_the_next_check_of_a_timer_counted_from_boot(board):
+    board.units = {server.RENEW_TIMER: {'ActiveState': 'active', 'NextElapseUSecRealtime': '',
+                                        'NextElapseUSecMonotonic': '2h'}}
+    board.settings.clock, board.settings.monotonic = (lambda: 1762264800.0), (lambda: 3600.0)
+    board.sign_in()
+    card = board.request('/')[2].split('id="logins"', 1)[1].split('</section>', 1)[0]
+    assert f'<dt>Next check</dt><dd>{logins.when(1762268400, ZONE)} · then hourly</dd>' in card
+    assert 'Not scheduled' not in card
