@@ -521,15 +521,26 @@ the live `config.json` from a phone or laptop:
 Riders' names, token and cache paths, login variable names and the journey
 route aren't on the page and are kept as they are.
 
-**Logins.** For each rider: whether the token works and until when, the
-refresh chain's age and renewals, whether the padlock is on and the reason
-renewal gave, the last browser-login try, and whether an email and password
-are saved (never what they are). Above them, renewal's status: running now or
-how the last run went and when, the next check (on a manual board, checks run
-hourly only while the display is on), failures in a row, and the board's
-renewal mode. A run that's going updates there by itself until it finishes. When a rider needs a fresh login on a board without a
-browser, the card shows the `scripts/seed_board.sh user@board.local` command
-to run from your computer.
+**Logins.** At the top, renewal's status as labelled rows:
+
+- **Renewal**: running now, or whether the last run worked. A run that's going
+  updates there by itself until it finishes.
+- **Last run**, and **Interval**: every hour (on a manual board, only while the
+  display is on). Each check renews a token only once it's within 12 hours of
+  expiring; otherwise it does nothing.
+- **Next check**, and **Next renewal**: when the soonest rider's token will
+  actually be renewed, at the first check within 12 hours of it expiring.
+  Times are approximate, since a check can start up to 10 minutes late.
+- **Failures** in a row, if any, and the board's renewal **Mode**.
+
+Then a card per rider. It stays closed to one line (name, when their token
+renews, and a green *Working* pill) while their login works. It opens by
+itself when it needs you: *No working token*, *Expired* or *Needs login*, with
+the reason renewal gave. On a board without a browser, it also shows the
+`scripts/seed_board.sh user@board.local` command to run from your computer.
+Open, it lists the token's expiry, when it renews, the refresh chain's age and
+renewals, the last browser-login try, and whether an email and password are
+saved (never what they are).
 
 - *Renew now* starts `peloton-token-refresh.service` straight away (the same
   run the hourly timer does, with its once-a-day limit on browser logins);
