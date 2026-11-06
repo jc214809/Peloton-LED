@@ -379,13 +379,13 @@ class Handler(BaseHTTPRequestHandler):
         return parse_qs(self.rfile.read(length).decode('utf-8', 'replace'), keep_blank_values=True)
 
     def _page(self, problems=(), saved=None, config=None, login_outcome=None, login_problems=(), started=None,
-              alert_outcome=None, alert_problems=(), editing_logins=False):
+              alert_outcome=None, alert_problems=(), editing_rider=None):
         loaded, problem = self.settings.load()
         updates = self.settings.updates
         return page.settings_page(config if config is not None else loaded, self._in_setup(), problems, saved,
                                   board_name(), problem, self.settings.logins(), self._signed_in(),
                                   login_outcome, login_problems, updates.view() if updates else None, started,
-                                  alert_outcome, alert_problems, editing_logins)
+                                  alert_outcome, alert_problems, editing_rider)
 
     # --- routes
 
@@ -420,8 +420,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, self._page(saved=saved if saved in page.SAVED else None,
                                    login_outcome=outcome if outcome in page.LOGIN_OUTCOMES else None,
                                    started=started if started in STARTS else None,
-                                   alert_outcome=alert if alert in page.ALERT_OUTCOMES else None,
-                                   editing_logins=query.get('edit') == ['logins'] and self._signed_in()))
+                                   alert_outcome=alert if alert in page.ALERT_OUTCOMES else None))
 
     def do_POST(self):
         path = urlsplit(self.path).path
@@ -464,8 +463,11 @@ class Handler(BaseHTTPRequestHandler):
             alerts = (form.get('card') or [''])[0] == 'alerts'  # the Pushover alerts card's form
             if problems:
                 logger.info('Settings page: %s not saved: %s', 'alert keys' if alerts else 'logins', '; '.join(problems))
+                # A rider's form names its rider (cred_<key>_name): their card and form reopen with the problems.
+                rider = next((name[len('cred_'):-len('_name')] for name in form
+                              if name.startswith('cred_') and name.endswith('_name')), None)
                 return self._send(400, self._page(**({'alert_problems': problems} if alerts
-                                                     else {'login_problems': problems})))
+                                                     else {'login_problems': problems, 'editing_rider': rider})))
             if alerts:
                 return self._redirect(f'/?alerts={outcome.replace("logins_", "alerts_")}#alerts')
             return self._redirect(f'/?logins={outcome}#logins')

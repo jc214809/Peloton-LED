@@ -216,9 +216,13 @@ def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
     board.sign_in()
     html = board.request('/')[2]
     card = html.split('id="logins"', 1)[1].split('</section>', 1)[0]
-    assert 'Valid until' in card and 'Expired' in card and 'Padlock on' in card
-    assert 'Renewal says: invalid_grant: chain is dead' in card
-    assert 'Email and password set' in card and 'Email not set, password not set' in card
+    joel, jen = card.split('<details class="rider-card"')[1:3]
+    # Joel works: his card stays closed. Jen needs a login: hers opens by itself, saying why.
+    assert joel.startswith('><summary><strong>Joel</strong>') and '<span class="pill ok">Working</span>' in joel
+    assert '<span class="k">Token</span><span>Valid until' in joel
+    assert jen.startswith(' open><summary><strong>Jen</strong>') and '<span class="pill bad">Expired</span>' in jen
+    assert '<span class="k">Renewal says</span><span>invalid_grant: chain is dead</span>' in jen
+    assert '<span>Set <span class="change">' in joel and '<span>Email not set, password not set ' in jen
     # Labelled rows, times in the page's own style (systemd gives them as epoch seconds).
     assert '<dt>Renewal</dt><dd><span class="pill bad">Last run failed (exit-code)</span></dd>' in card
     assert f'<dt>Last run</dt><dd>{logins.when(1762264800, ZONE)} \u00b7 failed</dd>' in card  # the page, unescaped
@@ -227,7 +231,8 @@ def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
     assert '<span class="pill bad">3 in a row</span><span class="hint">Jen: invalid_grant</span>' in card
     assert 'Automatic, with refresh tokens only.' in card
     assert 'scripts/seed_board.sh' in card and card.count('seed_board.sh') == 1  # Jen only
-    assert 'Change logins' in card and 'Save logins' in card and 'Send a test alert' not in card
+    assert card.count('<details class="cred"') == 2 and 'Send a test alert' not in card
+    assert 'This board has no browser, so it never signs in with these' in card, 'a no-browser board says so'
     alerts = html.split('id="alerts"', 1)[1].split('</section>', 1)[0]
     assert 'Send a test alert' in alerts and 'Save alert keys' in alerts and 'Remove the Pushover keys' in alerts
     for secret in list(SECRETS.values()) + ['rt-secret']:
@@ -260,18 +265,30 @@ def test_a_running_renewal_is_followed_until_it_is_done(board):
     assert now['renewing'] is False and 'Last run worked' in now['html'] and 'data-running' not in now['html']
 
 
-def test_change_logins_is_a_dialog_with_a_no_script_way_in(board):
+def test_each_riders_login_changes_from_their_own_email_and_password_row(board):
     board.sign_in()
     html = board.request('/')[2]
     card = html.split('id="logins"', 1)[1].split('</section>', 1)[0]
-    assert 'data-dialog="logins-dialog"' in card and 'href="/?edit=logins#logins"' in card
-    assert '<dialog id="logins-dialog" class="modal" aria-labelledby="logins-dialog-title">' in card, 'closed'
-    assert 'name="cred_0_email"' in card and 'name="pushover_app_token"' not in card, 'riders only'
-    assert '<dialog id="logins-dialog" class="modal" aria-labelledby="logins-dialog-title" open>' in board.request(
-        '/?edit=logins')[2], 'opened in the page without the script'
-    assert "loginsDialog.showModal()" in html
-    status, _, body = board.request('/credentials', {'cred_0_email': 'nope'})
-    assert status == 400 and 'aria-labelledby="logins-dialog-title" open>' in body, 'problems: open again'
+    assert 'Change logins' not in card and '<dialog' not in card, 'no separate button or window'
+    joel = card.split('<details class="cred" id="cred-0">', 1)[1].split('</details>', 1)[0]
+    assert '<span class="k">Email & password</span>' in joel and 'Change</span>' in joel  # the page, unescaped
+    assert 'name="cred_0_email"' in joel and 'name="cred_1_email"' not in joel, "only this rider's fields"
+    assert '<input type="hidden" name="cred_0_name" value="Joel">' in joel
+    assert 'data-cancel' in joel and "closest('details.cred')" in html, 'Cancel clears and closes it'
+    # A save with problems opens that rider's card and form again, the problems inside.
+    status, _, body = board.request('/credentials', {'cred_1_name': 'Jen', 'cred_1_email': 'nope'})
+    assert status == 400
+    jen = body.split('<details class="cred" id="cred-1" open>', 1)[1].split('</details>', 1)[0]
+    assert "Jen's email doesn't look like" in jen and '<details class="cred" id="cred-0" open>' not in body
+
+
+def test_saving_one_riders_login_leaves_the_others(board):
+    board.sign_in()
+    status, headers, _ = board.request('/credentials', {'cred_1_name': 'Jen', 'cred_1_password': 'jens-new-one'})
+    assert headers['Location'] == '/?logins=logins_saved#logins'
+    saved = read_auth_env(board.auth_env)
+    assert saved['PELOTON_PASSWORD_JEN'] == 'jens-new-one'
+    assert saved['PELOTON_PASSWORD_RIDER_ONE'] == SECRETS['PELOTON_PASSWORD_RIDER_ONE']
 
 
 def test_the_alert_keys_save_from_their_own_card(board):
@@ -435,7 +452,7 @@ def test_seed_command_names_the_checkout_owner(tmp_path, monkeypatch):
 
 def test_the_card_on_a_fresh_board(tmp_path):
     html = page.logins_card({'riders': [], 'mode': None, 'seed': 'x'})
-    assert 'Unknown (an older install)' in html and 'No run since the board started' in html and 'Save logins' in html
+    assert 'Unknown (an older install)' in html and 'No run since the board started' in html and 'Renew now' in html
     assert page.logins_card(None) == '' and page.alerts_card(None) == ''
     assert 'Off: no keys' in page.alerts_card({'pushover': False}) and 'Send a test alert' not in page.alerts_card({})
     assert 'sign in with the PIN' in page.alerts_card({'pushover': True}, signed_in=False)
@@ -488,13 +505,14 @@ def test_a_token_problem_says_what_it_means_and_keeps_its_capitals():
     from settings_page.logins import RiderLogin
     import dataclasses
     fields = {f.name: None for f in dataclasses.fields(RiderLogin)}
-    login = RiderLogin(**{**fields, 'name': 'Joel', 'token': {'ok': False, 'reason': 'JWT payload has no usable exp claim'},
+    login = RiderLogin(**{**fields, 'key': '0', 'name': 'Joel', 'token': {'ok': False, 'reason': 'JWT payload has no usable exp claim'},
                           'chain': None, 'padlock': None, 'browser_attempt': None, 'email_set': True,
                           'password_set': True})
     html = page._login_status(login, {'mode': 'browser'}, None)
-    assert 'The token file can&#x27;t be used (JWT payload has no usable exp claim).' in html, 'JWT, not Jwt'
+    assert '<span class="k">Token</span><span>The token file can&#x27;t be used (JWT payload has no usable exp claim)</span>' in html, 'JWT, not Jwt'
+    assert html.startswith('<details class="rider-card" open>'), 'no working token: it opens by itself'
     missing = dataclasses.replace(login, token={'ok': False, 'reason': 'file does not exist'})
-    assert 'No token on this board yet.' in page._login_status(missing, {'mode': 'browser'}, None)
+    assert '<span>No token on this board yet</span>' in page._login_status(missing, {'mode': 'browser'}, None)
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -541,7 +559,8 @@ def test_the_card_shows_the_interval_and_when_each_token_renews():
     joel = logins.when(next_check + 18 * 3600, ZONE)
     assert (f'<dt>Next renewal</dt><dd>Around {jen} <span class="hint">&middot; Jen\'s token, 12 hours before '
             'it expires</span></dd>') in html, 'the soonest rider'
-    assert f'Renews around {jen}, 12 hours before it expires.' in html and f'Renews around {joel}, 12' in html
+    assert f'<span class="k">Renews</span><span>Around {jen} \u00b7 12 hours before it expires</span>' in html
+    assert f'<span class="what">Renews around {joel}</span>' in html, 'on the closed card\'s line'
 
 
 def test_with_no_check_scheduled_it_renews_at_the_first_check_after_its_due():
