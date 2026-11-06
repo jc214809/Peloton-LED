@@ -162,7 +162,7 @@ Options:
 
 Your name stays fixed at the top in the largest font that fits, above a blue underline. The panel below rotates through up to six highlights, 4 s each: **Total Workouts** (in large gold digits), **This Week** (workouts and minutes since Monday), **Top Discipline**, and your **top three instructors** by class count. The instructor counts come from the [workout log](#refresh-behavior), so a workout still in progress is counted once it finishes. Only real instructors count: workouts without a class (Just Walk, Just Ride, Lanebreak, ride goals, free outdoor sessions) are left out, and a class with two or more instructors counts once for each of them.
 
-Options: `duration` (or `screen_durations.username`) is the minimum time on screen; it's extended automatically so every highlight gets its 4 s. The name comes from `--username`, then `users[].username`, then your Peloton username, then `display.username`. `font` and `color` style the name.
+Options: `duration` (or `screen_durations.username`) is the minimum time on screen; it's extended automatically so every highlight gets its 4 s. The name comes from `--username`, then `users[].username`, then your Peloton username, then `display.username`. `color` colours the name (*Text colour* on the settings page). The name always takes the largest font that fits, so `font` no longer does anything.
 
 ### `streaks` — weekly and daily streaks
 
@@ -321,8 +321,8 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | Setting | Default | Meaning |
 |---|---|---|
 | `username` | Peloton Member | Fallback if profile is unavailable; `--username` takes precedence |
-| `font` | stats | Username font: discipline, info, titles, stats, countdown |
-| `color` | white | white, red, gold, disney_blue, down |
+| `font` | stats | No longer used: the name takes the largest font that fits. Kept so older configs still load |
+| `color` | white | Text colour for your name and the per-discipline pages: white, gold, red, disney_blue (blue on the settings page), or down (a darker red, kept for older configs) |
 | `duration` | 4 | Username screen seconds |
 | `overview_duration` | 4 | Per-discipline and PR screen seconds |
 | `last_workout_duration` | 30 | `0` hides workout screens; otherwise only used with `compact_workout_pages`. Normal workout pages are timed by `last_workout_detail_interval` (see below) |
@@ -458,7 +458,20 @@ See [implementation status and validation evidence](docs/phase-1-2-status.md).
 
 On the Pi, edit `config.json` in the checkout and restart the service; the services read it directly. See [Editing the config](docs/install.md#editing-the-config).
 
-Or change it from a browser: the **[settings page](docs/install.md#settings-page)** at `http://<board>.local:8080` covers each rider's login health (with Renew now and write-only credentials), the rotation, durations, schedules, goals (per rider too) and the panel. Sign in with the PIN the board shows; saved passwords and keys are never shown.
+Or change it from a browser: the **[settings page](docs/install.md#settings-page)** at `http://<board>.local:8080`. Sign in with the PIN the board shows; saved passwords and keys are never shown. It has:
+
+- **Updates**: what's installed, a check for a newer release or Beta (with each change's release notes), *Update now* and *Roll back*.
+- **Logins**: token renewal's status (how often it checks, when it next checks, and when each rider's token will actually renew), a card per rider, and *Renew now*. Click a rider's *Email & password* row to change their login.
+- **Pushover alerts**: whether alerts are on, a test alert, and the keys.
+- **General**, **Rotation**, **Timing**, **Goals**, **Schedules**, **Panel** and **Advanced**: everything in `config.json`'s `display` and `matrix` sections a person would change.
+
+### Updating
+
+Once a board is on v0.1.0 or later, it updates itself: from the settings page's **Updates** card, or over SSH with `peloton-update check` and then `sudo peloton-update update` (add `--channel beta` for the newest Beta). A new version has to prove it works within 5 minutes, or the board rolls back to what it had, `config.json` included; `sudo peloton-rollback` undoes the last update by hand. The details are in [Updating with `peloton-update`](docs/install.md#updating-with-peloton-update).
+
+### How releases are made
+
+Pull requests go into `develop-beta` (the default branch). Each one needs a `## Release notes` section in its description, saying in a sentence what changes on the board (or "None"), and a check fails without it. Merging a pull request tags it `vX.Y.N-beta`, which boards on the Beta channel can install once its tests pass. A `develop-beta` → `main` pull request makes a release: it's tagged `vX.Y.0` and gets a GitHub release listing every pull request's notes.
 
 ## Two users on one board
 
