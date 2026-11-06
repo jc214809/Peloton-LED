@@ -8,6 +8,7 @@ whether each one is set ever leaves this module.
 """
 import json
 import logging
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -27,6 +28,11 @@ SINGLE_ENV = ('PELOTON_EMAIL', 'PELOTON_PASSWORD')  # setup_config.py's names fo
 PUSHOVER_KEYS = ('PUSHOVER_APP_TOKEN', 'PUSHOVER_USER_KEY')
 # What the page says each board's renewal does (the installer's resolve_token_mode).
 TOKEN_MODES = ('browser', 'no-browser', 'none')
+# How renewal runs, as packaging/systemd's units set it (tests check they agree): the timer checks
+# every CHECK_EVERY_S (OnUnitActiveSec=1h), starting up to 10 minutes late (RandomizedDelaySec), and a
+# check renews a token only once it's within RENEW_BEFORE_S of expiring (--renew-before-hours 12).
+CHECK_EVERY_S = 60 * 60
+RENEW_BEFORE_S = 12 * 60 * 60
 _EMAIL = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
 _PUSHOVER = re.compile(r'[A-Za-z0-9]{20,40}')
 _ENV_LINE = re.compile(r'\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$')
@@ -242,6 +248,21 @@ def credential_changes(form, logins):
                 changes[name] = value
                 changed.append(label)
     return (changes, problems, changed) if not problems else ({}, problems, [])
+
+
+def renews_at(token, next_check):
+    """When renewal will renew this token: the first check once it's within RENEW_BEFORE_S of expiring
+    (at once if it already is), counting hourly from next_check (epoch seconds). Without a next check
+    (no timer running), from when it becomes due. None when the token has no expiry to go by."""
+    expires = token.get('expires_at') if token.get('ok') else None
+    if not isinstance(expires, (int, float)) or isinstance(expires, bool):
+        return None
+    due = expires - RENEW_BEFORE_S
+    if not isinstance(next_check, (int, float)) or isinstance(next_check, bool):
+        return due
+    if due <= next_check:
+        return next_check
+    return next_check + math.ceil((due - next_check) / CHECK_EVERY_S) * CHECK_EVERY_S
 
 
 def when(timestamp, zone=None):

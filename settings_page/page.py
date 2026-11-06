@@ -15,7 +15,7 @@ from self_update.github import FAILED, PASSED, REPO, RUNNING
 from self_update.state import ROLLBACK_FAILED, UNFINISHED
 from self_update.update import (BETA, BETA_BRANCH, CURRENT, RELEASES, WAITING, WOULD_UPDATE, beta_number, name_of,
                                 release_of)
-from settings_page.logins import when
+from settings_page.logins import RENEW_BEFORE_S, renews_at, when
 from settings_page.updates import BUSY, START_FAILED, STARTED, STEPS
 from settings_page.form import (COLORS, COMPACT_SHOWN, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
                                 SHARED_DURATION, STREAK_REMINDER_DEFAULT, SWITCH_KEYS, TIMING, WEEKDAYS,
@@ -824,6 +824,9 @@ def _login_status(login, view, zone):
         lines.append('No token on this board yet.' if reason == 'file does not exist'
                      else f"The token file can't be used ({reason}).")
     lines.append(login.chain.capitalize() + '.' if login.chain else 'No refresh token: renewal needs a login.')
+    renews = _renews(login, view)
+    if renews is not None:
+        lines.append(f'Renews {_renewal_time(renews, view, zone)}, {RENEW_BEFORE_S // 3600} hours before it expires.')
     if login.padlock:
         lines.append(f'Renewal says: {login.padlock["reason"]}')
     if login.browser_attempt:
@@ -867,8 +870,13 @@ def renewal_status(view, zone=None):
     if view.get('last_run'):
         worked = 'worked' if result == 'success' else 'failed'
         rows.append(('Last run', escape(_at(view['last_run'], zone)) + ('' if renewing else f' &middot; {worked}')))
+    if mode != 'none':
+        rows.append(('Interval', 'Every hour' + (' while the display is on' if view.get('display_running') is False
+                                                 and not view.get('timer_next') else '')
+                     + ' <span class="hint">&middot; each check renews only tokens within '
+                       f'{RENEW_BEFORE_S // 3600} hours of expiring</span>'))
     if view.get('timer_next'):
-        rows.append(('Next check', escape(_at(view['timer_next'], zone)) + ' &middot; then hourly'))
+        rows.append(('Next check', escape(_at(view['timer_next'], zone))))
     elif mode == 'none':
         rows.append(('Next check', 'Off: automatic renewal isn\'t installed. <em>Renew now</em> still works.'))
     elif view.get('display_running') is False:
@@ -877,6 +885,13 @@ def renewal_status(view, zone=None):
     else:
         rows.append(('Next check', 'Not scheduled <span class="hint">&middot; the hourly timer isn\'t running'
                                    '</span>'))
+    upcoming = _next_renewal(view)
+    if upcoming:
+        at, login = upcoming
+        text = _renewal_time(at, view, zone)
+        rows.append(('Next renewal', f'{escape(text[:1].upper() + text[1:])} <span class="hint">&middot; '
+                                     f'{escape(login.name)}\'s token, '
+                                     f'{RENEW_BEFORE_S // 3600} hours before it expires</span>'))
     alerts = view.get('alerts') or {}
     if alerts.get('failures'):
         count = alerts['failures']
@@ -886,6 +901,31 @@ def renewal_status(view, zone=None):
     rows.append(('Mode', f'<span class="hint">{escape(mode_text)}</span>'))
     items = ''.join(f'<dt>{label}</dt><dd>{value}</dd>' for label, value in rows)
     return f'<dl class="facts" id="renewal" aria-live="polite"{" data-running" if renewing else ""}>{items}</dl>'
+
+
+def _renews(login, view):
+    """When renewal will renew this rider's token (logins.renews_at), or None: no timer (mode none),
+    no expiry to go by, or nothing to renew with (no refresh token, on a board without a browser)."""
+    mode = view.get('mode')
+    if mode == 'none' or not (login.chain or mode == 'browser'):
+        return None
+    next_check = view.get('timer_next')
+    return renews_at(login.token, next_check if isinstance(next_check, (int, float)) else None)
+
+
+def _next_renewal(view):
+    """(when, rider) of the soonest renewal, or None."""
+    found = [(at, login) for login in view.get('riders') or () if (at := _renews(login, view)) is not None]
+    return min(found, key=lambda pair: pair[0]) if found else None
+
+
+def _renewal_time(at, view, zone):
+    """When a renewal happens, in words (plain text): around a check's time (checks start up to 10
+    minutes late, the timer's RandomizedDelaySec), or, with no check scheduled (a manual board's
+    display is off), at the first check after it's due."""
+    if isinstance(view.get('timer_next'), (int, float)):
+        return f'around {when(at, zone)}'
+    return f'at the first check after {when(at, zone)}'
 
 
 def _logins_dialog(riders, problems=(), open_=False):
