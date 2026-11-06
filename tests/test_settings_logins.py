@@ -3,6 +3,7 @@ auth.env, and the Renew now and test alert buttons. No network; systemctl and Pu
 import base64
 import json
 import os
+import pathlib
 import re
 import time
 from html import unescape
@@ -221,9 +222,10 @@ def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
     # Labelled rows, times in the page's own style (systemd gives them as epoch seconds).
     assert '<dt>Renewal</dt><dd><span class="pill bad">Last run failed (exit-code)</span></dd>' in card
     assert f'<dt>Last run</dt><dd>{logins.when(1762264800, ZONE)} \u00b7 failed</dd>' in card  # the page, unescaped
-    assert f'<dt>Next check</dt><dd>{logins.when(1762268400, ZONE)} \u00b7 then hourly</dd>' in card
+    assert f'<dt>Next check</dt><dd>{logins.when(1762268400, ZONE)}</dd>' in card
+    assert '<dt>Interval</dt><dd>Every hour' in card
     assert '<span class="pill bad">3 in a row</span><span class="hint">Jen: invalid_grant</span>' in card
-    assert 'refresh tokens only' in card
+    assert 'Automatic, with refresh tokens only.' in card
     assert 'scripts/seed_board.sh' in card and card.count('seed_board.sh') == 1  # Jen only
     assert 'Change logins' in card and 'Save logins' in card and 'Send a test alert' not in card
     alerts = html.split('id="alerts"', 1)[1].split('</section>', 1)[0]
@@ -237,7 +239,7 @@ def test_a_browser_board_needs_no_seed_command(board, tmp_path):
     board.units = {server.RENEW_UNIT: {'ActiveState': 'activating'}}
     board.sign_in()
     card = board.request('/')[2].split('id="logins"', 1)[1].split('</section>', 1)[0]
-    assert 'seed_board.sh' not in card and 'one browser login a day' in card
+    assert 'seed_board.sh' not in card and 'trying at most once a day' in card
     assert 'id="renewal" aria-live="polite" data-running>' in card, 'the script follows it'
     assert '<span class="pill now">Running now</span>' in card
     assert 'Not scheduled' in card and "the hourly timer isn't running" in card, 'the display is on'
@@ -478,5 +480,84 @@ def test_the_card_shows_the_next_check_of_a_timer_counted_from_boot(board):
     board.settings.clock, board.settings.monotonic = (lambda: 1762264800.0), (lambda: 3600.0)
     board.sign_in()
     card = board.request('/')[2].split('id="logins"', 1)[1].split('</section>', 1)[0]
-    assert f'<dt>Next check</dt><dd>{logins.when(1762268400, ZONE)} · then hourly</dd>' in card
+    assert f'<dt>Next check</dt><dd>{logins.when(1762268400, ZONE)}</dd>' in card
     assert 'Not scheduled' not in card
+
+
+def test_a_token_problem_says_what_it_means_and_keeps_its_capitals():
+    from settings_page.logins import RiderLogin
+    import dataclasses
+    fields = {f.name: None for f in dataclasses.fields(RiderLogin)}
+    login = RiderLogin(**{**fields, 'name': 'Joel', 'token': {'ok': False, 'reason': 'JWT payload has no usable exp claim'},
+                          'chain': None, 'padlock': None, 'browser_attempt': None, 'email_set': True,
+                          'password_set': True})
+    html = page._login_status(login, {'mode': 'browser'}, None)
+    assert 'The token file can&#x27;t be used (JWT payload has no usable exp claim).' in html, 'JWT, not Jwt'
+    missing = dataclasses.replace(login, token={'ok': False, 'reason': 'file does not exist'})
+    assert 'No token on this board yet.' in page._login_status(missing, {'mode': 'browser'}, None)
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def test_the_cards_interval_and_renewal_window_are_the_units_own():
+    timer = (ROOT / 'packaging' / 'systemd' / 'peloton-token-refresh.timer').read_text()
+    service = (ROOT / 'packaging' / 'systemd' / 'peloton-token-refresh.service').read_text()
+    assert f'OnUnitActiveSec={logins.CHECK_EVERY_S // 3600}h\n' in timer
+    assert f'--renew-before-hours {logins.RENEW_BEFORE_S // 3600} ' in service
+
+
+@pytest.mark.parametrize('expires, next_check, expected', [
+    (100_000, 40_000, 58_000),  # due at 56_800: the first hourly check from 40_000 at or after it
+    (100_000, 60_000, 60_000),  # already due: the next check
+    (100_000, 56_800, 56_800),  # due exactly at a check
+    (100_000, None, 56_800),    # no timer running: when it becomes due
+])
+def test_a_token_renews_at_the_first_check_within_twelve_hours_of_expiring(expires, next_check, expected):
+    assert logins.renews_at({'ok': True, 'expires_at': expires}, next_check) == expected
+
+
+def test_a_token_without_an_expiry_has_no_renewal_time():
+    assert logins.renews_at({'ok': False, 'reason': 'file is empty'}, 1000) is None
+    assert logins.renews_at({'ok': True}, 1000) is None
+
+
+def _rider(name, expires, chain='refresh chain 3 days old'):
+    import dataclasses
+    from settings_page.logins import RiderLogin
+    fields = {f.name: None for f in dataclasses.fields(RiderLogin)}
+    return RiderLogin(**{**fields, 'key': name.lower(), 'name': name, 'chain': chain, 'email_set': False,
+                         'password_set': False, 'token': {'ok': True, 'expires_at': expires, 'expired': False}})
+
+
+def test_the_card_shows_the_interval_and_when_each_token_renews():
+    next_check = 1762400000.0
+    view = {'mode': 'no-browser', 'timer_next': next_check, 'display_running': True, 'seed': 'x',
+            'riders': [_rider('Joel', next_check + 30 * 3600), _rider('Jen', next_check + 14 * 3600)]}
+    html = page.logins_card(view, zone=ZONE)
+    assert '<dt>Interval</dt><dd>Every hour <span class="hint">&middot; each check renews only tokens within 12 hours' in html
+    assert f'<dt>Next check</dt><dd>{logins.when(next_check, ZONE)}</dd>' in html
+    jen = logins.when(next_check + 2 * 3600, ZONE)  # due 2 hours after the next check, on a check
+    joel = logins.when(next_check + 18 * 3600, ZONE)
+    assert (f'<dt>Next renewal</dt><dd>Around {jen} <span class="hint">&middot; Jen\'s token, 12 hours before '
+            'it expires</span></dd>') in html, 'the soonest rider'
+    assert f'Renews around {jen}, 12 hours before it expires.' in html and f'Renews around {joel}, 12' in html
+
+
+def test_with_no_check_scheduled_it_renews_at_the_first_check_after_its_due():
+    view = {'mode': 'no-browser', 'timer_next': None, 'display_running': False, 'seed': 'x',
+            'riders': [_rider('Joel', 1762400000.0 + 13 * 3600)]}
+    html = page.logins_card(view, zone=ZONE)
+    due = logins.when(1762400000.0 + 3600, ZONE)
+    assert '<dt>Interval</dt><dd>Every hour while the display is on' in html
+    assert f'<dt>Next renewal</dt><dd>At the first check after {due}' in html
+
+
+def test_no_renewal_time_without_a_way_to_renew():
+    no_refresh = {'mode': 'no-browser', 'timer_next': 1762400000.0, 'seed': 'x',
+                  'riders': [_rider('Joel', 1762400000.0 + 5 * 3600, chain=None)]}
+    assert 'Next renewal' not in page.logins_card(no_refresh) and 'Renews ' not in page.logins_card(no_refresh)
+    browser = {**no_refresh, 'mode': 'browser'}
+    assert 'Next renewal' in page.logins_card(browser), 'a browser board signs in without a refresh token'
+    off = {**no_refresh, 'mode': 'none'}
+    assert 'Next renewal' not in page.logins_card(off) and '<dt>Interval</dt>' not in page.logins_card(off)
