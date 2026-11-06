@@ -18,6 +18,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -98,8 +99,8 @@ class Settings:
     def __init__(self, config_path=CONFIG, gate=None, restart_unit=APP_UNIT, state_file=wifi_setup.STATE_FILE,
                  send_pushover=notify.send_pushover, auth_env=AUTH_ENV, token_base=None,
                  default_token=logins.DEFAULT_TOKEN, token_mode_file=logins.TOKEN_MODE_FILE,
-                 renew_unit=RENEW_UNIT, clock=time.time, updates=None):
-        self.updates = updates
+                 renew_unit=RENEW_UNIT, clock=time.time, updates=None, monotonic=time.monotonic):
+        self.updates, self.monotonic = updates, monotonic
         self.config_path, self.restart_unit, self.state_file = config_path, restart_unit, state_file
         self.send_pushover, self.auth_env, self.default_token = send_pushover, auth_env, default_token
         # Where relative token paths start: the folder of the config the display reads (/etc/peloton-led).
@@ -191,20 +192,32 @@ class Settings:
         config, _ = self.load()
         auth = logins.read_auth_env(self.auth_env)
         renew = self._unit_properties(self.renew_unit, 'ActiveState', 'Result', 'ExecMainExitTimestamp')
-        timer = self._unit_properties(RENEW_TIMER, 'ActiveState', 'NextElapseUSecRealtime')
+        timer = self._unit_properties(RENEW_TIMER, 'ActiveState', 'NextElapseUSecRealtime', 'NextElapseUSecMonotonic')
         return {
             'riders': logins.rider_logins(config, self.token_base, auth, self.default_token),
             'mode': logins.token_mode(self.token_mode_file),
             'renewing': renew.get('ActiveState') in ('activating', 'reloading'),
             'last_result': renew.get('Result') if renew.get('ExecMainExitTimestamp') else None,
             'last_run': unix_time(renew.get('ExecMainExitTimestamp')),
-            'timer_next': unix_time(timer.get('NextElapseUSecRealtime')) if timer.get('ActiveState') == 'active'
-            else None,
+            'timer_next': self.next_elapse(timer) if timer.get('ActiveState') == 'active' else None,
             'display_running': self.display_running(),
             'alerts': logins.alert_state(self.default_token),
             'pushover': all(auth.get(name) for name in PUSHOVER_KEYS),
             'seed': f'scripts/seed_board.sh {self.checkout_owner()}@{board_name()}.local',
         }
+
+    def next_elapse(self, timer):
+        """When an active timer next fires, as epoch seconds (or systemd's own text), or None. The
+        renewal timer is OnBootSec/OnUnitActiveSec, which systemd counts on the monotonic clock: it
+        leaves NextElapseUSecRealtime blank and gives NextElapseUSecMonotonic, a time since boot
+        ("2h 5min 3.5s"), which is turned into wall-clock time here."""
+        realtime = unix_time(timer.get('NextElapseUSecRealtime'))
+        if realtime and realtime != 0.0:
+            return realtime
+        since_boot = timespan_seconds(timer.get('NextElapseUSecMonotonic'))
+        if since_boot is None:
+            return None
+        return self.clock() - self.monotonic() + since_boot  # Python's monotonic is systemd's CLOCK_MONOTONIC
 
     def checkout_owner(self):
         """Who to seed the board as: the config's owner when that's a person (the checkout's)."""
@@ -504,6 +517,23 @@ def unix_time(value):
         except ValueError:
             return value
     return value
+
+
+# systemd's timespan units ("1d 2h 3min 4.5s"), in seconds.
+TIMESPAN_UNITS = {'y': 31557600, 'M': 2629800, 'w': 604800, 'd': 86400, 'h': 3600, 'min': 60, 's': 1,
+                  'ms': 1e-3, 'us': 1e-6, '\u03bcs': 1e-6}
+TIMESPAN_PART = re.compile(r'(\d+(?:\.\d+)?)\s*(min|ms|us|\u03bcs|[yMwdhs])(?![a-z])')
+
+
+def timespan_seconds(value):
+    """systemctl show's timespan ("2h 5min 3.5s") in seconds, or None when blank, 0, "infinity" or
+    not a timespan."""
+    text = (value or '').strip()
+    parts = TIMESPAN_PART.findall(text)
+    if not parts or TIMESPAN_PART.sub('', text).strip():
+        return None
+    total = sum(float(number) * TIMESPAN_UNITS[unit] for number, unit in parts)
+    return total if total > 0 else None
 
 
 def board_name():
