@@ -12,10 +12,12 @@ def _updates(started=None, **changes):
     return settings_page({}, updates={**UPDATES, **changes}, started=started)
 
 
-def test_the_updates_card_is_after_logins_outside_the_settings_form_with_its_own_forms():
+def test_the_updates_card_is_first_outside_the_settings_form_with_its_own_forms():
+    html = settings_page({}, logins={"riders": [], "seed": "x"}, updates=UPDATES)
+    assert html.index('id="updates"') < html.index('id="logins"') < html.index('id="alerts"') < html.index('id="settings"')
+    assert html.index('href="#updates"') < html.index('href="#logins"') < html.index('href="#alerts"') \
+        < html.index('href="#rotation"'), "first on the page and in the list"
     html = _updates()
-    assert html.index('id="updates"') < html.index('id="settings"'), "not part of Save"
-    assert html.index('href="#logins"') < html.index('href="#updates"') < html.index('href="#rotation"')
     assert "<strong>2.1.0</strong>" in html and "aaaaaaa" in html and "on develop-beta" in html
     assert re.search(r'<form method="post" action="/update/check"[^>]*><select id="channel" name="channel">'
                      r'<option value="releases" selected>Releases</option><option value="beta">Beta</option>', html)

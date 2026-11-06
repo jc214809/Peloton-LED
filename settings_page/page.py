@@ -34,6 +34,11 @@ LOGIN_OUTCOMES = {
     'renew_running': ('warn', 'Renewal is already running: reload the page in a minute.'),
     'renew_failed': ('bad', "Renewal couldn't be started; the settings page's log says why."),
     'renew_unavailable': ('warn', 'Renewal can only be started on a board (it runs under systemd).'),
+}
+# What the Pushover alerts card says after its buttons: (kind, text).
+ALERT_OUTCOMES = {
+    'alerts_saved': ('good', '<strong>Alert keys saved</strong> to auth.env.'),
+    'alerts_unchanged': ('info', 'Nothing to save: both key fields were blank, so the saved ones stay.'),
     'test_sent': ('good', 'Test alert sent: check your phone.'),
     'test_wait': ('warn', 'A test alert went out less than a minute ago.'),
     'test_failed': ('bad', "Pushover didn't take the test alert: check the keys (the log says why)."),
@@ -276,6 +281,25 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 @media (max-width: 640px) { .cred-grid { grid-template-columns: 1fr; } }
 .rider-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 640px) { .rider-grid { grid-template-columns: 1fr 1fr; } }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 20px; margin: 0;
+  padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 14px; }
+.facts dt { color: var(--text-3); font-weight: 600; }
+.card-body > .facts { margin-top: 12px; }
+.facts dd { margin: 0; display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+.facts .hint { margin: 0; }
+@media (max-width: 640px) { .facts { grid-template-columns: 1fr; gap: 2px; } .facts dd { margin-bottom: 8px; } }
+.pill.now { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.pill.now::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  animation: beat 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .pill.now::before { animation: none; } }
+dialog.modal { width: min(600px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 22px;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .35); }
+dialog.modal::backdrop { background: rgba(10, 12, 18, .55); }
+dialog.modal:not(:modal) { position: static; width: auto; max-height: none; margin: 16px 0 0; box-shadow: none; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.modal-head h3 { margin: 0; font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.modal-head button { padding: 0; width: 36px; height: 36px; }
 .add-row { display: flex; gap: 8px; }
 .add-row select { flex: 1; min-width: 0; }
 .changes { margin: 0 0 12px; }
@@ -323,10 +347,14 @@ ICONS = {
     'refresh': '<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8M21 3v5h-5"/>',
     'wifi': '<path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/>',
     'undo': '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
+    'bell': '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    'edit': '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    'x': '<path d="M18 6 6 18M6 6l12 12"/>',
 }
 
 SECTIONS = (  # id, nav title, icon
-    ('logins', 'Logins', 'key'), ('updates', 'Updates', 'refresh'), ('rotation', 'Rotation', 'list'), ('timing', 'Timing', 'clock'), ('goals', 'Goals', 'target'),
+    ('updates', 'Updates', 'refresh'), ('logins', 'Logins', 'key'), ('alerts', 'Pushover alerts', 'bell'),
+    ('rotation', 'Rotation', 'list'), ('timing', 'Timing', 'clock'), ('goals', 'Goals', 'target'),
     ('display', 'Name and text', 'type'), ('schedules', 'Schedules', 'sun'), ('panel', 'Panel', 'board'),
     ('advanced', 'Advanced', 'sliders'),
 )
@@ -415,6 +443,25 @@ for (const id of ['brightness_schedule', 'refresh_schedule']) {
   on.addEventListener('change', show);
   show();
 }
+// Change logins: a modal dialog. Without the script, the button is a link that opens it in the
+// page (?edit=logins); the page also renders it open after a save that had problems.
+const loginsDialog = document.getElementById('logins-dialog');
+if (loginsDialog) {
+  if (loginsDialog.open) { loginsDialog.close(); loginsDialog.showModal(); }
+  document.querySelectorAll('[data-dialog="logins-dialog"]').forEach(b => b.addEventListener('click', () => loginsDialog.showModal()));
+  loginsDialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => loginsDialog.close()));
+  loginsDialog.addEventListener('click', e => { if (e.target === loginsDialog) loginsDialog.close(); });  // the backdrop
+}
+// A renewal that's running: follow it, swapping in the status block until it's done.
+const followRenewal = () => setTimeout(async () => {
+  try {
+    const reply = await fetch('/renew/status', {headers: {Accept: 'application/json'}});
+    const now = await reply.json();
+    document.getElementById('renewal').outerHTML = now.html;
+    if (now.renewing) followRenewal();
+  } catch { followRenewal(); }
+}, 5000);
+if (document.querySelector('#renewal[data-running]')) followRenewal();
 // Updates: the buttons say they're working (a check can take a while), Roll back asks first, and
 // while an update runs the page follows it, reloading once it's done. The settings page restarts
 // during an update, so a failed ask just tries again.
@@ -725,68 +772,140 @@ def _secret_input(name, label, kind, is_set, autocomplete='off'):
                                                      f'placeholder="{placeholder}"'))
 
 
-def logins_card(view, signed_in=True, outcome=None, problems=(), zone=None):
-    """Logins: each rider's health, Renew now and the test alert, and the write-only credentials
-    form (only with a PIN session: the setup hotspot alone can't change logins). view: Settings.logins()."""
-    if not view:
-        return ''
+def _at(value, zone):
+    """A time from Settings.logins() (epoch seconds) in the page's style, or systemd's own text."""
+    return when(value, zone) if isinstance(value, (int, float)) else str(value)
+
+
+def renewal_status(view, zone=None):
+    """Token renewal as labelled rows: whether it's running or how its last run went, when it next
+    checks, failures in a row, and the board's mode. data-running makes the page's script follow a
+    run (/renew/status answers with this block again)."""
+    mode = view.get('mode')
+    renewing = view.get('renewing')
+    result = view.get('last_result')
+    if renewing:
+        status = _pill('now', 'Running now')
+    elif not view.get('last_run'):
+        status = _pill('', 'No run since the board started')
+    elif result == 'success':
+        status = _pill('ok', 'Last run worked')
+    else:
+        status = _pill('bad', f'Last run failed ({result})' if result else 'Last run failed')
+    rows = [('Renewal', status)]
+    if view.get('last_run'):
+        worked = 'worked' if result == 'success' else 'failed'
+        rows.append(('Last run', escape(_at(view['last_run'], zone)) + ('' if renewing else f' &middot; {worked}')))
+    if view.get('timer_next'):
+        rows.append(('Next check', escape(_at(view['timer_next'], zone)) + ' &middot; then hourly'))
+    elif mode == 'none':
+        rows.append(('Next check', 'Off: automatic renewal isn\'t installed. <em>Renew now</em> still works.'))
+    elif view.get('display_running') is False:
+        rows.append(('Next check', 'When the display starts <span class="hint">&middot; on this manual board, '
+                                   'checks run hourly only while the display is on</span>'))
+    else:
+        rows.append(('Next check', 'Not scheduled <span class="hint">&middot; the hourly timer isn\'t running'
+                                   '</span>'))
+    alerts = view.get('alerts') or {}
+    if alerts.get('failures'):
+        count = alerts['failures']
+        rows.append(('Failures', _pill('bad', f'{count} in a row')
+                     + f'<span class="hint">{escape(alerts.get("last_message") or "no message")}</span>'))
+    rows.append(('Mode', f'<span class="hint">{escape(MODE_TEXT.get(mode, "Unknown (an older install): re-run the "
+                                                                          "installer to record it."))}</span>'))
+    items = ''.join(f'<dt>{label}</dt><dd>{value}</dd>' for label, value in rows)
+    return f'<dl class="facts" id="renewal" aria-live="polite"{" data-running" if renewing else ""}>{items}</dl>'
+
+
+def _logins_dialog(riders, problems=(), open_=False):
+    """Change logins: each rider's email and password, write-only, in a dialog the page's script
+    opens as a modal. open_: shown in the page (no script, or after a save with problems)."""
     top = ''
     if problems:
         items = ''.join(f'<li>{escape(p)}</li>' for p in problems)
-        top += _notice('bad', f'<strong>Logins not saved.</strong><ul>{items}</ul>', 'alert')
+        top = _notice('bad', f'<strong>Logins not saved.</strong><ul>{items}</ul>', 'alert')
+    rows = ''.join(
+        f'<div class="rider"><h3>{escape(r.name)}</h3><input type="hidden" name="cred_{r.key}_name" '
+        f'value="{_attr(r.name)}"><div class="cred-grid">'
+        + _secret_input(f'cred_{r.key}_email', 'Peloton email', 'email', r.email_set)
+        + _secret_input(f'cred_{r.key}_password', 'Peloton password', 'password', r.password_set, 'new-password')
+        + '</div></div>' for r in riders)
+    return (f'<dialog id="logins-dialog" class="modal" aria-labelledby="logins-dialog-title"{" open" if open_ else ""}>'
+            '<form method="post" action="/credentials" id="credentials">'
+            '<div class="modal-head"><h3 id="logins-dialog-title">Change logins</h3>'
+            f'<button type="button" class="ghost js-only" hidden data-close aria-label="Close">{icon("x")}</button>'
+            '</div><p class="hint">Saved to the board\'s auth.env and never shown again, here or anywhere: blank '
+            'keeps what\'s saved. This page isn\'t encrypted, so only do this on your own network.</p>'
+            + top + rows
+            + f'<div class="actions"><button type="submit" class="primary">{icon("lock")}Save logins</button>'
+              '<button type="button" class="secondary js-only" hidden data-close>Cancel</button>'
+              '<noscript><a class="btn secondary" href="/#logins">Cancel</a></noscript></div></form></dialog>')
+
+
+def logins_card(view, signed_in=True, outcome=None, problems=(), zone=None, editing=False):
+    """Logins: renewal's status, each rider's health, Renew now, and Change logins, which opens
+    the write-only credentials dialog (only with a PIN session: the setup hotspot alone can't change
+    logins). view: Settings.logins(). editing: the dialog starts open (?edit=logins, or problems)."""
+    if not view:
+        return ''
+    top = ''
     if outcome in LOGIN_OUTCOMES:
         kind, html = LOGIN_OUTCOMES[outcome]
         top += _notice(kind, html, 'alert' if kind == 'bad' else 'status')
-    mode = view.get('mode')
-    about = [MODE_TEXT.get(mode, 'Renewal mode unknown (an older install): re-run the installer to record it.')]
-    if view.get('renewing'):
-        about.append('Renewal is running now.')
-    elif view.get('last_run'):
-        result = 'worked' if view.get('last_result') == 'success' else f'failed ({view.get("last_result")})'
-        about.append(f'Last renewal run: {view["last_run"]}, {result}.')
-    about.append(f'Next scheduled check: {view["timer_next"]}.' if view.get('timer_next')
-                 else 'No check is scheduled right now (a manual board checks only while the display runs).')
-    alerts = view.get('alerts') or {}
-    if alerts.get('failures'):
-        about.append(f'{alerts["failures"]} failed run{"s" if alerts["failures"] != 1 else ""} in a row; last: '
-                     f'{alerts.get("last_message") or "no message"}')
     riders = view.get('riders') or []
-    actions = (
-        '<div class="actions"><form method="post" action="/renew"><button type="submit" class="secondary">'
-        f'{icon("refresh")}Renew now</button></form>'
-        + ('<form method="post" action="/alert/test"><button type="submit" class="secondary">'
-           f'{icon("phone")}Send a test alert</button></form>' if view.get('pushover') else '')
-        + '</div>')
+    change = ''
     if signed_in:
-        rows = ''.join(
-            f'<div class="rider"><h3>{escape(r.name)}</h3><input type="hidden" name="cred_{r.key}_name" '
-            f'value="{_attr(r.name)}"><div class="cred-grid">'
-            + _secret_input(f'cred_{r.key}_email', 'Peloton email', 'email', r.email_set)
-            + _secret_input(f'cred_{r.key}_password', 'Peloton password', 'password', r.password_set, 'new-password')
-            + '</div></div>' for r in riders)
-        pushover_set = view.get('pushover')
-        creds = (
-            '<form method="post" action="/credentials" id="credentials"><h3>Change logins</h3>'
-            '<p class="hint">Saved to the board\'s auth.env and never shown again, here or anywhere: blank keeps '
-            'what\'s saved. This page isn\'t encrypted, so only do this on your own network.</p>'
-            + rows
-            + '<div class="rider"><h3>Pushover alerts</h3><p class="hint">For renewal problems, and sending the '
-              'sign-in PIN to your phone. From pushover.net: your user key, and an app\'s token.</p>'
-              '<div class="cred-grid">'
-            + _secret_input('pushover_app_token', 'App token', 'password', pushover_set)
-            + _secret_input('pushover_user_key', 'User key', 'password', pushover_set)
-            + '</div>'
-            + (_field('pushover_clear', 'Remove the Pushover keys', _switch_input('pushover_clear', False),
-                      'No more alerts or PIN by phone.', inline=True) if pushover_set else '')
-            + '</div><div class="actions"><button type="submit" class="primary">'
-              f'{icon("lock")}Save logins</button></div></form>')
+        change = (f'<button type="button" class="secondary js-only" hidden data-dialog="logins-dialog">'
+                  f'{icon("edit")}Change logins</button>'
+                  f'<noscript><a class="btn secondary" href="/?edit=logins#logins">{icon("edit")}Change logins'
+                  '</a></noscript>')
+    actions = ('<div class="actions"><form method="post" action="/renew"><button type="submit" class="secondary">'
+               f'{icon("refresh")}Renew now</button></form>{change}</div>')
+    if signed_in:
+        actions += _logins_dialog(riders, problems, editing or bool(problems))
     else:
-        creds = _notice('info', 'Changing logins takes the PIN, even in setup mode: '
-                                '<a href="/signin">sign in with the PIN</a>.')
-    body = (top + ''.join(f'<p class="hint">{escape(line)}</p>' for line in about)
-            + ''.join(_login_status(r, view, zone) for r in riders) + actions + creds)
+        actions += _notice('info', 'Changing logins takes the PIN, even in setup mode: '
+                                   '<a href="/signin">sign in with the PIN</a>.')
+    body = top + renewal_status(view, zone) + ''.join(_login_status(r, view, zone) for r in riders) + actions
     return _section('logins', 'Logins', "Each rider's Peloton login, and how the board keeps it working.", body,
                     'key')
+
+
+def alerts_card(view, signed_in=True, outcome=None, problems=()):
+    """Pushover alerts: whether the keys are set, a test alert, and the write-only keys (a PIN
+    session, as for logins). view: Settings.logins() (its "pushover")."""
+    if not view:
+        return ''
+    keys_set = bool(view.get('pushover'))
+    top = ''
+    if problems:
+        items = ''.join(f'<li>{escape(p)}</li>' for p in problems)
+        top += _notice('bad', f'<strong>Alert keys not saved.</strong><ul>{items}</ul>', 'alert')
+    if outcome in ALERT_OUTCOMES:
+        kind, html = ALERT_OUTCOMES[outcome]
+        top += _notice(kind, html, 'alert' if kind == 'bad' else 'status')
+    status = ('<dl class="facts"><dt>Alerts</dt><dd>'
+              + (_pill('ok', 'On') if keys_set else _pill('', 'Off: no keys'))
+              + '</dd><dt>Sent for</dt><dd><span class="hint">Token renewal problems, a rolled-back update, and '
+                'the sign-in PIN when you ask for it</span></dd></dl>')
+    test = ('<div class="actions"><form method="post" action="/alert/test"><button type="submit" class="secondary">'
+            f'{icon("phone")}Send a test alert</button></form></div>' if keys_set else '')
+    if signed_in:
+        keys = ('<form method="post" action="/credentials" id="alert-keys"><input type="hidden" name="card" '
+                'value="alerts"><h3>Keys</h3><p class="hint">From pushover.net: your user key, and an app\'s '
+                'token. Saved to auth.env and never shown again: blank keeps what\'s saved.</p><div class="cred-grid">'
+                + _secret_input('pushover_app_token', 'App token', 'password', keys_set)
+                + _secret_input('pushover_user_key', 'User key', 'password', keys_set)
+                + '</div>'
+                + (_field('pushover_clear', 'Remove the Pushover keys', _switch_input('pushover_clear', False),
+                          'No more alerts or PIN by phone.', inline=True) if keys_set else '')
+                + f'<div class="actions"><button type="submit" class="primary">{icon("lock")}Save alert keys'
+                  '</button></div></form>')
+    else:
+        keys = _notice('info', 'Changing the keys takes the PIN, even in setup mode: '
+                               '<a href="/signin">sign in with the PIN</a>.')
+    return _section('alerts', 'Pushover alerts', 'Messages to your phone when the board needs you.',
+                    top + status + test + keys, 'bell')
 
 
 def _sentence(text):
@@ -1018,12 +1137,15 @@ def check_result(view, zone=None):
 
 
 def settings_page(config, hotspot=None, problems=(), saved=None, board=None, note=None, logins=None,
-                  signed_in=True, login_outcome=None, login_problems=(), updates=None, started=None):
+                  signed_in=True, login_outcome=None, login_problems=(), updates=None, started=None,
+                  alert_outcome=None, alert_problems=(), editing_logins=False):
     """The settings form, filled from config. hotspot: the Wi-Fi setup hotspot's name when this
     browser is on it (no PIN needed). note: why config.json couldn't be read, if it couldn't.
     logins: Settings.logins() for the Logins card (None leaves it off); signed_in: a PIN session,
     which changing logins needs. updates: updates.Updates.view() for the Updates card (None leaves
-    it off); started: how starting an update or rollback went, one of updates.STARTS."""
+    it off); started: how starting an update or rollback went, one of updates.STARTS. alert_outcome
+    and alert_problems: the Pushover alerts card's (ALERT_OUTCOMES). editing_logins: the Change
+    logins dialog starts open."""
     display = section(config, 'display')
     matrix = section(config, 'matrix')
     merged = {**DEFAULTS, **display}  # what the app uses where config.json says nothing
@@ -1134,7 +1256,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
         + '</div></details>')
 
     toc = ''.join(f'<a href="#{sid}">{icon(glyph)}{escape(title)}</a>' for sid, title, glyph in SECTIONS
-                  if sid != 'updates' or updates)
+                  if (sid != 'updates' or updates) and (sid not in ('logins', 'alerts') or logins))
     mode = ('warn', 'Setup mode') if hotspot else ('good', 'Signed in')
     body = (
         _topbar(board, mode, sign_out=not hotspot)  # on the hotspot there's no PIN session to end
@@ -1142,8 +1264,9 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
         + '<div class="page-head"><h1>Settings</h1><p>Changes are checked, saved to the board\'s config.json, '
           'and the display restarts to use them. Logins go to the board\'s auth.env and are never shown.</p></div>'
         + top
-        + f'<div class="stack" style="margin-bottom:20px">{logins_card(logins, signed_in, login_outcome, login_problems, _zone(display))}'
-          f'{updates_card(updates, started, _zone(display))}</div>'
+        + f'<div class="stack" style="margin-bottom:20px">{updates_card(updates, started, _zone(display))}'
+          f'{logins_card(logins, signed_in, login_outcome, login_problems, _zone(display), editing_logins)}'
+          f'{alerts_card(logins, signed_in, alert_outcome, alert_problems)}</div>'
         + f'<form method="post" action="/save" id="settings"><input type="hidden" name="{FORM_FIELD}" value="1">'
           f'<div class="stack">{rotation}{timing}{goals}{text}{schedules}{panel}{advanced}</div>'
         + '<div class="savebar"><div class="savebar-in"><div class="status" id="save-status"><span class="dot"></span>'

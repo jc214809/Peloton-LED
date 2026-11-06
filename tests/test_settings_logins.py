@@ -203,8 +203,8 @@ def board(tmp_path, monkeypatch, state):
 
 def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
     board.units = {server.RENEW_UNIT: {'ActiveState': 'inactive', 'Result': 'exit-code',
-                                       'ExecMainExitTimestamp': 'Wed 2026-11-04 09:00:00 EST'},
-                   server.RENEW_TIMER: {'ActiveState': 'active', 'NextElapseUSecRealtime': 'Wed 2026-11-04 10:00:00'}}
+                                       'ExecMainExitTimestamp': '@1762264800'},
+                   server.RENEW_TIMER: {'ActiveState': 'active', 'NextElapseUSecRealtime': '@1762268400'}}
     (tmp_path / 'token-mode').write_text('no-browser flag\n')
     (tmp_path / 'token-alert-state.json').write_text(json.dumps({'failures': 3, 'last_message': 'Jen: invalid_grant'}))
     board.sign_in()
@@ -213,11 +213,16 @@ def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
     assert 'Valid until' in card and 'Expired' in card and 'Padlock on' in card
     assert 'Renewal says: invalid_grant: chain is dead' in card
     assert 'Email and password set' in card and 'Email not set, password not set' in card
-    assert 'refresh tokens only' in card and 'Last renewal run: Wed 2026-11-04 09:00:00 EST, failed (exit-code)' in card
-    assert 'Next scheduled check: Wed 2026-11-04 10:00:00' in card
-    assert '3 failed runs in a row; last: Jen: invalid_grant' in card
+    # Labelled rows, times in the page's own style (systemd gives them as epoch seconds).
+    assert '<dt>Renewal</dt><dd><span class="pill bad">Last run failed (exit-code)</span></dd>' in card
+    assert f'<dt>Last run</dt><dd>{logins.when(1762264800)} \u00b7 failed</dd>' in card  # the page, unescaped
+    assert f'<dt>Next check</dt><dd>{logins.when(1762268400)} \u00b7 then hourly</dd>' in card
+    assert '<span class="pill bad">3 in a row</span><span class="hint">Jen: invalid_grant</span>' in card
+    assert 'refresh tokens only' in card
     assert 'scripts/seed_board.sh' in card and card.count('seed_board.sh') == 1  # Jen only
-    assert 'Send a test alert' in card and 'Save logins' in card
+    assert 'Change logins' in card and 'Save logins' in card and 'Send a test alert' not in card
+    alerts = html.split('id="alerts"', 1)[1].split('</section>', 1)[0]
+    assert 'Send a test alert' in alerts and 'Save alert keys' in alerts and 'Remove the Pushover keys' in alerts
     for secret in list(SECRETS.values()) + ['rt-secret']:
         assert secret not in html
 
@@ -228,7 +233,51 @@ def test_a_browser_board_needs_no_seed_command(board, tmp_path):
     board.sign_in()
     card = board.request('/')[2].split('id="logins"', 1)[1].split('</section>', 1)[0]
     assert 'seed_board.sh' not in card and 'one browser login a day' in card
-    assert 'Renewal is running now.' in card and 'No check is scheduled right now' in card
+    assert 'id="renewal" aria-live="polite" data-running>' in card, 'the script follows it'
+    assert '<span class="pill now">Running now</span>' in card
+    assert 'Not scheduled' in card and "the hourly timer isn't running" in card, 'the display is on'
+    board.running = False
+    card = board.request('/')[2].split('id="logins"', 1)[1].split('</section>', 1)[0]
+    assert 'When the display starts' in card and 'only while the display is on' in card
+
+
+def test_a_running_renewal_is_followed_until_it_is_done(board):
+    assert json.loads(board.request('/renew/status')[2]) == {'renewing': False, 'html': ''}, 'signed out'
+    board.sign_in()
+    board.units = {server.RENEW_UNIT: {'ActiveState': 'activating'}}
+    now = json.loads(board.request('/renew/status')[2])
+    assert now['renewing'] is True and 'Running now' in now['html'] and now['html'].startswith('<dl class="facts" id="renewal"')
+    board.units = {server.RENEW_UNIT: {'ActiveState': 'inactive', 'Result': 'success',
+                                       'ExecMainExitTimestamp': '@1762264800'}}
+    now = json.loads(board.request('/renew/status')[2])
+    assert now['renewing'] is False and 'Last run worked' in now['html'] and 'data-running' not in now['html']
+
+
+def test_change_logins_is_a_dialog_with_a_no_script_way_in(board):
+    board.sign_in()
+    html = board.request('/')[2]
+    card = html.split('id="logins"', 1)[1].split('</section>', 1)[0]
+    assert 'data-dialog="logins-dialog"' in card and 'href="/?edit=logins#logins"' in card
+    assert '<dialog id="logins-dialog" class="modal" aria-labelledby="logins-dialog-title">' in card, 'closed'
+    assert 'name="cred_0_email"' in card and 'name="pushover_app_token"' not in card, 'riders only'
+    assert '<dialog id="logins-dialog" class="modal" aria-labelledby="logins-dialog-title" open>' in board.request(
+        '/?edit=logins')[2], 'opened in the page without the script'
+    assert "loginsDialog.showModal()" in html
+    status, _, body = board.request('/credentials', {'cred_0_email': 'nope'})
+    assert status == 400 and 'aria-labelledby="logins-dialog-title" open>' in body, 'problems: open again'
+
+
+def test_the_alert_keys_save_from_their_own_card(board):
+    board.sign_in()
+    status, headers, _ = board.request('/credentials', {'card': 'alerts', 'pushover_user_key': 'k' * 30})
+    assert headers['Location'] == '/?alerts=alerts_saved#alerts'
+    assert read_auth_env(board.auth_env)['PUSHOVER_USER_KEY'] == 'k' * 30
+    assert read_auth_env(board.auth_env)['PELOTON_PASSWORD_RIDER_ONE'] == SECRETS['PELOTON_PASSWORD_RIDER_ONE']
+    assert board.request('/credentials', {'card': 'alerts'})[1]['Location'] == '/?alerts=alerts_unchanged#alerts'
+    status, _, body = board.request('/credentials', {'card': 'alerts', 'pushover_user_key': 'short'})
+    alerts = body.split('id="alerts"', 1)[1].split('</section>', 1)[0]
+    assert status == 400 and 'Alert keys not saved.' in alerts and 'Logins not saved' not in body
+    assert 'Alert keys saved' in board.request('/?alerts=alerts_saved')[2]
 
 
 def test_saving_logins_takes_a_pin_session_even_on_the_hotspot(board):
@@ -295,17 +344,21 @@ def test_strangers_can_not_renew_or_test(board):
 def test_test_alert_outcomes(board, monkeypatch):
     board.sign_in()
     monkeypatch.delenv('PUSHOVER_APP_TOKEN', raising=False)
-    assert board.request('/alert/test', {})[1]['Location'] == '/?logins=test_off#logins'
+    assert board.request('/alert/test', {})[1]['Location'] == '/?alerts=test_off#alerts'
     monkeypatch.setenv('PUSHOVER_APP_TOKEN', 't')
     monkeypatch.setenv('PUSHOVER_USER_KEY', 'u')
-    assert board.request('/alert/test', {})[1]['Location'] == '/?logins=test_sent#logins'
+    assert board.request('/alert/test', {})[1]['Location'] == '/?alerts=test_sent#alerts'
     assert len(board.sent) == 1 and 'test alert' in board.sent[0][0]
-    assert board.request('/alert/test', {})[1]['Location'] == '/?logins=test_wait#logins'
+    assert board.request('/alert/test', {})[1]['Location'] == '/?alerts=test_wait#alerts'
     board.settings._last_test -= server.TEST_ALERT_EVERY_S
     board.settings.send_pushover = lambda title, message: False
-    assert board.request('/alert/test', {})[1]['Location'] == '/?logins=test_failed#logins'
+    assert board.request('/alert/test', {})[1]['Location'] == '/?alerts=test_failed#alerts'
     for outcome in page.LOGIN_OUTCOMES:
         assert page.LOGIN_OUTCOMES[outcome][1].split('<')[0][:10] in unescape(board.request(f'/?logins={outcome}')[2])
+    for outcome in page.ALERT_OUTCOMES:
+        html = unescape(board.request(f'/?alerts={outcome}')[2])
+        alerts = html.split('id="alerts"', 1)[1].split('</section>', 1)[0]
+        assert page.ALERT_OUTCOMES[outcome][1].split('<')[0][:10] in alerts
 
 
 def test_renew_now(board):
@@ -340,7 +393,7 @@ def test_renew_problems(tmp_path, monkeypatch, result, outcome):
 def test_unit_properties_are_read_from_systemctl_show(tmp_path, monkeypatch):
     settings = server.Settings(str(tmp_path / 'config.json'))
     runs = []
-    answers = [SimpleNamespace(returncode=0, stdout='ActiveState=active\nNextElapseUSecRealtime=Wed 10:00\nnoise\n'),
+    answers = [SimpleNamespace(returncode=0, stdout='ActiveState=active\nNextElapseUSecRealtime=@1762268400\nnoise\n'),
                SimpleNamespace(returncode=1, stdout=''), OSError('boom')]
 
     def run(cmd, **kwargs):
@@ -352,8 +405,9 @@ def test_unit_properties_are_read_from_systemctl_show(tmp_path, monkeypatch):
     monkeypatch.setattr(server.shutil, 'which', lambda name: '/bin/systemctl')
     monkeypatch.setattr(server.subprocess, 'run', run)
     assert settings._unit_properties('x.timer', 'ActiveState', 'NextElapseUSecRealtime') == {
-        'ActiveState': 'active', 'NextElapseUSecRealtime': 'Wed 10:00'}
-    assert runs[0] == ['systemctl', 'show', '--property=ActiveState', '--property=NextElapseUSecRealtime', 'x.timer']
+        'ActiveState': 'active', 'NextElapseUSecRealtime': '@1762268400'}
+    assert runs[0] == ['systemctl', 'show', '--timestamp=unix', '--property=ActiveState',
+                       '--property=NextElapseUSecRealtime', 'x.timer']
     assert settings._unit_properties('x.timer', 'ActiveState') == {}
     assert settings._unit_properties('x.timer', 'ActiveState') == {}
     settings.restart_unit = ''
@@ -374,6 +428,21 @@ def test_seed_command_names_the_checkout_owner(tmp_path, monkeypatch):
 
 def test_the_card_on_a_fresh_board(tmp_path):
     html = page.logins_card({'riders': [], 'mode': None, 'seed': 'x'})
-    assert 'Renewal mode unknown' in html and 'Save logins' in html
-    assert page.logins_card(None) == ''
+    assert 'Unknown (an older install)' in html and 'No run since the board started' in html and 'Save logins' in html
+    assert page.logins_card(None) == '' and page.alerts_card(None) == ''
+    assert 'Off: no keys' in page.alerts_card({'pushover': False}) and 'Send a test alert' not in page.alerts_card({})
+    assert 'sign in with the PIN' in page.alerts_card({'pushover': True}, signed_in=False)
+
+
+@pytest.mark.parametrize('value, expected', [('@1762264800', 1762264800.0), ('', None), (None, None), ('n/a', None),
+                                             ('@junk', '@junk'), ('Wed 2026-11-04 09:00:00 EST', 'Wed 2026-11-04 09:00:00 EST')])
+def test_systemd_times_become_epoch_seconds(value, expected):
+    assert server.unix_time(value) == expected
+
+
+def test_renewal_rows_for_each_state():
+    html = page.renewal_status({'last_run': 1762264800.0, 'last_result': 'success', 'mode': 'none'})
+    assert '<span class="pill ok">Last run worked</span>' in html and 'Off: automatic renewal' in html
+    html = page.renewal_status({'last_run': 'Wed 09:00', 'last_result': None})
+    assert 'Last run failed</span>' in html and '<dd>Wed 09:00 &middot; failed</dd>' in html, "an old systemd's text"
     assert re.search(r'id="logins"', page.settings_page({}, logins={'riders': [], 'seed': 'x'}))
