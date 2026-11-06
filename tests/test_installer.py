@@ -733,9 +733,6 @@ def test_installer_installs_verifies_and_points_the_settings_page_at_the_live_co
     text = (ROOT / 'peloton-install.sh').read_text()
     assert 'packaging/systemd/peloton-settings.service" "$UNIT_DIR/peloton-settings.service"' in text
     assert '"$UNIT_DIR/peloton-settings.service"' in text.split('systemd-analyze verify', 1)[1].split('\n#', 1)[0]
-    assert ("printf '[Service]\\nEnvironment=PELOTON_CONFIG=%s\\nReadWritePaths=%s\\n' "
-            '"$LIVE_CONFIG" "$SOURCE_DIR"') in text
-    assert 'rm -f "$UNIT_DIR/peloton-settings.service.d/project-config.conf"' in text
     assert text.index('resolve_settings_page\n') < text.index('apt-get update')
     assert text.index('\nstart_or_restart_display\nstart_settings_page\n') > text.index('systemctl daemon-reload')
     assert '--settings-page) SETTINGS_PAGE=true' in text and '--no-settings-page) SETTINGS_PAGE=false' in text
@@ -820,3 +817,36 @@ def test_the_display_unit_gives_the_heartbeat_a_folder_it_can_write_after_droppi
     assert 'RuntimeDirectory=peloton-led\n' in display and 'RuntimeDirectoryMode=0770\n' in display
     assert 'Group=peloton-led' in display  # the folder's group: the user the display drops to
     assert "HEARTBEAT_FILE = '/run/peloton-led/health'\n" in (ROOT / 'utils' / 'heartbeat.py').read_text()
+
+
+def _settings_drop_in(tmp_path, live_config):
+    """Run the installer's settings-page drop-in block; return the drop-in it writes."""
+    text = (ROOT / 'peloton-install.sh').read_text()
+    start = text.index('install -d -m 0755 "$UNIT_DIR/peloton-settings.service.d"')
+    block = text[start:text.index('if [[ "$MANUAL" == true && "$AUTO_TOKEN" == true ]]', start)]
+    units = tmp_path / 'units'
+    units.mkdir(exist_ok=True)
+    script = (f'set -Eeuo pipefail\nUNIT_DIR={units}\nSOURCE_DIR=/home/pi/Peloton-LED\n'
+              f'LIVE_CONFIG={live_config}\n{block}')
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    return (units / 'peloton-settings.service.d' / 'project-config.conf').read_text()
+
+
+def test_the_settings_page_gets_the_checkout_to_update_and_the_live_config(tmp_path):
+    # The Updates card updates the checkout: its path, and its .git writable for a check's fetch.
+    assert _settings_drop_in(tmp_path, '/etc/peloton-led/config.json') == (
+        '[Service]\nEnvironment=PELOTON_CHECKOUT=/home/pi/Peloton-LED\n'
+        'ReadWritePaths=/home/pi/Peloton-LED/.git\n')
+    # The checkout's config.json is the live one: the page saves it there, with its .bak beside it.
+    assert _settings_drop_in(tmp_path, '/home/pi/Peloton-LED/config.json') == (
+        '[Service]\nEnvironment=PELOTON_CHECKOUT=/home/pi/Peloton-LED\n'
+        'ReadWritePaths=/home/pi/Peloton-LED/.git\n'
+        'Environment=PELOTON_CONFIG=/home/pi/Peloton-LED/config.json\nReadWritePaths=/home/pi/Peloton-LED\n')
+
+
+def test_opt_gets_what_the_updates_card_imports():
+    import re
+    text = (ROOT / 'peloton-install.sh').read_text()
+    assert 'self_update' in re.search(r'^for directory in (.+); do$', text, re.M).group(1).split()
+    assert 'version.py' in re.search(r'^for file in (.+); do$', text, re.M).group(1).split()
