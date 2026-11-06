@@ -185,8 +185,8 @@ def test_each_pull_request_shows_its_notes_under_its_title_and_the_behind_the_sc
                  [205, "Faster CI", []], [204, "Tidy tests", []],
                  [203, "Updates card polish", None]]}
     html = _updates(check=found, channel="beta")
-    assert ('#206</a><span>Sparkle<span class="hint note">The castle sparkles.</span>'
-            '<span class="hint note">So do &lt;the&gt; rides.</span></span></li>') in html, "notes under the title"
+    assert ('#206</a><span>Sparkle<ul class="notes"><li>The castle sparkles.</li>'
+            '<li>So do &lt;the&gt; rides.</li></ul></span></li>') in html, "notes bulleted under the title"
     assert '#203</a><span>Updates card polish</span></li>' in html, "from before release notes: the title alone"
     assert re.search(r"Behind the scenes, nothing you'd notice: <a [^>]*>#205</a>, <a [^>]*>#204</a></span>", html)
     assert "Faster CI" not in html

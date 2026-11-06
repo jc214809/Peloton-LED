@@ -323,7 +323,9 @@ dialog.modal:not(:modal) { position: static; width: auto; max-height: none; marg
 .changes ul { margin: 6px 0 0; padding-left: 0; list-style: none; display: grid; gap: 4px; font-size: 14px; }
 .changes li { display: flex; gap: 8px; }
 .changes li a, .changes li .mono { flex: none; min-width: 3.2em; color: var(--text-3); }
-.changes .note { display: block; margin-top: 1px; }
+.changes ul.notes { display: block; list-style: disc; margin: 4px 0 2px; padding-left: 18px; color: var(--text-2);
+  font-size: 13px; }
+.changes ul.notes li { display: list-item; margin-top: 2px; }
 .notice .changes { margin: 8px 0 0; }
 .notice.new { color: var(--text); background: var(--accent-soft); border-color: var(--accent); }
 .notice.new svg { color: var(--accent); }
@@ -1046,7 +1048,8 @@ def _changes(view, found):
     items = ''
     for number, title, notes in shown[:CHANGES_SHOWN]:
         tag = _pr_link(number) if number else '<span class="mono">•</span>'
-        notes = ''.join(f'<span class="hint note">{escape(str(note))}</span>' for note in notes or ())
+        notes = ''.join(f'<li>{escape(str(note))}</li>' for note in notes or ())
+        notes = f'<ul class="notes">{notes}</ul>' if notes else ''
         items += f'<li>{tag}<span>{escape(str(title))}{notes}</span></li>'
     more = len(shown) - CHANGES_SHOWN
     if more > 0:
