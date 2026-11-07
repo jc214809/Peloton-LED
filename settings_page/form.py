@@ -38,7 +38,7 @@ SHARED_DURATION = {'total_workouts': 'lifetime'}
 TIMING = (
     ('overview_duration', 'Each page', 'For any screen without its own time in Rotation.'),
     ('last_workout_detail_interval', 'Each workout stat', 'How long each stat shows on a workout page.'),
-    ('logo_duration', 'Logo at start-up', '0 skips it.'),
+    ('logo_duration', 'Logo', 'At start-up and between riders (once per cycle with one rider). 0 skips it.'),
     ('refresh_interval', 'Check Peloton every',
      'How often to look for new workouts. 300 (5 minutes) is plenty; much less only adds load.'),
 )
