@@ -5,7 +5,7 @@ from typing import Any, List, Optional, Tuple
 
 from driver import graphics
 from display.display import get_text_width, loaded_fonts
-from .last_workout_screen import _fmt_split
+from .last_workout_screen import _fmt_split, _whole
 from .screen import Screen
 
 _GOLD = graphics.Color(255, 215, 0)
@@ -63,8 +63,9 @@ def pr_card_lines(summary: dict) -> Optional[Tuple[str, str, Optional[str]]]:
         if isinstance(previous, (int, float)) and value > previous:
             diff = value - previous
             # Small PRs are common; don't let "+0.8" round away to "+0".
-            gain = f"+{diff:.1f} KJ" if diff < 1 else f"+{int(diff)} KJ"
-        return "OUTPUT PR", f"{round(value)} KJ", gain
+            gain = f"+{diff:.1f} KJ" if diff < 1 else f"+{_whole(diff)} KJ"
+        # The app's Total Output, not the precise work: they can round differently.
+        return "OUTPUT PR", f"{_whole(summary['total_output_kj'])} KJ", gain
     if summary.get("is_splits_pr") and summary.get("row_split_sec_per_500m"):
         return "SPLITS PR", f"{_fmt_split(summary['row_split_sec_per_500m'])}/500", None
     if summary.get("is_pr"):

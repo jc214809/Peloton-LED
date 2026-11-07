@@ -9,7 +9,7 @@ from peloton.summaries import summarize_workout
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count
 from peloton.config import load_config, load_dotenv
 from peloton.records import is_pr_workout
-from display.ui.last_workout_screen import _fmt_pace, _fmt_split, _middle_stats
+from display.ui.last_workout_screen import _fmt_pace, _fmt_split, _middle_stats, _stat_details
 from models import get_model_for_discipline
 from models.core import GeneralWorkout
 
@@ -363,7 +363,7 @@ def test_known_disciplines_have_registered_summary_models(discipline, family):
 
 
 @pytest.mark.parametrize('discipline,expected_rows', [
-    ('Bike Bootcamp', 3), ('Tread Bootcamp', 2), ('Row Bootcamp', 2),
+    ('Bike Bootcamp', 3), ('Tread Bootcamp', 3), ('Row Bootcamp', 3),
     ('Strength', 2), ('Yoga', 2), ('Meditation', 2), ('Unknown Future Workout', 2),
 ])
 def test_discipline_stat_layouts_have_safe_fallbacks(discipline, expected_rows):
@@ -397,3 +397,65 @@ def test_brief_workouts_are_under_a_minute_by_their_start_and_end(start, end, se
 def test_a_placeholder_instructor_is_not_shown(instructor, shown):
     summary = summarize_workout({'fitness_discipline': 'walking', 'ride': {'instructor': instructor}})
     assert summary['instructor'] == shown
+
+
+def _stat_values(summary):
+    return {d['label']: d['value'] for d in _stat_details(summary) if d['label'] != 'instructor'}
+
+
+@pytest.mark.parametrize('summary,expected', [
+    # Jen's real 30 min ride: the board used to show Strive 27 (int() cut the .7) and 6.3 mi.
+    ({'discipline': 'Cycling', 'total_output_kj': 140.0, 'strive_score': 27.7, 'avg_speed': 12.7,
+      'avg_speed_unit': 'mph', 'avg_cadence': 65.0, 'avg_resistance': 37.0,
+      'distance': 6.3333, 'distance_unit': 'mi'},
+     {'total output': '140 kj', 'strive score': '27.7', 'avg speed': '12.7 mph',
+      'avg cadence': '65 rpm', 'avg resistance': '37%', 'distance': '6.33 mi'}),
+    # Joel's real outdoor walk.
+    ({'discipline': 'Walking', 'distance': 15.7592, 'distance_unit': 'mi', 'avg_pace': 10.33,
+      'avg_pace_unit': 'min/mi', 'elevation': 772.0, 'elevation_unit': 'ft'},
+     {'distance': '15.76 mi', 'avg pace': '10:20/mi', 'elevation gain': '772 ft'}),
+    # A whole Strive Score still shows its decimal, like the app.
+    ({'discipline': 'Strength', 'strive_score': 11.0, 'hr_max': 142.0},
+     {'strive score': '11.0', 'max heart rate': '142'}),
+    # Real tread walk: Peloton sends incline to one decimal, 0.0 included.
+    ({'discipline': 'Walking', 'distance': 1.0439, 'distance_unit': 'mi', 'elevation': 0.0,
+      'elevation_unit': 'ft', 'avg_incline': 0.0},
+     {'distance': '1.04 mi', 'elevation gain': '0 ft', 'avg incline': '0.0%'}),
+    # Real row: Peloton sends metres with centimetres (1906.47); the board shows whole metres.
+    ({'discipline': 'Rowing', 'distance': 1906.47, 'distance_unit': 'm', 'avg_stroke_rate': 26.0,
+      'row_split_sec_per_500m': 157.2, 'avg_output_w': 111.0},
+     {'distance': '1906m', 'stroke rate': '26 spm', 'split per 500m': '2:37'}),
+    # Total Output from total_work (no graph summary) rounds half up rather than truncating.
+    ({'discipline': 'Cycling', 'total_output_kj': 139.7, 'strive_score': 0.1},
+     {'total output': '140 kj', 'strive score': '0.1'}),
+])
+def test_stats_match_the_peloton_apps_formats(summary, expected):
+    assert _stat_values(summary) == expected
+    flat = [value for row in _middle_stats(summary) for value in row if value]
+    if 'strive score' in expected:
+        assert f"{expected['strive score']} pts" in flat
+    if 'distance' in expected:
+        assert expected['distance'] in flat
+
+
+@pytest.mark.parametrize('summary,expected', [
+    # Treadmill: Strive and Total Output join distance and pace, as in the app.
+    ({'discipline': 'Running', 'distance': 3.1, 'distance_unit': 'mi', 'avg_pace': 9.5,
+      'avg_pace_unit': 'min/mi', 'strive_score': 31.2, 'total_output_kj': 312.0,
+      'elevation': 60.0, 'elevation_unit': 'ft', 'avg_incline': 1.5},
+     ['distance', 'avg pace', 'strive score', 'total output', 'elevation gain', 'avg incline']),
+    # Outdoor: total_work is 0, so there's no output to show; Strive still is.
+    ({'discipline': 'Outdoor Walk', 'distance': 2.0, 'distance_unit': 'mi', 'avg_pace': 18.0,
+      'avg_pace_unit': 'min/mi', 'strive_score': 9.4, 'total_output_kj': 0.0},
+     ['distance', 'avg pace', 'strive score']),
+    # Rows lead with Total Output and Strive like rides; average watts gives way to them.
+    ({'discipline': 'Rowing', 'distance': 1906.47, 'distance_unit': 'm', 'avg_stroke_rate': 26.0,
+      'row_split_sec_per_500m': 157.2, 'avg_output_w': 111.0, 'total_output_kj': 63.0,
+      'strive_score': 13.3},
+     ['total output', 'strive score', 'distance', 'stroke rate', 'split per 500m']),
+])
+def test_tread_and_row_pages_show_strive_and_output(summary, expected):
+    assert list(_stat_values(summary)) == expected
+    flat = [value for row in _middle_stats(summary) for value in row if value]
+    assert (f"{summary['strive_score']:.1f} pts" in flat)
+    assert any(value.endswith(' kj') for value in flat) == ('total output' in expected)

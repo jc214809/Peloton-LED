@@ -29,6 +29,10 @@ def test_card_lines_for_each_pr_kind():
     # Jen's real 5 min ride: the graph rounds 25.4 kJ to 25, which would hide the gain.
     assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 25.0,
                           'total_work_kj': 25.4, 'previous_best_kj': 25.0})[1:] == ('25 KJ', '+0.4 KJ')
+    # The card shows the app's Total Output (189 kJ), not round(188.5), which Python sends
+    # to the even 188; and the gain rounds (6.6 -> 7) instead of truncating to 6.
+    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 189.0,
+                          'total_work_kj': 188.5, 'previous_best_kj': 181.9})[1:] == ('189 KJ', '+7 KJ')
     assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412}) == (
         'OUTPUT PR', '412 KJ', None)
     assert pr_card_lines({'is_pr': True, 'is_splits_pr': True, 'row_split_sec_per_500m': 128}) == (
