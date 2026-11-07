@@ -90,6 +90,28 @@ def heart_rate_zone_seconds(perf):
     return [round(s) for s in seconds] if sum(seconds) > 0 else None
 
 
+MUSCLE_GROUPS_SHOWN = 3
+
+
+def muscle_groups(perf, limit=MUSCLE_GROUPS_SHOWN):
+    """The most-worked muscle groups, most first, as {'name', 'percent', 'bucket'};
+    None when the workout has none. Bucket is Peloton's 1-3 intensity (3 = most)."""
+    groups = []
+    for entry in perf.get('muscle_group_score') or []:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get('display_name') or '').strip()
+        percent = number(entry.get('percentage'))
+        if not name or not percent:
+            continue
+        bucket = number(entry.get('bucket'))
+        bucket = min(3, max(1, int(bucket))) if bucket else 1
+        groups.append({'name': name, 'percent': round(percent), 'bucket': bucket})
+    # Stable sort: equal percentages keep Peloton's order.
+    groups.sort(key=lambda g: -g['percent'])
+    return groups[:limit] or None
+
+
 def _zone_of(bpm, lower_bounds):
     """1-5 zone for a heart rate, given each zone's min bpm (zone 1 first)."""
     zone = None
@@ -203,6 +225,7 @@ def summarize_workout(workout, perf=None):
         'strive_score': number((perf.get('effort_zones') or {}).get('total_effort_points')),
         'graph': performance_graph(perf),
         'hr_zone_seconds': heart_rate_zone_seconds(perf),
+        'muscles': muscle_groups(perf),
     }
     for key in ('calories', 'max_speed', 'avg_incline', 'max_incline', 'elevation',
                 'avg_cadence', 'avg_resistance', 'avg_stroke_rate', 'hr_avg', 'hr_max'):

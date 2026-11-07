@@ -56,8 +56,13 @@ def demo_data():
                 for z, zone in enumerate(metrics[0]['zones'])}
         performance[identity] = {'duration': 1800 if i == 0 else 1200, 'summaries': summaries,
                                 'metrics': metrics, 'effort_zones': effort_zones}
-    # Deliberately omit strength metrics to exercise missing-data rendering.
-    performance['demo-strength'] = {'duration': 1200}
+    # Deliberately omit strength metrics to exercise missing-data rendering,
+    # but keep muscle groups so the demo shows that slide.
+    performance['demo-strength'] = {'duration': 1200, 'muscle_group_score': [
+        {'muscle_group': slug, 'display_name': name, 'percentage': pct, 'bucket': bucket}
+        for slug, name, pct, bucket in [('biceps', 'Biceps', 9, 1), ('quads', 'Quads', 24, 3),
+                                        ('glutes', 'Glutes', 17, 3), ('hamstrings', 'Hamstrings', 14, 2),
+                                        ('core', 'Core', 6, 1)]]}
     return deepcopy({'me': {'id': 'demo', 'username': 'Demo Rider', 'timezone': 'America/New_York'},
         'overview': {'streaks': {'current_weekly': 23, 'best_weekly': 41, 'current_daily': 3},
                      'workout_counts': [{'name': label, 'count': count} for label, count in

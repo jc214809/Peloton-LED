@@ -330,13 +330,18 @@ def _stat_details(summary: dict) -> List[dict]:
     return details
 
 
+# Disciplines whose workout page ends with the muscle-groups slide. Peloton sends
+# the data for most workouts; it's only shown where the page is light on stats.
+MUSCLE_DISCIPLINES = {'strength'}
+
+
 def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
     """Details the stats phase cycles through, in order.
 
     64-row panels show the instructor in the intro, so only stats rotate.
     32-row panels have no room for it there, so it leads the rotation.
     The workout graph and heart-rate zone bar close out the rotation when the
-    workout recorded them.
+    workout recorded them, then the top muscle groups for MUSCLE_DISCIPLINES.
     """
     details = _stat_details(summary)
     stats = [d for d in details if d['label'] != 'instructor']
@@ -349,6 +354,8 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
     zones = summary.get('hr_zone_seconds')
     if isinstance(zones, list) and len(zones) == 5 and sum(zones) > 0:
         stats.append({'label': 'hr zones', 'value': '', 'kind': 'zones'})
+    if summary.get('muscles') and (summary.get('discipline') or '').strip().lower() in MUSCLE_DISCIPLINES:
+        stats.append({'label': 'muscles worked', 'value': '', 'kind': 'muscles'})
     return stats
 
 
@@ -425,6 +432,51 @@ def _draw_zones(matrix, seconds: List[float], font, big_font, label_y: int,
     tx = max((w - total_w) // 2, 2)
     graphics.DrawText(matrix, big_font, tx, text_y, graphics.Color(*HR_ZONE_COLORS[top_zone]), name)
     graphics.DrawText(matrix, big_font, tx + get_text_width(big_font, name), text_y, _WHITE, pct)
+
+
+# Peloton's muscle-group intensity buckets: 1 some (yellow), 2 more (orange), 3 most (red).
+MUSCLE_BUCKET_COLORS = {1: (200, 150, 0), 2: (255, 110, 0), 3: (255, 30, 0)}
+
+
+def _muscle_row_text(matrix, font, baseline: int, group: dict) -> None:
+    """Muscle name on the left, its percent on the right, in white."""
+    w = matrix.width
+    pct = f"{group['percent']}%"
+    pct_w = _text_width(font, pct)
+    name = _truncate(font, group['name'].upper(), w - 4 - pct_w - 3)
+    _draw_text(matrix, font, 2, baseline, _WHITE, name)
+    _draw_text(matrix, font, w - 2 - pct_w, baseline, _WHITE, pct)
+
+
+def _draw_muscles(matrix, muscles: List[dict], font, label_y: int) -> None:
+    """64 rows: a label, then each muscle's name and percent over a 2-px bar
+    in its bucket colour, scaled to the top muscle."""
+    w = matrix.width
+    label = 'MUSCLES WORKED'
+    _draw_text(matrix, font, max((w - _text_width(font, label)) // 2, 2), label_y,
+               graphics.Color(*_LABEL_GREY), label)
+    peak = muscles[0]['percent']
+    for i, group in enumerate(muscles):
+        baseline = label_y + 10 + i * 9
+        _muscle_row_text(matrix, font, baseline, group)
+        r, g, b = MUSCLE_BUCKET_COLORS.get(group['bucket'], MUSCLE_BUCKET_COLORS[1])
+        for x in range(2, 2 + max(1, round((w - 4) * group['percent'] / peak))):
+            matrix.SetPixel(x, baseline + 1, r, g, b)
+            matrix.SetPixel(x, baseline + 2, r, g, b)
+
+
+def _draw_muscle_rows(matrix, muscles: List[dict], font, top: int) -> None:
+    """32 rows: no room for a label, so each muscle is a 5-px half-brightness
+    bar in its bucket colour, scaled to the top muscle, with the text over it."""
+    w = matrix.width
+    peak = muscles[0]['percent']
+    for i, group in enumerate(muscles):
+        y0 = top + i * 6
+        r, g, b = MUSCLE_BUCKET_COLORS.get(group['bucket'], MUSCLE_BUCKET_COLORS[1])
+        for x in range(1, 1 + max(1, round((w - 2) * group['percent'] / peak))):
+            for y in range(y0, y0 + 5):
+                matrix.SetPixel(x, y, r // 2, g // 2, b // 2)
+        _muscle_row_text(matrix, font, y0 + 5, group)
 
 
 # 7-wide × 7-tall pixel trophy marking PRs: 'C' gold cup, 'B' darker stem/base.
@@ -508,14 +560,14 @@ def _draw_short_lines(matrix, font, lines: List[str], top_y: int, summary: dict)
 # Default seconds each intro/stat holds for; overridable via the
 # `last_workout_detail_interval` display config key.
 LAST_WORKOUT_DETAIL_INTERVAL_SECONDS = 4.0
-# The graph and zone-bar frames hold this much longer than a stat: there's
-# more to read than one number.
+# The graph, zone-bar and muscle frames hold this much longer than a stat:
+# there's more to read than one number.
 GRAPH_FRAME_EXTRA_SECONDS = 1.0
 
 
 def detail_hold_seconds(detail: dict, interval: float) -> float:
     """Seconds one rotating detail stays up."""
-    if interval > 0 and detail.get('kind') in ('graph', 'zones'):
+    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'muscles'):
         return interval + GRAPH_FRAME_EXTRA_SECONDS
     return interval
 
@@ -620,6 +672,11 @@ class LastWorkoutScreen(Screen):
             if detail.get('kind') == 'zones':
                 _draw_zones(matrix, summary['hr_zone_seconds'], stat_font, text_font,
                             14, 17, 22, 30)
+                return True
+            if detail.get('kind') == 'muscles':
+                # Three bars fill the space under the discipline; the bar stays.
+                _draw_muscle_rows(matrix, summary['muscles'], text_font, 8)
+                _draw_hr_calories(matrix, summary, stat_font, bottom_y)
                 return True
             # Rise 2px rather than 3 so the value never brushes the bottom bar.
             offset = max(0, round(2 * (1 - min(1, phase_seconds / 0.3))))
@@ -784,6 +841,9 @@ class LastWorkoutScreen(Screen):
             elif detail.get('kind') == 'zones':
                 _draw_zones(matrix, summary['hr_zone_seconds'], stat_font, titles_font or text_font,
                             label_y, label_y + 5, label_y + 13, label_y + 24)
+            elif detail.get('kind') == 'muscles':
+                # Starts higher than the other slides: three rows need the room.
+                _draw_muscles(matrix, summary['muscles'], text_font, block_y + 8)
             else:
                 value_font = (title_font if get_text_width(title_font, detail['value'].upper()) <= w - 4
                               else text_font)
