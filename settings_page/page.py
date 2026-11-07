@@ -707,7 +707,9 @@ def _screen_row(name, label, hint, on, display):
     durations = section(display, 'screen_durations')
     if name in SHARED_DURATION:
         other = dict((n, l) for n, l, _ in SCREENS)[SHARED_DURATION[name]]
-        time = f'<span class="time shared">As {escape(other)}</span>'
+        # The column is narrow: the label's first word ("Lifetime"), the full name in the tooltip.
+        time = (f'<span class="time shared" title="Shown as long as each {_attr(other)} page">'
+                f'Same as {escape(other.split()[0])}</span>')
     else:
         seconds = _number(f'duration_{name}', durations.get(name), duration_fallback(display, name),
                           f' aria-label="{_attr(label)} seconds"', 's')
