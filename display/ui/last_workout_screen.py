@@ -6,6 +6,7 @@ from typing import Any, List, Optional, Tuple
 from driver import graphics
 from display.display import get_text_width, loaded_fonts
 from utils import debug
+from .logo_art import ZONE_COLORS
 from .screen import Screen
 
 _WHITE = graphics.Color(255, 255, 255)
@@ -316,7 +317,7 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
 
 
 # Heart-rate zone colors, zone 1 first; also used to color graph columns.
-HR_ZONE_COLORS = [(90, 160, 255), (40, 200, 120), (250, 210, 0), (255, 130, 0), (240, 40, 40)]
+HR_ZONE_COLORS = list(ZONE_COLORS)
 _LABEL_GREY = (145, 165, 190)
 _PEAK_WHITE = (255, 255, 255)
 

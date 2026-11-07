@@ -15,6 +15,7 @@ from self_update.github import FAILED, PASSED, REPO, RUNNING
 from self_update.state import ROLLBACK_FAILED, UNFINISHED
 from self_update.update import (BETA, BETA_BRANCH, CURRENT, RELEASES, WAITING, WOULD_UPDATE, beta_number, name_of,
                                 release_of)
+from settings_page import logo
 from settings_page.logins import RENEW_BEFORE_S, renews_at, when
 from settings_page.updates import BUSY, START_FAILED, STARTED, STEPS
 from settings_page.form import (COLORS, COMPACT_SHOWN, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
@@ -47,6 +48,7 @@ ALERT_OUTCOMES = {
     'test_off': ('warn', 'Set both Pushover keys below first.'),
 }
 SENT = ('sent', 'wait', 'used', 'failed')  # pins.PinGate.send_pin's outcomes
+TOUCH_ICON = '/apple-touch-icon.png'  # server.py serves logo.touch_icon_png() here, without a PIN
 
 STYLE = """
 :root {
@@ -82,9 +84,8 @@ a { color: var(--accent); }
 .topbar-in { max-width: 1080px; margin: 0 auto; padding: 0 16px; height: 60px;
   display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.mark { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: #fff;
-  background: linear-gradient(135deg, #df1c2f, #8b1020); box-shadow: var(--shadow); flex: none; }
-.mark svg { width: 18px; height: 18px; }
+.mark { width: 36px; height: 36px; border-radius: 9px; overflow: hidden; box-shadow: var(--shadow); flex: none; }
+.mark svg { display: block; width: 100%; height: 100%; stroke: none; }
 .brand-name { font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
 .brand-sub { color: var(--text-3); font-size: 12.5px; }
 .top-meta { display: flex; align-items: center; gap: 8px; }
@@ -360,7 +361,6 @@ details.cred[open] > summary .change { display: none; }
 """
 
 ICONS = {
-    'bolt': '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
     'list': '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
     'clock': '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     'target': '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
@@ -559,7 +559,9 @@ def icon(name):
 def document(title, body, script=''):
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1">'
-            f'<meta name="robots" content="noindex"><title>{escape(title)}</title><style>{STYLE}</style></head>'
+            f'<meta name="robots" content="noindex"><title>{escape(title)}</title>'
+            f'<link rel="icon" type="image/svg+xml" href="{_attr(logo.favicon_href())}">'
+            f'<link rel="apple-touch-icon" href="{TOUCH_ICON}"><style>{STYLE}</style></head>'
             f'<body>{body}{f"<script>{script}</script>" if script else ""}</body></html>')
 
 
@@ -571,7 +573,7 @@ def _topbar(board=None, mode=None, sign_out=False):
         chips += f'<span class="chip {kind}">{icon("wifi" if kind == "warn" else "lock")}{escape(text)}</span>'
     if sign_out:
         chips += '<form method="post" action="/signout"><button type="submit" class="ghost">Sign out</button></form>'
-    return (f'<header class="topbar"><div class="topbar-in"><div class="brand"><span class="mark">{icon("bolt")}</span>'
+    return (f'<header class="topbar"><div class="topbar-in"><div class="brand"><span class="mark">{logo.svg()}</span>'
             f'<div><div class="brand-name">Peloton LED</div><div class="brand-sub">Board settings</div>'
             f'</div></div><div class="top-meta">{chips}</div></div></header>')
 

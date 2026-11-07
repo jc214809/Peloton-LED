@@ -33,7 +33,7 @@ the repo is public and two of them show your real workout data.
 | Total workouts count page | Two-line names crowded the count | **done** |
 | Lifetime disciplines | One text page per discipline (12 pages) | **done**: icon pages, 2 per page |
 | Goals / milestones | Unit missing ("2/5" of what?) | **done** |
-| Logo | Separate 64x32 art exists | **checked, no change** |
+| Logo | Separate 64x32 art exists | **done** (2026-11-06): mark on the left, words beside it |
 | Login / stale overlays | Bottom corners | **checked**; workout title and calories move out of their way |
 
 ## Changes and decisions
@@ -134,6 +134,14 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
 - The startup Peloton P is Peloton red (#DF1C2F) instead of white on both
   boards. A custom `display.logo_path` image is unaffected.
 - The PR celebration screen keeps its star burst.
+
+### Board logo (both boards, requested 2026-11-06)
+- The startup logo is now the red Peloton mark, PELOTON, a heart-rate zone
+  bar and LED. On 64x64 they stack: mark on top, then PELOTON, the bar and
+  L E D. 64x32 has no room to stack, so the mark sits on the left (the
+  32-row art, unchanged) with PELOTON, the bar and L E D in the 37 columns
+  beside it. PELOTON ends one pixel from the panel's edge.
+- Both boards use the 32-row mark (23x28); the old 64-row art is gone.
 
 ### Versus week strip (both boards, requested 2026-10-31)
 - Seven dashes along the bottom of the versus page, Monday first: finished
