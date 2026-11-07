@@ -115,6 +115,27 @@ def _fmt_duration(minutes) -> str:
     return f"{h}h{rem}m" if h and rem else (f"{h}hr" if h else f"{m}m")
 
 
+def _whole(value) -> int:
+    """Round half up, as Peloton does (Python's round() sends 0.5 to even)."""
+    return int(value + 0.5)
+
+
+def _fmt_strive(strive) -> str:
+    """Strive Score to one decimal, as the Peloton app shows it."""
+    return f"{strive:.1f}"
+
+
+def _fmt_output(output) -> Optional[str]:
+    """Total Output in kJ, or None when there is none: outdoor runs and walks
+    carry a total_work of 0, which isn't an output to show."""
+    return f"{_whole(output)} kj" if isinstance(output, (int, float)) and output > 0 else None
+
+
+def _fmt_distance(distance, unit) -> str:
+    """Miles and km to two decimals, as the Peloton app shows them."""
+    return f"{distance:.2f} {unit}".rstrip()
+
+
 def _fmt_pace(pace_min_per_mile) -> str:
     if not isinstance(pace_min_per_mile, (int, float)):
         return ""
@@ -161,16 +182,16 @@ def _middle_stats(summary: dict) -> List[Tuple[Optional[str], Optional[str]]]:
         dist_unit = summary.get("distance_unit") or ""
         return [
             (
-                f"{int(output)} kj" if isinstance(output, (int, float)) else None,
-                f"{int(strive)} pts" if isinstance(strive, (int, float)) else None,
+                f"{_whole(output)} kj" if isinstance(output, (int, float)) else None,
+                f"{_fmt_strive(strive)} pts" if isinstance(strive, (int, float)) else None,
             ),
             (
                 f"{spd:.1f} {spd_unit}" if isinstance(spd, (int, float)) else None,
-                f"{int(cad)} rpm" if isinstance(cad, (int, float)) else None,
+                f"{_whole(cad)} rpm" if isinstance(cad, (int, float)) else None,
             ),
             (
-                f"{int(res)}% res" if isinstance(res, (int, float)) else None,
-                f"{dist_val:.1f} {dist_unit}" if isinstance(dist_val, (int, float)) else None,
+                f"{_whole(res)}% res" if isinstance(res, (int, float)) else None,
+                _fmt_distance(dist_val, dist_unit) if isinstance(dist_val, (int, float)) else None,
             ),
         ]
     if any(d in disc for d in ("running", "walking", "outdoor", "tread", "hiking")):
@@ -180,14 +201,21 @@ def _middle_stats(summary: dict) -> List[Tuple[Optional[str], Optional[str]]]:
         elevation = summary.get("elevation")
         elevation_unit = summary.get("elevation_unit") or ""
         incline = summary.get("avg_incline")
+        strive = summary.get("strive_score")
+        output = _fmt_output(summary.get("total_output_kj"))
         rows = [(
-            f"{dist_val:.1f} {dist_unit}" if isinstance(dist_val, (int, float)) else None,
+            _fmt_distance(dist_val, dist_unit) if isinstance(dist_val, (int, float)) else None,
             f"{_fmt_pace(pace_val)}{(summary.get('avg_pace_unit') or '').replace('min', '')}" if pace_val is not None else None,
         )]
+        if strive is not None or output:
+            rows.append((
+                f"{_fmt_strive(strive)} pts" if isinstance(strive, (int, float)) else None,
+                output,
+            ))
         if elevation is not None or incline is not None:
             rows.append((
                 f"{elevation:g} {elevation_unit}" if isinstance(elevation, (int, float)) else None,
-                f"{incline:g}% inc" if isinstance(incline, (int, float)) else None,
+                f"{incline:.1f}% inc" if isinstance(incline, (int, float)) else None,
             ))
         return rows
     if "rowing" in disc or disc.startswith("row "):
@@ -195,15 +223,19 @@ def _middle_stats(summary: dict) -> List[Tuple[Optional[str], Optional[str]]]:
         dist_unit = summary.get("distance_unit") or ""
         spm_val = summary.get("avg_stroke_rate")
         split_val = summary.get("row_split_sec_per_500m")
-        out_val = summary.get("avg_output_w")
+        strive = summary.get("strive_score")
         return [
             (
-                f"{dist_val:g}{dist_unit}" if isinstance(dist_val, (int, float)) else None,
-                f"{int(spm_val)} spm" if isinstance(spm_val, (int, float)) else None,
+                _fmt_output(summary.get("total_output_kj")),
+                f"{_fmt_strive(strive)} pts" if isinstance(strive, (int, float)) else None,
+            ),
+            (
+                f"{_whole(dist_val)}{dist_unit}" if isinstance(dist_val, (int, float)) else None,
+                f"{_whole(spm_val)} spm" if isinstance(spm_val, (int, float)) else None,
             ),
             (
                 _fmt_split(split_val) + "/500" if split_val else None,
-                f"{int(out_val)}W" if isinstance(out_val, (int, float)) else None,
+                None,
             ),
         ]
     strive = summary.get("strive_score")
@@ -214,13 +246,13 @@ def _middle_stats(summary: dict) -> List[Tuple[Optional[str], Optional[str]]]:
     rows = []
     if strive is not None or hr_max is not None:
         rows.append((
-            f"{strive:g} pts" if isinstance(strive, (int, float)) else None,
-            f"{int(hr_max)} max" if isinstance(hr_max, (int, float)) else None,
+            f"{_fmt_strive(strive)} pts" if isinstance(strive, (int, float)) else None,
+            f"{_whole(hr_max)} max" if isinstance(hr_max, (int, float)) else None,
         ))
     if distance is not None or avg_output is not None:
         rows.append((
-            f"{distance:g} {distance_unit}" if isinstance(distance, (int, float)) else None,
-            f"{int(avg_output)}W" if isinstance(avg_output, (int, float)) else None,
+            _fmt_distance(distance, distance_unit) if isinstance(distance, (int, float)) else None,
+            f"{_whole(avg_output)}W" if isinstance(avg_output, (int, float)) else None,
         ))
     return rows
 
@@ -248,12 +280,12 @@ def _stat_details(summary: dict) -> List[dict]:
         res = summary.get("avg_resistance")
         dist_val = summary.get("distance")
         dist_unit = summary.get("distance_unit") or ""
-        add("total output", f"{int(output)} kj" if isinstance(output, (int, float)) else None)
-        add("strive score", f"{int(strive)}" if isinstance(strive, (int, float)) else None)
+        add("total output", f"{_whole(output)} kj" if isinstance(output, (int, float)) else None)
+        add("strive score", _fmt_strive(strive) if isinstance(strive, (int, float)) else None)
         add("avg speed", f"{spd:.1f} {spd_unit}" if isinstance(spd, (int, float)) else None)
-        add("avg cadence", f"{int(cad)} rpm" if isinstance(cad, (int, float)) else None)
-        add("avg resistance", f"{int(res)}%" if isinstance(res, (int, float)) else None)
-        add("distance", f"{dist_val:.1f} {dist_unit}" if isinstance(dist_val, (int, float)) else None)
+        add("avg cadence", f"{_whole(cad)} rpm" if isinstance(cad, (int, float)) else None)
+        add("avg resistance", f"{_whole(res)}%" if isinstance(res, (int, float)) else None)
+        add("distance", _fmt_distance(dist_val, dist_unit) if isinstance(dist_val, (int, float)) else None)
     elif any(d in disc for d in ("running", "walking", "outdoor", "tread", "hiking")):
         dist_val = summary.get("distance")
         dist_unit = summary.get("distance_unit") or ""
@@ -261,32 +293,36 @@ def _stat_details(summary: dict) -> List[dict]:
         elevation = summary.get("elevation")
         elevation_unit = summary.get("elevation_unit") or ""
         incline = summary.get("avg_incline")
-        add("distance", f"{dist_val:.1f} {dist_unit}" if isinstance(dist_val, (int, float)) else None)
+        add("distance", _fmt_distance(dist_val, dist_unit) if isinstance(dist_val, (int, float)) else None)
         add("avg pace", f"{_fmt_pace(pace_val)}{(summary.get('avg_pace_unit') or '').replace('min', '')}"
             if pace_val is not None else None)
+        strive = summary.get("strive_score")
+        add("strive score", _fmt_strive(strive) if isinstance(strive, (int, float)) else None)
+        add("total output", _fmt_output(summary.get("total_output_kj")))
         if elevation is not None or incline is not None:
             add("elevation gain", f"{elevation:g} {elevation_unit}" if isinstance(elevation, (int, float)) else None)
-            add("avg incline", f"{incline:g}%" if isinstance(incline, (int, float)) else None)
+            add("avg incline", f"{incline:.1f}%" if isinstance(incline, (int, float)) else None)
     elif "rowing" in disc or disc.startswith("row "):
         dist_val = summary.get("distance")
         dist_unit = summary.get("distance_unit") or ""
         spm_val = summary.get("avg_stroke_rate")
         split_val = summary.get("row_split_sec_per_500m")
-        out_val = summary.get("avg_output_w")
-        add("distance", f"{dist_val:g}{dist_unit}" if isinstance(dist_val, (int, float)) else None)
-        add("stroke rate", f"{int(spm_val)} spm" if isinstance(spm_val, (int, float)) else None)
+        strive = summary.get("strive_score")
+        add("total output", _fmt_output(summary.get("total_output_kj")))
+        add("strive score", _fmt_strive(strive) if isinstance(strive, (int, float)) else None)
+        add("distance", f"{_whole(dist_val)}{dist_unit}" if isinstance(dist_val, (int, float)) else None)
+        add("stroke rate", f"{_whole(spm_val)} spm" if isinstance(spm_val, (int, float)) else None)
         add("split per 500m", _fmt_split(split_val) if split_val else None)
-        add("avg output", f"{int(out_val)}W" if isinstance(out_val, (int, float)) else None)
     else:
         strive = summary.get("strive_score")
         hr_max = summary.get("hr_max")
         distance = summary.get("distance")
         distance_unit = summary.get("distance_unit") or ""
         avg_output = summary.get("avg_output_w")
-        add("strive score", f"{strive:g}" if isinstance(strive, (int, float)) else None)
-        add("max heart rate", f"{int(hr_max)}" if isinstance(hr_max, (int, float)) else None)
-        add("distance", f"{distance:g} {distance_unit}" if isinstance(distance, (int, float)) else None)
-        add("avg output", f"{int(avg_output)}W" if isinstance(avg_output, (int, float)) else None)
+        add("strive score", _fmt_strive(strive) if isinstance(strive, (int, float)) else None)
+        add("max heart rate", f"{_whole(hr_max)}" if isinstance(hr_max, (int, float)) else None)
+        add("distance", _fmt_distance(distance, distance_unit) if isinstance(distance, (int, float)) else None)
+        add("avg output", f"{_whole(avg_output)}W" if isinstance(avg_output, (int, float)) else None)
 
     instructor = (summary.get("instructor") or "").strip()
     if instructor:
@@ -442,14 +478,14 @@ def _draw_hr_calories(matrix, summary: dict, stat_font, bottom_y: int) -> None:
     if isinstance(hr_val, (int, float)):
         heart_top = bottom_y - font_h + (font_h - _HEART_H) // 2 + 1
         _draw_heart(matrix, 2, heart_top, _RED)
-        graphics.DrawText(matrix, stat_font, 2 + _HEART_W + 1, bottom_y, _WHITE, str(int(hr_val)))
+        graphics.DrawText(matrix, stat_font, 2 + _HEART_W + 1, bottom_y, _WHITE, str(_whole(hr_val)))
 
     cal_val = summary.get("calories")
     if isinstance(cal_val, (int, float)):
         # Leave the bottom-right corner free for the login padlock.
         right = w - 1 - (8 if summary.get('login_required') else 0)
         mid = w // 2 + 1
-        _draw_stat(matrix, stat_font, right, bottom_y, _WHITE, f"{int(cal_val)} cal",
+        _draw_stat(matrix, stat_font, right, bottom_y, _WHITE, f"{_whole(cal_val)} cal",
                    max(0, right - mid), right_align=True)
 
 
@@ -638,9 +674,9 @@ class LastWorkoutScreen(Screen):
                 hr = summary.get('hr_avg')
                 calories = summary.get('calories')
                 if isinstance(hr, (int, float)):
-                    stats.append(f'{int(hr)} avg HR')
+                    stats.append(f'{_whole(hr)} avg HR')
                 if isinstance(calories, (int, float)):
-                    stats.append(f'{int(calories)} cal')
+                    stats.append(f'{_whole(calories)} cal')
                 lines = [(7, 'WORKOUT STATS', _disc_color(discipline))]
                 lines += [(16 + index * 8, value, _WHITE)
                           for index, value in enumerate(stats[:2])]

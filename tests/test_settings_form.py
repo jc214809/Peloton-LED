@@ -307,6 +307,14 @@ def test_rotation_rows_have_a_grip_and_arrow_for_the_script():
     assert "addEventListener('pointerdown'" in page.SCRIPT  # mouse and touch dragging
 
 
+def test_total_workouts_time_says_it_matches_lifetime():
+    html = page.settings_page(TWO_RIDERS)
+    row = next(r for r in html.split('<li class="screen-row')[1:] if 'value="total_workouts"' in r)
+    assert '>Same as Lifetime</span>' in row
+    assert 'title="Shown as long as each Lifetime by discipline page"' in row
+    assert 'duration_total_workouts' not in row
+
+
 def test_number_fields_show_their_units():
     import re
     config = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'brightness_schedule': None}}
