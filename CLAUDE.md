@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Planned work lives in `ROADMAP.md`; remove an item when its PR merges.
+
 ## Running the App
 
 ```bash
