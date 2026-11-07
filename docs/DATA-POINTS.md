@@ -50,7 +50,7 @@ score or a measurement.
 | Calories | ✅ shown | ✅ shown | ✅ shown | ✅ shown (50 of 54) |
 | Heart-rate zones | ✅ shown (12 of 13) | ✅ shown | ✅ shown | ✅ shown (49 of 54) |
 | Output / heart-rate graph | ✅ shown | ✅ shown | ✅ shown | ✅ shown |
-| Muscle groups worked | ❌ not shown (11 of 13) | ❌ not shown (6 of 11) | ❌ not shown | ❌ not shown (47 of 54) |
+| Muscle groups worked | ❌ not shown (11 of 13) | ❌ not shown (6 of 11) | ❌ not shown | ✅ shown on Strength only (47 of 54) |
 | Per-mile splits | ❌ not shown (11 of 13) | ❌ not shown (10 of 11) | — | — |
 | GPS route | — | ❌ not shown (3 of 11: outdoor only) | — | — |
 
@@ -75,8 +75,12 @@ Stats Peloton sends that the board doesn't show, and why:
 - **Stroke count** on rows: the board doesn't read it from the data; stroke rate
   and split already cover it.
 
-Extras that could be new features rather than fixes: muscle groups, per-mile
-splits, and the GPS route. Peloton also sends the **max** (peak) for every
+- **Muscle groups** except on Strength: Strength pages have the fewest stats,
+  so they got the screen first (2026-11-07). Adding another discipline is one
+  entry in `MUSCLE_DISCIPLINES`.
+
+Extras that could be new features rather than fixes: per-mile splits and the
+GPS route. Peloton also sends the **max** (peak) for every
 equipment stat in the table (output, cadence, resistance, speed, incline,
 stroke rate, split); the board shows only the averages, and of the maxes only
 max heart rate, which is why that one has its own row.
@@ -93,15 +97,16 @@ calories on its bottom row.
 | Treadmill | 6: distance, avg pace, Strive, total output, elevation gain, avg incline | 9 | 10 | 38 |
 | Outdoor run or walk | 4: distance, avg pace, Strive, elevation gain | 7 | 8 | 30 |
 | Row | 5: total output, Strive, distance, stroke rate, split per 500 m | 8 | 9 | 34 |
-| No equipment | 2: Strive, max heart rate | 5 | 6 | 22 |
+| No equipment | 2: Strive, max heart rate | 5 (Strength 6) | 6 (Strength 7) | 22 (Strength 27) |
 
 **Screens** = the intro (class length, title and, on 64x64, instructor) + one
-per stat + the output or heart-rate graph + the heart-rate zones bar. 64x32 has
-no room for the instructor in the intro, so it gets its own screen. A missing
-stat, graph or zones bar drops its screen.
+per stat + the output or heart-rate graph + the heart-rate zones bar, and on
+Strength the top three muscle groups. 64x32 has no room for the instructor in the intro, so it
+gets its own screen. A missing stat, graph, zones bar or muscle list drops its
+screen.
 
 **Seconds** use the default 4 seconds a screen (`last_workout_detail_interval`);
-the graph and zones screens hold 1 second longer. 64x32 adds 4 seconds for the
+the graph, zones and muscle screens hold 1 second longer. 64x32 adds 4 seconds for the
 instructor screen.
 
 ## Number formats

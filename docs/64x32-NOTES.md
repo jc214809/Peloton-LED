@@ -155,6 +155,19 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   trophy is bottom-aligned with the name, so at baseline 6 its rim landed on
   row -1 and was cut off (reported 2026-11-03). It now spans rows 0-6.
 
+### Muscle groups slide (both boards, requested 2026-11-07)
+- A new last slide on Strength workout pages when Peloton sends muscle groups
+  (other disciplines: add them to `MUSCLE_DISCIPLINES`): the
+  top three, most worked first, coloured by Peloton's bucket (1 yellow,
+  2 orange, 3 red), bars scaled to the top muscle. Holds 1 s longer, like the
+  graph and zones slides. Every other frame is unchanged on both boards.
+- 64x64: `MUSCLES WORKED` 8 rows under the discipline (row 20 for a one-line
+  header), then name left, percent right, and a 2-row bar under each, 9 rows
+  apart.
+- 64x32: no room for a label, so three 5-row half-brightness bars from row 8
+  with the name and percent in white over them. Unlike the graph and zones
+  slides it keeps the heart-rate/calorie row.
+
 ## Open questions for Joel
 
 1. **`compact_workout_pages`**: the new 32-row layout makes this option

@@ -97,7 +97,7 @@ All screens implement the `Screen` ABC (`display/ui/screen.py`):
 
 `show_and_wait(manager, name, state, duration)` in `peloton_led.py` is the standard way to display a screen for a fixed duration.
 
-Workout-page stats come from `_stat_details` in `display/ui/last_workout_screen.py` (routed by equipment: bike, tread/outdoor, row, everything else; `_middle_stats` mirrors it for the legacy compact 32-row page). Number formats match the Peloton app (`_fmt_strive`, `_fmt_distance`, `_fmt_output`, `_whole` rounds half up). `docs/DATA-POINTS.md` records which stats Peloton sends per equipment (from the raw responses in `perf_graphs/`) against which the board shows, plus stats/screens per workout; update it when changing `_stat_details`.
+Workout-page stats come from `_stat_details` in `display/ui/last_workout_screen.py` (routed by equipment: bike, tread/outdoor, row, everything else; `_middle_stats` mirrors it for the legacy compact 32-row page). Number formats match the Peloton app (`_fmt_strive`, `_fmt_distance`, `_fmt_output`, `_whole` rounds half up). `docs/DATA-POINTS.md` records which stats Peloton sends per equipment (from the raw responses in `perf_graphs/`) against which the board shows, plus stats/screens per workout; update it when changing `_stat_details`. After the stats, `rotating_details` appends chart slides (`kind`): `graph`, `zones`, `muscles` (top 3 from `summaries.muscle_groups`; only for disciplines in `MUSCLE_DISCIPLINES`, just Strength for now, though most workouts carry `muscle_group_score`); each holds `GRAPH_FRAME_EXTRA_SECONDS` longer, and `build_rotation_pages` sizes the page from the same list.
 
 ### Peloton API Layer
 
