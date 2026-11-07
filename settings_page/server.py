@@ -30,7 +30,7 @@ from ipaddress import ip_address, ip_network
 from urllib.parse import parse_qs, urlsplit
 
 from peloton import notify
-from settings_page import logins, page
+from settings_page import logins, logo, page
 from settings_page.form import apply_form
 from settings_page.pins import PIN_FILE, PIN_SHOWN_S, SESSION_S, PinGate
 from settings_page.updates import STARTS, Updates
@@ -361,6 +361,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_png(self, body):
+        self.send_response(200)
+        self.send_header('Content-Type', 'image/png')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'max-age=86400')
+        self.end_headers()
+        self.wfile.write(body)
+
     def _redirect(self, where, headers=()):
         self.send_response(303)
         self.send_header('Location', where)
@@ -402,6 +410,8 @@ class Handler(BaseHTTPRequestHandler):
             config, _ = self.settings.load()
             zone = page._zone(config.get('display') if isinstance(config.get('display'), dict) else {})
             return self._send_json(200, {'renewing': bool(view['renewing']), 'html': page.renewal_status(view, zone)})
+        if url.path == page.TOUCH_ICON:  # a phone's home-screen icon: nothing private, so no PIN
+            return self._send_png(logo.touch_icon_png())
         if url.path not in ('/', '/signin'):
             return self._send(404, page.message_page('Not found', "There's nothing at this address."))
         query = parse_qs(url.query, keep_blank_values=True)  # "?wrong", "?shown", "?sent=...", "?signedout"

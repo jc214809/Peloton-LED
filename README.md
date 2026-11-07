@@ -1,4 +1,7 @@
 # Peloton LED Dashboard
+
+![Peloton LED](docs/logo.png)
+
 ![Tests](https://github.com/jc214809/Peloton-LED/actions/workflows/tests.yml/badge.svg) [![codecov](https://codecov.io/gh/jc214809/Peloton-LED/graph/badge.svg)](https://codecov.io/gh/jc214809/Peloton-LED)
 
 A Python dashboard for a Raspberry Pi RGB LED matrix, with a desktop browser emulator. Shows every completed workout from your latest active day, one-time personal-record celebrations, username, and lifetime workout counts by discipline.
@@ -83,7 +86,7 @@ Data refreshes in the background (see [Refresh behavior](#refresh-behavior)), bu
 
 ![Startup logo](docs/screenshots/rotation/logo.png)
 
-Shown once at launch for `logo_duration` seconds (default 3), never again. The app picks `prepared_logos/peloton_64x64_auto.png` or `peloton_64x32_auto.png` to match the panel, unless `logo_path` points somewhere else. A missing logo file is skipped.
+Shown once at launch for `logo_duration` seconds (default 3), never again: the red Peloton mark, PELOTON, a bar in the five heart-rate zone colours, and LED. A 64x64 panel stacks them; a 64x32 panel puts the mark on the left and the rest beside it. The board draws it in its own pixel font, so it needs no image file. Set `logo_path` to show an image file instead; if that file is missing, the built-in logo is shown. The settings page's icons (page header, browser tab, phone home screen) are the same mark and zone bar. `python scripts/render_logo.py` redraws this screenshot and the wordmark at the top of this README.
 
 ### `latest_workouts` — last active day's workouts
 
@@ -328,7 +331,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `last_workout_duration` | 30 | `0` hides workout screens; otherwise only used with `compact_workout_pages`. Normal workout pages are timed by `last_workout_detail_interval` (see below) |
 | `last_workout_detail_interval` | 4 | Seconds each stat (and the intro) holds for during the workout screen's rotation; the graph and zone bar get one second more |
 | `logo_duration` | 3 | Startup logo seconds |
-| `logo_path` | Auto-selected | Optional logo file; missing logos are skipped |
+| `logo_path` | Built-in logo | Optional image file shown instead; if it's missing, the built-in logo is shown |
 | `timezone` | Profile, then system local | Calendar-day grouping; explicit config must be a valid IANA zone |
 | `refresh_interval` | 300 | Positive integer seconds |
 | `recent_fetch_size` | 20 | Workouts read per refresh |

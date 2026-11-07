@@ -209,15 +209,6 @@ def test_pr_is_marked_with_a_trophy_on_both_boards(height):
     assert rows_of(later, base) == []
 
 
-@pytest.mark.parametrize('height', [32, 64])
-def test_startup_logo_is_peloton_red(height):
-    from display.ui.logo_mask_screen import LogoMaskScreen, PELOTON_RED
-    matrix = ImageMatrix(height=height)
-    assert LogoMaskScreen().render(matrix)
-    colors = {c for _, c in matrix.image.getcolors(64 * 64)}
-    assert colors == {(0, 0, 0), PELOTON_RED}
-
-
 @pytest.mark.parametrize('title,expected', [
     ('60 min 11 sec Just Walk', 'Just Walk'),           # was "11 sec Just Walk"
     ('41 sec Just Walk', 'Just Walk'),                  # was left whole

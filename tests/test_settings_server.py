@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 import pytest
 
 import settings_page.server as server
+from settings_page import logo, page
 from settings_page.pins import PinGate
 from settings_page.server import Settings, make_server, read_pushover_keys, save_config
 from tests.test_settings_form import TWO_RIDERS, posted
@@ -158,6 +159,13 @@ def test_forms_from_other_sites_and_oversized_posts_are_refused(board):
 def test_unknown_addresses(board):
     assert board.request('/nope')[0] == 404
     assert board.request('/nope', {})[0] == 404
+
+
+def test_the_home_screen_icon_needs_no_pin(board):
+    with board.opener.open(board.url + page.TOUCH_ICON, timeout=5) as response:
+        assert response.status == 200 and response.headers['Content-Type'] == 'image/png'
+        assert response.read() == logo.touch_icon_png()
+    assert board.request(page.TOUCH_ICON, {})[0] == 404, 'only a GET'
 
 
 def test_the_pin_page_says_when_the_display_cannot_show_a_pin(board):

@@ -300,27 +300,6 @@ def test_last_workout_screen_zero_detail_interval_does_not_crash():
     assert screen.render(matrix, summary)
 
 
-@pytest.mark.parametrize('height', [32, 64])
-def test_startup_logo_mask_renders_centered_within_panel(height):
-    from display.ui.logo_art import LOGO_ROWS
-    from display.ui.logo_mask_screen import LogoMaskScreen
-
-    matrix = ImageMatrix(height=height)
-    assert LogoMaskScreen().render(matrix)
-    pixels = matrix.image
-    lit = [(x, y) for y in range(height) for x in range(64)
-           if pixels.getpixel((x, y)) != (0, 0, 0)]
-    assert lit, 'logo drew nothing'
-    assert all(0 <= x < 64 and 0 <= y < height for x, y in lit)
-    # Each panel height uses the mask drawn for it, pixel for pixel, rather
-    # than downsampling the taller art.
-    from display.ui.logo_art import LOGO_ROWS_32
-    source = LOGO_ROWS if height == 64 else LOGO_ROWS_32
-    expected = {(x, y) for y, row in enumerate(source)
-                for x, ch in enumerate(row) if ch == '#'}
-    assert set(lit) == expected
-
-
 def test_rotation_places_pr_after_its_workout():
     from peloton_led import run_display_loop
 

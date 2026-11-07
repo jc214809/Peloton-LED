@@ -126,9 +126,9 @@ Key display settings under `display`:
 
 `initialize_fonts(matrix_height)` loads `.bdf` fonts from `assets/fonts/patched/` into a global `loaded_fonts` dict, keyed by font name. Font selection is board-height-aware (32 vs 64 rows). Colors are defined as `graphics.Color` instances in `colors()`.
 
-### Logo Preparation (`scripts/`, `prepared_logos/`)
+### Logo (`display/ui/logo_art.py`)
 
-`scripts/prepare_image.py` and `scripts/postprocess_logos.py` generate optimized PNGs for the LED matrix. Pre-generated logos are stored in `prepared_logos/`. The app auto-selects `peloton_64x64_auto.png` or `peloton_64x32_auto.png` based on matrix row count unless `display.logo_path` is set.
+The startup logo (`LogoMaskScreen`) is drawn, not decoded: the red mark (`logo_art.MARK`, cropped from the 32-row art), PELOTON and L E D in the loaded fonts, and a zone bar in `ZONE_COLORS` (also the workout pages' `HR_ZONE_COLORS`). 64 rows stack them; fewer put the mark on the left. `display.logo_path` swaps in an image file (`LogoScreen`). `settings_page/logo.py` draws the settings page's icons from the same art (inline SVG for the header and favicon, `/apple-touch-icon.png` served without a PIN), so `logo_art` must stay import-free. `scripts/render_logo.py` regenerates `docs/logo.png` and the README's startup screenshot. `prepared_logos/` and the `prepare_image`/`postprocess_logos` scripts are only for `logo_path` images.
 
 ### Models (`models/`)
 
