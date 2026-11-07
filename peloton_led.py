@@ -289,13 +289,17 @@ def show_wifi_setup_while_needed(manager):
 
 
 def run_multi_user_loop(manager, profiles, display, active, cycles=0):
-    """Show one complete rotation per user, in configured order."""
+    """Show one complete rotation per user, in configured order, with the logo between them
+    (and between cycles). The first rotation goes without, since main() has just shown it."""
     completed = 0
+    logo_duration = display.get('logo_duration', 0)
     while not cycles or completed < cycles:
         show_wifi_setup_while_needed(manager)
         rivals = weekly_rivals(profiles)
         for index, profile in enumerate(profiles):
             active['dashboard'] = profile['dashboard']
+            if logo_duration > 0 and (completed or index):
+                show_and_wait(manager, 'logo', None, logo_duration, profile['dashboard'])
             # The head-to-head page covers everyone, so show it once per cycle. Each rider's
             # rotation uses their own display settings (weekly goals, milestones, journey).
             run_display_loop(manager, profile['dashboard'], profile.get('display', display),

@@ -12,16 +12,15 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 Icon touch-ups (by hand) ──► 4, 6 if they show discipline icons
 
 1 Castle, 2 Heatmap colours ── independent, small
-3 Logo between riders ── independent, but touches the same loop as 6
 ```
 
 - **6 before 4.** The celebration screen works today with the existing total-workout milestones, so it can ship on its own. Item 4 then adds per-discipline milestones and celebrates them with it. Doing 4 first would mean building a throwaway celebration (or none) and redoing it.
 - **4 and 5 share their counting.** Both need "how many of X, per discipline (and instructor), over all time or this month" from the workout log. Whichever goes first adds that helper to `peloton/activity.py` (where `daily_minutes` / `streak_week_workouts` already live, fed via `WorkoutLog.derived`); the second reuses it. The log already keeps `discipline` (row bootcamp, bike bootcamp etc. are their own disciplines), `instructor_id` and `start`, so neither needs a `LOG_VERSION` bump or a re-download.
-- **3 and 6 both change what plays around the rotation** (`run_multi_user_loop` / `build_rotation_pages` in `peloton_led.py`). Do them one after the other, not in parallel branches, to avoid conflicts.
+- **6 plays around the rotation** (`run_multi_user_loop` / `build_rotation_pages` in `peloton_led.py`), where the logo now plays between riders; a celebration belongs after it, so the logo still separates riders.
 - **Icon touch-ups before 4 and 6** if those pages end up showing discipline icons; otherwise independent.
 - **1 and 2** stand alone: quick wins to slot in anywhere.
 
-Suggested order: 1, 2 (quick), 6, 4, 5, 3. Icon touch-ups whenever Joel has time, ideally before 6.
+Suggested order: 1, 2 (quick), 6, 4, 5. Icon touch-ups whenever Joel has time, ideally before 6.
 
 ## Up next
 
@@ -37,13 +36,6 @@ The activity heatmap (`LEVELS` in `display/ui/heatmap_screen.py`) uses four gree
 - Judge on the board, not just the PNG: LED panels compress dark shades.
 - Update `test_heatmap*` expectations for `level_color`.
 - Depends on: nothing. Needs a board to judge the colours on.
-
-### 3. Show the logo between riders, not just at start-up
-The startup logo (`LogoMaskScreen`, or `LogoScreen` with `display.logo_path`) only appears once, when the board boots. Show it again between riders in `run_multi_user_loop` (and once per cycle on a single-rider board) so it's part of the rotation.
-- Reuse `display.logo_duration`; decide whether 0 should also turn off the between-rider logo or whether it needs its own setting (and a settings-page control).
-- The loop stays network-free; the logo is already registered, so this is a `show_and_wait(manager, 'logo', ...)` call in the right place.
-- Test that the logo is shown between each rider's rotation.
-- Depends on: nothing, but sequence it with 6 (same loop). If 6 lands first, decide whether a celebration plays before or after the logo.
 
 ### 4. Upcoming milestones by discipline
 Show milestones that are close: "600th ride next", "5 away from 25 rowing bootcamps". Today's `next_milestone` page (`goals.next_milestone`, built in `peloton_led.py`) only counts down total workouts to the next configured milestone or `milestone_step` multiple.
@@ -74,7 +66,7 @@ A reached milestone is currently shown on the plain goal page (`'goal'` with `mi
 - Ordinals done properly (1ST, 2ND, 3RD, 11TH, 600TH); "ride" vs "run"/"row"/"class" by discipline.
 - Keep the once-only behaviour (`celebrated_milestones`) so it doesn't repeat every cycle forever; decide how long it keeps showing (one cycle, one day).
 - Design 64x64 first, then 32 rows; preview with `render_rotation.py`.
-- Depends on: nothing; ships first with total-workout milestones. Item 4 builds on it. Sequence with 3 (same loop).
+- Depends on: nothing; ships first with total-workout milestones. Item 4 builds on it. The logo plays before each rider's rotation (except the first after start-up); show the celebration after it.
 
 ## Joel, by hand
 

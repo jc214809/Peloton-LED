@@ -79,6 +79,8 @@ For Sixel support in the emulator (optional): `brew install libsixel` on macOS.
 3. Registers screens with `ScreenManager`, shows a startup logo, then enters the display loop
 4. The loop cycles: logo → username → recent workout disciplines → all-time discipline totals
 
+`run_multi_user_loop` plays the logo (`display.logo_duration`, 0 = never) before each rider's rotation except the first one after start-up, so a single-rider board shows it once per cycle.
+
 The loop is intentionally network-free after startup — all data is prefetched before `run_display_loop()` is called.
 
 On a multi-rider board, `configured_profiles` gives each profile its own `display` (the shared section with the rider's `weekly_goals`, `milestones` and `journey` over it), and `run_multi_user_loop` must pass that, not the shared one, to each rider's `run_display_loop`: until 2026-11-04 it passed the shared one, so per-rider goal pages never showed. `render_rotation.py` hard-codes its own goals, so it can't catch this; `test_each_rider_rotation_uses_their_own_goals_milestones_and_journey` does.

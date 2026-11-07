@@ -53,7 +53,7 @@ python peloton_led.py --emulated --refresh-interval 300
 
 ## Screens and rotation
 
-The board shows the startup logo once, then loops through the sections listed in `display.rotation`, in that order, forever. Each section is one or more screens. A section with nothing to show is skipped for that pass; for example, `streaks` is skipped while you have no weekly or daily streak. Leave a section out of `rotation` to hide it.
+The board shows the logo at start-up and between riders, and loops through the sections listed in `display.rotation`, in that order, forever. Each section is one or more screens. A section with nothing to show is skipped for that pass; for example, `streaks` is skipped while you have no weekly or daily streak. Leave a section out of `rotation` to hide it.
 
 Default order:
 
@@ -82,11 +82,11 @@ Any section's time can be overridden with `screen_durations.<section>`; setting 
 
 Data refreshes in the background (see [Refresh behavior](#refresh-behavior)), but each pass through the rotation uses one consistent snapshot. New workouts and totals appear at the start of the next pass. The login padlock is the one exception: it can appear or disappear mid-screen.
 
-### Startup logo
+### Logo
 
-![Startup logo](docs/screenshots/rotation/logo.png)
+![Logo](docs/screenshots/rotation/logo.png)
 
-Shown once at launch for `logo_duration` seconds (default 3), never again: the red Peloton mark, PELOTON, a bar in the five heart-rate zone colours, and LED. A 64x64 panel stacks them; a 64x32 panel puts the mark on the left and the rest beside it. The board draws it in its own pixel font, so it needs no image file. Set `logo_path` to show an image file instead; if that file is missing, the built-in logo is shown. The settings page's icons (page header, browser tab, phone home screen) are the same mark and zone bar. `python scripts/render_logo.py` redraws this screenshot and the wordmark at the top of this README.
+Shown at launch for `logo_duration` seconds (default 3), then again before each rider's rotation (once per cycle on a single-rider board; not straight after the launch logo). `logo_duration` 0 turns off both. It is the red Peloton mark, PELOTON, a bar in the five heart-rate zone colours, and LED. A 64x64 panel stacks them; a 64x32 panel puts the mark on the left and the rest beside it. The board draws it in its own pixel font, so it needs no image file. Set `logo_path` to show an image file instead; if that file is missing, the built-in logo is shown. The settings page's icons (page header, browser tab, phone home screen) are the same mark and zone bar. `python scripts/render_logo.py` redraws this screenshot and the wordmark at the top of this README.
 
 ### `latest_workouts` — last active day's workouts
 
@@ -330,7 +330,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `overview_duration` | 4 | Per-discipline and PR screen seconds |
 | `last_workout_duration` | 30 | `0` hides workout screens; otherwise only used with `compact_workout_pages`. Normal workout pages are timed by `last_workout_detail_interval` (see below) |
 | `last_workout_detail_interval` | 4 | Seconds each stat (and the intro) holds for during the workout screen's rotation; the graph and zone bar get one second more |
-| `logo_duration` | 3 | Startup logo seconds |
+| `logo_duration` | 3 | Logo seconds, at start-up and between riders; 0 skips it |
 | `logo_path` | Built-in logo | Optional image file shown instead; if it's missing, the built-in logo is shown |
 | `timezone` | Profile, then system local | Calendar-day grouping; explicit config must be a valid IANA zone |
 | `refresh_interval` | 300 | Positive integer seconds |

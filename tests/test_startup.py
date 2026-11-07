@@ -346,6 +346,34 @@ def test_multi_user_loop_runs_complete_rotations_in_configured_order():
     assert [call.kwargs['first_pass'] for call in run.call_args_list] == [0, 0, 1, 1]
 
 
+def test_logo_plays_between_riders_and_cycles_but_not_before_the_first_rotation():
+    first, second = Mock(), Mock()
+    profiles = [{'name': 'First', 'dashboard': first}, {'name': 'Second', 'dashboard': second}]
+    order = []
+    manager = Mock()
+    with patch('peloton_led.show_and_wait',
+               side_effect=lambda manager, name, state, duration, dashboard:
+                   order.append((name, duration, dashboard))), \
+         patch('peloton_led.run_display_loop',
+               side_effect=lambda manager, dashboard, *a, **k: order.append(('rotation', dashboard))):
+        run_multi_user_loop(manager, profiles, {'logo_duration': 3}, {}, cycles=2)
+    # The startup logo has just played, so the first rider goes straight in; the padlock
+    # on each later logo is the rider about to show.
+    assert order == [('rotation', first), ('logo', 3, second), ('rotation', second),
+                     ('logo', 3, first), ('rotation', first), ('logo', 3, second), ('rotation', second)]
+
+
+def test_single_rider_board_shows_the_logo_once_per_cycle_and_none_when_its_duration_is_zero():
+    rider = Mock()
+    for duration, expected in ((2, ['rotation', 'logo', 'rotation', 'logo', 'rotation']),
+                               (0, ['rotation', 'rotation', 'rotation'])):
+        order = []
+        with patch('peloton_led.show_and_wait', side_effect=lambda manager, name, *a: order.append(name)), \
+             patch('peloton_led.run_display_loop', side_effect=lambda *a, **k: order.append('rotation')):
+            run_multi_user_loop(Mock(), [{'dashboard': rider}], {'logo_duration': duration}, {}, cycles=3)
+        assert order == expected
+
+
 def test_configured_profiles_isolates_relative_tokens_and_caches(tmp_path):
     options = Mock(config=str(tmp_path / 'household.json'), cookies='legacy.txt',
                    username=None, demo=False, demo_login_needed=False)
@@ -808,7 +836,7 @@ def test_each_rider_rotation_uses_their_own_goals_milestones_and_journey(tmp_pat
     assert joel['display']['weekly_goals'] == {'workouts': 5, 'minutes': 300}
     assert kid['display']['weekly_goals'] == config['display']['weekly_goals']  # the shared default
     shown = {}
-    with patch('peloton_led.run_display_loop',
+    with patch('peloton_led.show_and_wait'), patch('peloton_led.run_display_loop',
                side_effect=lambda manager, dashboard, display, *a, **k: shown.setdefault(dashboard, display)):
         run_multi_user_loop(Mock(), [joel, jen, kid], config['display'], {}, cycles=1)
     assert shown[joel['dashboard']] is joel['display'] and shown[jen['dashboard']] is jen['display']
