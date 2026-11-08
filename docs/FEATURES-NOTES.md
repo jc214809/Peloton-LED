@@ -174,18 +174,13 @@ Your lifetime miles become a trip from one place to another.
   `journey` section for what counts.
   880 is roughly the driving distance from Columbus to Walt Disney World;
   set `miles` to whatever you like.
-- **64x64:** a vertical map on the left (Florida is south): a blue start
-  dot, a dotted route, an orange trail for what you've covered, a white
-  "you are here" dot, and a white castle with blue roofs and gold tips at
-  the bottom (`CASTLE_ROWS`; 32 rows draw the shorter `CASTLE_ROWS_SHORT`).
-  On the right: the start name, the miles (big, `741.6`; whole miles from 1,000), `MILES`, `138.4 TO GO`, and
-  the destination name at the bottom (wraps to 2 lines).
-- **64x32:** `TO DISNEY WORLD` across the top, big miles with the percent,
-  `138.4 TO GO`, and the route running left to right along the bottom to
-  the castle.
-- **Past the destination** the trip turns around: `TRIP 2`, `TO HOME` /
-  `TO COLUMBUS`, and the trail runs back from the castle. Trip 3 heads out
-  again, and so on.
+- **Layout (redesigned 2026-11-08; the map and castle are gone):**
+  `TO DISNEY WORLD`, the miles (big, `741.6`; whole miles from 1,000) with
+  `MI`, `138.4 TO GO` and the percent, an orange bar for this leg, and the
+  miles split into BIKE / WALK/RUN / ROW. 64x64 shows it on one page; 64x32
+  shows the trip, then `MILES BY TYPE`. Details in `docs/64x32-NOTES.md`.
+- **Past the destination** the trip turns around: `TRIP 2` beside the bar,
+  `TO HOME` / `TO COLUMBUS`. Trip 3 heads out again, and so on.
 - **Where the miles come from:** each workout row in your history has a
   `distance`. They're summed per discipline into a saved tally that's
   updated incrementally, the same way the top-instructor counts are.
@@ -196,8 +191,7 @@ Your lifetime miles become a trip from one place to another.
   for 2,100 workouts; Jen's is similar). After that it reuses the page
   the instructor tally already fetches, so **no extra calls per refresh**.
   The journey page stays hidden until the tally has miles.
-- Long start names are trimmed on 64x64 (`SAN FRANCISC`). Destination
-  names wrap onto two lines.
+- Long place names are trimmed to the panel's width.
 
 Code: `peloton/journey.py`, `display/ui/journey_screen.py`, the tally in
 `peloton/dashboard.py`; tests in `tests/test_journey.py`.

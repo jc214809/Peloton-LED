@@ -108,6 +108,11 @@ def frame_times(name, state, duration, detail_interval, height=64):
     if name == 'versus' and state and 'riders' in state:
         share = state.get('stat_seconds')  # 32 rows: one frame per stat
         return [0.6 + i * share for i in range(round(duration / share))] if share else [0.6]
+    if name == 'journey':
+        # Once each step's opening animation has settled; 32 rows: the trip, then the miles by type.
+        from display.ui.journey_screen import INTRO_SECONDS
+        share = state.get('step_seconds')
+        return [INTRO_SECONDS, share + INTRO_SECONDS] if share else [INTRO_SECONDS]
     if name == 'username':
         share = state.get('detail_seconds') or 4.0
         return [0.6 + i * share for i in range(max(1, len(state.get('details', []))))]

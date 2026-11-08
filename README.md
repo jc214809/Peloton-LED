@@ -72,7 +72,7 @@ Default order:
 | [`total_workouts`](#total_workouts--lifetime-total) | Lifetime total workout count | Profile totals available | Same as `lifetime` (at least 5 s) |
 | [`next_milestone`](#next_milestone--countdown-to-the-next-milestone) | A countdown to your next milestone, all workouts' or a discipline's (`4 MORE / 500TH / STRENGTH`), closest first | Something is within 5 workouts of its milestone | `overview_duration` per page (up to 3) |
 | [`lifetime`](#lifetime--per-discipline-totals) | Every discipline's lifetime count, with icons | Profile totals available | `overview_duration` per page (at least 5 s) |
-| [`journey`](#journey--lifetime-miles-as-a-trip) | Lifetime miles plotted as a trip between two places | Some distance has been tallied | `overview_duration` |
+| [`journey`](#journey--lifetime-miles-as-a-trip) | Lifetime miles as a trip between two places, split into bike, walk/run and row | Some distance has been tallied | `overview_duration` |
 | [`heatmap`](#heatmap--last-12-weeks) | One cell per day for the last 12 weeks, shaded by minutes | The full history is in the workout log and has a workout in those weeks | `overview_duration` |
 | [`milestones`](#milestones--milestone-celebration) | A trophy and confetti for a lifetime milestone you just reached (all workouts, or one discipline's), ahead of the rest of the rotation | A milestone is reached, until midnight on the day it first shows | `overview_duration` (at least 5.8 s) |
 | [`goals`](#goals--weekly-goals) | Progress bar toward each weekly goal | `weekly_goals.workouts` and/or `.minutes` is above 0 | `overview_duration` per goal |
@@ -215,9 +215,9 @@ A GitHub-style grid: one column per week (oldest on the left, this week on the r
 
 ### `journey` — lifetime miles as a trip
 
-![Journey map](docs/screenshots/rotation/journey.png)
+![Journey page](docs/screenshots/rotation/journey.png)
 
-Your lifetime miles, plotted as a trip on a little map: a start dot, the route, your position, and a castle at the destination. Reaching the destination turns you around for the trip home, and so on forever. `TRIP 4` means you're on your fourth one-way leg. The screen also shows total miles and how far is left on the current leg, to a tenth of a mile (`741.6`) below 1,000 and in whole miles from there, where the decimal wouldn't fit. The route's `miles` can be a decimal too, e.g. `26.2`.
+Your lifetime miles as a trip: where you're headed, your total miles, how far is left on this leg and the percent done, a progress bar, and the miles split by how you covered them: **BIKE** (Cycling, Bike Bootcamp), **ROW** (Rowing, Row Bootcamp) and **WALK/RUN** (everything else: tread, outdoor, hiking). 64x64 shows it all on one page. 64x32 shows the trip, then *Miles by type*, sharing the screen's time (at least 4 seconds each; with only one type of miles it stays on the trip). Each step opens with about a second of motion, then holds still: the bar fills while the miles count up across this leg, the bar's tip then pulses gently, and the types come in one after another. Reaching the destination turns you around for the trip home (`TO COLUMBUS`), and so on forever. `TRIP 4` means you're on your fourth one-way leg. Miles show to a tenth (`741.6`) below 1,000 and in whole miles from there, where the decimal wouldn't fit. The route's `miles` can be a decimal too, e.g. `26.2`.
 
 The default route is Columbus → Disney World, 880 miles, counting every workout that has a distance. Set your own:
 

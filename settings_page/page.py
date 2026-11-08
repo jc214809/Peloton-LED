@@ -745,6 +745,10 @@ def shows_for(name, display, rows):
         return f'{_secs(t)}: the trophy rises, then the number.'
     if name == 'goals':
         return f'{_secs(t)} a goal.'
+    if name == 'journey' and rows < 64:
+        both = page_seconds(display, name, rows, 2)
+        return (f'{_secs(t)}. With miles of more than one type, the trip then the miles by type, '
+                f'{_secs(both / 2)} each ({_secs(both)} in all).')
     return f'{_secs(t)}.'
 
 

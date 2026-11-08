@@ -195,8 +195,13 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         progress = journey_progress(snapshot.get('distance_totals'), display.get('journey'))
         # Skip until the distance tally has something (e.g. before the backfill).
         if progress and progress['miles'] > 0:
-            groups['journey'].append(('journey', progress,
-                                      page_seconds(display, 'journey', matrix_height)))
+            from display.ui.journey_screen import journey_steps
+            # 32 rows show the trip, then the miles by type: the page's time shared, each once.
+            steps = journey_steps(progress, matrix_height)
+            journey_duration = page_seconds(display, 'journey', matrix_height, steps)
+            if steps > 1:
+                progress['step_seconds'] = journey_duration / steps
+            groups['journey'].append(('journey', progress, journey_duration))
 
     if 'heatmap' in groups and snapshot.get('activity_days'):
         from peloton.activity import HEATMAP_WEEKS

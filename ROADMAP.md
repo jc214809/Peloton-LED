@@ -8,6 +8,7 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 Icon touch-ups (by hand) ── independent
 5 Varied username facts ── independent
 6 More head-to-head stats ── independent (shares 5's per-period helper if 5 lands first)
+7 Journey moments ── after the journey redesign (journey-mile-groups) merges
 ```
 
 Suggested order: 5, then 6. Both add frames to screens that share their page time across frames (`peloton/screen_times.py`), so more facts or stats mean a longer minimum page. Icon touch-ups whenever Joel has time.
@@ -62,6 +63,19 @@ Notes:
 - 32 rows keeps one stat at a time (labels and big numbers already rotate there); the page's minimum duration grows with the number of stats shown, so pick a per-pass set there too.
 - Optional: a settings-page choice of which stats compete (the Rotation card's Head to head row, or a small section).
 - Depends on: nothing. Per-week and per-month figures come from a helper over the workout log in `peloton/activity.py`, fed via `WorkoutLog.derived` like `streak_week_workouts`; every candidate field is already in the log, so no `LOG_VERSION` bump. If item 5 lands first, reuse its per-period helper.
+
+### 7. Journey moments: arrival, turning for home, and the 32-row hand-off
+The redesigned journey page (`display/ui/journey_screen.py`, 2026-11-08) opens each step with a fill, a count-up, a pulsing tip and the groups coming in. Joel chose these three for later:
+- **Arrival.** Within about 1% of the destination, the bar's end glows gold. The first time the page shows after a leg is finished, a short confetti burst (reuse `celebration_screen`'s confetti) plays before `TRIP n` appears.
+- **Turning for home.** The first time the page shows on a new leg, a small arrow sweeps along the bar in the new direction (toward `TO COLUMBUS` on the way home, back out on the next leg).
+- **32-row hand-off.** Between the two steps, the orange bar splits in place into the BIKE / WALK/RUN / ROW colours, then the rows fade in, so the split reads as the same miles broken down. Today step 2 starts fresh with its own growing bar.
+
+Notes:
+- "The first time after" needs memory across passes: record the last leg shown (`trip`) in the dashboard cache, like `milestone_shown_at` / `acknowledge_milestone`, so a restart doesn't replay it and every pass after doesn't either. Per rider on multi-rider boards.
+- Keep each effect inside the step's opening second (`INTRO_SECONDS`), or raise the journey's `least_seconds` for the showing that carries it; a 32-row step must keep at least 3 s still.
+- The arrival confetti must stay off the text, like the milestone celebration's.
+- Check both boards with `scripts/render_rotation.py` and frame strips (the journey's `frame_times` captures settled frames only); the other pages must stay byte-identical.
+- Depends on: the journey redesign (branch `journey-mile-groups`).
 
 ## Joel, by hand
 
