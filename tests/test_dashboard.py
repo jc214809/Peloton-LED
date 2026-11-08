@@ -398,7 +398,7 @@ def test_stop_reports_blocked_worker_then_completes(tmp_path):
     client.close.assert_called_once()
 
 
-def test_screen_rotation_continues_during_slow_refresh(tmp_path):
+def test_screen_rotation_continues_during_slow_refresh(tmp_path, instant_clock):
     import threading
     from peloton_led import run_display_loop
 
@@ -410,8 +410,7 @@ def test_screen_rotation_continues_during_slow_refresh(tmp_path):
     dashboard.start()
     assert entered.wait(1)
     manager = Mock()
-    display = {'duration': 0, 'overview_duration': 0, 'last_workout_duration': 0,
-               'color': 'white'}
+    display = {'color': 'white'}
     try:
         run_display_loop(manager, dashboard, display, cycles=1)
         assert manager.show.call_count > 1

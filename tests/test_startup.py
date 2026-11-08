@@ -1,6 +1,8 @@
 import json
 from unittest.mock import Mock, patch
+
 import pytest
+
 from peloton.config import load_config
 from peloton_led import (build_rotation_pages, configured_profiles, main,
                          run_display_loop, run_multi_user_loop, scheduled_brightness)
@@ -15,10 +17,12 @@ from display.ui.status_screen import StatusScreen
 from display.display import initialize_fonts
 from scripts.render_demo import ImageMatrix
 
+# Loops here play whole rotations: sleeping only moves peloton_led's clock on.
+pytestmark = pytest.mark.usefixtures('instant_clock')
+
 
 def test_demo_rotation_has_no_network_and_renders_all_screens(tmp_path):
     config = load_config(tmp_path / 'missing', allow_missing=True)['display']
-    config.update(duration=0, overview_duration=0, last_workout_duration=0)
     matrix = ImageMatrix()
     initialize_fonts(64)
     dashboard = Dashboard(tmp_path / 'missing', config, demo=True, demo_login_needed=True)
@@ -316,8 +320,7 @@ def test_rotation_places_pr_after_its_workout():
         'totals': {}, 'status': 'ready',
     }
     manager = Mock()
-    display = {'duration': 0, 'overview_duration': 0, 'last_workout_duration': 0,
-               'color': 'white'}
+    display = {'color': 'white'}
     run_display_loop(manager, dashboard, display, cycles=1)
     assert [call.args[0] for call in manager.show.call_args_list] == [
         'last_workout', 'pr', 'last_workout', 'username',
@@ -365,14 +368,15 @@ def test_logo_plays_between_riders_and_cycles_but_not_before_the_first_rotation(
                      ('logo', 3, first), ('rotation', first), ('logo', 3, second), ('rotation', second)]
 
 
-def test_single_rider_board_shows_the_logo_once_per_cycle_and_none_when_its_duration_is_zero():
+def test_single_rider_board_shows_the_logo_once_per_cycle_and_none_when_it_is_switched_off():
     rider = Mock()
-    for duration, expected in ((2, ['rotation', 'logo', 'rotation', 'logo', 'rotation']),
-                               (0, ['rotation', 'rotation', 'rotation'])):
+    for show, expected in ((True, ['rotation', 'logo', 'rotation', 'logo', 'rotation']),
+                           (False, ['rotation', 'rotation', 'rotation'])):
         order = []
         with patch('peloton_led.show_and_wait', side_effect=lambda manager, name, *a: order.append(name)), \
              patch('peloton_led.run_display_loop', side_effect=lambda *a, **k: order.append('rotation')):
-            run_multi_user_loop(Mock(), [{'dashboard': rider}], {'logo_duration': duration}, {}, cycles=3)
+            run_multi_user_loop(Mock(), [{'dashboard': rider}], {'logo_duration': 2, 'show_logo': show}, {},
+                                cycles=3)
         assert order == expected
 
 
@@ -422,8 +426,7 @@ def test_pr_celebration_only_appears_once_across_rotations(tmp_path):
 
     dashboard = Dashboard(tmp_path / 'missing-token', {}, demo=True)
     manager = Mock()
-    display = {'duration': 0, 'overview_duration': 0, 'last_workout_duration': 0,
-               'color': 'white'}
+    display = {'color': 'white'}
     run_display_loop(manager, dashboard, display, cycles=2)
     assert [call.args[0] for call in manager.show.call_args_list].count('pr') == 1
 
@@ -433,8 +436,7 @@ def test_display_loop_alternates_the_streak_view_each_pass(tmp_path):
 
     dashboard = Dashboard(tmp_path / 'missing-token', {}, demo=True)
     manager = Mock(matrix=Mock(height=64))
-    display = {'duration': 0, 'overview_duration': 0, 'last_workout_duration': 0,
-               'color': 'white', 'rotation': ['streaks'], 'streak_reminder_day': None}
+    display = {'color': 'white', 'rotation': ['streaks'], 'streak_reminder_day': None}
     run_display_loop(manager, dashboard, display, cycles=3)
     assert [call.args[1]['view'] for call in manager.show.call_args_list
             if call.args[0] == 'streak'] == ['weekly', 'daily', 'weekly']
@@ -445,8 +447,7 @@ def test_64_row_rotation_keeps_total_separate_from_compact_lifetime_pages(tmp_pa
 
     dashboard = Dashboard(tmp_path / 'missing-token', {}, demo=True)
     manager = Mock(matrix=Mock(height=64))
-    display = {'duration': 0, 'overview_duration': 0, 'last_workout_duration': 0,
-               'color': 'white'}
+    display = {'color': 'white'}
     run_display_loop(manager, dashboard, display, cycles=1)
     names = [call.args[0] for call in manager.show.call_args_list]
     assert names.count('lifetime') == 2
@@ -467,8 +468,7 @@ def test_64_row_discipline_pages_share_requested_duration():
         },
     }
     manager = Mock(matrix=Mock(height=64))
-    display = {'duration': 0, 'overview_duration': 1, 'last_workout_duration': 0,
-               'color': 'white'}
+    display = {'overview_duration': 1, 'color': 'white'}
 
     with patch('peloton_led.show_and_wait') as show:
         run_display_loop(manager, dashboard, display, cycles=1)
@@ -658,16 +658,6 @@ def test_scheduled_brightness_handles_day_and_overnight_ranges():
     display['brightness_schedule']['day_start'] = '20:00'
     display['brightness_schedule']['night_start'] = '06:00'
     assert scheduled_brightness(display, datetime(2026, 1, 1, 23, 0)) == 80
-
-
-def test_32_row_optional_second_workout_page_renders_stats():
-    matrix = ImageMatrix(height=32)
-    initialize_fonts(32)
-    summary = {'discipline': 'Cycling', 'compact_page': 1, 'duration_min': 20,
-               'total_output_kj': 200, 'strive_score': 12, 'hr_avg': 130,
-               'calories': 250}
-    assert LastWorkoutScreen().render(matrix, summary)
-    assert matrix.image.getbbox() is not None
 
 
 def test_lifetime_icon_page_renders_real_pixels():

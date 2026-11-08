@@ -23,6 +23,9 @@ from scripts.render_rotation import PreviewDashboard
 TOTALS = {'Total Workouts': 2123, 'Cycling': 641, 'Strength': 496, 'Walking': 202, 'Cardio': 93,
           'Meditation': 89, 'Bike Bootcamp': 47, 'Row Bootcamp': 9}
 
+# Loops here play whole rotations: sleeping only moves peloton_led's clock on.
+pytestmark = pytest.mark.usefixtures('instant_clock')
+
 
 @pytest.mark.parametrize('count, after, reached', [
     (0, 25, None), (9, 25, None), (24, 25, None), (25, 50, 25), (49, 50, 25), (50, 100, 50),
@@ -149,8 +152,7 @@ def test_display_loop_acknowledges_a_discipline_celebration_by_its_key():
     dashboard = _dashboard(disciplines=['walking:200'])
     dashboard.login_required = False
     dashboard.snapshot.return_value = {'me': {'username': 'Rider'}, **_snapshot()}
-    run_display_loop(Mock(), dashboard, _display(rotation=['milestones'], duration=0, overview_duration=0,
-                                                 screen_durations={'milestones': 0}), cycles=1)
+    run_display_loop(Mock(), dashboard, _display(rotation=['milestones']), cycles=1)
     dashboard.acknowledge_milestone.assert_called_once_with('walking:200')
 
 

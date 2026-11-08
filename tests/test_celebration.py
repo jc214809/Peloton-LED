@@ -16,6 +16,9 @@ from scripts.render_rotation import frame_times
 GOLD, WHITE, BLUE = (255, 215, 0), (255, 255, 255), (0, 120, 255)
 STATE = {'number': 600, 'noun': 'WORKOUT', 'subtitle': 'Joel'}
 
+# Loops here play whole rotations: sleeping only moves peloton_led's clock on.
+pytestmark = pytest.mark.usefixtures('instant_clock')
+
 
 @pytest.mark.parametrize('number, expected', [
     (1, '1ST'), (2, '2ND'), (3, '3RD'), (4, '4TH'), (11, '11TH'), (12, '12TH'), (13, '13TH'),
@@ -160,9 +163,9 @@ def test_rotation_leads_with_the_newest_milestone_only():
     long = build_rotation_pages(_snapshot(), dashboard,
                                 _display(screen_durations={'milestones': 20}), 'Joel', 64)
     assert long[0][2] == 20
-    off = build_rotation_pages(_snapshot(), dashboard,
-                               _display(screen_durations={'milestones': 0}), 'Joel', 64)
-    assert off[0][2] == 0
+    short = build_rotation_pages(_snapshot(), dashboard,
+                                 _display(screen_durations={'milestones': 2}), 'Joel', 64)
+    assert short[0][2] == INTRO_SECONDS + MIN_CARD_SECONDS  # never cut short
 
 
 def test_rotation_has_no_celebration_when_none_pending_or_section_off():
@@ -183,8 +186,7 @@ def test_display_loop_acknowledges_the_celebration_after_showing_it():
     dashboard.snapshot.return_value = {'me': {'username': 'Rider'}, **_snapshot()}
     dashboard.pending_milestones.return_value = [500]
     manager = Mock()
-    run_display_loop(manager, dashboard, _display(duration=0, overview_duration=0,
-                                                  screen_durations={'milestones': 0}), cycles=1)
+    run_display_loop(manager, dashboard, _display(), cycles=1)
     assert manager.show.call_args_list[0].args[0] == 'celebration'
     dashboard.acknowledge_milestone.assert_called_once_with(500)
 

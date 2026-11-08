@@ -10,7 +10,7 @@ Icon touch-ups (by hand) ── independent
 6 More head-to-head stats ── independent (shares 5's per-period helper if 5 lands first)
 ```
 
-Suggested order: 5, then 6. Icon touch-ups whenever Joel has time.
+Suggested order: 5, then 6. Both add frames to screens that share their page time across frames (`peloton/screen_times.py`), so more facts or stats mean a longer minimum page. Icon touch-ups whenever Joel has time.
 
 ## Up next
 

@@ -9,12 +9,13 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .journey import DEFAULT_JOURNEY, DISTANCE_DISCIPLINES
+from .screen_times import retire_zero_times
 from .selection import normalize_discipline
 
 logger = logging.getLogger('peloton-led.config')
 
 DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration': 4,
-            'per_workout_duration': 4, 'last_workout_duration': 30, 'logo_duration': 5,
+            'per_workout_duration': 4, 'last_workout_duration': 30, 'logo_duration': 5, 'show_logo': True,
             'last_workout_detail_interval': 4.0,
             'refresh_interval': 300, 'history_batch_size': 100, 'recent_fetch_size': 20,
             'performance_cache_size': 32,
@@ -32,8 +33,7 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'streak_reminder_day': 5,
             'journey': DEFAULT_JOURNEY,
             'brightness_schedule': None,
-            'refresh_schedule': None,
-            'compact_workout_pages': False}
+            'refresh_schedule': None}
 
 # Panel/driver settings, one per --led-* flag (flag name minus "led-"). Flags win.
 MATRIX_DEFAULTS = {'rows': 64, 'cols': 64, 'chain': 1, 'parallel': 1, 'pwm_bits': 11,
@@ -254,12 +254,22 @@ def validate_config(config, path='config.json'):
             if 'journey' in user:
                 user['journey'] = _validate_journey(path, user['journey'], f'users[{index}].')
     config['matrix'] = _validate_matrix(path, config.get('matrix'))
+    # 0 seconds used to mean "don't show"; it's now the screen's switch (or show_logo).
+    switched = retire_zero_times(config.get('display'), ROTATION_SECTIONS, DEFAULTS['rotation'])
+    if switched:
+        logger.warning('%s: a time of 0 now means switched off (%s); saving the settings page writes '
+                       'it that way', path, '; '.join(switched))
     display = {**DEFAULTS, **config.get('display', {})}
-    for key in ('duration', 'overview_duration', 'per_workout_duration', 'last_workout_duration', 'logo_duration',
+    for key in ('duration', 'overview_duration', 'last_workout_duration', 'logo_duration',
                 'last_workout_detail_interval'):
         value = display[key]
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
-            raise ValueError(f'{path}: display.{key} must be a non-negative number')
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            raise ValueError(f'{path}: display.{key} must be a number above 0 (switch a screen off to hide it)')
+    value = display['per_workout_duration']  # no longer used; still accepted
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+        raise ValueError(f'{path}: display.per_workout_duration must be a non-negative number')
+    if not isinstance(display['show_logo'], bool):
+        raise ValueError(f'{path}: display.show_logo must be true or false')
     for key in ('refresh_interval', 'history_batch_size', 'recent_fetch_size', 'performance_cache_size'):
         value = display[key]
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -293,8 +303,9 @@ def validate_config(config, path='config.json'):
     if not isinstance(durations, dict) or not set(durations) <= DURATION_SECTIONS:
         raise ValueError(f'{path}: display.screen_durations contains an unsupported screen name')
     for value in durations.values():
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
-            raise ValueError(f'{path}: display.screen_durations values must be non-negative numbers')
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            raise ValueError(f'{path}: display.screen_durations values must be numbers above 0 '
+                             '(switch a screen off to hide it)')
     _validate_weekly_goals(path, display.get('weekly_goals'), 'display.')
     display['milestones'] = _validate_milestones(path, display.get('milestones'), 'display.')
     display['journey'] = _validate_journey(path, display.get('journey'), 'display.')
@@ -309,8 +320,6 @@ def validate_config(config, path='config.json'):
         value = display.get(key)
         if isinstance(value, bool) or not isinstance(value, int) or value < lowest:
             raise ValueError(f'{path}: display.{key} must be a whole number of at least {lowest}')
-    if not isinstance(display.get('compact_workout_pages'), bool):
-        raise ValueError(f'{path}: display.compact_workout_pages must be true or false')
     schedule = display.get('brightness_schedule')
     if schedule is not None:
         required = {'day', 'night', 'day_start', 'night_start'}

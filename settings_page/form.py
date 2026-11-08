@@ -8,7 +8,8 @@ Every check is the app's own (peloton.config.validate_config), so a saved config
 import copy
 import re
 
-from peloton.config import DEFAULTS, MATRIX_DEFAULTS, validate_config
+from peloton.config import DEFAULTS, MATRIX_DEFAULTS, ROTATION_SECTIONS, validate_config
+from peloton.screen_times import least_seconds, retire_zero_times
 
 # Marks a post as this page's whole form: switches post nothing when off, so a partial post
 # would otherwise turn them all off.
@@ -17,8 +18,7 @@ FORM_FIELD = 'settings_form'
 # Every rotation screen, in the app's default order: (name, label, hint).
 SCREENS = (
     ('latest_workouts', 'Latest workouts',
-     'Each recent workout, then a PR celebration when there is one. On a 64x64 board each page '
-     'lasts long enough to show every stat once; 0 hides them.'),
+     'Each workout from your latest day, then a PR celebration when there is one.'),
     ('username', 'Name and highlights', 'Your name, then all-time totals, this week and top instructors.'),
     ('streaks', 'Streaks', 'Weekly and daily streaks, one per pass.'),
     ('versus', 'Head to head', 'This week, rider against rider. Needs two or more riders.'),
@@ -27,7 +27,7 @@ SCREENS = (
      'A countdown when all workouts or a discipline is a few workouts from its next milestone '
      '(a discipline\'s: 25, 50, 100, then every 100), closest first. How close and how many pages are '
      'under Milestones. Most days there are none.'),
-    ('lifetime', 'Lifetime by discipline', 'All-time totals per discipline (at least 5 seconds a page).'),
+    ('lifetime', 'Lifetime by discipline', 'All-time totals per discipline.'),
     ('journey', 'Journey', 'Miles along the journey route.'),
     ('heatmap', 'Activity heatmap', 'Minutes a day over the last 12 weeks.'),
     ('milestones', 'Milestone celebrations',
@@ -38,7 +38,8 @@ SCREENS = (
 # The Milestones card's countdown settings; blank is the app's default.
 MILESTONE_KEYS = ('milestone_within', 'milestone_pages')
 # Settings that are gone; saving the page tidies them out of an old config.
-RETIRED_DISPLAY_KEYS = ('discipline_milestone_celebrate_within',)
+# compact_workout_pages and last_workout_duration went with the two-page 64x32 workout layout.
+RETIRED_DISPLAY_KEYS = ('discipline_milestone_celebrate_within', 'compact_workout_pages', 'last_workout_duration')
 SCREEN_NAMES = tuple(name for name, _, _ in SCREENS)
 # Screens timed by another one's setting rather than their own.
 SHARED_DURATION = {'total_workouts': 'lifetime'}
@@ -47,10 +48,14 @@ SHARED_DURATION = {'total_workouts': 'lifetime'}
 TIMING = (
     ('overview_duration', 'Each page', 'For any screen without its own time in Rotation.'),
     ('last_workout_detail_interval', 'Each workout stat', 'How long each stat shows on a workout page.'),
-    ('logo_duration', 'Logo', 'At start-up and between riders (once per cycle with one rider). 0 skips it.'),
+    ('logo_duration', 'Logo', 'At start-up and between riders (once per cycle with one rider).'),
     ('refresh_interval', 'Check Peloton every',
      'How often to look for new workouts. 300 (5 minutes) is plenty; much less only adds load.'),
 )
+
+# The Timing card's least values: a time is never 0 (a screen is switched off instead, and the logo has
+# its own switch).
+TIMING_LEAST = {'overview_duration': 1, 'last_workout_detail_interval': 1, 'logo_duration': 1}
 
 COLORS = ('white', 'gold', 'red', 'disney_blue', 'down')
 WEEKDAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
@@ -70,9 +75,6 @@ PANEL_FIELDS = (
 )
 SIZE_KEYS = ('rows', 'cols')
 SWITCH_KEYS = ('show_refresh', 'no_hardware_pulse')
-# Posted beside the Compact workout pages switch, which the page shows only on a 64x32 panel: without
-# it the switch wasn't on the page, so the saved value stays (an unticked switch posts nothing).
-COMPACT_SHOWN = 'compact_workout_pages_shown'
 # Rotation's choices: --led-pixel-mapper values. A saved one not here is offered as it is.
 ROTATIONS = (('Rotate:180', 'Upside down (Rotate:180)'), ('Rotate:90', 'A quarter turn (Rotate:90)'),
              ('Rotate:270', 'Three quarters (Rotate:270)'), ('Mirror:H', 'Mirrored left to right (Mirror:H)'),
@@ -112,6 +114,12 @@ def duration_fallback(display, name):
     return display.get(key, DEFAULTS[key])
 
 
+def board_rows(matrix):
+    """The panel's rows, as the board reads them (MATRIX_DEFAULTS when config.json doesn't say)."""
+    rows = matrix.get('rows', MATRIX_DEFAULTS['rows']) if isinstance(matrix, dict) else None
+    return rows if isinstance(rows, int) and not isinstance(rows, bool) else MATRIX_DEFAULTS['rows']
+
+
 def panel_size(matrix):
     """config.json's matrix size as "64x32"; the app's 64x64 where unset."""
     return f"{matrix.get('cols') or MATRIX_DEFAULTS['cols']}x{matrix.get('rows') or MATRIX_DEFAULTS['rows']}"
@@ -147,6 +155,10 @@ def _milestones(text):
     return values
 
 
+def _seconds(value):
+    return f'{value:g} second{"" if value == 1 else "s"}'
+
+
 def apply_form(config, form):
     """(the config to save, [problems]) from the posted form: {field: [values]}, as
     urllib.parse.parse_qs(..., keep_blank_values=True) gives it. With any problem, nothing
@@ -155,6 +167,8 @@ def apply_form(config, form):
         return config, ["That wasn't the settings form: reload the page and try again."]
     new = copy.deepcopy(config)
     problems = []
+    # An older config's 0 seconds meant "off": save it as the switch it meant (peloton.screen_times).
+    retire_zero_times(new.get('display'), ROTATION_SECTIONS, DEFAULTS['rotation'])
 
     def one(name, default=''):
         return (form.get(name) or [default])[0].strip()
@@ -181,8 +195,6 @@ def apply_form(config, form):
     set_or_drop(display, 'username', 'username', str)
     display['font'] = one('font', display.get('font', DEFAULTS['font']))
     display['color'] = one('color', display.get('color', DEFAULTS['color']))
-    if one(COMPACT_SHOWN):
-        display['compact_workout_pages'] = checked('compact_workout_pages')
     reminder = one('streak_reminder_day', str(STREAK_REMINDER_DEFAULT))
     display['streak_reminder_day'] = None if reminder == 'off' else _number(reminder)
 
@@ -196,9 +208,11 @@ def apply_form(config, form):
         if name in SHARED_DURATION or f'duration_{name}' not in form:
             continue
         set_or_drop(durations, name, f'duration_{name}')
+    durations.pop('latest_workouts', None)  # each workout page lasts every stat once: no time of its own
     display['screen_durations'] = durations
     for key, _, _ in TIMING:
         set_or_drop(display, key, key)
+    display['show_logo'] = checked('show_logo')
 
     # Schedules
     set_or_drop(display, 'timezone', 'timezone', str)
@@ -260,6 +274,21 @@ def apply_form(config, form):
             matrix[key] = text
         else:
             matrix[key] = _number(text)
+
+    # Each time at least what its screen needs on this panel; 0 is never one (switch a screen off).
+    labels = {name: label for name, label, _ in SCREENS}
+    rows = board_rows(new.get('matrix'))
+    durations = display['screen_durations']
+    for name in SCREEN_NAMES:  # switched off too: a saved time is never under its screen's need
+        least = least_seconds(name, rows)
+        value = durations.get(name)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value < least:
+            problems.append(f'{labels[name]} needs at least {_seconds(least)}. To hide it, switch it off.')
+    for key, label, _ in TIMING:
+        value, least = display.get(key), TIMING_LEAST.get(key)
+        if least and isinstance(value, (int, float)) and not isinstance(value, bool) and value < least:
+            problems.append(f'{label} needs at least {_seconds(least)}'
+                            + ('. To hide the logo, switch it off.' if key == 'logo_duration' else '.'))
 
     if not problems:
         try:

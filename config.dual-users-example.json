@@ -41,10 +41,9 @@
       "goals"
     ],
     "screen_durations": {
-      "latest_workouts": 15,
       "username": 9,
       "lifetime": 5,
-      "milestones": 4,
+      "milestones": 5.8,
       "goals": 4
     }
   }

@@ -109,7 +109,11 @@ class VersusScreen(Screen):
                 _draw_trophy(matrix, x + name_w + 1, name_y - 7)
 
         if short:
-            key, label = STATS[int(self.elapsed / DETAIL_INTERVAL_SECONDS) % len(STATS)]
+            # build_rotation_pages shares the page's time out (stat_seconds), each stat once; without
+            # it, each gets the standard 4 s and they repeat.
+            share = (state or {}).get('stat_seconds')
+            index = int(self.elapsed / (share or DETAIL_INTERVAL_SECONDS))
+            key, label = STATS[min(index, len(STATS) - 1) if share else index % len(STATS)]
             graphics.DrawText(matrix, small, max((w - get_text_width(small, label)) // 2, 1), 15, _GREY, label)
             # Big digits when they fit; smaller fonts keep 4-5 digit values apart.
             self._values(matrix, (big, loaded_fonts.get('countdown'), small), riders, key, 29)

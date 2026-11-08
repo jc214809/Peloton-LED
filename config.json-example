@@ -12,7 +12,6 @@
     "color": "white",
     "duration": 4,
     "overview_duration": 4,
-    "last_workout_duration": 30,
     "last_workout_detail_interval": 4,
     "logo_duration": 5,
     "timezone": "America/New_York",
@@ -31,10 +30,9 @@
       "goals"
     ],
     "screen_durations": {
-      "latest_workouts": 15,
       "username": 4,
       "lifetime": 5,
-      "milestones": 4,
+      "milestones": 5.8,
       "goals": 4
     },
     "weekly_goals": {
@@ -46,7 +44,6 @@
     "milestone_within": 5,
     "milestone_pages": 3,
     "brightness_schedule": null,
-    "refresh_schedule": null,
-    "compact_workout_pages": false
+    "refresh_schedule": null
   }
 }

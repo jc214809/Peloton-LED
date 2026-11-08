@@ -6,11 +6,12 @@ from. It works without JavaScript; the script adds dragging and moving screens i
 The Updates card (updates.py) checks for, starts and follows updates; its script checks once the
 page loads and follows a running update.
 """
+import copy
 import re
 from html import escape
 from zoneinfo import available_timezones
 
-from peloton.config import DEFAULTS, GPIO_MAPPINGS, MATRIX_DEFAULTS
+from peloton.config import DEFAULTS, GPIO_MAPPINGS, MATRIX_DEFAULTS, ROTATION_SECTIONS
 from self_update.github import FAILED, PASSED, REPO, RUNNING
 from self_update.state import ROLLBACK_FAILED, UNFINISHED
 from self_update.update import (BETA, BETA_BRANCH, CURRENT, RELEASES, WAITING, WOULD_UPDATE, beta_number, name_of,
@@ -18,10 +19,12 @@ from self_update.update import (BETA, BETA_BRANCH, CURRENT, RELEASES, WAITING, W
 from settings_page import logo
 from settings_page.logins import RENEW_BEFORE_S, renews_at, when
 from settings_page.updates import BUSY, START_FAILED, STARTED, STEPS
-from settings_page.form import (COLORS, COMPACT_SHOWN, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
-                                SHARED_DURATION, STREAK_REMINDER_DEFAULT, SWITCH_KEYS, TIMING, WEEKDAYS,
-                                advanced_keys, duration_fallback, milestones_text, number_text, panel_size,
-                                riders, rotation_rows, section)
+from peloton.screen_times import (FRAME_SECONDS, VERSUS_STATS, least_seconds, page_seconds,
+                                  retire_zero_times)
+from settings_page.form import (COLORS, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
+                                SHARED_DURATION, STREAK_REMINDER_DEFAULT, SWITCH_KEYS, TIMING, TIMING_LEAST, WEEKDAYS,
+                                advanced_keys, board_rows, duration_fallback, milestones_text,
+                                number_text, panel_size, riders, rotation_rows, section)
 
 # What a save says, by Settings.restart_app's outcome.
 SAVED = ('restarted', 'not_running', 'saved', 'failed')
@@ -246,6 +249,7 @@ input.pin { height: 56px; text-align: center; font-size: 26px; font-weight: 650;
 .screen-row:not(.on) .screen-name { color: var(--text-3); }
 .screen-name { font-weight: 550; }
 .screen-row .shared { color: var(--text-3); font-size: 13px; }
+.screen-row .shows { color: var(--text-2); }
 .move { width: 32px; height: 32px; padding: 0; border-radius: 8px; background: transparent; color: var(--text-3); }
 .move:hover { color: var(--accent); background: var(--accent-soft); }
 .move svg { width: 16px; height: 16px; }
@@ -640,11 +644,11 @@ def _unit(control, unit):
             f'<span class="unit-text" aria-hidden="true">{escape(unit)}</span></span>')
 
 
-def _number(name, value, placeholder='', extra='', unit=None):
-    """A number field: decimals allowed (step any) unless extra says otherwise."""
+def _number(name, value, placeholder='', extra='', unit=None, least=0):
+    """A number field: decimals allowed (step any) unless extra says otherwise; least is its min."""
     return _unit(_input(name, number_text(value), 'number',
-                        f' inputmode="decimal" step="any" min="0" placeholder="{_attr(number_text(placeholder))}"'
-                        f'{extra}'), unit)
+                        f' inputmode="decimal" step="any" min="{number_text(least)}" '
+                        f'placeholder="{_attr(number_text(placeholder))}"{extra}'), unit)
 
 
 def _options(name, options, chosen, extra=''):
@@ -687,8 +691,9 @@ ROTATION_COLUMNS = (
     ('', '#', 'Switched-on screens play in this order, numbered. Drag a screen by its handle, or use its arrow, '
               'to move it.'),
     ('', 'Screen', None),
-    ('seconds-col', 'Seconds', 'How long each page shows. Blank uses the setting it falls back on (shown '
-                               'greyed out); 0 skips the screen.'),
+    ('seconds-col', 'Seconds', 'How long each page shows; the line under each screen says what that means '
+                               'for it. Blank uses the setting it falls back on (shown greyed out). To hide a '
+                               'screen, switch it off.'),
     ('', 'Show', 'Off takes the screen out of the rotation and moves it to the bottom. A screen with nothing '
                  'to show yet is skipped either way.'),
     ('', '', None),
@@ -705,24 +710,72 @@ def _rotation_head():
     return f'<div class="screens-head" id="screens-head">{cells}</div>'
 
 
-def _screen_row(name, label, hint, on, display):
-    """One rotation screen: posted as "rotation_order" in page order, with its switch and time."""
+def _secs(value):
+    return f'{number_text(round(value, 1))} s'
+
+
+# A ride's workout page, for the Latest workouts line: the opening frame, 6 stats and 2 charts.
+RIDE_STATS, RIDE_CHARTS = 6, 2
+
+
+def shows_for(name, display, rows):
+    """What a screen's time means on this board, worked out as the board works it out
+    (peloton.screen_times). display: the config's display over DEFAULTS."""
+    t = page_seconds(display, name, rows)
+    if name == 'latest_workouts':
+        stat = display['last_workout_detail_interval']
+        ride = stat * (1 + RIDE_STATS) + (stat + 1) * RIDE_CHARTS
+        return (f'Each workout shows every stat once: {_secs(stat)} each (the stat time under Timing), charts '
+                f'1 s longer. A ride is about {_secs(ride)}.')
+    if name == 'username':
+        three = max(t, 3 * FRAME_SECONDS)
+        return (f'Shared by its highlights, at least {_secs(FRAME_SECONDS)} each: with 3, '
+                f'{_secs(three / 3)} each ({_secs(three)} in all).')
+    if name == 'versus':
+        if rows < 64:
+            return f'{_secs(t)}: {_secs(t / VERSUS_STATS)} for each of its {VERSUS_STATS} stats, one at a time.'
+        return f'{_secs(t)}: all {VERSUS_STATS} stats on one page.'
+    if name == 'total_workouts':
+        return f'{_secs(t)}, like each Lifetime page.'
+    if name == 'lifetime':
+        return f'{_secs(t)} a page, {4 if rows >= 64 else 2} disciplines a page.'
+    if name == 'next_milestone':
+        return f'{_secs(t)} a countdown, up to {display.get("milestone_pages", 3)}.'
+    if name == 'milestones':
+        return f'{_secs(t)}: the trophy rises, then the number.'
+    if name == 'goals':
+        return f'{_secs(t)} a goal.'
+    return f'{_secs(t)}.'
+
+
+def _screen_row(name, label, hint, on, display, rows=64):
+    """One rotation screen: posted as "rotation_order" in page order, with its switch and time.
+    display: the config's display over DEFAULTS."""
     durations = section(display, 'screen_durations')
-    if name in SHARED_DURATION:
+    least = least_seconds(name, rows)
+    if name == 'latest_workouts':
+        # Each page lasts every stat once: no time of its own to set.
+        time = '<span class="time shared" title="Every stat once, at the stat time under Timing">Every stat</span>'
+    elif name in SHARED_DURATION:
         other = dict((n, l) for n, l, _ in SCREENS)[SHARED_DURATION[name]]
         # The column is narrow: the label's first word ("Lifetime"), the full name in the tooltip.
         time = (f'<span class="time shared" title="Shown as long as each {_attr(other)} page">'
                 f'Same as {escape(other.split()[0])}</span>')
     else:
-        seconds = _number(f'duration_{name}', durations.get(name), duration_fallback(display, name),
-                          f' aria-label="{_attr(label)} seconds"', 's')
+        # A saved time under what the screen needs shows as the board plays it (saving keeps that).
+        own = durations.get(name)
+        if isinstance(own, (int, float)) and not isinstance(own, bool):
+            own = max(own, least)
+        seconds = _number(f'duration_{name}', own, max(duration_fallback(display, name), least),
+                          f' aria-label="{_attr(label)} seconds"', 's', least)
         time = f'<span class="time">{seconds}</span>'
     switch = _switch_input(f'rotation_on_{name}', on, f' aria-label="Show {_attr(label)}"')
     grip = (f'<button type="button" class="grip js-only" hidden aria-label="Drag to reorder {_attr(label)}, '
             f'or use the arrow keys">{icon("grip")}</button>')
     return (f'<li class="screen-row{" on" if on else ""}"><input type="hidden" name="rotation_order" value="{name}">'
             f'{grip}'
-            f'<div><label class="screen-name" for="rotation_on_{name}">{escape(label)}</label>{_hint(hint)}</div>'
+            f'<div><label class="screen-name" for="rotation_on_{name}">{escape(label)}</label>{_hint(hint)}'
+            f'<p class="hint shows">Shows: {escape(shows_for(name, display, rows))}</p></div>'
             f'{time}{switch}'
             f'<button type="button" class="move js-only" hidden aria-label="Move {_attr(label)} earlier">'
             f'{icon("up")}</button></li>')
@@ -751,9 +804,7 @@ def _colour_choices(chosen):
 
 
 def _rows(matrix):
-    """The panel's rows, as the board reads them (MATRIX_DEFAULTS when config.json doesn't say)."""
-    rows = matrix.get('rows', MATRIX_DEFAULTS['rows'])
-    return rows if isinstance(rows, int) else MATRIX_DEFAULTS['rows']
+    return board_rows(matrix)
 
 
 def _matrix_field(key, label, hint, value):
@@ -1301,7 +1352,9 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     it off); started: how starting an update or rollback went, one of updates.STARTS. alert_outcome
     and alert_problems: the Pushover alerts card's (ALERT_OUTCOMES). editing_rider: the key of the
     rider whose login form login_problems came from (their card and form start open)."""
-    display = section(config, 'display')
+    # An older config's 0 seconds meant "off": show it as the switch it meant, as the board reads it.
+    display = copy.deepcopy(section(config, 'display'))
+    retire_zero_times(display, ROTATION_SECTIONS, DEFAULTS['rotation'])
     matrix = section(config, 'matrix')
     merged = {**DEFAULTS, **display}  # what the app uses where config.json says nothing
 
@@ -1313,21 +1366,28 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     general = _section('general', 'General', 'How the board\'s pages look.', (
         _field('color', 'Text colour', _options('color', _colour_choices(merged['color']), merged['color']),
                'For your name and the per-discipline pages.')
-        + (f'<input type="hidden" name="{COMPACT_SHOWN}" value="1">'
-           + _switch('compact_workout_pages', 'Compact workout pages', merged['compact_workout_pages'],
-                     'Each workout in two still pages instead of one changing page.')
-           if _rows(matrix) < 64 else '')
     ), 'type')
 
-    rows = ''.join(_screen_row(name, *dict((n, (l, h)) for n, l, h in SCREENS)[name], on, merged)
-                   for name, on in rotation_rows(display))
+    screen_rows = ''.join(_screen_row(name, *dict((n, (l, h)) for n, l, h in SCREENS)[name], on, merged,
+                                      _rows(matrix))
+                          for name, on in rotation_rows(display))
     rotation = _section('rotation', 'Rotation', 'Which screens the board shows, in this order, and for how long.', (
-        _rotation_head() + f'<ol class="screens" id="screens" aria-label="Screens, in order">{rows}</ol>'
+        _rotation_head() + f'<ol class="screens" id="screens" aria-label="Screens, in order">{screen_rows}</ol>'
     ), 'list')
 
+    def timing_field(key, label, hint):
+        least = TIMING_LEAST.get(key, 0)
+        value = display.get(key)
+        if least and isinstance(value, (int, float)) and not isinstance(value, bool):
+            value = max(value, least)  # shown, and saved, as the board plays it
+        field = _field(key, label, _number(key, value, DEFAULTS[key], unit='s', least=least), hint)
+        if key == 'logo_duration':
+            field = _switch('show_logo', 'Show the logo', merged['show_logo'],
+                            'The Peloton LED logo at start-up and between riders.') + field
+        return field
+
     timing = _section('timing', 'Timing', 'How long pages last, and how often the board checks Peloton.', ''.join(
-        _field(key, label, _number(key, display.get(key), DEFAULTS[key], unit='s'), hint)
-        for key, label, hint in TIMING
+        timing_field(key, label, hint) for key, label, hint in TIMING
     ), 'clock')
 
     shared_goals = section(display, 'weekly_goals')
