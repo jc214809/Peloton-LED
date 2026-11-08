@@ -171,7 +171,8 @@ Your lifetime miles become a trip from one place to another.
   set `miles` to whatever you like.
 - **64x64:** a vertical map on the left (Florida is south): a blue start
   dot, a dotted route, an orange trail for what you've covered, a white
-  "you are here" dot, and a gold castle with pink towers at the bottom.
+  "you are here" dot, and a white castle with blue roofs and gold tips at
+  the bottom (`CASTLE_ROWS`; 32 rows draw the shorter `CASTLE_ROWS_SHORT`).
   On the right: the start name, the miles (big, `741.6`; whole miles from 1,000), `MILES`, `138.4 TO GO`, and
   the destination name at the bottom (wraps to 2 lines).
 - **64x32:** `TO DISNEY WORLD` across the top, big miles with the percent,

@@ -5,7 +5,8 @@ from unittest.mock import Mock
 import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.journey_screen import CASTLE_COLORS, JourneyScreen, journey_text
+from display.ui.journey_screen import (CASTLE_COLORS, CASTLE_ROWS, CASTLE_ROWS_SHORT, JourneyScreen,
+                                       journey_text)
 from peloton.config import load_config
 from peloton.journey import (DEFAULT_JOURNEY, DISTANCE_DISCIPLINES, journey_progress,
                              merge_distance_totals, uses_metric, workout_miles)
@@ -164,6 +165,36 @@ def test_journey_screen_fits_both_boards(height, miles, journey):
     assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))
     found = {c for _, c in matrix.image.getcolors(64 * 64)}
     assert set(CASTLE_COLORS.values()) <= found
+
+
+def find_castle(image, rows):
+    """Top-left corner of the castle's exact pixels in the image, or None."""
+    pixels = image.load()
+    for top in range(image.height - len(rows) + 1):
+        for left in range(image.width - len(rows[0]) + 1):
+            if all(pixels[left + dx, top + dy] == CASTLE_COLORS[cell]
+                   for dy, row in enumerate(rows) for dx, cell in enumerate(row) if cell in CASTLE_COLORS):
+                return left, top
+    return None
+
+
+@pytest.mark.parametrize('height, rows, corner', [(64, CASTLE_ROWS, (1, 48)), (32, CASTLE_ROWS_SHORT, (53, 21))])
+def test_journey_castle_sits_at_the_end_of_the_route_clear_of_the_text(height, rows, corner):
+    matrix = ImageMatrix(height=height)
+    initialize_fonts(height)
+    JourneyScreen().render(matrix, journey_progress({'cycling': 252}, DEFAULT_JOURNEY))
+    assert find_castle(matrix.image, rows) == corner
+    left, top = corner
+    if height == 64:
+        # At least 3 columns clear of the text column (x 13), the route ending one row above it.
+        assert left + len(rows[0]) <= 10
+        assert matrix.image.getpixel((5, top - 2)) != (0, 0, 0)
+        assert matrix.image.getpixel((5, top - 1)) == (0, 0, 0)
+    else:
+        # At least 3 rows below the big miles line (baseline 17), at the right end of the route.
+        assert top >= 21 and left + len(rows[0]) <= 63
+        # The route is dotted, so either of its last two pixels may be lit.
+        assert {matrix.image.getpixel((x, 27)) for x in (left - 4, left - 3)} != {(0, 0, 0)}
 
 
 def test_journey_screen_renders_nothing_without_progress():
