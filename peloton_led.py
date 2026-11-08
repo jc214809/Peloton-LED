@@ -12,6 +12,7 @@ from peloton.dashboard import Dashboard
 from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
                            week_start)
 from peloton.journey import journey_progress
+from peloton.screen_times import configured_seconds, page_seconds
 from peloton.selection import normalize_discipline
 from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
@@ -23,7 +24,7 @@ from display.ui.last_workout_screen import (LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
                                            stats_phase_seconds)
 from display.ui.settings_pin import shown_pin
 from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
-from display.ui.celebration_screen import INTRO_SECONDS, MIN_CARD_SECONDS, discipline_noun, milestone_noun
+from display.ui.celebration_screen import discipline_noun, milestone_noun
 from display.ui.streak_screen import streak_views
 
 logger = logging.getLogger('peloton-led')
@@ -61,10 +62,6 @@ def apply_scheduled_brightness(matrix, display, now=None, timezone_name=None):
         matrix.brightness = brightness
 
 
-def _duration(display, section, fallback):
-    return display.get('screen_durations', {}).get(section, fallback)
-
-
 def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, rivals=None,
                          pass_index=0):
     """Build one rotation from configured named sections.
@@ -76,7 +73,9 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
     """
     rotation = display.get('rotation', DEFAULT_ROTATION)
     groups = {name: [] for name in rotation}
-    workout_duration = _duration(display, 'latest_workouts', display['last_workout_duration'])
+    # Each screen's page time comes from peloton.screen_times, as the settings page shows it. None is 0:
+    # a screen that's off isn't in rotation (old configs' 0s are switched off by load_config).
+    workout_duration = configured_seconds(display, 'latest_workouts')
     detail_interval = display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)
     if 'latest_workouts' in groups:
         if snapshot['summaries']:
@@ -88,7 +87,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                 # On the full-board layout the screen intros, then cycles one
                 # stat at a time; size the page to exactly one pass so every
                 # stat shows once — no cut-offs and no wrap-around repeats.
-                if workout_duration > 0 and not compact:
+                if not compact:
                     page_duration = detail_interval + stats_phase_seconds(
                         rotating_details(summary, matrix_height), detail_interval)
                 else:
@@ -97,9 +96,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                     groups['latest_workouts'].append(('last_workout', state, page_duration))
                 if dashboard.should_celebrate_pr(summary):
                     # Burst + settle animation, then the card holds one interval.
-                    pr_duration = _duration(display, 'milestones', display['overview_duration'])
-                    if pr_duration > 0:
-                        pr_duration = PR_BURST_SECONDS + PR_SETTLE_SECONDS + detail_interval
+                    pr_duration = PR_BURST_SECONDS + PR_SETTLE_SECONDS + detail_interval
                     groups['latest_workouts'].append(('pr', summary, pr_duration))
         else:
             status = snapshot['status'] if snapshot['status'] != 'ready' else 'empty'
@@ -131,19 +128,19 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         for rank_label, (name, count) in zip(rank_labels, instructor_ranks):
             details.append({'label': rank_label, 'value': f'{name} / {count:,}',
                             'lines': [name.upper(), f'{count:,} CLASSES']})
-        username_duration = _duration(display, 'username', display['duration'])
-        if username_duration > 0 and details:
-            from display.ui.username import DETAIL_INTERVAL_SECONDS
-            username_duration = max(
-                username_duration, len(details) * DETAIL_INTERVAL_SECONDS)
-        groups['username'].append(('username', {'username': username, 'details': details},
-                                   username_duration))
+        # The page's time is shared by its highlights (at least 4 s each), so more time means each
+        # stays up longer rather than the list starting over.
+        username_duration = page_seconds(display, 'username', matrix_height, frames=len(details))
+        state = {'username': username, 'details': details}
+        if details:
+            state['detail_seconds'] = username_duration / len(details)
+        groups['username'].append(('username', state, username_duration))
 
     # 64 rows fit a 2x2 grid of icon tiles per page; 32 rows fit one row of two.
     zone = display.get('timezone') or (snapshot.get('me') or {}).get('timezone')
     if 'streaks' in groups and streak_views(snapshot.get('streaks')):
         streaks = snapshot['streaks']
-        streak_duration = _duration(display, 'streaks', display['overview_duration'])
+        streak_duration = page_seconds(display, 'streaks', matrix_height)
         weekday = week_day(zone)
         reminder_day = display.get('streak_reminder_day', 5)
         if (reminder_day is not None and weekday >= reminder_day
@@ -165,19 +162,17 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
             groups['streaks'].append(('streak', state, streak_duration))
 
     if 'versus' in groups and rivals and len(rivals) >= 2:
-        from display.ui.versus_screen import DETAIL_INTERVAL_SECONDS, STATS
-        versus_duration = _duration(display, 'versus', display['overview_duration'])
-        if versus_duration > 0 and matrix_height < 64:
-            # 32 rows show one stat at a time; give each its full turn.
-            versus_duration = max(versus_duration, len(STATS) * DETAIL_INTERVAL_SECONDS)
-        groups['versus'].append(('versus', {'riders': rivals, 'weekday': week_day(zone)},
-                                 versus_duration))
+        from display.ui.versus_screen import STATS
+        versus_duration = page_seconds(display, 'versus', matrix_height)
+        state = {'riders': rivals, 'weekday': week_day(zone)}
+        if matrix_height < 64:
+            # 32 rows show one stat at a time: the page's time shared by the stats, each shown once.
+            state['stat_seconds'] = versus_duration / len(STATS)
+        groups['versus'].append(('versus', state, versus_duration))
 
     overview_pages = lifetime_overview_pages(snapshot['totals'],
                                              page_size=4 if matrix_height >= 64 else 2)
-    discipline_duration = _duration(display, 'lifetime', display['overview_duration'])
-    if discipline_duration > 0:
-        discipline_duration = max(discipline_duration, 5.0)
+    discipline_duration = page_seconds(display, 'lifetime', matrix_height)
     total = total_workout_count(snapshot['totals'])
     if 'total_workouts' in groups and total is not None:
         groups['total_workouts'].append(('discipline', {
@@ -195,7 +190,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
             groups['next_milestone'].append(('countdown', {
                 'total': upcoming['count'], 'target': upcoming['target'],
                 'previous': upcoming['previous'], 'title': title, 'discipline': upcoming['discipline']},
-                _duration(display, 'next_milestone', display['overview_duration'])))
+                page_seconds(display, 'next_milestone', matrix_height)))
     if 'lifetime' in groups:
         for index, items in enumerate(overview_pages):
             groups['lifetime'].append(('lifetime', {
@@ -207,16 +202,16 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         # Skip until the distance tally has something (e.g. before the backfill).
         if progress and progress['miles'] > 0:
             groups['journey'].append(('journey', progress,
-                                      _duration(display, 'journey', display['overview_duration'])))
+                                      page_seconds(display, 'journey', matrix_height)))
 
     if 'heatmap' in groups and snapshot.get('activity_days'):
         from peloton.activity import HEATMAP_WEEKS
         today = week_start(zone)[1].date().isoformat()
         groups['heatmap'].append(('heatmap', {'days': snapshot['activity_days'], 'today': today,
                                               'weeks': HEATMAP_WEEKS},
-                                  _duration(display, 'heatmap', display['overview_duration'])))
+                                  page_seconds(display, 'heatmap', matrix_height)))
 
-    goal_duration = _duration(display, 'goals', display['overview_duration'])
+    goal_duration = page_seconds(display, 'goals', matrix_height)
     if 'goals' in groups:
         progress = snapshot.get('weekly_progress', {})
         for key, target in display.get('weekly_goals', {}).items():
@@ -241,9 +236,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
             candidates.append({'number': target, 'noun': discipline_noun(discipline, labels.get(discipline)),
                                'subtitle': username, 'milestone': key})
         if candidates:
-            celebration_duration = _duration(display, 'milestones', display['overview_duration'])
-            if celebration_duration > 0:
-                celebration_duration = max(celebration_duration, INTRO_SECONDS + MIN_CARD_SECONDS)
+            celebration_duration = page_seconds(display, 'milestones', matrix_height)
             celebrations.append(('celebration', candidates[pass_index % len(candidates)],
                                  celebration_duration))
     return celebrations + [page for section in rotation for page in groups[section]]
@@ -329,7 +322,7 @@ def run_multi_user_loop(manager, profiles, display, active, cycles=0):
     """Show one complete rotation per user, in configured order, with the logo between them
     (and between cycles). The first rotation goes without, since main() has just shown it."""
     completed = 0
-    logo_duration = display.get('logo_duration', 0)
+    logo_duration = display.get('logo_duration', 0) if display.get('show_logo', True) else 0
     while not cycles or completed < cycles:
         show_wifi_setup_while_needed(manager)
         rivals = weekly_rivals(profiles)
@@ -469,7 +462,7 @@ def main():
             manager.register('logo', LogoScreen(str(logo)))
         else:
             manager.register('logo', LogoMaskScreen())
-        if display['logo_duration'] > 0:
+        if display['show_logo']:
             show_and_wait(manager, 'logo', None, display['logo_duration'], active['dashboard'])
         if options.cycles and not options.demo:
             # A finite real-data smoke run should wait for the initial request.

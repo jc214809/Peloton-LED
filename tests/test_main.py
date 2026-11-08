@@ -11,8 +11,8 @@ from peloton.dashboard import Dashboard
 from scripts.render_demo import ImageMatrix
 
 ROOT = Path(__file__).resolve().parents[1]
-FAST = {'duration': 0, 'overview_duration': 0, 'last_workout_duration': 0,
-        'per_workout_duration': 0, 'logo_duration': 0}
+# No start-up logo; tests that play a rotation use the instant_clock fixture (times are never 0).
+FAST = {'show_logo': False}
 
 
 class FakeMatrix(ImageMatrix):
@@ -49,8 +49,8 @@ def _main(monkeypatch, *argv):
 
 
 @pytest.mark.parametrize('rows', [32, 64])
-def test_demo_runs_one_rotation_and_cleans_up(monkeypatch, tmp_path, fake_matrix, rows):
-    config = _config(tmp_path, {'logo_duration': 0.01})
+def test_demo_runs_one_rotation_and_cleans_up(monkeypatch, tmp_path, fake_matrix, rows, instant_clock):
+    config = _config(tmp_path, {'show_logo': True})
     _main(monkeypatch, '--demo', '--cycles', '1', '--config', config, '--led-rows', rows,
           '--display-duration', '0', '--refresh-interval', '60')
     matrix = fake_matrix.instances[-1]

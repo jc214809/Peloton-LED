@@ -68,8 +68,11 @@ class UsernameScreen(Screen):
             matrix.SetPixel(x, line_y, blue.red, blue.green, blue.blue)
 
         if details:
-            interval = DETAIL_INTERVAL_SECONDS
-            index = int(self.elapsed / interval) % len(details)
+            # build_rotation_pages shares the page's time out (detail_seconds), each highlight once;
+            # without it, each gets the standard 4 s and the list repeats.
+            interval = state.get('detail_seconds') or DETAIL_INTERVAL_SECONDS
+            index = int(self.elapsed / interval)
+            index = min(index, len(details) - 1) if state.get('detail_seconds') else index % len(details)
             phase_seconds = self.elapsed % interval
             detail = details[index]
             # Each new detail rises into place during its first 0.3 seconds.

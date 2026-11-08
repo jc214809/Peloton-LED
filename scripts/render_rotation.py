@@ -109,11 +109,11 @@ def frame_times(name, state, duration, detail_interval, height=64):
         count = max(1, round(duration / detail_interval))
         return [0.6 + i * detail_interval for i in range(count)]
     if name == 'versus' and state and 'riders' in state:
-        from display.ui.versus_screen import DETAIL_INTERVAL_SECONDS
-        return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, round(duration / DETAIL_INTERVAL_SECONDS)))]
+        share = state.get('stat_seconds')  # 32 rows: one frame per stat
+        return [0.6 + i * share for i in range(round(duration / share))] if share else [0.6]
     if name == 'username':
-        from display.ui.username import DETAIL_INTERVAL_SECONDS
-        return [0.6 + i * DETAIL_INTERVAL_SECONDS for i in range(max(1, len(state.get('details', []))))]
+        share = state.get('detail_seconds') or 4.0
+        return [0.6 + i * share for i in range(max(1, len(state.get('details', []))))]
     if name == 'pr':
         from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS
         return [0.5, BURST_SECONDS + SETTLE_SECONDS + 0.5]

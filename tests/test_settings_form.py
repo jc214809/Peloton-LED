@@ -156,8 +156,9 @@ def test_duration_fallbacks_name_the_setting_the_app_uses():
 
 
 @pytest.mark.parametrize('field,value,message', [
-    ('duration_goals', '-1', 'screen_durations values must be non-negative'),
-    ('duration_goals', 'soon', 'screen_durations values must be non-negative'),
+    ('duration_goals', '-1', 'Weekly goals needs at least 1 second. To hide it, switch it off.'),
+    ('duration_goals', '0', 'Weekly goals needs at least 1 second. To hide it, switch it off.'),
+    ('duration_goals', 'soon', 'screen_durations values must be numbers above 0'),
     ('refresh_interval', '0', 'display.refresh_interval must be a positive integer'),
     ('refresh_interval', '60.5', 'display.refresh_interval must be a positive integer'),
     ('timezone', 'Mars/Olympus', 'invalid display.timezone'),
@@ -415,6 +416,8 @@ def test_rotation_has_column_headings_with_tooltips():
     for tid, label in (('tip-rotation-order', 'Order'), ('tip-rotation-seconds', 'Seconds'), ('tip-rotation-show', 'Show')):
         assert f'aria-label="About {label}" aria-describedby="{tid}"' in head
         assert f'role="tooltip" id="{tid}">' in head
-    assert '0 skips the screen' in head and 'Seconds per page' not in rotation, 'the old note is in the tooltips now'
+    assert 'To hide a screen, switch it off' in head and 'Seconds per page' not in rotation, \
+        'the old note is in the tooltips now'
+    assert '0 skips' not in html and '0 hides' not in html, 'a time is never 0: screens are switched off'
     assert rotation.index('id="screens-head"') < rotation.index('id="screens"')
     assert "getElementById('screens-head').classList.add('js')" in html, 'lines up with the grip column'
