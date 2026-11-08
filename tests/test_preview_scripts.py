@@ -91,6 +91,8 @@ def test_frame_times_per_page_kind():
     assert len(frame_times('username', {'details': ['a', 'b', 'c']}, 10, 4)) == 3
     assert len(frame_times('versus', {'riders': []}, 30, 4)) >= 1
     assert frame_times('last_workout', {}, 0, 4) == [0.6]
+    assert frame_times('journey', {}, 8, 4) == [1.0]  # settled, after the bar fills
+    assert frame_times('journey', {'step_seconds': 4}, 8, 4) == [1.0, 5.0]  # 32 rows: both steps
 
 
 def test_preview_dashboard_celebrates_only_a_just_reached_milestone():

@@ -36,6 +36,15 @@ def test_the_shared_numbers_match_the_screens_and_config_they_stand_for():
     assert all(DEFAULTS[key] == value for key, value in screen_times.FALLBACK_DEFAULTS.items())
 
 
+def test_the_journeys_two_steps_need_4_seconds_each():
+    assert screen_times.least_seconds('journey', 32, 2) == 8
+    assert screen_times.least_seconds('journey', 32) == screen_times.least_seconds('journey', 64) == 1
+    display = {**DEFAULTS, 'screen_durations': {'journey': 3}}
+    assert page.shows_for('journey', display, 32) == (
+        '3 s. With miles of more than one type, the trip then the miles by type, 4 s each (8 s in all).')
+    assert page.shows_for('journey', display, 64) == '3 s.'
+
+
 def test_an_old_zero_is_the_switch_it_meant():
     display, changed = _retire({'rotation': ['username', 'goals', 'lifetime', 'total_workouts', 'versus'],
                                 'screen_durations': {'goals': 0, 'versus': 12}, 'logo_duration': 0})
@@ -135,12 +144,14 @@ def test_the_settings_page_says_the_times_the_board_plays(tmp_path, rows):
         if section is None:
             continue
         seen.add(section)
-        frames = len(state['details']) if section == 'username' else 1
+        frames = len(state['details']) if section == 'username' else 2 if 'step_seconds' in state else 1
         assert duration == page_seconds(display, section, rows, frames), section
         line = page.shows_for(section, display, rows)
-        if section != 'username':  # its line gives the rule (it depends on the day's highlights)
+        if frames > 1 and section == 'journey':  # the demo has bike and walk/run miles: both steps
+            assert f'({page.number_text(round(duration, 1))} s in all)' in line, line
+        elif section != 'username':  # its line gives the rule (it depends on the day's highlights)
             assert line.startswith(f'{page.number_text(round(duration, 1))} s'), (section, line)
-    assert {'username', 'versus', 'total_workouts', 'lifetime', 'goals'} <= seen
+    assert {'username', 'versus', 'total_workouts', 'lifetime', 'goals', 'journey'} <= seen
 
 
 def _rotation_row(html, name):

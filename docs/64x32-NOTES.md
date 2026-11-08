@@ -193,6 +193,33 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   with the name and percent in white over them. Unlike the graph and zones
   slides it keeps the heart-rate/calorie row.
 
+### Journey: miles by type (both boards, requested 2026-11-08)
+Joel found the 64x64 journey page showed less than the 64x32 one: no percent,
+and on the way home it still listed Columbus at the top and Disney World by
+the castle while saying `414 TO HOME`. Both boards now use one design
+("C", picked from three mockups), and the map and castle are gone:
+- Heading `TO DISNEY WORLD` (or `TO COLUMBUS` on the way home), big miles
+  with `MI`, `138.4 TO GO` with the percent beside it (rounded down, so never
+  100% short of the destination), and an orange bar for this leg. Past the
+  first leg, `TRIP 2` sits at the bar's right end.
+- The miles split three ways, by how they were covered
+  (`peloton.journey.MILE_GROUPS`): BIKE (Cycling, Bike Bootcamp), ROW
+  (Rowing, Row Bootcamp), and WALK/RUN for everything else (tread, outdoor,
+  hiking), so every mile is in a row. Joel picked the WALK/RUN name; four
+  groups (tread and outdoor apart) would not fit three rows.
+- 64x64: one page, the groups listed under the bar with colour squares.
+- 64x32: two steps sharing the page's time (`step_seconds`, like Head to
+  head's `stat_seconds`): the trip, then `MILES BY TYPE` with a bar in the
+  groups' colours and a row each. At least 4 s a step, so 8 s with two
+  groups; with one group there's no split, so the trip stays up.
+- Animation (both boards, all done by `INTRO_SECONDS`, 1 s into a step, at
+  20 fps): the bar fills with an ease-out while the miles count up from the
+  leg's start (`counted_miles`), the bar's white tip then pulses (2 s, down
+  to 35%); 64x64 slides the group rows in from the left 0.15 s apart, 64x32
+  grows the split bar a colour at a time with each row appearing as its
+  colour lands. The arrival, turning-for-home and step hand-off effects are
+  ROADMAP item 7. `render_rotation.py` captures settled frames.
+
 ## Open questions for Joel
 
 1. ~~**`compact_workout_pages`**~~: removed with the old layout (2026-11-08).
