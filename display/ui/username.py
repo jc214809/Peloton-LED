@@ -79,7 +79,10 @@ class UsernameScreen(Screen):
             # 32-row panels rise 2px so the second line never drops off the bottom.
             rise = 2 if compact else 3
             offset = max(0, round(rise * (1 - min(1, phase_seconds / 0.3))))
-            label = self._fit(small_font, str(detail.get('label', '')).upper(), matrix.width - 4)
+            label = str(detail.get('label', '')).upper()
+            if get_text_width(small_font, label) > matrix.width - 4 and detail.get('short_label'):
+                label = str(detail['short_label']).upper()
+            label = self._fit(small_font, label, matrix.width - 4)
             self._center(matrix, small_font, label, (17 if compact else 38) + offset,
                          graphics.Color(145, 165, 190))
             lines = detail.get('lines') or [detail.get('value', '')]

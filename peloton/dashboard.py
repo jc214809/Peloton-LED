@@ -99,7 +99,8 @@ class Dashboard:
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
                       'distance_totals': {}, 'personal_records': {},
-                      'streak_week_workouts': None, 'activity_days': {}}
+                      'streak_week_workouts': None, 'activity_days': {},
+                      'recent_activity': {}, 'discipline_instructor_counts': {}}
         self.demo = demo
         if demo:
             data = demo_data()
