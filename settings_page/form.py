@@ -26,7 +26,7 @@ SCREENS = (
     ('next_milestone', 'Next milestone',
      'A countdown when all workouts or a discipline is a few workouts from its next milestone '
      '(a discipline\'s: 25, 50, 100, then every 100), closest first. How close and how many pages are '
-     'under Goals. Most days there are none.'),
+     'under Milestones. Most days there are none.'),
     ('lifetime', 'Lifetime by discipline', 'All-time totals per discipline (at least 5 seconds a page).'),
     ('journey', 'Journey', 'Miles along the journey route.'),
     ('heatmap', 'Activity heatmap', 'Minutes a day over the last 12 weeks.'),
@@ -35,8 +35,10 @@ SCREENS = (
      'day. Always first, after the logo.'),
     ('goals', 'Weekly goals', "Progress toward this week's goals."),
 )
-# The Goals card's milestone countdown and discipline celebration settings; blank is the app's default.
-MILESTONE_KEYS = ('milestone_within', 'milestone_pages', 'discipline_milestone_celebrate_within')
+# The Milestones card's countdown settings; blank is the app's default.
+MILESTONE_KEYS = ('milestone_within', 'milestone_pages')
+# Settings that are gone; saving the page tidies them out of an old config.
+RETIRED_DISPLAY_KEYS = ('discipline_milestone_celebrate_within',)
 SCREEN_NAMES = tuple(name for name, _, _ in SCREENS)
 # Screens timed by another one's setting rather than their own.
 SHARED_DURATION = {'total_workouts': 'lifetime'}
@@ -215,12 +217,14 @@ def apply_form(config, form):
     else:
         display['refresh_schedule'] = None
 
-    # Goals: everyone's, then each rider's own (blank for everyone's)
+    # Goals and Milestones: everyone's, then each rider's own (blank for everyone's)
     display['weekly_goals'] = {key: _number(one(f'goal_{key}') or '0') for key in ('workouts', 'minutes')}
     display['milestones'] = _milestones(one('milestones'))
     set_or_drop(display, 'milestone_step', 'milestone_step')
     for key in MILESTONE_KEYS:
         set_or_drop(display, key, key)
+    for key in RETIRED_DISPLAY_KEYS:
+        display.pop(key, None)
     for index, user in riders(new):
         if f'rider_{index}_name' not in form:
             continue

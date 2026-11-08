@@ -502,8 +502,11 @@ the live `config.json` from a phone or laptop:
 - **General**: text colour, and compact workout pages (64x32 only)
 - **Rotation**: which screens show, in what order, and each one's seconds
 - **Timing**: default page time, workout stat time, logo, how often to check Peloton
-- **Goals**: everyone's weekly goals and milestones, each rider's own, and
+- **Goals**: everyone's weekly goals, each rider's name and own goals, and
   the streak reminder day
+- **Milestones**: the total workouts to celebrate (a list, then every N), the
+  Next milestone countdown (how close, how many pages), and each rider's own
+  list; each discipline's (25, 50, 100, then every 100) needs no setting
 - **Schedules**: time zone, day and night brightness, quiet hours
 - **Panel**: size, brightness, GPIO mapping, rotation, slowdown, PWM timing;
   the rest of the driver settings under **Advanced**, with debug logging and

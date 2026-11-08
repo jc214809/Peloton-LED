@@ -116,13 +116,12 @@ def test_how_close_and_how_many_pages_are_configurable():
     assert shown(milestone_pages=1) == ['Bike Bootcamp']
 
 
-def test_how_recent_a_celebrated_milestone_must_be_is_configurable(tmp_path):
-    dashboard, _ = _real_dashboard(tmp_path, {'Walking': 202, 'Yoga': 36})  # 25 was 11 classes ago
-    assert dashboard.pending_discipline_milestones() == ['walking:200']
-    dashboard.config['discipline_milestone_celebrate_within'] = 12
+def test_a_discipline_milestone_is_celebrated_only_within_its_last_10_workouts(tmp_path):
+    dashboard, _ = _real_dashboard(tmp_path, {'Walking': 202, 'Yoga': 34, 'Cycling': 610})
+    assert dashboard.pending_discipline_milestones() == ['walking:200', 'yoga:25']  # 600 was 10 rides ago
+    # The old setting is gone: an old config's value changes nothing.
+    dashboard.config['discipline_milestone_celebrate_within'] = 0
     assert dashboard.pending_discipline_milestones() == ['walking:200', 'yoga:25']
-    dashboard.config['discipline_milestone_celebrate_within'] = 0  # never
-    assert dashboard.pending_discipline_milestones() == []
 
 
 def test_a_discipline_celebration_needs_no_configured_milestones():
@@ -338,12 +337,11 @@ def test_config_defaults_and_rejects_bad_milestone_countdown_settings(tmp_path):
     path = tmp_path / 'config.json'
     path.write_text('{"display": {}}')
     display = load_config(str(path))['display']
-    assert (display['milestone_within'], display['milestone_pages'],
-            display['discipline_milestone_celebrate_within']) == (5, 3, 10)
-    path.write_text('{"display": {"discipline_milestone_celebrate_within": 0}}')
-    assert load_config(str(path))['display']['discipline_milestone_celebrate_within'] == 0
-    for key, value in (('milestone_within', 0), ('milestone_pages', 0),
-                       ('discipline_milestone_celebrate_within', -1), ('milestone_within', True),
+    assert (display['milestone_within'], display['milestone_pages']) == (5, 3)
+    assert 'discipline_milestone_celebrate_within' not in display
+    path.write_text('{"display": {"discipline_milestone_celebrate_within": -1}}')
+    load_config(str(path))  # retired, so an old config's value is ignored, not rejected
+    for key, value in (('milestone_within', 0), ('milestone_pages', 0), ('milestone_within', True),
                        ('milestone_pages', 2.5), ('milestone_within', '5')):
         path.write_text(json.dumps({'display': {key: value}}))
         with pytest.raises(ValueError, match=key):

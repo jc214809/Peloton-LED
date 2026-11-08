@@ -25,6 +25,7 @@
       "latest_workouts",
       "username",
       "total_workouts",
+      "next_milestone",
       "lifetime",
       "milestones",
       "goals"
@@ -41,6 +42,9 @@
       "minutes": 0
     },
     "milestones": [],
+    "milestone_step": 100,
+    "milestone_within": 5,
+    "milestone_pages": 3,
     "brightness_schedule": null,
     "refresh_schedule": null,
     "compact_workout_pages": false

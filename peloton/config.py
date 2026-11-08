@@ -26,11 +26,9 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'milestones': [],
             'milestone_step': 100,
             # The Next Milestone page counts down to a target this close, the total's or a discipline's
-            # (25, 50, 100, then every 100), at most this many pages. A discipline's crossed within this
-            # many of its workouts is celebrated (0: never).
+            # (25, 50, 100, then every 100), at most this many pages.
             'milestone_within': 5,
             'milestone_pages': 3,
-            'discipline_milestone_celebrate_within': 10,
             'streak_reminder_day': 5,
             'journey': DEFAULT_JOURNEY,
             'brightness_schedule': None,
@@ -307,8 +305,7 @@ def validate_config(config, path='config.json'):
     step = display.get('milestone_step')
     if isinstance(step, bool) or not isinstance(step, int) or step < 0:
         raise ValueError(f'{path}: display.milestone_step must be a non-negative integer')
-    for key, lowest in (('milestone_within', 1), ('milestone_pages', 1),
-                        ('discipline_milestone_celebrate_within', 0)):
+    for key, lowest in (('milestone_within', 1), ('milestone_pages', 1)):
         value = display.get(key)
         if isinstance(value, bool) or not isinstance(value, int) or value < lowest:
             raise ValueError(f'{path}: display.{key} must be a whole number of at least {lowest}')
