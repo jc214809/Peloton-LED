@@ -17,7 +17,7 @@ from .selection import is_brief, last_active_day
 from .summaries import summarize_workout
 from .timestamps import workout_date, workout_timestamp
 from .totals import extract_discipline_totals, parse_streaks
-from .goals import (STEP_CELEBRATION_WINDOW, local_date, parse_milestone_key, reached_discipline_milestones, reached_milestones,
+from .goals import (local_date, parse_milestone_key, reached_discipline_milestones, reached_milestones,
                     week_start, weekly_progress)
 from .journey import uses_metric
 from .schedule import in_quiet_hours, scheduled_refresh_interval
@@ -220,9 +220,7 @@ class Dashboard:
     def pending_discipline_milestones(self, snapshot=None, now=None):
         """Per-discipline milestones ('strength:500') still to celebrate, as pending_milestones."""
         data = snapshot or self.snapshot()
-        reached = reached_discipline_milestones(
-            data.get('totals', {}), self.config.get('discipline_milestone_celebrate_within',
-                                                    STEP_CELEBRATION_WINDOW))
+        reached = reached_discipline_milestones(data.get('totals', {}))
         return self._still_to_celebrate(data, reached, data.get('celebrated_discipline_milestones', []),
                                         data.get('discipline_milestone_shown_at'), now)
 

@@ -385,12 +385,15 @@ ICONS = {
     'bell': '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     'edit': '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     'x': '<path d="M18 6 6 18M6 6l12 12"/>',
+    'trophy': '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16"/>'
+              '<path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 '
+              '.55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
 }
 
 SECTIONS = (  # id, nav title, icon
     ('updates', 'Updates', 'refresh'), ('logins', 'Logins', 'key'), ('alerts', 'Pushover alerts', 'bell'),
     ('general', 'General', 'type'), ('rotation', 'Rotation', 'list'), ('timing', 'Timing', 'clock'), ('goals', 'Goals', 'target'),
-    ('schedules', 'Schedules', 'sun'), ('panel', 'Panel', 'board'),
+    ('milestone-settings', 'Milestones', 'trophy'), ('schedules', 'Schedules', 'sun'), ('panel', 'Panel', 'board'),
     ('advanced', 'Advanced', 'sliders'),
 )
 
@@ -790,10 +793,7 @@ def _rider(index, rider, display):
                         ' step="1" inputmode="numeric"', 'workouts'))
         + _mini(f'rider_{index}_minutes', 'Minutes a week',
                 _number(f'rider_{index}_minutes', goals.get('minutes'), shared.get('minutes', 0),
-                        ' step="1" inputmode="numeric"', 'min'))
-        + _mini(f'rider_{index}_milestones', 'Milestones',
-                _input(f'rider_{index}_milestones', milestones_text(rider.get('milestones')),
-                       extra=f' placeholder="{_attr(milestones_text(display.get("milestones")) or "None")}"')))
+                        ' step="1" inputmode="numeric"', 'min')))
     return (f'<div class="rider"><h3>{escape(name)}</h3>'
             f'<input type="hidden" name="rider_{index}_name" value="{_attr(name)}">'
             f'<div class="rider-grid">{fields}</div></div>')
@@ -1333,7 +1333,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     shared_goals = section(display, 'weekly_goals')
     reminder = display.get('streak_reminder_day', STREAK_REMINDER_DEFAULT)
     rider_list = riders(config)
-    goals = _section('goals', 'Goals', 'Weekly goals and all-time milestones.', (
+    goals = _section('goals', 'Goals', 'Weekly goals and the streak reminder.', (
         '<h3>Everyone</h3>'
         + _field('goal_workouts', 'Workouts a week',
                  _number('goal_workouts', shared_goals.get('workouts'), 0, ' step="1" inputmode="numeric"', 'workouts'),
@@ -1341,29 +1341,6 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
         + _field('goal_minutes', 'Minutes a week',
                  _number('goal_minutes', shared_goals.get('minutes'), 0, ' step="1" inputmode="numeric"', 'min'),
                  '0 or blank for no minutes goal.')
-        + _field('milestones', 'Milestones',
-                 _input('milestones', milestones_text(display.get('milestones')), extra=' placeholder="100, 250, 500"'),
-                 'Total workout counts to celebrate, separated by commas.')
-        + _field('milestone_step', 'And every',
-                 _number('milestone_step', display.get('milestone_step'), DEFAULTS['milestone_step'],
-                         ' step="1" inputmode="numeric"', 'workouts'),
-                 'Workouts between milestones past the list (100: 100, 200, 300…). 0 for none.')
-        + _field('milestone_within', 'Count down from',
-                 _number('milestone_within', display.get('milestone_within'),
-                         DEFAULTS['milestone_within'], ' step="1" inputmode="numeric"', 'away'),
-                 'The Next milestone page appears this many workouts or fewer from a milestone: all '
-                 'workouts\' (above), or a discipline\'s (25, 50, 100, then every 100).')
-        + _field('milestone_pages', 'At most',
-                 _number('milestone_pages', display.get('milestone_pages'),
-                         DEFAULTS['milestone_pages'], ' step="1" inputmode="numeric"', 'pages'),
-                 'Closest first, when more are that close.')
-        + _field('discipline_milestone_celebrate_within', 'Celebrate a discipline\'s within',
-                 _number('discipline_milestone_celebrate_within',
-                         display.get('discipline_milestone_celebrate_within'),
-                         DEFAULTS['discipline_milestone_celebrate_within'], ' step="1" inputmode="numeric"',
-                         'workouts'),
-                 'A discipline\'s round number gets the trophy if it was reached within this many of its '
-                 'workouts (so old ones aren\'t celebrated). 0 for never.')
         + _field('streak_reminder_day', 'Streak reminder from',
                  _options('streak_reminder_day', [('off', 'Never')] + [(str(i), d) for i, d in enumerate(WEEKDAYS)],
                           'off' if reminder is None else str(reminder)),
@@ -1372,6 +1349,41 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
             'rider their own pair (the other blank is no goal).</p>'
             + ''.join(_rider(i, rider, display) for i, rider in rider_list)) if rider_list else '')
     ), 'target')
+
+    shared_list = milestones_text(display.get('milestones'))
+    count = ' step="1" inputmode="numeric"'
+    milestones = _section('milestone-settings', 'Milestones',
+                          'The trophy when a total is reached, and the countdown to the next one.', (
+        '<h3>Total workouts</h3>'
+        + _field('milestones', 'Celebrate at',
+                 _input('milestones', shared_list, extra=' placeholder="100, 250, 500"'),
+                 'Lifetime workout counts, separated by commas. Blank for none.')
+        + _field('milestone_step', 'Then every',
+                 _number('milestone_step', display.get('milestone_step'), DEFAULTS['milestone_step'], count,
+                         'workouts'),
+                 'Past the list, every this many workouts (100: 2,100, 2,200…). 0 for none.')
+        + '<h3>Each discipline</h3>'
+        + _hint('25, 50, 100, then every 100 classes, picked automatically: 500th Strength, 600th Ride. '
+                'Nothing to set.')
+        + _hint('A round number set by "Then every" or a discipline only gets the trophy if it was '
+                'reached in the last 10 of those workouts, so old ones aren\'t celebrated.')
+        + '<h3>Countdown</h3>'
+        + _field('milestone_within', 'Show it from',
+                 _number('milestone_within', display.get('milestone_within'), DEFAULTS['milestone_within'],
+                         count, 'to go'),
+                 'The Next milestone page appears when the total or a discipline is this many workouts '
+                 'or fewer from its next one.')
+        + _field('milestone_pages', 'Up to',
+                 _number('milestone_pages', display.get('milestone_pages'), DEFAULTS['milestone_pages'],
+                         count, 'pages'),
+                 'When more are that close, the closest ones.')
+        + (('<h3>Each rider</h3><p class="hint">Their own total workouts to celebrate. Blank uses the '
+            'list above.</p>'
+            + ''.join(_field(f'rider_{i}_milestones', rider['name'],
+                             _input(f'rider_{i}_milestones', milestones_text(rider.get('milestones')),
+                                    extra=f' placeholder="{_attr(shared_list or "None")}"'))
+                      for i, rider in rider_list)) if rider_list else '')
+    ), 'trophy')
 
     bright = display.get('brightness_schedule') if isinstance(display.get('brightness_schedule'), dict) else None
     quiet = display.get('refresh_schedule') if isinstance(display.get('refresh_schedule'), dict) else None
@@ -1439,7 +1451,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
           f'{logins_card(logins, signed_in, login_outcome, login_problems, _zone(display), editing_rider)}'
           f'{alerts_card(logins, signed_in, alert_outcome, alert_problems)}</div>'
         + f'<form method="post" action="/save" id="settings"><input type="hidden" name="{FORM_FIELD}" value="1">'
-          f'<div class="stack">{general}{rotation}{timing}{goals}{schedules}{panel}{advanced}</div>'
+          f'<div class="stack">{general}{rotation}{timing}{goals}{milestones}{schedules}{panel}{advanced}</div>'
         + '<div class="savebar"><div class="savebar-in"><div class="status" id="save-status"><span class="dot"></span>'
           '<span>Everything here is saved to config.json</span></div>'
           f'<button type="submit" class="primary" id="save">{icon("check")}<span>Save and restart</span></button>'

@@ -215,15 +215,13 @@ def test_shared_goals_blank_is_no_goal_and_milestones_are_sorted_once_each():
 
 
 def test_milestone_countdown_settings_save_blank_to_default_and_reject_bad_values():
-    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, milestone_within='8',
-                                                  milestone_pages='',
-                                                  discipline_milestone_celebrate_within='0'))
+    old = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'discipline_milestone_celebrate_within': 0}}
+    new, problems = apply_form(old, posted(old, milestone_within='8', milestone_pages=''))
     assert problems == []
     assert new['display']['milestone_within'] == 8
-    assert new['display']['discipline_milestone_celebrate_within'] == 0  # 0 is "never", not blank
     assert 'milestone_pages' not in new['display']
-    for field, value in (('milestone_within', '0'), ('milestone_pages', '0'),
-                         ('discipline_milestone_celebrate_within', '2.5')):
+    assert 'discipline_milestone_celebrate_within' not in new['display'], 'retired: saving tidies it away'
+    for field, value in (('milestone_within', '0'), ('milestone_pages', '0'), ('milestone_pages', '2.5')):
         _, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, **{field: value}))
         assert problems and field in problems[0]
 
@@ -337,7 +335,8 @@ def test_number_fields_show_their_units():
                             r'<span class="unit-text" aria-hidden="true">([^<]+)</span>', html))
     expected = {'duration_goals': 's', 'overview_duration': 's', 'refresh_interval': 's', 'logo_duration': 's',
                 'last_workout_detail_interval': 's', 'quiet_interval': 's', 'goal_minutes': 'min',
-                'goal_workouts': 'workouts', 'milestone_step': 'workouts', 'rider_0_minutes': 'min',
+                'goal_workouts': 'workouts', 'milestone_step': 'workouts', 'milestone_within': 'to go',
+                'milestone_pages': 'pages', 'rider_0_minutes': 'min',
                 'rider_1_workouts': 'workouts', 'bright_day': '%', 'bright_night': '%', 'matrix_brightness': '%',
                 'matrix_pwm_lsb_nanoseconds': 'ns', 'matrix_limit_refresh': 'Hz'}
     assert {name: units.get(name) for name in expected} == expected
@@ -363,6 +362,24 @@ def test_name_and_text_is_gone_and_its_settings_live_where_they_belong():
     assert html.index('id="general"') < html.index('id="rotation"')
     advanced = html.split('id="advanced"', 1)[1].split('</details>', 1)[0]
     assert 'Fallback name' in advanced and 'name="username"' in advanced
+
+
+def test_milestone_settings_have_their_own_card_after_goals():
+    html = page.settings_page(TWO_RIDERS)
+    card, goals = _card(html, 'milestone-settings'), _card(html, 'goals')
+    for name in ('milestones', 'milestone_step', 'milestone_within', 'milestone_pages',
+                 'rider_0_milestones', 'rider_1_milestones'):
+        assert f'name="{name}"' in card and f'name="{name}"' not in goals, name
+    for name in ('goal_workouts', 'streak_reminder_day', 'rider_0_name', 'rider_0_username', 'rider_1_minutes'):
+        assert f'name="{name}"' in goals, name
+    assert '25, 50, 100, then every 100' in card and 'last 10' in card
+    assert 'discipline_milestone_celebrate_within' not in html
+    for old in ('And every', 'Count down from', 'At most'):
+        assert old not in html
+    assert html.index('id="goals"') < html.index('id="milestone-settings"') < html.index('id="schedules"')
+    assert html.index('href="#goals"') < html.index('href="#milestone-settings"')
+    assert 'id="rider_0_milestones" name="rider_0_milestones" value="100, 250"' in card
+    assert 'id="rider_1_milestones" name="rider_1_milestones" value="" placeholder="None"' in card
 
 
 def test_the_text_colours_are_four_plus_an_old_configs_own():
