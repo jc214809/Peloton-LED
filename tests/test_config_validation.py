@@ -117,3 +117,11 @@ def test_validate_config_checks_a_dict_without_a_file():
     assert checked['display']['rotation'] == ['goals'] and checked['matrix']['rows'] == 64
     with pytest.raises(ValueError, match='^from the settings page: display.rotation must contain'):
         validate_config({'display': {'rotation': ['nope']}}, 'from the settings page')
+
+
+def test_logo_shows_for_five_seconds_by_default(tmp_path):
+    from pathlib import Path
+    assert _load(tmp_path, {'display': {}})['display']['logo_duration'] == 5
+    root = Path(__file__).resolve().parents[1]
+    for template in ('config.json-example', 'packaging/config.pi.json'):
+        assert json.loads((root / template).read_text())['display']['logo_duration'] == 5, template

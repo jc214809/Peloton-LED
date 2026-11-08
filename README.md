@@ -87,7 +87,7 @@ Data refreshes in the background (see [Refresh behavior](#refresh-behavior)), bu
 
 ![Logo](docs/screenshots/rotation/logo.png)
 
-Shown at launch for `logo_duration` seconds (default 3), then again before each rider's rotation (once per cycle on a single-rider board; not straight after the launch logo). `logo_duration` 0 turns off both. It is the red Peloton mark, PELOTON, a bar in the five heart-rate zone colours, and LED. A 64x64 panel stacks them; a 64x32 panel puts the mark on the left and the rest beside it. The board draws it in its own pixel font, so it needs no image file. Set `logo_path` to show an image file instead; if that file is missing, the built-in logo is shown. The settings page's icons (page header, browser tab, phone home screen) are the same mark and zone bar. `python scripts/render_logo.py` redraws this screenshot and the wordmark at the top of this README.
+Shown at launch for `logo_duration` seconds (default 5), then again before each rider's rotation (once per cycle on a single-rider board; not straight after the launch logo). `logo_duration` 0 turns off both. It is the red Peloton mark, PELOTON, a bar in the five heart-rate zone colours, and LED. A 64x64 panel stacks them; a 64x32 panel puts the mark on the left and the rest beside it. The board draws it in its own pixel font, so it needs no image file. Set `logo_path` to show an image file instead; if that file is missing, the built-in logo is shown. The settings page's icons (page header, browser tab, phone home screen) are the same mark and zone bar. `python scripts/render_logo.py` redraws this screenshot and the wordmark at the top of this README.
 
 ### `latest_workouts` — last active day's workouts
 
@@ -335,7 +335,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `overview_duration` | 4 | Per-discipline and PR screen seconds |
 | `last_workout_duration` | 30 | `0` hides workout screens; otherwise only used with `compact_workout_pages`. Normal workout pages are timed by `last_workout_detail_interval` (see below) |
 | `last_workout_detail_interval` | 4 | Seconds each stat (and the intro) holds for during the workout screen's rotation; the graph and zone bar get one second more |
-| `logo_duration` | 3 | Logo seconds, at start-up and between riders; 0 skips it |
+| `logo_duration` | 5 | Logo seconds, at start-up and between riders; 0 skips it |
 | `logo_path` | Built-in logo | Optional image file shown instead; if it's missing, the built-in logo is shown |
 | `timezone` | Profile, then system local | Calendar-day grouping; explicit config must be a valid IANA zone |
 | `refresh_interval` | 300 | Positive integer seconds |
@@ -396,7 +396,7 @@ Each refresh saves Peloton's output personal-records table (one record per disci
     "overview_duration": 4,
     "last_workout_duration": 15,
     "last_workout_detail_interval": 4,
-    "logo_duration": 3,
+    "logo_duration": 5,
     "logo_path": null,
     "timezone": "America/New_York",
     "refresh_interval": 300,
