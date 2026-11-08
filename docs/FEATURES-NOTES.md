@@ -127,6 +127,10 @@ tests in `tests/test_versus.py`.
 A new rotation section, `next_milestone` (default: right after the Total
 Workouts page).
 
+> Superseded 2026-11-08: the page now uses the discipline countdown's big
+> layout (`3 MORE / 2,200TH / WORKOUT`), covers disciplines too, and shows only
+> within `milestone_within` (5) workouts of a target. See the README.
+
 - **Target:** the next milestone in your `milestones` list above your
   total. If you've passed them all (you have: your list is 100/250/500 and
   you're at 2,111), it's the next multiple of the new `milestone_step`

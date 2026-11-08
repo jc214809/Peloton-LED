@@ -9,8 +9,10 @@ from zoneinfo import ZoneInfo
 from peloton.activity import daily_streak_start
 from peloton.config import load_config, load_dotenv, user_token_path
 from peloton.dashboard import Dashboard
-from peloton.goals import next_milestone, week_day, week_start
+from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
+                           week_start)
 from peloton.journey import journey_progress
+from peloton.selection import normalize_discipline
 from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
 from utils import heartbeat
@@ -21,7 +23,7 @@ from display.ui.last_workout_screen import (LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
                                            stats_phase_seconds)
 from display.ui.settings_pin import shown_pin
 from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
-from display.ui.celebration_screen import INTRO_SECONDS, MIN_CARD_SECONDS, milestone_noun
+from display.ui.celebration_screen import INTRO_SECONDS, MIN_CARD_SECONDS, discipline_noun, milestone_noun
 from display.ui.streak_screen import streak_views
 
 logger = logging.getLogger('peloton-led')
@@ -182,11 +184,17 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
             'discipline': 'Total Workouts', 'count': total,
             'color_key': display['color'], 'number_font_key': 'big',
             'number_color_key': 'gold'}, discipline_duration))
-    if 'next_milestone' in groups and total is not None:
-        upcoming = next_milestone(total, display.get('milestones', []), display.get('milestone_step', 0))
-        if upcoming:
+    if 'next_milestone' in groups:
+        # Usually empty: only the total or a discipline a few workouts from its next target.
+        for upcoming in upcoming_milestones(
+                total, display.get('milestones', []), display.get('milestone_step', 0), snapshot.get('totals'),
+                within=display.get('milestone_within', UPCOMING_WITHIN),
+                limit=display.get('milestone_pages', MAX_UPCOMING)):
+            # 2,200TH WORKOUT on 64 rows; TO 2,200 / WORKOUTS on 32.
+            title = upcoming['label'] if upcoming['discipline'] or matrix_height < 64 else 'Workout'
             groups['next_milestone'].append(('countdown', {
-                'total': total, 'previous': upcoming[0], 'target': upcoming[1]},
+                'total': upcoming['count'], 'target': upcoming['target'],
+                'previous': upcoming['previous'], 'title': title, 'discipline': upcoming['discipline']},
                 _duration(display, 'next_milestone', display['overview_duration'])))
     if 'lifetime' in groups:
         for index, items in enumerate(overview_pages):
@@ -216,18 +224,28 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                 groups['goals'].append(('goal', {
                     'title': 'Weekly Goal', 'current': progress.get(key, 0),
                     'target': target, 'unit': key}, goal_duration))
-    # A celebration leads the rotation (after the logo), wherever 'milestones' sits in it.
-    # Only the newest milestone: acknowledging it retires any older ones still pending.
+    # A celebration leads the rotation (after the logo), wherever 'milestones' sits in it. One per
+    # rotation: the newest total-workouts milestone (acknowledging it retires any older ones), and any
+    # discipline's taking turns with it pass by pass, so each shows during its day.
     celebrations = []
-    if 'milestones' in groups and (display.get('milestones') or display.get('milestone_step')):
-        pending = dashboard.pending_milestones(snapshot)
-        if pending:
+    if 'milestones' in groups:
+        candidates = []
+        if display.get('milestones') or display.get('milestone_step'):
+            pending = dashboard.pending_milestones(snapshot)
+            if pending:
+                candidates.append({'number': pending[-1], 'noun': milestone_noun(None),
+                                   'subtitle': username, 'milestone': pending[-1]})
+        labels = {normalize_discipline(label): label for label in snapshot.get('totals', {})}
+        for key in dashboard.pending_discipline_milestones(snapshot):
+            discipline, target = parse_milestone_key(key)
+            candidates.append({'number': target, 'noun': discipline_noun(discipline, labels.get(discipline)),
+                               'subtitle': username, 'milestone': key})
+        if candidates:
             celebration_duration = _duration(display, 'milestones', display['overview_duration'])
             if celebration_duration > 0:
                 celebration_duration = max(celebration_duration, INTRO_SECONDS + MIN_CARD_SECONDS)
-            celebrations.append(('celebration', {
-                'number': pending[-1], 'noun': milestone_noun(None),
-                'subtitle': username, 'milestone': pending[-1]}, celebration_duration))
+            celebrations.append(('celebration', candidates[pass_index % len(candidates)],
+                                 celebration_duration))
     return celebrations + [page for section in rotation for page in groups[section]]
 
 

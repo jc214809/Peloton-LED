@@ -19,12 +19,18 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'refresh_interval': 300, 'history_batch_size': 100, 'recent_fetch_size': 20,
             'performance_cache_size': 32,
             'rotation': ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                         'next_milestone', 'lifetime', 'journey', 'heatmap',
-                         'milestones', 'goals'],
+                         'next_milestone', 'lifetime', 'journey',
+                         'heatmap', 'milestones', 'goals'],
             'screen_durations': {},
             'weekly_goals': {'workouts': 0, 'minutes': 0},
             'milestones': [],
             'milestone_step': 100,
+            # The Next Milestone page counts down to a target this close, the total's or a discipline's
+            # (25, 50, 100, then every 100), at most this many pages. A discipline's crossed within this
+            # many of its workouts is celebrated (0: never).
+            'milestone_within': 5,
+            'milestone_pages': 3,
+            'discipline_milestone_celebrate_within': 10,
             'streak_reminder_day': 5,
             'journey': DEFAULT_JOURNEY,
             'brightness_schedule': None,
@@ -45,7 +51,8 @@ RETIRED_DISPLAY_KEYS = ('history_days', 'history_limit', 'history_page_size',
                         'history_max_pages', 'instructor_tally_max_pages')
 
 ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                     'next_milestone', 'lifetime', 'journey', 'heatmap', 'milestones', 'goals'}
+                     'next_milestone', 'lifetime', 'journey', 'heatmap',
+                     'milestones', 'goals'}
 DURATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'next_milestone',
                      'lifetime', 'journey', 'heatmap', 'milestones', 'goals'}
 
@@ -300,6 +307,11 @@ def validate_config(config, path='config.json'):
     step = display.get('milestone_step')
     if isinstance(step, bool) or not isinstance(step, int) or step < 0:
         raise ValueError(f'{path}: display.milestone_step must be a non-negative integer')
+    for key, lowest in (('milestone_within', 1), ('milestone_pages', 1),
+                        ('discipline_milestone_celebrate_within', 0)):
+        value = display.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < lowest:
+            raise ValueError(f'{path}: display.{key} must be a whole number of at least {lowest}')
     if not isinstance(display.get('compact_workout_pages'), bool):
         raise ValueError(f'{path}: display.compact_workout_pages must be true or false')
     schedule = display.get('brightness_schedule')

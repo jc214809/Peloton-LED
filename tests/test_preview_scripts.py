@@ -94,9 +94,13 @@ def test_frame_times_per_page_kind():
     assert frame_times('last_workout', {}, 0, 4) == [0.6]
 
 
-def test_preview_dashboard_celebrates_only_the_newest_reached_milestone():
-    dashboard = render_rotation.PreviewDashboard([100, 250, 500])
-    assert dashboard.pending_milestones({'totals': {'Total Workouts': 300}}) == [250]
+def test_preview_dashboard_celebrates_only_a_just_reached_milestone():
+    dashboard = render_rotation.PreviewDashboard([100, 250, 255, 500])
+    assert dashboard.pending_milestones({'totals': {'Total Workouts': 258}}) == [255]
+    assert dashboard.pending_milestones({'totals': {'Total Workouts': 259}}) == [255]
+    # 2,000 is 123 workouts back: the board celebrated it long ago, so the preview doesn't.
+    assert render_rotation.PreviewDashboard([2000]).pending_milestones(
+        {'totals': {'Total Workouts': 2123}}) == []
     assert dashboard.pending_milestones({'totals': {}}) == []
     assert dashboard.should_celebrate_pr({'is_pr': True}) is True
 

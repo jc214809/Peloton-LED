@@ -7,7 +7,7 @@ from display.display import initialize_fonts
 from display.ui.countdown_screen import BAR_EMPTY, BAR_FILL, CountdownScreen
 from peloton.config import load_config
 from peloton.dashboard import Dashboard
-from peloton.goals import next_milestone, reached_milestones
+from peloton.goals import next_milestone, reached_milestones, upcoming_milestones
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 
@@ -41,36 +41,86 @@ def test_dashboard_celebrates_a_fresh_step_milestone_once(tmp_path):
     assert dashboard.pending_milestones(snapshot) == []
 
 
-def test_rotation_adds_countdown_and_step_celebration_without_configured_milestones():
+def _total_rotation(total, **display):
     display = {'rotation': ['next_milestone', 'milestones'], 'last_workout_duration': 15,
-               'overview_duration': 5, 'milestones': [], 'milestone_step': 100}
+               'overview_duration': 5, 'milestones': [], 'milestone_step': 100, **display}
+    snapshot = {'summaries': [], 'totals': {'Total Workouts': total}, 'status': 'ready'}
+    dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
+    dashboard.pending_milestones.return_value = []
+    return build_rotation_pages(snapshot, dashboard, display, 'R', display.pop('height', 64))
+
+
+def test_total_countdown_shows_only_within_a_few_workouts_like_a_disciplines():
+    # 2,123 is 77 from 2,200: no page, the same rule as a discipline's.
+    assert _total_rotation(2123) == []
+    assert _total_rotation(2195) == [('countdown', {'total': 2195, 'target': 2200, 'previous': 2100,
+                                                    'title': 'Workout', 'discipline': None}, 5)]
+    assert _total_rotation(2195, height=32)[0][1]['title'] == 'Workouts'  # TO 2,200 / WORKOUTS
+    assert _total_rotation(2190, milestone_within=10)[0][1]['target'] == 2200
+    # A configured milestone comes first; with neither list nor step there is nothing to count to.
+    assert _total_rotation(248, milestones=[250])[0][1]['target'] == 250
+    assert _total_rotation(2195, milestone_step=0) == []
+
+
+def test_rotation_celebrates_a_step_milestone_without_configured_milestones():
     snapshot = {'summaries': [], 'totals': {'Total Workouts': 2201}, 'status': 'ready'}
     dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.pending_milestones.return_value = [2200]
+    display = {'rotation': ['next_milestone', 'milestones'], 'last_workout_duration': 15,
+               'overview_duration': 5, 'milestones': [], 'milestone_step': 100}
     pages = build_rotation_pages(snapshot, dashboard, display, 'R', 64)
-    assert pages[0][0] == 'celebration' and pages[0][1]['milestone'] == 2200
-    assert pages[1] == ('countdown', {'total': 2201, 'previous': 2200, 'target': 2300}, 5)
-    display['milestone_step'] = 0
-    assert [p[0] for p in build_rotation_pages(snapshot, dashboard, display, 'R', 64)] == []
+    assert [page[0] for page in pages] == ['celebration']
+    assert pages[0][1]['milestone'] == 2200
+
+
+def test_total_and_disciplines_share_the_page_limit_nearest_first():
+    totals = {'Total Workouts': 2197, 'Strength': 496, 'Cycling': 598, 'Yoga': 23}
+    snapshot = {'summaries': [], 'totals': totals, 'status': 'ready'}
+    dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
+    dashboard.pending_milestones.return_value = []
+    display = {'rotation': ['next_milestone'], 'last_workout_duration': 15, 'overview_duration': 5,
+               'milestones': [], 'milestone_step': 100}
+    titles = [p[1]['title'] for p in build_rotation_pages(snapshot, dashboard, display, 'R', 64)]
+    # Cycling 2 away and Yoga 2 (bigger target first), then the total 3 away; Strength (4) is the fourth.
+    assert titles == ['Cycling', 'Yoga', 'Workout']
+    display['milestone_pages'] = 4
+    assert [p[1]['title'] for p in build_rotation_pages(snapshot, dashboard, display, 'R', 64)][-1] == 'Strength'
+
+
+def test_upcoming_milestones_put_the_total_first_on_a_tie():
+    totals = {'Total Workouts': 2196, 'Strength': 496}
+    upcoming = upcoming_milestones(2196, [], 100, totals)
+    assert [u['discipline'] for u in upcoming] == [None, 'strength']
+    assert upcoming[0] == {'discipline': None, 'label': 'Workouts', 'count': 2196, 'target': 2200,
+                           'previous': 2100}
+    assert upcoming_milestones(None, [], 100, totals) == upcoming_milestones(2123, [], 100, totals)[:1]
 
 
 @pytest.mark.parametrize('height', [32, 64])
-@pytest.mark.parametrize('state', [{'total': 2111, 'previous': 2100, 'target': 2200},
-                                   {'total': 12, 'previous': 0, 'target': 10000}])
-def test_countdown_fits_and_fills_the_bar_by_progress(height, state):
-    matrix = ImageMatrix(height=height)
+def test_total_countdown_reads_3_more_2200th_workout(height, monkeypatch):
+    import display.ui.countdown_screen as screen
+    drawn = []
+    original = screen.graphics.DrawText
+    def record(matrix, font, x, y, color, text):
+        drawn.append(text)
+        return original(matrix, font, x, y, color, text)
+    monkeypatch.setattr(screen.graphics, 'DrawText', record)
     initialize_fonts(height)
-    assert CountdownScreen().render(matrix, state)
+    matrix = ImageMatrix(height=height)
+    title = 'Workout' if height == 64 else 'Workouts'
+    assert CountdownScreen().render(matrix, {'total': 2197, 'previous': 2100, 'target': 2200,
+                                             'title': title, 'discipline': None})
+    expected = (['3', 'MORE', '2', ',', '200', 'TH', 'WORKOUT'] if height == 64
+                else ['3', 'MORE', 'TO', '2,200', 'WORKOUTS'])
+    assert drawn == expected
     pixels = matrix.image.load()
     assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))
-    bar_row = next(y for y in range(height) if pixels[60, y] in (BAR_FILL, BAR_EMPTY))
-    filled = sum(pixels[x, bar_row] == BAR_FILL for x in range(64))
-    # At least two blank rows between the bar and the total underneath it.
-    bar_bottom = max(y for y in range(height) if pixels[60, y] in (BAR_FILL, BAR_EMPTY))
-    text_top = min(y for y in range(bar_bottom + 1, height) for x in range(64) if pixels[x, y] != (0, 0, 0))
-    assert text_top - bar_bottom - 1 >= 2
-    expected = round(58 * (state['total'] - state['previous']) / (state['target'] - state['previous']))
-    assert filled == expected
+    if height == 64:
+        bar_row = next(y for y in range(height) if pixels[3, y] in (BAR_FILL, BAR_EMPTY))
+        assert sum(pixels[x, bar_row] == BAR_FILL for x in range(64)) == round(58 * 97 / 100)
 
 
 @pytest.mark.parametrize('state', [{}, {'total': 2200, 'previous': 2100, 'target': 2200},
@@ -87,3 +137,5 @@ def test_config_milestone_step(tmp_path):
     path.write_text('{"display": {"milestone_step": -1}}')
     with pytest.raises(ValueError, match='milestone_step'):
         load_config(str(path))
+    path.write_text('{"display": {"rotation": ["next_milestone"], "screen_durations": {"next_milestone": 6}}}')
+    assert load_config(str(path))['display']['screen_durations'] == {'next_milestone': 6}

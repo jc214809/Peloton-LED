@@ -304,6 +304,8 @@ def test_rotation_places_pr_after_its_workout():
     from peloton_led import run_display_loop
 
     dashboard = Mock(login_required=False)
+
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.should_celebrate_pr.side_effect = lambda summary: summary.get('is_pr', False)
     dashboard.snapshot.return_value = {
         'me': {'username': 'Rider'},
@@ -456,6 +458,7 @@ def test_64_row_rotation_keeps_total_separate_from_compact_lifetime_pages(tmp_pa
 
 def test_64_row_discipline_pages_share_requested_duration():
     dashboard = Mock(login_required=False)
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.snapshot.return_value = {
         'me': {'username': 'Rider'}, 'summaries': [], 'status': 'ready',
         'totals': {
@@ -478,6 +481,7 @@ def test_64_row_discipline_pages_share_requested_duration():
 
 def test_configured_rotation_order_and_disabled_sections():
     dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.should_celebrate_pr.return_value = False
     snapshot = {'me': {'username': 'Rider'}, 'summaries': [{'workout_id': 'one'}],
                 'totals': {'Total Workouts': 10, 'Cycling': 10}, 'status': 'ready',
@@ -495,6 +499,8 @@ def test_last_workout_duration_stretches_to_fit_every_stat():
     from display.ui.last_workout_screen import _stat_details
 
     dashboard = Mock()
+
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.should_celebrate_pr.return_value = False
     summary = {'workout_id': 'one', 'discipline': 'Cycling', 'title': 'Cycling Class',
                'duration_min': 20, 'total_output_kj': 200, 'strive_score': 22,
@@ -520,6 +526,7 @@ def test_last_workout_duration_shows_each_stat_once_without_repeats():
     # Strength has only strive score + max HR; a longer configured duration
     # used to wrap the rotation back around and show strive score twice.
     dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.should_celebrate_pr.return_value = False
     summary = {'workout_id': 'one', 'discipline': 'Strength', 'title': 'Full Body',
                'duration_min': 20, 'strive_score': 11.3, 'hr_max': 142,
@@ -538,6 +545,7 @@ def test_last_workout_duration_shows_each_stat_once_without_repeats():
 
 def test_last_workout_without_stats_shows_intro_for_one_interval():
     dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.should_celebrate_pr.return_value = False
     summary = {'workout_id': 'one', 'discipline': 'Meditation', 'title': 'Calm',
                'duration_min': 10}
@@ -554,6 +562,7 @@ def test_last_workout_without_stats_shows_intro_for_one_interval():
 
 def test_username_profile_details_all_receive_display_time():
     dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
     snapshot = {'me': {'username': 'Rider'}, 'summaries': [], 'status': 'ready',
                 'totals': {'Total Workouts': 100, 'Cycling': 60, 'Yoga': 40},
                 'weekly_progress': {'workouts': 3, 'minutes': 75}}
@@ -572,6 +581,7 @@ def test_username_profile_details_all_receive_display_time():
 
 def test_username_profile_includes_top_three_instructors_when_present():
     dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
     snapshot = {'me': {'username': 'Rider'}, 'summaries': [], 'status': 'ready',
                 'totals': {'Total Workouts': 100, 'Cycling': 60},
                 'weekly_progress': {'workouts': 3, 'minutes': 75},
@@ -596,6 +606,7 @@ def test_username_profile_includes_top_three_instructors_when_present():
 
 def test_username_profile_has_no_instructor_details_when_untallied():
     dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
     snapshot = {'me': {'username': 'Rider'}, 'summaries': [], 'status': 'ready',
                 'totals': {'Total Workouts': 100, 'Cycling': 60},
                 'weekly_progress': {'workouts': 3, 'minutes': 75}}
@@ -842,7 +853,8 @@ def test_each_rider_rotation_uses_their_own_goals_milestones_and_journey(tmp_pat
     assert shown[joel['dashboard']] is joel['display'] and shown[jen['dashboard']] is jen['display']
 
     def goals(profile):
-        dashboard = Mock(should_celebrate_pr=Mock(return_value=False), pending_milestones=Mock(return_value=[]))
+        dashboard = Mock(should_celebrate_pr=Mock(return_value=False), pending_milestones=Mock(return_value=[]),
+                         pending_discipline_milestones=Mock(return_value=[]))
         snapshot = {'summaries': [], 'status': 'ready', 'totals': {}, 'weekly_progress': {'workouts': 2, 'minutes': 90}}
         return [(state['current'], state['target'], state['unit'])
                 for name, state, _ in build_rotation_pages(snapshot, dashboard, profile['display'], 'Rider', 32)

@@ -76,6 +76,27 @@ def milestone_noun(discipline: Optional[str]) -> str:
     return _NOUNS.get(str(discipline).strip().lower().replace(' ', '_'), 'CLASS')
 
 
+# One discipline's milestone: these say what was counted in a word; the rest use their name.
+_DISCIPLINE_NOUNS = {'cycling': 'RIDE', 'running': 'RUN', 'walking': 'WALK', 'rowing': 'ROW'}
+
+
+def discipline_noun(discipline: Optional[str], label: Optional[str] = None) -> str:
+    """What one discipline's milestone counts: 600TH RIDE, 500TH STRENGTH, 25TH ROW BOOTCAMP.
+    Unlike milestone_noun, a bootcamp keeps its own name: its count isn't the rides' or rows'."""
+    slug = str(discipline or '').strip().lower().replace(' ', '_')
+    return _DISCIPLINE_NOUNS.get(slug) or str(label or slug.replace('_', ' ')).upper() or 'CLASS'
+
+
+def _noun_line(noun, fonts, room, baseline, left, right):
+    """The noun centred in the first font it fits, else its last word (TREAD BOOTCAMP is
+    too wide beside the trophy on 32 rows; BOOTCAMP isn't)."""
+    for text in dict.fromkeys((noun, noun.split()[-1] if noun.split() else noun)):
+        line = _placed(_fit(text, fonts, room), text, baseline, _GOLD, left, right)
+        if line:
+            return line
+    return None
+
+
 def number_text(number) -> str:
     """'600TH', '2000TH': no comma, so four digits still fit the big font on 64 columns."""
     if not isinstance(number, int) or isinstance(number, bool) or number < 0:
@@ -165,7 +186,7 @@ def _number_runs(font, digits):
     return runs, pen
 
 
-def _ordinal_line(number, digit_fonts, suffix_font, baseline, color, left, right):
+def ordinal_line(number, digit_fonts, suffix_font, baseline, color, left, right):
     """2,000 big with a small TH raised to the digits' top, like a superscript; centred as one piece.
     With a comma like the board's other totals, unless dropping it keeps the number in a bigger font
     (10000 on 64 columns). None when it fits in none of the digit fonts."""
@@ -234,7 +255,7 @@ class CelebrationScreen(Screen):
     @staticmethod
     def _big_line(big, fonts, suffix_font, baseline, left, right):
         if isinstance(big, int):
-            return _ordinal_line(big, fonts, suffix_font, baseline, _WHITE, left, right)
+            return ordinal_line(big, fonts, suffix_font, baseline, _WHITE, left, right)
         return _placed(_fit(big, fonts, right - left - 1), big, baseline, _WHITE, left, right)
 
     @staticmethod
@@ -245,7 +266,7 @@ class CelebrationScreen(Screen):
             CelebrationScreen._big_line(big, [loaded_fonts.get('big'), loaded_fonts.get('countdown'),
                                               loaded_fonts.get('discipline')], loaded_fonts.get('titles'),
                                         41, 0, w),
-            _placed(_fit(noun, small, w - 2), noun, 51, _GOLD, 0, w),
+            _noun_line(noun, small, w - 2, 51, 0, w),
             _placed(_fit(subtitle, small, w - 2), subtitle, 61, _BLUE, 0, w),
         ]
         return [line for line in lines if line]
@@ -261,6 +282,6 @@ class CelebrationScreen(Screen):
             CelebrationScreen._big_line(big, [loaded_fonts.get('big'), loaded_fonts.get('countdown'),
                                               loaded_fonts.get('info')], loaded_fonts.get('info'),
                                         20, TEXT_LEFT_32, w),
-            _placed(_fit(noun, info, room), noun, 28, _GOLD, TEXT_LEFT_32, w),
+            _noun_line(noun, info, room, 28, TEXT_LEFT_32, w),
         ]
         return [line for line in lines if line]

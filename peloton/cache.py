@@ -3,13 +3,15 @@ import json
 import os
 from pathlib import Path
 
+from .goals import parse_milestone_key
+
 
 CACHE_VERSION = 1
 PERSISTED_KEYS = (
     'me', 'totals', 'summaries', 'last_updated', 'generation',
     'active_day_count', 'celebrated_pr_ids',
     'weekly_progress', 'celebrated_milestones', 'personal_records', 'streaks',
-    'milestone_shown_at',
+    'milestone_shown_at', 'celebrated_discipline_milestones', 'discipline_milestone_shown_at',
 )
 
 
@@ -58,6 +60,16 @@ def load_snapshot(path):
             key.isdigit() and isinstance(at, (int, float)) and not isinstance(at, bool)
             for key, at in shown.items())):
         del restored['milestone_shown_at']
+    # Per-discipline milestones ('strength:500'): damage only means one may celebrate again.
+    celebrated = restored.get('celebrated_discipline_milestones')
+    if celebrated is not None and (not isinstance(celebrated, list) or not all(
+            parse_milestone_key(key) for key in celebrated)):
+        del restored['celebrated_discipline_milestones']
+    shown = restored.get('discipline_milestone_shown_at')
+    if shown is not None and (not isinstance(shown, dict) or not all(
+            parse_milestone_key(key) and isinstance(at, (int, float)) and not isinstance(at, bool)
+            for key, at in shown.items())):
+        del restored['discipline_milestone_shown_at']
     return restored
 
 

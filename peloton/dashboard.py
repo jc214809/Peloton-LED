@@ -17,7 +17,8 @@ from .selection import is_brief, last_active_day
 from .summaries import summarize_workout
 from .timestamps import workout_date, workout_timestamp
 from .totals import extract_discipline_totals, parse_streaks
-from .goals import local_date, reached_milestones, week_start, weekly_progress
+from .goals import (STEP_CELEBRATION_WINDOW, local_date, parse_milestone_key, reached_discipline_milestones, reached_milestones,
+                    week_start, weekly_progress)
 from .journey import uses_metric
 from .schedule import in_quiet_hours, scheduled_refresh_interval
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
@@ -94,6 +95,7 @@ class Dashboard:
                       'consecutive_failures': 0,
                       'celebrated_pr_ids': [], 'celebrated_milestones': [],
                       'milestone_shown_at': {},
+                      'celebrated_discipline_milestones': [], 'discipline_milestone_shown_at': {},
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
                       'distance_totals': {}, 'personal_records': {},
@@ -212,28 +214,53 @@ class Dashboard:
         total = data.get('totals', {}).get('Total Workouts')
         reached = reached_milestones(total, self.config.get('milestones', []),
                                      self.config.get('milestone_step', 0))
-        celebrated = set(data.get('celebrated_milestones', []))
-        shown = data.get('milestone_shown_at') or {}
+        return self._still_to_celebrate(data, reached, data.get('celebrated_milestones', []),
+                                        data.get('milestone_shown_at'), now)
+
+    def pending_discipline_milestones(self, snapshot=None, now=None):
+        """Per-discipline milestones ('strength:500') still to celebrate, as pending_milestones."""
+        data = snapshot or self.snapshot()
+        reached = reached_discipline_milestones(
+            data.get('totals', {}), self.config.get('discipline_milestone_celebrate_within',
+                                                    STEP_CELEBRATION_WINDOW))
+        return self._still_to_celebrate(data, reached, data.get('celebrated_discipline_milestones', []),
+                                        data.get('discipline_milestone_shown_at'), now)
+
+    def _still_to_celebrate(self, data, reached, celebrated, shown, now):
+        celebrated, shown = set(celebrated or []), shown or {}
         now = time.time() if now is None else now
-        today = local_date(now, self._celebration_zone(data))
+        zone = self._celebration_zone(data)
+        today = local_date(now, zone)
         return [value for value in reached if value not in celebrated
-                and local_date(shown.get(str(value), now), self._celebration_zone(data)) == today]
+                and local_date(shown.get(str(value), now), zone) == today]
 
     def acknowledge_milestone(self, milestone, now=None):
-        """Record that milestone's celebration was shown.
+        """Record that milestone's celebration was shown: a total-workouts milestone (an int) or a
+        per-discipline one ('strength:500').
 
-        The first showing starts its day; after midnight it's done for good. Lower milestones still pending are done too: only the newest
-        one is celebrated (e.g. 100/250/500 all reached when first set up).
+        The first showing starts its day; after midnight it's done for good. Lower milestones still
+        pending (of the same discipline) are done too: only the newest one is celebrated (e.g.
+        100/250/500 all reached when first set up).
         """
-        if not isinstance(milestone, int) or isinstance(milestone, bool):
-            return
         now = time.time() if now is None else now
-        lower = [value for value in self.pending_milestones(now=now) if value < milestone]
+        if isinstance(milestone, int) and not isinstance(milestone, bool):
+            lower = [value for value in self.pending_milestones(now=now) if value < milestone]
+            self._acknowledge(milestone, lower, 'celebrated_milestones', 'milestone_shown_at', int, now)
+            return
+        parsed = parse_milestone_key(milestone)
+        if parsed is None:
+            return
+        lower = [key for key in self.pending_discipline_milestones(now=now)
+                 if (other := parse_milestone_key(key)) and other[0] == parsed[0] and other[1] < parsed[1]]
+        self._acknowledge(milestone, lower, 'celebrated_discipline_milestones',
+                          'discipline_milestone_shown_at', str, now)
+
+    def _acknowledge(self, milestone, lower, celebrated_key, shown_key, parse, now):
         with self._lock:
             today = local_date(now, self._celebration_zone(self._data))
-            celebrated = list(self._data['celebrated_milestones'])
-            shown = dict(self._data.get('milestone_shown_at') or {})
-            expired = [int(key) for key, at in shown.items()
+            celebrated = list(self._data.get(celebrated_key) or [])
+            shown = dict(self._data.get(shown_key) or {})
+            expired = [parse(key) for key, at in shown.items()
                        if local_date(at, self._celebration_zone(self._data)) != today]
             done = [value for value in lower + expired if value not in celebrated]
             for value in expired:
@@ -244,8 +271,8 @@ class Dashboard:
                 shown[str(milestone)] = now
             if not done and not started:
                 return
-            self._data['celebrated_milestones'] = (celebrated + done)[-256:]
-            self._data['milestone_shown_at'] = shown
+            self._data[celebrated_key] = (celebrated + done)[-256:]
+            self._data[shown_key] = shown
         try:
             self._persist_snapshot()
         except (OSError, TypeError, ValueError) as exc:
