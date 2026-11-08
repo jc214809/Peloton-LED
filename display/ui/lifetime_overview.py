@@ -13,6 +13,15 @@ COLORS = {
 }
 
 
+# A bootcamp takes its machine's colour.
+_COLOR_FAMILY = {'bike_bootcamp': 'cycling', 'tread_bootcamp': 'running', 'row_bootcamp': 'rowing'}
+
+
+def discipline_color(key):
+    """The (r, g, b) a discipline's icon is drawn in."""
+    return COLORS.get(_COLOR_FAMILY.get(key, key), (200, 200, 235))
+
+
 def draw_icon(matrix, key, left, top, color):
     """Draw a Peloton-inspired silhouette in a 26×24 pixel canvas."""
     def pixel(x, y):
@@ -139,9 +148,7 @@ class LifetimeOverviewScreen(Screen):
         for index, item in enumerate(items[:4]):
             left, top = (index % 2)*32, (index//2)*30
             key = item.get('icon','')
-            family = {'bike_bootcamp':'cycling','tread_bootcamp':'running',
-                      'row_bootcamp':'rowing'}.get(key,key)
-            color = COLORS.get(family, (200,200,235))
+            color = discipline_color(key)
             # Clear the icon area (labels are omitted so the icon can use
             # the full tile height) so counts remain steady across frames.
             for y in range(top, top+24):

@@ -59,7 +59,8 @@ Default order:
 
 ```json
 "rotation": ["latest_workouts", "username", "streaks", "versus", "total_workouts",
-             "next_milestone", "lifetime", "journey", "heatmap", "milestones", "goals"]
+             "next_milestone", "lifetime", "journey", "heatmap",
+             "milestones", "goals"]
 ```
 
 | Section | What it shows | Shown when | Time on screen |
@@ -69,11 +70,11 @@ Default order:
 | [`streaks`](#streaks--weekly-and-daily-streaks) | Current weekly streak and your best, or your daily streak on alternate passes; or a weekend reminder when this week has no workout yet | Weekly streak above 0 or daily streak of 2+ days | `overview_duration` |
 | [`versus`](#versus--household-head-to-head) | Two riders side by side for this week | 2+ riders configured under `users` | `overview_duration` (64×32: at least 12 s) |
 | [`total_workouts`](#total_workouts--lifetime-total) | Lifetime total workout count | Profile totals available | Same as `lifetime` (at least 5 s) |
-| [`next_milestone`](#next_milestone--countdown-to-the-next-milestone) | Workouts left until your next milestone | A milestone is ahead of you | `overview_duration` |
+| [`next_milestone`](#next_milestone--countdown-to-the-next-milestone) | A countdown to your next milestone, all workouts' or a discipline's (`4 MORE / 500TH / STRENGTH`), closest first | Something is within 5 workouts of its milestone | `overview_duration` per page (up to 3) |
 | [`lifetime`](#lifetime--per-discipline-totals) | Every discipline's lifetime count, with icons | Profile totals available | `overview_duration` per page (at least 5 s) |
 | [`journey`](#journey--lifetime-miles-as-a-trip) | Lifetime miles plotted as a trip between two places | Some distance has been tallied | `overview_duration` |
 | [`heatmap`](#heatmap--last-12-weeks) | One cell per day for the last 12 weeks, shaded by minutes | The full history is in the workout log and has a workout in those weeks | `overview_duration` |
-| [`milestones`](#milestones--milestone-celebration) | A trophy and confetti for a lifetime milestone you just reached, ahead of the rest of the rotation | A milestone is reached, until midnight on the day it first shows | `overview_duration` (at least 5.8 s) |
+| [`milestones`](#milestones--milestone-celebration) | A trophy and confetti for a lifetime milestone you just reached (all workouts, or one discipline's), ahead of the rest of the rotation | A milestone is reached, until midnight on the day it first shows | `overview_duration` (at least 5.8 s) |
 | [`goals`](#goals--weekly-goals) | Progress bar toward each weekly goal | `weekly_goals.workouts` and/or `.minutes` is above 0 | `overview_duration` per goal |
 
 Any section's time can be overridden with `screen_durations.<section>`; setting it to `0` turns the section off. The one exception is `total_workouts`: it has no key of its own and follows `screen_durations.lifetime`, so the two stay in step.
@@ -195,7 +196,9 @@ A full-size page with your lifetime workout count: the title in `color`, the num
 
 ![Next milestone countdown](docs/screenshots/rotation/next-milestone.png)
 
-Shows how many workouts are left (`12 TO GO`) until your next lifetime milestone, with a progress bar measured from the last milestone you reached. The target is the next value in `milestones` above your total; if there isn't one, it's the next multiple of `milestone_step` (default `100`). Setting `milestone_step` to `0` with no `milestones` left ahead hides this screen.
+A countdown in big type when you're close to a milestone: how many more (`3 MORE`), the milestone in gold with a raised ending (`2,200TH`), and what it counts (`WORKOUT`, or a discipline's name in its colour from the `lifetime` page), over a progress bar from the previous milestone. On 64x32 it reads `3 MORE / TO 2,200 / WORKOUTS`, with no bar.
+
+Your total and each discipline follow the same rule: a page appears only when it's 5 or fewer workouts away (`milestone_within`), closest first and at most 3 pages (`milestone_pages`), so most of the time this section shows nothing. Your total's milestone is the next value in `milestones` above it, else the next multiple of `milestone_step` (default `100`). A discipline's are picked automatically: 25, 50, 100, then every 100. Discipline counts are Peloton's own per-discipline totals, the ones on the `lifetime` pages, so Bike, Tread and Row Bootcamp count separately from rides, runs and rows. Options: `screen_durations.next_milestone` / `overview_duration`, per page.
 
 ### `lifetime` — per-discipline totals
 
@@ -240,6 +243,8 @@ To count only some of them, add `"disciplines"` with the names from the left col
 ![Milestone celebration](docs/screenshots/rotation/milestones.png)
 
 A gold trophy rises through falling confetti, then the milestone (`2,000` with a small raised `TH`), `WORKOUT` and the rider's name appear under it (on 64x32, beside it, with the name on top), when your lifetime total reaches a value in `milestones` (e.g. `[100, 250, 500, 1000]`). It also appears for a multiple of `milestone_step`, but only if you crossed it within your last 10 workouts, so turning the feature on doesn't celebrate something you passed years ago. It opens the rider's rotation (after the logo) wherever `milestones` sits in `rotation`, and keeps doing so for the rest of the day it first shows (until midnight in `timezone`, else the rider's Peloton time zone), so a rider who missed that cycle still sees it. If the board is off when you reach it, its day starts when the board next shows it. Only the newest milestone is celebrated: reaching several at once (e.g. setting `[100, 250, 500]` at 600 workouts) shows just 500. The page lasts its `screen_durations.milestones` / `overview_duration`, but at least 5.8 seconds (0.8 s for the trophy to rise, then the text). Celebrated milestones are saved in the dashboard cache. `milestones` can be set per rider under `users[]`.
+
+Each discipline's round numbers (25, 50, 100, then every 100, as on the `next_milestone` page) are celebrated too, with no setup: `200TH WALK`, `600TH RIDE`, `500TH STRENGTH`. Like `milestone_step`, only one crossed within that discipline's last 10 workouts counts (`discipline_milestone_celebrate_within`; `0` turns these celebrations off and keeps the total-workout ones). When more than one celebration is due on the same day (say 2,100 workouts and a 500th strength class), they take turns, one per pass through the rotation.
 
 ### `goals` — weekly goals
 
@@ -346,6 +351,9 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `milestones` | `[]` | Lifetime Total Workouts thresholds that celebrate once each, e.g. `[100, 250, 500]` |
 | `streak_reminder_day` | `5` (Saturday) | First weekday (`0` Monday … `6` Sunday) the [streak reminder](#streaks--weekly-and-daily-streaks) can replace the streak page; `null` turns it off |
 | `milestone_step` | `100` | Also count down to (and celebrate) every Nth lifetime workout, e.g. 2,200 after 2,100; `0` turns this off |
+| `milestone_within` | `5` | A `next_milestone` page appears when your total or a discipline is this many workouts or fewer from its next milestone (at least 1) |
+| `milestone_pages` | `3` | At most this many `next_milestone` pages, closest first (at least 1) |
+| `discipline_milestone_celebrate_within` | `10` | Celebrate a discipline's round number only if it was crossed within this many of that discipline's workouts; `0` never celebrates them |
 | `journey` | Columbus → Disney World, 880 mi, every workout with a distance | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880}`. Any places and distance; optional `"disciplines"` list narrows which workouts count (see [`journey`](#journey--lifetime-miles-as-a-trip)); also settable per rider under `users[]`. Optional `"start_date": "YYYY-MM-DD"` counts only miles from that day on (display timezone); changing it recounts the full history once on the next refresh |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |

@@ -149,6 +149,7 @@ def _snapshot():
 
 def test_rotation_leads_with_the_newest_milestone_only():
     dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.pending_milestones.return_value = [100, 500]
     pages = build_rotation_pages(_snapshot(), dashboard, _display(), 'Joel', 64)
     assert [name for name, _, _ in pages] == ['celebration', 'username']
@@ -166,6 +167,7 @@ def test_rotation_leads_with_the_newest_milestone_only():
 
 def test_rotation_has_no_celebration_when_none_pending_or_section_off():
     dashboard = Mock()
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.pending_milestones.return_value = []
     assert 'celebration' not in [p[0] for p in build_rotation_pages(_snapshot(), dashboard, _display(), 'J', 64)]
     dashboard.pending_milestones.return_value = [500]
@@ -177,6 +179,7 @@ def test_rotation_has_no_celebration_when_none_pending_or_section_off():
 
 def test_display_loop_acknowledges_the_celebration_after_showing_it():
     dashboard = Mock(login_required=False)
+    dashboard.pending_discipline_milestones.return_value = []
     dashboard.snapshot.return_value = {'me': {'username': 'Rider'}, **_snapshot()}
     dashboard.pending_milestones.return_value = [500]
     manager = Mock()
@@ -222,14 +225,14 @@ def test_show_and_wait_ticks_faster_for_the_confetti(monkeypatch):
 @pytest.mark.parametrize('height', [32, 64])
 @pytest.mark.parametrize('number', [600, 21, 102, 10000])
 def test_ordinal_ending_is_small_and_raised_to_the_top_of_the_digits(height, number):
-    from display.ui.celebration_screen import _CAP_HEIGHTS, _ordinal_line
+    from display.ui.celebration_screen import _CAP_HEIGHTS, ordinal_line
     initialize_fonts(height)
     digits_font = loaded_fonts['big']
     suffix_font = loaded_fonts['titles' if height >= 64 else 'info']
     for font in (digits_font, suffix_font):
         assert (font.height, font.baseline) in _CAP_HEIGHTS  # the board's fonts are all measured
     left = TEXT_LEFT_32 if height < 64 else 0
-    parts = _ordinal_line(number, [digits_font], suffix_font, 30, (255, 255, 255), left, 64)
+    parts = ordinal_line(number, [digits_font], suffix_font, 30, (255, 255, 255), left, 64)
     (_, dx, dy, _, digits), (_, sx, sy, _, suffix) = parts
     assert (digits, suffix) == (str(number), ordinal(number)[len(str(number)):])
     assert sx > dx + get_text_width(digits_font, digits) and sy < dy  # after the digits, raised
@@ -242,10 +245,10 @@ def test_ordinal_ending_is_small_and_raised_to_the_top_of_the_digits(height, num
 
 
 def test_ordinal_that_fits_no_font_is_left_off():
-    from display.ui.celebration_screen import _ordinal_line
+    from display.ui.celebration_screen import ordinal_line
     initialize_fonts(64)
-    assert _ordinal_line(10 ** 12, [loaded_fonts['big']], loaded_fonts['titles'], 41, (1, 1, 1), 0, 64) is None
-    no_suffix_font = _ordinal_line(600, [loaded_fonts['big']], None, 41, (1, 1, 1), 0, 64)
+    assert ordinal_line(10 ** 12, [loaded_fonts['big']], loaded_fonts['titles'], 41, (1, 1, 1), 0, 64) is None
+    no_suffix_font = ordinal_line(600, [loaded_fonts['big']], None, 41, (1, 1, 1), 0, 64)
     assert [part[4] for part in no_suffix_font] == ['600']
 
 
@@ -253,11 +256,11 @@ def test_ordinal_that_fits_no_font_is_left_off():
     (64, 600, '600'), (64, 2000, '2,000'), (64, 2500, '2,500'), (64, 10000, '10000'),
     (32, 2000, '2,000'), (32, 10000, '10000')])
 def test_comma_unless_dropping_it_keeps_the_big_font(height, number, digits):
-    from display.ui.celebration_screen import _ordinal_line
+    from display.ui.celebration_screen import ordinal_line
     initialize_fonts(height)
     left = TEXT_LEFT_32 if height < 64 else 0
     fonts = [loaded_fonts['big'], loaded_fonts['countdown']]
-    parts = _ordinal_line(number, fonts, loaded_fonts['info'], 30, (1, 1, 1), left, 64)
+    parts = ordinal_line(number, fonts, loaded_fonts['info'], 30, (1, 1, 1), left, 64)
     # The last part is the raised ending; the rest are the number (in pieces round a comma).
     assert ''.join(part[4] for part in parts[:-1]) == digits and parts[0][0] is loaded_fonts['big']
 

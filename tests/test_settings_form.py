@@ -214,6 +214,20 @@ def test_shared_goals_blank_is_no_goal_and_milestones_are_sorted_once_each():
     assert 'milestone_step' not in new['display']
 
 
+def test_milestone_countdown_settings_save_blank_to_default_and_reject_bad_values():
+    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, milestone_within='8',
+                                                  milestone_pages='',
+                                                  discipline_milestone_celebrate_within='0'))
+    assert problems == []
+    assert new['display']['milestone_within'] == 8
+    assert new['display']['discipline_milestone_celebrate_within'] == 0  # 0 is "never", not blank
+    assert 'milestone_pages' not in new['display']
+    for field, value in (('milestone_within', '0'), ('milestone_pages', '0'),
+                         ('discipline_milestone_celebrate_within', '2.5')):
+        _, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, **{field: value}))
+        assert problems and field in problems[0]
+
+
 def test_each_rider_has_own_goals_or_everyones():
     form = posted(TWO_RIDERS, rider_0_workouts='', rider_0_minutes='', rider_0_milestones='',
                   rider_1_workouts='4', rider_1_milestones='50 100', rider_1_username='JenRides')

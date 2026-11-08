@@ -27,7 +27,9 @@ ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'versus', 'total_worko
 
 
 class PreviewDashboard:
-    """Stands in for Dashboard: every PR and reached milestone is still pending."""
+    """Stands in for Dashboard with no celebration history: every PR is still
+    pending, and a milestone only when the board would still celebrate it
+    (crossed within the last STEP_CELEBRATION_WINDOW workouts)."""
 
     def __init__(self, milestones):
         self.milestones = milestones
@@ -36,8 +38,13 @@ class PreviewDashboard:
         return bool(summary.get('is_pr'))
 
     def pending_milestones(self, snapshot):
+        from peloton.goals import STEP_CELEBRATION_WINDOW
         total = snapshot.get('totals', {}).get('Total Workouts') or 0
-        return [m for m in self.milestones if total >= m][-1:]
+        return [m for m in self.milestones if 0 <= total - m < STEP_CELEBRATION_WINDOW][-1:]
+
+    def pending_discipline_milestones(self, snapshot):
+        from peloton.goals import reached_discipline_milestones
+        return reached_discipline_milestones(snapshot.get('totals'))[:1]
 
 
 def preview_journey(options):
@@ -148,7 +155,8 @@ def render(options):
                'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
                'pr': PrCelebrationScreen(), 'status': StatusScreen(), 'goal': GoalScreen(),
                'logo': LogoMaskScreen(), 'streak': StreakScreen(), 'versus': VersusScreen(),
-               'countdown': CountdownScreen(), 'journey': JourneyScreen(),
+               'countdown': CountdownScreen(),
+               'journey': JourneyScreen(),
                'heatmap': HeatmapScreen(), 'streak_risk': StreakRiskScreen(),
                'celebration': CelebrationScreen()}
     snapshot = load_snapshot_for(options)
@@ -164,8 +172,14 @@ def render(options):
     elif options.demo:
         rivals = [{'name': username, 'workouts': 3, 'minutes': 95, 'output_kj': 612},
                   {'name': 'Rival', 'workouts': 4, 'minutes': 80, 'output_kj': 540}]
-    pages += build_rotation_pages(snapshot, PreviewDashboard(display['milestones']),
-                                  display, username, options.height, rivals=rivals)
+    dashboard = PreviewDashboard(display['milestones'])
+    built = build_rotation_pages(snapshot, dashboard, display, username, options.height, rivals=rivals)
+    # Total and discipline celebrations take turns pass by pass; show the next pass's too.
+    following = build_rotation_pages(snapshot, dashboard, display, username, options.height,
+                                     rivals=rivals, pass_index=1)
+    if following and following[0][0] == 'celebration' and following[0] != built[0]:
+        built.insert(1, following[0])
+    pages += built
     # The board alternates weekly and daily streaks across passes; show both.
     from display.ui.streak_screen import streak_views
     expanded = []

@@ -1348,6 +1348,22 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
                  _number('milestone_step', display.get('milestone_step'), DEFAULTS['milestone_step'],
                          ' step="1" inputmode="numeric"', 'workouts'),
                  'Workouts between milestones past the list (100: 100, 200, 300…). 0 for none.')
+        + _field('milestone_within', 'Count down from',
+                 _number('milestone_within', display.get('milestone_within'),
+                         DEFAULTS['milestone_within'], ' step="1" inputmode="numeric"', 'away'),
+                 'The Next milestone page appears this many workouts or fewer from a milestone: all '
+                 'workouts\' (above), or a discipline\'s (25, 50, 100, then every 100).')
+        + _field('milestone_pages', 'At most',
+                 _number('milestone_pages', display.get('milestone_pages'),
+                         DEFAULTS['milestone_pages'], ' step="1" inputmode="numeric"', 'pages'),
+                 'Closest first, when more are that close.')
+        + _field('discipline_milestone_celebrate_within', 'Celebrate a discipline\'s within',
+                 _number('discipline_milestone_celebrate_within',
+                         display.get('discipline_milestone_celebrate_within'),
+                         DEFAULTS['discipline_milestone_celebrate_within'], ' step="1" inputmode="numeric"',
+                         'workouts'),
+                 'A discipline\'s round number gets the trophy if it was reached within this many of its '
+                 'workouts (so old ones aren\'t celebrated). 0 for never.')
         + _field('streak_reminder_day', 'Streak reminder from',
                  _options('streak_reminder_day', [('off', 'Never')] + [(str(i), d) for i, d in enumerate(WEEKDAYS)],
                           'off' if reminder is None else str(reminder)),
@@ -1383,7 +1399,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
                            + _mini('quiet_end', 'Until', _input('quiet_end', q.get('quiet_end', '05:00'), 'time'))
                            + _mini('quiet_interval', 'Check every',
                                    _unit(_input('quiet_interval', q.get('quiet_interval', 3600), 'number',
-                                                ' min="1" step="1" inputmode="numeric"'), 's'))
+                                                ' step="1" inputmode="numeric"'), 's'))
                            + '</div>')
     ), 'sun')
 

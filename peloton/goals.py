@@ -90,3 +90,93 @@ def next_milestone(total, thresholds, step=0):
         below.append(total // step * step)
     previous = max([value for value in below if value < target] or [0])
     return previous, target
+
+
+# Per-discipline milestones pick their own round targets: these, then every 100.
+DISCIPLINE_TARGETS = (25, 50, 100)
+DISCIPLINE_TARGET_STEP = 100
+# The Next Milestone page counts down to a target only this close, at most this many pages.
+UPCOMING_WITHIN = 5
+MAX_UPCOMING = 3
+
+
+def discipline_target_after(count):
+    """The first round target above count: 25, 50, 100, then every 100."""
+    for target in DISCIPLINE_TARGETS:
+        if count < target:
+            return target
+    return (count // DISCIPLINE_TARGET_STEP + 1) * DISCIPLINE_TARGET_STEP
+
+
+def discipline_target_reached(count):
+    """The highest round target at or below count, or None below the first."""
+    if count < DISCIPLINE_TARGETS[0]:
+        return None
+    if count < DISCIPLINE_TARGETS[-1]:
+        return max(target for target in DISCIPLINE_TARGETS if target <= count)
+    return count // DISCIPLINE_TARGET_STEP * DISCIPLINE_TARGET_STEP
+
+
+def _discipline_counts(totals):
+    """(slug, label, count) for each discipline in Peloton's overview totals, not the total."""
+    from .selection import normalize_discipline
+    for label, count in (totals or {}).items():
+        slug = normalize_discipline(label)
+        if (slug and slug != 'total_workouts' and isinstance(count, int)
+                and not isinstance(count, bool) and count >= 0):
+            yield slug, label, count
+
+
+def upcoming_discipline_milestones(totals, within=UPCOMING_WITHIN, limit=MAX_UPCOMING):
+    """Disciplines within `within` of their next round target, closest first (then the
+    bigger target): [{'discipline', 'label', 'count', 'target', 'previous'}], previous being the
+    target before (0 before the first), where the progress bar starts. Usually empty."""
+    upcoming = []
+    for slug, label, count in _discipline_counts(totals):
+        target = discipline_target_after(count)
+        if target - count <= within:
+            upcoming.append({'discipline': slug, 'label': label, 'count': count, 'target': target,
+                             'previous': discipline_target_reached(count) or 0})
+    upcoming.sort(key=lambda item: (item['target'] - item['count'], -item['target'], item['label']))
+    return upcoming[:limit]
+
+
+def upcoming_milestones(total, thresholds, step, totals, within=UPCOMING_WITHIN, limit=MAX_UPCOMING):
+    """Everything within `within` workouts of its next target, closest first: the total (discipline
+    None, label 'Workouts'; its target from next_milestone) and each discipline. On a tie the total
+    goes first, then the bigger target. Usually empty."""
+    upcoming = upcoming_discipline_milestones(totals, within, limit=None)
+    around = next_milestone(total, thresholds, step)
+    if around and around[1] - total <= within:
+        upcoming.append({'discipline': None, 'label': 'Workouts', 'count': total,
+                         'target': around[1], 'previous': around[0]})
+    upcoming.sort(key=lambda item: (item['target'] - item['count'], item['discipline'] is not None,
+                                    -item['target'], item['label']))
+    return upcoming[:limit]
+
+
+def milestone_key(discipline, target):
+    """'strength:500': how a per-discipline milestone is stored and acknowledged."""
+    return f'{discipline}:{target}'
+
+
+def parse_milestone_key(key):
+    """('strength', 500) from 'strength:500', or None when it isn't one."""
+    if not isinstance(key, str):
+        return None
+    discipline, _, target = key.rpartition(':')
+    if not discipline or not target.isdigit():
+        return None
+    return discipline, int(target)
+
+
+def reached_discipline_milestones(totals, within=STEP_CELEBRATION_WINDOW):
+    """Keys of per-discipline targets crossed within the last `within` workouts of that
+    discipline, so one reached long ago isn't celebrated when the feature first runs. Sorted;
+    none when within is 0."""
+    reached = []
+    for slug, _, count in _discipline_counts(totals):
+        target = discipline_target_reached(count)
+        if target is not None and count - target < within:
+            reached.append(milestone_key(slug, target))
+    return sorted(reached)

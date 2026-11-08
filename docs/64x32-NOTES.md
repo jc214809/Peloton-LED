@@ -106,6 +106,18 @@ digits (`10000`) don't fit it with one on either size. The fonts give the
 comma a whole digit-wide cell, which left a wide gap either side of it, so
 it's drawn closed up, with the same gap as between digits (`_COMMA_INK`). A name too long for its line is left off.
 
+### Next milestone (done)
+The `next_milestone` page (`CountdownScreen`; the total's or a discipline's) stacks
+`4 MORE` (10x20 and 7x13B), `500TH` (10x20, raised `TH`) and the name (6x13B,
+smaller fonts for long names, in its Lifetime colour) over a bar on 64x64.
+32 rows can't fit a second 13-pixel number line and a bar, so it reads
+`4 MORE` (7x13B), `TO 500` (6x9 and 7x13B, no ordinal ending) and the name
+(`WORKOUTS` for the total; 6x9, `TREAD BOOTCAMP` in 4x6), with no bar. Not 5x8: its narrow G and T
+left uneven gaps (`S TRENG TH`). The celebration's noun is the
+discipline's name (`STRENGTH`); `TREAD BOOTCAMP` and `BIKE BOOTCAMP` are too
+wide beside the trophy (47 columns, 4x6), so they fall back to their last
+word, `BOOTCAMP`. 64x64 fits the whole name.
+
 ### Workouts with HR but no stats (done)
 Meditation-style workouts with HR/calories but no rotating stats never
 reached the stats phase, so the bar never showed. When there are no stats and

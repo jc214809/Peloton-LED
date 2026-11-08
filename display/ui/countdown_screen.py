@@ -1,20 +1,22 @@
-"""Countdown to the next lifetime-workouts milestone, with a progress bar."""
+"""Next milestone: 3 MORE / 600TH / CYCLING, with a progress bar.
+
+One page per target within a few workouts, the total's or a discipline's.
+state: {'total': 597, 'target': 600, 'previous': 500, 'title': 'Cycling', 'discipline': 'cycling'};
+previous is where the bar starts. The name is drawn in the discipline's Lifetime-page colour
+(discipline None, the total: the default one).
+"""
 from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
+from .celebration_screen import ordinal_line
+from .lifetime_overview import discipline_color
 from .screen import Screen
 
-_GREY = graphics.Color(145, 165, 190)
-_GOLD = graphics.Color(255, 215, 0)
-_WHITE = graphics.Color(255, 255, 255)
-_ORANGE = graphics.Color(255, 140, 0)
+_WHITE = (255, 255, 255)
+_GOLD = (255, 215, 0)
+_GREY = (145, 165, 190)
 BAR_FILL = (0, 120, 255)
 BAR_EMPTY = (35, 35, 35)
-
-
-def _center(matrix, font, y, color, text):
-    graphics.DrawText(matrix, font, max((matrix.width - get_text_width(font, text)) // 2, 1),
-                      y, color, text)
 
 
 def _bar(matrix, top, height, fraction):
@@ -26,36 +28,59 @@ def _bar(matrix, top, height, fraction):
             matrix.SetPixel(x, y, *color)
 
 
+def _fonts(*keys):
+    return [loaded_fonts[key] for key in keys if loaded_fonts.get(key) is not None]
+
+
+def _draw_runs(matrix, runs, baseline):
+    """runs: [(font, text, colour, gap after)] centred as one line on a baseline."""
+    width = sum(get_text_width(font, text) + gap for font, text, _, gap in runs)
+    x = max((matrix.width - width) // 2, 0)
+    for font, text, color, gap in runs:
+        graphics.DrawText(matrix, font, x, baseline, graphics.Color(*color), text)
+        x += get_text_width(font, text) + gap
+
+
+def _fit(text, fonts, room):
+    """The first font the text fits in, else the last (smallest) one."""
+    return next((font for font in fonts if get_text_width(font, text) <= room), fonts[-1])
+
+
 class CountdownScreen(Screen):
-    """state: {'total': int, 'target': int, 'previous': int}."""
 
     def render(self, matrix, state=None):
         state = state if isinstance(state, dict) else {}
         total, target, previous = state.get('total'), state.get('target'), state.get('previous', 0)
-        if not all(isinstance(v, int) for v in (total, target, previous)) or target <= total:
+        if (not all(isinstance(v, int) and not isinstance(v, bool) for v in (total, target, previous))
+                or target <= total):
             return False
-        small = loaded_fonts.get('stats') or loaded_fonts.get('info')
-        mid = loaded_fonts.get('titles') or small
-        big = loaded_fonts.get('big') or mid
-        if small is None:
+        big, bold = _fonts('big'), _fonts('bold', 'big')
+        if not big or not bold:
             return False
-        remaining = f'{target - total:,}'
+        big, bold = big[0], bold[0]
+        name = str(state.get('title') or '').upper()
+        color = discipline_color(state.get('discipline'))
         fraction = (total - previous) / (target - previous) if target > previous else 0
+        more = [(big if matrix.height >= 64 else bold, str(target - total), _WHITE, 3 if matrix.height >= 64 else 2),
+                (bold, 'MORE', _WHITE, 0)]
+        # 32 rows: 6x9 ('countdown'), since 5x8's narrow G and T leave gaps (S TRENG TH).
+        names = _fonts('title_bold', 'titles', 'info') if matrix.height >= 64 else _fonts('countdown', 'info')
         if matrix.height < 64:
-            _center(matrix, small, 6, _GREY, f'NEXT: {target:,}')
-            # Remaining count and "TO GO" side by side.
-            gap = 3
-            width = get_text_width(big, remaining) + gap + get_text_width(small, 'TO GO')
-            x = max((matrix.width - width) // 2, 1)
-            graphics.DrawText(matrix, big, x, 19, _WHITE, remaining)
-            graphics.DrawText(matrix, small, x + get_text_width(big, remaining) + gap, 19, _ORANGE, 'TO GO')
-            _bar(matrix, 21, 3, fraction)
-            _center(matrix, small, 31, _GREY, f'{total:,} WORKOUTS')
+            # No room to stack a big 600TH: TO 600 in one line, and no bar.
+            _draw_runs(matrix, more, 11)
+            _draw_runs(matrix, [(loaded_fonts.get('countdown') or bold, 'TO', _GREY, 2),
+                                (bold, f'{target:,}', _GOLD, 0)], 22)
+            if name and names:
+                font = _fit(name, names, matrix.width - 2)
+                _draw_runs(matrix, [(font, name, color, 0)], 30)
             return True
-        _center(matrix, small, 8, _GREY, 'NEXT MILESTONE')
-        _center(matrix, mid, 18, _GOLD, f'{target:,}')
-        _center(matrix, big, 40, _WHITE, remaining)
-        _center(matrix, mid, 49, _ORANGE, 'TO GO')
-        _bar(matrix, 53, 3, fraction)
-        _center(matrix, small, 63, _GREY, f'{total:,} WORKOUTS')
+        _draw_runs(matrix, more, 16)
+        parts = ordinal_line(target, [big, bold], loaded_fonts.get('titles'), 36, graphics.Color(*_GOLD),
+                             0, matrix.width)
+        for font, x, y, line_color, text in parts or ():
+            graphics.DrawText(matrix, font, x, y, line_color, text)
+        if name and names:
+            font = _fit(name, names, matrix.width - 2)
+            _draw_runs(matrix, [(font, name, color, 0)], 50)
+        _bar(matrix, 56, 4, fraction)
         return True
