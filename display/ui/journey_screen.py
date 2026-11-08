@@ -4,17 +4,38 @@ from driver import graphics
 from display.display import get_text_width, loaded_fonts
 from .screen import Screen
 
-# 7x7 castle for the destination: gold walls, pink tower tips.
+# Destination castle: white walls, blue roof cones, gold tips and windows, a
+# gate. The 64-row page has room for the tall one; 32 rows get the short one.
+# Each layout sizes its route from the castle it draws.
 CASTLE_ROWS = (
-    "P..P..P",
-    "G.GGG.G",
-    "GGGGGGG",
-    "GG.G.GG",
-    "GGGGGGG",
-    "GGG.GGG",
-    "GGG.GGG",
+    "....Y....",
+    "....B....",
+    "...BBB...",
+    "...BBB...",
+    "..BBBBB..",
+    "...WWW...",
+    ".Y.WYW.Y.",
+    ".B.WWW.B.",
+    "BBBWWWBBB",
+    "WWBBBBBWW",
+    "WYWWWWWYW",
+    "WWWWYWWWW",
+    "WWWW.WWWW",
+    "WWW...WWW",
+    "WWW...WWW",
 )
-CASTLE_COLORS = {'G': (255, 215, 0), 'P': (255, 110, 180)}
+CASTLE_ROWS_SHORT = (
+    "....Y....",
+    "....B....",
+    "...BBB...",
+    ".Y.WYW.Y.",
+    "BBBWWWBBB",
+    "WWWWWWWWW",
+    "WYWW.WWYW",
+    "WWW...WWW",
+    "WWW...WWW",
+)
+CASTLE_COLORS = {'W': (215, 220, 235), 'B': (30, 90, 255), 'Y': (255, 200, 0)}
 START_COLOR = (0, 150, 255)
 ROUTE_COLOR = (60, 60, 70)
 DONE_COLOR = (255, 140, 0)
@@ -25,8 +46,8 @@ _WHITE = graphics.Color(255, 255, 255)
 _ORANGE = graphics.Color(255, 140, 0)
 
 
-def draw_castle(matrix, x, y):
-    for dy, row in enumerate(CASTLE_ROWS):
+def draw_castle(matrix, x, y, rows=None):
+    for dy, row in enumerate(rows or CASTLE_ROWS):
         for dx, cell in enumerate(row):
             if cell in CASTLE_COLORS:
                 matrix.SetPixel(x + dx, y + dy, *CASTLE_COLORS[cell])
@@ -98,14 +119,17 @@ class JourneyScreen(Screen):
             return self._render_short(matrix, progress, small, big, miles, status, trip)
 
         # Vertical route on the left: start at the top, castle at the bottom.
-        x, top, bottom = 5, 4, 54
+        rows = CASTLE_ROWS
+        cw, ch = len(rows[0]), len(rows)
+        x, top = max(5, cw // 2 + 1), 4
+        bottom = 62 - ch - 1
         for y in range(top, bottom + 1, 2):
             matrix.SetPixel(x, y, *ROUTE_COLOR)
         you = _route_points(top, bottom, progress['fraction'], progress['returning'])
         for y in range(top, you + 1) if not progress['returning'] else range(you, bottom + 1):
             matrix.SetPixel(x, y, *DONE_COLOR)
         _dot(matrix, x, top, START_COLOR)
-        draw_castle(matrix, x - 3, bottom + 2)
+        draw_castle(matrix, x - cw // 2, bottom + 2, rows)
         _dot(matrix, x, you, YOU_COLOR)
 
         # Text column to the right of the route.
@@ -138,13 +162,16 @@ class JourneyScreen(Screen):
             graphics.DrawText(matrix, small, right_x, 17, _GREY, right)
         graphics.DrawText(matrix, small, 2, 23, _ORANGE, _fit(small, status, w - 14))
         # Horizontal route along the bottom: start dot, castle at the right.
-        y, start, end = 27, 3, w - 12
+        rows = CASTLE_ROWS_SHORT
+        cw, ch = len(rows[0]), len(rows)
+        castle_x = w - 2 - cw
+        y, start, end = 27, 3, castle_x - 3
         for x in range(start, end + 1, 2):
             matrix.SetPixel(x, y, *ROUTE_COLOR)
         you = _route_points(start, end, progress['fraction'], progress['returning'])
         for x in range(start, you + 1) if not progress['returning'] else range(you, end + 1):
             matrix.SetPixel(x, y, *DONE_COLOR)
         _dot(matrix, start, y, START_COLOR)
-        draw_castle(matrix, end + 3, y - 4)
+        draw_castle(matrix, castle_x, 30 - ch, rows)
         _dot(matrix, you, y, YOU_COLOR)
         return True
