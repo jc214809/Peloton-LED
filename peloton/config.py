@@ -14,7 +14,7 @@ from .selection import normalize_discipline
 logger = logging.getLogger('peloton-led.config')
 
 DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration': 4,
-            'per_workout_duration': 4, 'last_workout_duration': 30, 'logo_duration': 3,
+            'per_workout_duration': 4, 'last_workout_duration': 30, 'logo_duration': 5,
             'last_workout_detail_interval': 4.0,
             'refresh_interval': 300, 'history_batch_size': 100, 'recent_fetch_size': 20,
             'performance_cache_size': 32,
