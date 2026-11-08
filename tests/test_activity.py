@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from display.display import initialize_fonts
-from display.ui.heatmap_screen import EMPTY, HeatmapScreen, heatmap_cells, level_color
+from display.ui.heatmap_screen import EMPTY, LEVELS, HeatmapScreen, heatmap_cells, level_color
 from display.ui.streak_risk_screen import StreakRiskScreen, days_left_text
 from peloton.activity import counts_for_streaks, daily_minutes, streak_week_workouts
 from peloton.config import load_config
@@ -109,7 +109,29 @@ def test_heatmap_cells_and_levels():
     assert len(cells) == 11 * 7 + 6
     assert cells[0] == (0, 0, level_color(5)) and cells[-1] == (11, 5, level_color(100))
     assert level_color(0) == EMPTY and level_color(None) == EMPTY
-    assert level_color(19) != level_color(20) != level_color(45) != level_color(90)
+    colors = [color for _, color in LEVELS]
+    assert len(colors) == 5
+    assert [level_color(m) for m in (1, 5, 6, 20, 21, 38, 39, 59, 60, 224)] == [
+        colors[0], colors[0], colors[1], colors[1], colors[2], colors[2], colors[3], colors[3], colors[4], colors[4]]
+
+
+def test_heatmap_levels_step_down_in_brightness_and_stand_out_from_empty():
+    """Pale for the shortest days to deep green for the longest, each step
+    clearly darker than the one before, and even the darkest level brighter
+    and more saturated than the grey of a day without a workout."""
+    import colorsys
+
+    def luma(rgb):
+        r, g, b = rgb
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    def saturation(rgb):
+        return colorsys.rgb_to_hsv(*(c / 255 for c in rgb))[1]
+
+    colors = [color for _, color in LEVELS]
+    assert all(luma(a) - luma(b) >= 30 for a, b in zip(colors, colors[1:]))
+    assert luma(colors[-1]) - luma(EMPTY) >= 20
+    assert saturation(EMPTY) < 0.3 and all(saturation(color) > 0.5 for color in colors)
 
 
 @pytest.mark.parametrize('height', [32, 64])

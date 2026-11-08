@@ -209,7 +209,7 @@ Options: `screen_durations.lifetime` / `overview_duration`, per page, minimum 5 
 
 ![Activity heatmap](docs/screenshots/rotation/heatmap.png)
 
-A GitHub-style grid: one column per week (oldest on the left, this week on the right), one row per day (Monday at the top), each day shaded by its workout minutes: grey for none, then darker to brighter green at under 20, 20–44, 45–89 and 90+ minutes. Days after today are left blank. It comes from the [workout log](#refresh-behavior), so it costs no API calls, and it appears once the first full-history download has finished. Options: `screen_durations.heatmap` / `overview_duration`.
+A GitHub-style grid: one column per week (oldest on the left, this week on the right), one row per day (Monday at the top), each day shaded by its workout minutes: grey for none, then pale to deep green at under 6, 6–20, 21–38, 39–59 and 60+ minutes. Days after today are left blank. It comes from the [workout log](#refresh-behavior), so it costs no API calls, and it appears once the first full-history download has finished. Options: `screen_durations.heatmap` / `overview_duration`.
 
 ### `journey` — lifetime miles as a trip
 

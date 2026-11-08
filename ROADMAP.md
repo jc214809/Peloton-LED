@@ -10,26 +10,16 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 5 Varied username facts ──────┘ share a per-discipline / per-period counting helper
 
 Icon touch-ups (by hand) ──► 4, 6 if they show discipline icons
-
-2 Heatmap colours ── independent, small
 ```
 
 - **6 before 4.** The celebration screen works today with the existing total-workout milestones, so it can ship on its own. Item 4 then adds per-discipline milestones and celebrates them with it. Doing 4 first would mean building a throwaway celebration (or none) and redoing it.
 - **4 and 5 share their counting.** Both need "how many of X, per discipline (and instructor), over all time or this month" from the workout log. Whichever goes first adds that helper to `peloton/activity.py` (where `daily_minutes` / `streak_week_workouts` already live, fed via `WorkoutLog.derived`); the second reuses it. The log already keeps `discipline` (row bootcamp, bike bootcamp etc. are their own disciplines), `instructor_id` and `start`, so neither needs a `LOG_VERSION` bump or a re-download.
 - **6 plays around the rotation** (`run_multi_user_loop` / `build_rotation_pages` in `peloton_led.py`), where the logo now plays between riders; a celebration belongs after it, so the logo still separates riders.
 - **Icon touch-ups before 4 and 6** if those pages end up showing discipline icons; otherwise independent.
-- **2** stands alone: a quick win to slot in anywhere.
 
-Suggested order: 2 (quick), 6, 4, 5. Icon touch-ups whenever Joel has time, ideally before 6.
+Suggested order: 6, 4, 5. Icon touch-ups whenever Joel has time, ideally before 6.
 
 ## Up next
-
-### 2. Heatmap: colours you can tell apart
-The activity heatmap (`LEVELS` in `display/ui/heatmap_screen.py`) uses four greens that blur together on the LED panel. Pick levels that differ clearly in hue and brightness on real hardware (e.g. a dim-to-bright ramp across two or three hues), keeping "no workout" clearly distinct from the lowest level.
-- Revisit the minute thresholds (20/45/90) at the same time if they put most days in one bucket.
-- Judge on the board, not just the PNG: LED panels compress dark shades.
-- Update `test_heatmap*` expectations for `level_color`.
-- Depends on: nothing. Needs a board to judge the colours on.
 
 ### 4. Upcoming milestones by discipline
 Show milestones that are close: "600th ride next", "5 away from 25 rowing bootcamps". Today's `next_milestone` page (`goals.next_milestone`, built in `peloton_led.py`) only counts down total workouts to the next configured milestone or `milestone_step` multiple.

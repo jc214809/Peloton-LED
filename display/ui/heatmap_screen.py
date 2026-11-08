@@ -7,8 +7,13 @@ from display.display import get_text_width, loaded_fonts
 from .screen import Screen
 
 EMPTY = (28, 28, 34)
-# Minutes thresholds and colors, light to strong.
-LEVELS = ((20, (0, 80, 40)), (45, (0, 140, 60)), (90, (30, 200, 80)), (None, (150, 255, 150)))
+# Minutes thresholds and greens: under 6 (a stretch), 6-20, 21-38, 39-59, 60+.
+# The old 20/45/90 put most of either PelotonPi rider's days in one level
+# (2026-11-07). The greens run from pale yellow-green for the shortest days to
+# deep green for the longest, shifting hue as well as brightness so neighbouring
+# levels stay apart on the panel; the darkest stays clear of EMPTY's grey.
+LEVELS = ((6, (210, 255, 120)), (21, (110, 220, 30)), (39, (20, 170, 40)), (60, (0, 120, 60)),
+          (None, (0, 70, 50)))
 _GREY = graphics.Color(145, 165, 190)
 
 
