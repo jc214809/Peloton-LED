@@ -12,6 +12,12 @@ def week_day(timezone_name=None, now=None):
     return (now or datetime.now(timezone.utc)).astimezone(zone).weekday()
 
 
+def local_date(timestamp, timezone_name=None):
+    """The calendar date of a Unix timestamp in the display timezone."""
+    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
+    return datetime.fromtimestamp(timestamp, zone).date()
+
+
 def week_start(timezone_name=None, now=None):
     """Monday 00:00 of the current week in the display timezone, and now."""
     zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc

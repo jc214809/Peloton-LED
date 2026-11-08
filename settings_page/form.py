@@ -27,7 +27,8 @@ SCREENS = (
     ('lifetime', 'Lifetime by discipline', 'All-time totals per discipline (at least 5 seconds a page).'),
     ('journey', 'Journey', 'Miles along the journey route.'),
     ('heatmap', 'Activity heatmap', 'Minutes a day over the last 12 weeks.'),
-    ('milestones', 'Milestone celebrations', 'Once, when a milestone is reached.'),
+    ('milestones', 'Milestone celebrations',
+     'A trophy for a milestone just reached, for the rest of that day. Always first, after the logo.'),
     ('goals', 'Weekly goals', "Progress toward this week's goals."),
 )
 SCREEN_NAMES = tuple(name for name, _, _ in SCREENS)

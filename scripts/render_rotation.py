@@ -110,6 +110,9 @@ def frame_times(name, state, duration, detail_interval, height=64):
     if name == 'pr':
         from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS
         return [0.5, BURST_SECONDS + SETTLE_SECONDS + 0.5]
+    if name == 'celebration':
+        from display.ui.celebration_screen import INTRO_SECONDS
+        return [0.3, INTRO_SECONDS + 0.7]
     return [0.5]
 
 
@@ -121,6 +124,7 @@ def render(options):
     from display.ui.lifetime_overview import LifetimeOverviewScreen
     from display.ui.logo_mask_screen import LogoMaskScreen
     from display.ui.pr_celebration import PrCelebrationScreen
+    from display.ui.celebration_screen import CelebrationScreen
     from display.ui.status_screen import StatusScreen
     from display.ui.streak_screen import StreakScreen
     from display.ui.versus_screen import VersusScreen
@@ -145,7 +149,8 @@ def render(options):
                'pr': PrCelebrationScreen(), 'status': StatusScreen(), 'goal': GoalScreen(),
                'logo': LogoMaskScreen(), 'streak': StreakScreen(), 'versus': VersusScreen(),
                'countdown': CountdownScreen(), 'journey': JourneyScreen(),
-               'heatmap': HeatmapScreen(), 'streak_risk': StreakRiskScreen()}
+               'heatmap': HeatmapScreen(), 'streak_risk': StreakRiskScreen(),
+               'celebration': CelebrationScreen()}
     snapshot = load_snapshot_for(options)
     username = options.username or (snapshot.get('me') or {}).get('username') or 'Rider'
     pages = [('logo', None, 1.0)]

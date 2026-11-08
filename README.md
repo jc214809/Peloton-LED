@@ -73,7 +73,7 @@ Default order:
 | [`lifetime`](#lifetime--per-discipline-totals) | Every discipline's lifetime count, with icons | Profile totals available | `overview_duration` per page (at least 5 s) |
 | [`journey`](#journey--lifetime-miles-as-a-trip) | Lifetime miles plotted as a trip between two places | Some distance has been tallied | `overview_duration` |
 | [`heatmap`](#heatmap--last-12-weeks) | One cell per day for the last 12 weeks, shaded by minutes | The full history is in the workout log and has a workout in those weeks | `overview_duration` |
-| [`milestones`](#milestones--milestone-celebration) | Celebration for a lifetime milestone you just reached | A milestone is reached and not yet celebrated | `overview_duration` |
+| [`milestones`](#milestones--milestone-celebration) | A trophy and confetti for a lifetime milestone you just reached, ahead of the rest of the rotation | A milestone is reached, until midnight on the day it first shows | `overview_duration` (at least 5.8 s) |
 | [`goals`](#goals--weekly-goals) | Progress bar toward each weekly goal | `weekly_goals.workouts` and/or `.minutes` is above 0 | `overview_duration` per goal |
 
 Any section's time can be overridden with `screen_durations.<section>`; setting it to `0` turns the section off. The one exception is `total_workouts`: it has no key of its own and follows `screen_durations.lifetime`, so the two stay in step.
@@ -239,7 +239,7 @@ To count only some of them, add `"disciplines"` with the names from the left col
 
 ![Milestone celebration](docs/screenshots/rotation/milestones.png)
 
-A gold `MILESTONE` card that appears **once** when your lifetime total reaches a value in `milestones` (e.g. `[100, 250, 500, 1000]`). It also appears for a multiple of `milestone_step`, but only if you crossed it within your last 10 workouts, so turning the feature on doesn't celebrate something you passed years ago. Celebrated milestones are saved in the dashboard cache. `milestones` can be set per rider under `users[]`.
+A gold trophy rises through falling confetti, then the milestone (`2,000` with a small raised `TH`), `WORKOUT` and the rider's name appear under it (on 64x32, beside it, with the name on top), when your lifetime total reaches a value in `milestones` (e.g. `[100, 250, 500, 1000]`). It also appears for a multiple of `milestone_step`, but only if you crossed it within your last 10 workouts, so turning the feature on doesn't celebrate something you passed years ago. It opens the rider's rotation (after the logo) wherever `milestones` sits in `rotation`, and keeps doing so for the rest of the day it first shows (until midnight in `timezone`, else the rider's Peloton time zone), so a rider who missed that cycle still sees it. If the board is off when you reach it, its day starts when the board next shows it. Only the newest milestone is celebrated: reaching several at once (e.g. setting `[100, 250, 500]` at 600 workouts) shows just 500. The page lasts its `screen_durations.milestones` / `overview_duration`, but at least 5.8 seconds (0.8 s for the trophy to rise, then the text). Celebrated milestones are saved in the dashboard cache. `milestones` can be set per rider under `users[]`.
 
 ### `goals` — weekly goals
 

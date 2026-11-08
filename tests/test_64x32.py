@@ -151,10 +151,8 @@ def test_32_row_two_line_discipline_name_clears_the_count():
     assert len(gaps) == 2 and gaps[-1] >= 3
 
 
-@pytest.mark.parametrize('state', [
-    {'title': 'Weekly Goal', 'current': 2, 'target': 5, 'unit': 'workouts'},
-    {'title': 'Milestone', 'current': 2000, 'target': 2000, 'unit': 'Total Workouts', 'milestone': True}])
-def test_32_row_goal_screens_say_what_they_count(state):
+def test_32_row_goal_screen_says_what_it_counts():
+    state = {'title': 'Weekly Goal', 'current': 2, 'target': 5, 'unit': 'workouts'}
     from display.display import loaded_fonts, get_text_width
     from display.ui.goal_screen import GoalScreen
     matrix = ImageMatrix(height=32)
@@ -166,8 +164,8 @@ def test_32_row_goal_screens_say_what_they_count(state):
     bands = [[lit[0]]]
     for y in lit[1:]:
         (bands[-1].append(y) if y - bands[-1][-1] == 1 else bands.append([y]))
-    # Title, value, unit (and the progress bar for weekly goals).
-    assert len(bands) == (3 if state.get('milestone') else 4)
+    # Title, value, unit and the progress bar.
+    assert len(bands) == 4
     assert bands[-1][-1] <= 31
 
 

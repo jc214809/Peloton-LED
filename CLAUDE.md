@@ -79,6 +79,8 @@ For Sixel support in the emulator (optional): `brew install libsixel` on macOS.
 3. Registers screens with `ScreenManager`, shows a startup logo, then enters the display loop
 4. The loop cycles: logo → username → recent workout disciplines → all-time discipline totals
 
+A reached milestone (`dashboard.pending_milestones`) is celebrated by `display/ui/celebration_screen.py` (`CelebrationScreen`: confetti and a rising trophy, then the number with a small raised ordinal ending (`_ordinal_line`; `_CAP_HEIGHTS` lines it up and `_COMMA_INK` closes up the comma in `2,000`, both measured once since the Pi's fonts can't be measured by drawing), or a headline / noun / subtitle, confetti kept off the text; 20 fps via `frame_seconds`, which `show_and_wait` honours; `ordinal`, `milestone_noun` for item 4's per-discipline milestones). `build_rotation_pages` puts it first, whatever the `milestones` section's place, and only the newest pending one; `acknowledge_milestone` retires older pending ones and records the first showing in the cache's `milestone_shown_at`; it keeps showing until midnight that day (`goals.local_date` in `display.timezone`, else the profile's, else UTC), then moves to `celebrated_milestones`.
+
 `run_multi_user_loop` plays the logo (`display.logo_duration`, 0 = never) before each rider's rotation except the first one after start-up, so a single-rider board shows it once per cycle.
 
 The loop is intentionally network-free after startup — all data is prefetched before `run_display_loop()` is called.

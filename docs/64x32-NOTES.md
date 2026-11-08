@@ -92,6 +92,19 @@ couldn't tell workouts from minutes, and the milestone showed `2,000` alone.
 The weekly goal now moves up (title baseline 6, value 16) to fit the unit
 (`WORKOUTS` / `MINUTES`) between the value and the progress bar. The
 milestone adds `TOTAL WORKOUTS` in gold under the number, as on 64x64.
+(The milestone card has since become the celebration screen; see below.)
+
+### Milestone celebration (done)
+64x64 stacks an 18x16 trophy over three lines: the number (10x20) with a
+small raised `TH` (5x8, its top level with the digits'), `WORKOUT` (5x8)
+and the rider's name (5x8). 32 rows have no room to stack, so a 12x10
+trophy sits on the left and the three lines are centred in the columns to
+its right: the name on top (4x6), the number (7x13B) with a raised `TH`
+(4x6), and `WORKOUT` (4x6). The number has a comma (`2,000`) like the
+board's other totals, except when dropping it keeps the big font: five
+digits (`10000`) don't fit it with one on either size. The fonts give the
+comma a whole digit-wide cell, which left a wide gap either side of it, so
+it's drawn closed up, with the same gap as between digits (`_COMMA_INK`). A name too long for its line is left off.
 
 ### Workouts with HR but no stats (done)
 Meditation-style workouts with HR/calories but no rotating stats never
