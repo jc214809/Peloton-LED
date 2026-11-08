@@ -38,7 +38,8 @@ SCREENS = (
 # The Milestones card's countdown settings; blank is the app's default.
 MILESTONE_KEYS = ('milestone_within', 'milestone_pages')
 # Settings that are gone; saving the page tidies them out of an old config.
-RETIRED_DISPLAY_KEYS = ('discipline_milestone_celebrate_within',)
+# compact_workout_pages and last_workout_duration went with the two-page 64x32 workout layout.
+RETIRED_DISPLAY_KEYS = ('discipline_milestone_celebrate_within', 'compact_workout_pages', 'last_workout_duration')
 SCREEN_NAMES = tuple(name for name, _, _ in SCREENS)
 # Screens timed by another one's setting rather than their own.
 SHARED_DURATION = {'total_workouts': 'lifetime'}
@@ -74,9 +75,6 @@ PANEL_FIELDS = (
 )
 SIZE_KEYS = ('rows', 'cols')
 SWITCH_KEYS = ('show_refresh', 'no_hardware_pulse')
-# Posted beside the Compact workout pages switch, which the page shows only on a 64x32 panel: without
-# it the switch wasn't on the page, so the saved value stays (an unticked switch posts nothing).
-COMPACT_SHOWN = 'compact_workout_pages_shown'
 # Rotation's choices: --led-pixel-mapper values. A saved one not here is offered as it is.
 ROTATIONS = (('Rotate:180', 'Upside down (Rotate:180)'), ('Rotate:90', 'A quarter turn (Rotate:90)'),
              ('Rotate:270', 'Three quarters (Rotate:270)'), ('Mirror:H', 'Mirrored left to right (Mirror:H)'),
@@ -114,12 +112,6 @@ def duration_fallback(display, name):
     """What a screen's blank time is: the display setting the app falls back to."""
     key = {'latest_workouts': 'last_workout_duration', 'username': 'duration'}.get(name, 'overview_duration')
     return display.get(key, DEFAULTS[key])
-
-
-def compact_pages(display, rows):
-    """Whether workouts show as two still pages (64x32 with compact_workout_pages), the one case where
-    Latest workouts' own time is the page time; otherwise each page lasts every stat once."""
-    return rows < 64 and bool(display.get('compact_workout_pages'))
 
 
 def board_rows(matrix):
@@ -203,8 +195,6 @@ def apply_form(config, form):
     set_or_drop(display, 'username', 'username', str)
     display['font'] = one('font', display.get('font', DEFAULTS['font']))
     display['color'] = one('color', display.get('color', DEFAULTS['color']))
-    if one(COMPACT_SHOWN):
-        display['compact_workout_pages'] = checked('compact_workout_pages')
     reminder = one('streak_reminder_day', str(STREAK_REMINDER_DEFAULT))
     display['streak_reminder_day'] = None if reminder == 'off' else _number(reminder)
 
@@ -218,6 +208,7 @@ def apply_form(config, form):
         if name in SHARED_DURATION or f'duration_{name}' not in form:
             continue
         set_or_drop(durations, name, f'duration_{name}')
+    durations.pop('latest_workouts', None)  # each workout page lasts every stat once: no time of its own
     display['screen_durations'] = durations
     for key, _, _ in TIMING:
         set_or_drop(display, key, key)
@@ -288,7 +279,7 @@ def apply_form(config, form):
     labels = {name: label for name, label, _ in SCREENS}
     rows = board_rows(new.get('matrix'))
     durations = display['screen_durations']
-    for name in display['rotation']:
+    for name in SCREEN_NAMES:  # switched off too: a saved time is never under its screen's need
         least = least_seconds(name, rows)
         value = durations.get(name)
         if isinstance(value, (int, float)) and not isinstance(value, bool) and value < least:

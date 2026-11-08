@@ -155,8 +155,7 @@ Every discipline then adds the graph and zone bar if they're available.
 Options:
 
 - `last_workout_detail_interval` (default `4`): seconds per intro/stat frame.
-- `screen_durations.latest_workouts` / `last_workout_duration`: only used with `compact_workout_pages`, as each compact page's time (the settings page shows its box only then). To hide the section, leave it out of `rotation`.
-- `compact_workout_pages` (64×32 only, default `false`): use the older layout of two static pages per workout instead of rotating stats.
+- Each workout page lasts exactly one pass through its stats, so it has no time setting of its own. To hide the section, leave it out of `rotation`.
 - `timezone`: decides which calendar day counts as "most recent".
 - `recent_fetch_size` (default `20`): workouts read per refresh. The board reads more pages only when the latest day continues past them.
 
@@ -291,7 +290,7 @@ Set `brightness_schedule` to `null` to retain command-line brightness, or use a 
 }
 ```
 
-Times use the configured/profile timezone and brightness ranges from 1 through 100. On 32-row panels, `compact_workout_pages: true` switches back to the older two-page compact workout layout in place of the rotating one.
+Times use the configured/profile timezone and brightness ranges from 1 through 100.
 
 Set `refresh_schedule` to poll Peloton less often overnight, when nobody's likely to be working out:
 
@@ -333,7 +332,6 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `color` | white | Text colour for your name and the per-discipline pages: white, gold, red, disney_blue (blue on the settings page), or down (a darker red, kept for older configs) |
 | `duration` | 4 | Username screen seconds |
 | `overview_duration` | 4 | Per-discipline and PR screen seconds |
-| `last_workout_duration` | 30 | Only used with `compact_workout_pages`, as each compact page's time. Normal workout pages are timed by `last_workout_detail_interval` (see below) |
 | `last_workout_detail_interval` | 4 | Seconds each stat (and the intro) holds for during the workout screen's rotation; the graph and zone bar get one second more |
 | `logo_duration` | 5 | Logo seconds, at start-up and between riders (above 0) |
 | `show_logo` | `true` | `false` hides the logo at start-up and between riders |
@@ -357,11 +355,10 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `journey` | Columbus → Disney World, 880 mi, every workout with a distance | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880}`. Any places and distance; optional `"disciplines"` list narrows which workouts count (see [`journey`](#journey--lifetime-miles-as-a-trip)); also settable per rider under `users[]`. Optional `"start_date": "YYYY-MM-DD"` counts only miles from that day on (display timezone); changing it recounts the full history once on the next refresh |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |
-| `compact_workout_pages` | `false` | On 32-row panels, use the older two-page compact workout layout instead of the rotating one |
 
 `rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `heatmap`, `milestones`, `goals`, each at most once. See [Screens and rotation](#screens-and-rotation) for what each one shows. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `heatmap`, `milestones`, `goals` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
 
-Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds, with one extra second for the graph and the zone bar. The page lasts exactly that long (`last_workout_detail_interval * (1 + stat count)`, plus 1 s per graph or zone bar), so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. `last_workout_duration` (or `screen_durations.latest_workouts`) only sets the page length with `compact_workout_pages` on 32-row panels, where pages are static; `0` still disables the section.
+Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds, with one extra second for the graph and the zone bar. The page lasts exactly that long (`last_workout_detail_interval * (1 + stat count)`, plus 1 s per graph or zone bar), so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. The two-page "compact" 64×32 layout is gone: an older config's `compact_workout_pages`, `last_workout_duration` and `screen_durations.latest_workouts` still load and do nothing, and saving the settings page removes them.
 
 Legacy `ride` and `park` font names map to `discipline`. `per_workout_duration` is accepted for older configs but is not used in the current rotation.
 
@@ -395,7 +392,6 @@ Each refresh saves Peloton's output personal-records table (one record per disci
     "color": "white",
     "duration": 9,
     "overview_duration": 4,
-    "last_workout_duration": 15,
     "last_workout_detail_interval": 4,
     "logo_duration": 5,
     "logo_path": null,
@@ -405,10 +401,9 @@ Each refresh saves Peloton's output personal-records table (one record per disci
     "history_batch_size": 100,
     "performance_cache_size": 32,
     "rotation": ["username", "latest_workouts", "total_workouts", "lifetime", "milestones", "goals"],
-    "screen_durations": { "latest_workouts": 15, "username": 9, "lifetime": 5, "milestones": 5.8, "goals": 4 },
+    "screen_durations": { "username": 9, "lifetime": 5, "milestones": 5.8, "goals": 4 },
     "brightness_schedule": null,
-    "refresh_schedule": null,
-    "compact_workout_pages": false
+    "refresh_schedule": null
   }
 }
 ```

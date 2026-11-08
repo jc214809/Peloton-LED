@@ -1,7 +1,7 @@
 # display/ui/last_workout_screen.py
 
 import re
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from driver import graphics
 from display.display import get_text_width, loaded_fonts
@@ -167,103 +167,9 @@ def _wrap_two_lines(font, text: str, max_px: int) -> List[str]:
     return [line1]
 
 
-def _middle_stats(summary: dict) -> List[Tuple[Optional[str], Optional[str]]]:
-    """Return discipline-specific stat pairs for the middle of the screen."""
-    disc = (summary.get("discipline") or "").strip().lower()
-
-    if any(d in disc for d in ("cycling", "bike")):
-        output = summary.get("total_output_kj")
-        strive = summary.get("strive_score")
-        spd = summary.get("avg_speed")
-        spd_unit = summary.get("avg_speed_unit") or ""
-        cad = summary.get("avg_cadence")
-        res = summary.get("avg_resistance")
-        dist_val = summary.get("distance")
-        dist_unit = summary.get("distance_unit") or ""
-        return [
-            (
-                f"{_whole(output)} kj" if isinstance(output, (int, float)) else None,
-                f"{_fmt_strive(strive)} pts" if isinstance(strive, (int, float)) else None,
-            ),
-            (
-                f"{spd:.1f} {spd_unit}" if isinstance(spd, (int, float)) else None,
-                f"{_whole(cad)} rpm" if isinstance(cad, (int, float)) else None,
-            ),
-            (
-                f"{_whole(res)}% res" if isinstance(res, (int, float)) else None,
-                _fmt_distance(dist_val, dist_unit) if isinstance(dist_val, (int, float)) else None,
-            ),
-        ]
-    if any(d in disc for d in ("running", "walking", "outdoor", "tread", "hiking")):
-        dist_val = summary.get("distance")
-        dist_unit = summary.get("distance_unit") or ""
-        pace_val = summary.get("avg_pace")
-        elevation = summary.get("elevation")
-        elevation_unit = summary.get("elevation_unit") or ""
-        incline = summary.get("avg_incline")
-        strive = summary.get("strive_score")
-        output = _fmt_output(summary.get("total_output_kj"))
-        rows = [(
-            _fmt_distance(dist_val, dist_unit) if isinstance(dist_val, (int, float)) else None,
-            f"{_fmt_pace(pace_val)}{(summary.get('avg_pace_unit') or '').replace('min', '')}" if pace_val is not None else None,
-        )]
-        if strive is not None or output:
-            rows.append((
-                f"{_fmt_strive(strive)} pts" if isinstance(strive, (int, float)) else None,
-                output,
-            ))
-        if elevation is not None or incline is not None:
-            rows.append((
-                f"{elevation:g} {elevation_unit}" if isinstance(elevation, (int, float)) else None,
-                f"{incline:.1f}% inc" if isinstance(incline, (int, float)) else None,
-            ))
-        return rows
-    if "rowing" in disc or disc.startswith("row "):
-        dist_val = summary.get("distance")
-        dist_unit = summary.get("distance_unit") or ""
-        spm_val = summary.get("avg_stroke_rate")
-        split_val = summary.get("row_split_sec_per_500m")
-        strive = summary.get("strive_score")
-        return [
-            (
-                _fmt_output(summary.get("total_output_kj")),
-                f"{_fmt_strive(strive)} pts" if isinstance(strive, (int, float)) else None,
-            ),
-            (
-                f"{_whole(dist_val)}{dist_unit}" if isinstance(dist_val, (int, float)) else None,
-                f"{_whole(spm_val)} spm" if isinstance(spm_val, (int, float)) else None,
-            ),
-            (
-                _fmt_split(split_val) + "/500" if split_val else None,
-                None,
-            ),
-        ]
-    strive = summary.get("strive_score")
-    hr_max = summary.get("hr_max")
-    distance = summary.get("distance")
-    distance_unit = summary.get("distance_unit") or ""
-    avg_output = summary.get("avg_output_w")
-    rows = []
-    if strive is not None or hr_max is not None:
-        rows.append((
-            f"{_fmt_strive(strive)} pts" if isinstance(strive, (int, float)) else None,
-            f"{_whole(hr_max)} max" if isinstance(hr_max, (int, float)) else None,
-        ))
-    if distance is not None or avg_output is not None:
-        rows.append((
-            _fmt_distance(distance, distance_unit) if isinstance(distance, (int, float)) else None,
-            f"{_whole(avg_output)}W" if isinstance(avg_output, (int, float)) else None,
-        ))
-    return rows
-
-
 def _stat_details(summary: dict) -> List[dict]:
     """Discipline-specific stat values with spelled-out labels, one detail per
-    stat, for the rotating single-item display. Mirrors _middle_stats' field
-    selection and discipline routing exactly, but builds a full label instead
-    of the abbreviated unit that fits _middle_stats' packed side-by-side rows
-    (e.g. "output" instead of "kj") since only one detail is shown at a time.
-    """
+    stat, for the rotating single-item display (e.g. "output", not "kj")."""
     disc = (summary.get("discipline") or "").strip().lower()
     details = []
 
@@ -720,33 +626,8 @@ class LastWorkoutScreen(Screen):
 
         discipline = (summary.get("discipline") or "Workout").strip()
         w = matrix.width
-        if matrix.height < 64 and 'compact_page' not in summary:
-            return self._render_short(matrix, summary, discipline, title_font, text_font, stat_font)
         if matrix.height < 64:
-            # Legacy two-page layout, kept for display.compact_workout_pages.
-            if summary.get('compact_page') == 1:
-                stats = []
-                for left, right in _middle_stats(summary):
-                    stats.extend(value for value in (left, right) if value)
-                hr = summary.get('hr_avg')
-                calories = summary.get('calories')
-                if isinstance(hr, (int, float)):
-                    stats.append(f'{_whole(hr)} avg HR')
-                if isinstance(calories, (int, float)):
-                    stats.append(f'{_whole(calories)} cal')
-                lines = [(7, 'WORKOUT STATS', _disc_color(discipline))]
-                lines += [(16 + index * 8, value, _WHITE)
-                          for index, value in enumerate(stats[:2])]
-            else:
-                lines = [
-                    (7, str(summary.get('discipline') or 'Workout'), _disc_color(discipline)),
-                    (16, _fmt_duration(summary.get('duration_min')), _BLUE),
-                    (26, title_without_length(summary.get('title')), _WHITE),
-                ]
-            for y, text, color in lines:
-                text = _truncate(text_font, text, w - (10 if summary.get('login_required') and y == 27 else 4))
-                graphics.DrawText(matrix, text_font, 2, y, color, text)
-            return True
+            return self._render_short(matrix, summary, discipline, title_font, text_font, stat_font)
 
         _BOTTOM_Y = 61
         _STAT_STEP = 6

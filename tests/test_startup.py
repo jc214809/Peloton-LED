@@ -660,16 +660,6 @@ def test_scheduled_brightness_handles_day_and_overnight_ranges():
     assert scheduled_brightness(display, datetime(2026, 1, 1, 23, 0)) == 80
 
 
-def test_32_row_optional_second_workout_page_renders_stats():
-    matrix = ImageMatrix(height=32)
-    initialize_fonts(32)
-    summary = {'discipline': 'Cycling', 'compact_page': 1, 'duration_min': 20,
-               'total_output_kj': 200, 'strive_score': 12, 'hr_avg': 130,
-               'calories': 250}
-    assert LastWorkoutScreen().render(matrix, summary)
-    assert matrix.image.getbbox() is not None
-
-
 def test_lifetime_icon_page_renders_real_pixels():
     from peloton.totals import lifetime_overview_pages
 

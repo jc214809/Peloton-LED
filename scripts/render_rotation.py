@@ -97,7 +97,7 @@ def load_snapshot_for(options):
 
 def frame_times(name, state, duration, detail_interval, height=64):
     """Seconds into the page at which to capture a frame."""
-    if name == 'last_workout' and state.get('compact_page') is None:
+    if name == 'last_workout':
         # One frame per intro/stat, at each one's own start: graph frames hold longer.
         from display.ui.last_workout_screen import detail_hold_seconds, rotating_details
         starts, start = [0.0], detail_interval
@@ -105,9 +105,6 @@ def frame_times(name, state, duration, detail_interval, height=64):
             starts.append(start)
             start += detail_hold_seconds(detail, detail_interval)
         return [0.6 + s for s in starts if s < duration] or [0.6]
-    if name == 'last_workout':
-        count = max(1, round(duration / detail_interval))
-        return [0.6 + i * detail_interval for i in range(count)]
     if name == 'versus' and state and 'riders' in state:
         share = state.get('stat_seconds')  # 32 rows: one frame per stat
         return [0.6 + i * share for i in range(round(duration / share))] if share else [0.6]

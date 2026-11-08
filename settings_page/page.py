@@ -19,11 +19,11 @@ from self_update.update import (BETA, BETA_BRANCH, CURRENT, RELEASES, WAITING, W
 from settings_page import logo
 from settings_page.logins import RENEW_BEFORE_S, renews_at, when
 from settings_page.updates import BUSY, START_FAILED, STARTED, STEPS
-from peloton.screen_times import (FRAME_SECONDS, VERSUS_STATS, configured_seconds, least_seconds, page_seconds,
+from peloton.screen_times import (FRAME_SECONDS, VERSUS_STATS, least_seconds, page_seconds,
                                   retire_zero_times)
-from settings_page.form import (COLORS, COMPACT_SHOWN, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
+from settings_page.form import (COLORS, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
                                 SHARED_DURATION, STREAK_REMINDER_DEFAULT, SWITCH_KEYS, TIMING, TIMING_LEAST, WEEKDAYS,
-                                advanced_keys, board_rows, compact_pages, duration_fallback, milestones_text,
+                                advanced_keys, board_rows, duration_fallback, milestones_text,
                                 number_text, panel_size, riders, rotation_rows, section)
 
 # What a save says, by Settings.restart_app's outcome.
@@ -723,8 +723,6 @@ def shows_for(name, display, rows):
     (peloton.screen_times). display: the config's display over DEFAULTS."""
     t = page_seconds(display, name, rows)
     if name == 'latest_workouts':
-        if compact_pages(display, rows):
-            return f'Each workout: two still pages of {_secs(configured_seconds(display, name))}.'
         stat = display['last_workout_detail_interval']
         ride = stat * (1 + RIDE_STATS) + (stat + 1) * RIDE_CHARTS
         return (f'Each workout shows every stat once: {_secs(stat)} each (the stat time under Timing), charts '
@@ -755,7 +753,7 @@ def _screen_row(name, label, hint, on, display, rows=64):
     display: the config's display over DEFAULTS."""
     durations = section(display, 'screen_durations')
     least = least_seconds(name, rows)
-    if name == 'latest_workouts' and not compact_pages(display, rows):
+    if name == 'latest_workouts':
         # Each page lasts every stat once: no time of its own to set.
         time = '<span class="time shared" title="Every stat once, at the stat time under Timing">Every stat</span>'
     elif name in SHARED_DURATION:
@@ -1368,10 +1366,6 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     general = _section('general', 'General', 'How the board\'s pages look.', (
         _field('color', 'Text colour', _options('color', _colour_choices(merged['color']), merged['color']),
                'For your name and the per-discipline pages.')
-        + (f'<input type="hidden" name="{COMPACT_SHOWN}" value="1">'
-           + _switch('compact_workout_pages', 'Compact workout pages', merged['compact_workout_pages'],
-                     'Each workout in two still pages instead of one changing page.')
-           if _rows(matrix) < 64 else '')
     ), 'type')
 
     screen_rows = ''.join(_screen_row(name, *dict((n, (l, h)) for n, l, h in SCREENS)[name], on, merged,

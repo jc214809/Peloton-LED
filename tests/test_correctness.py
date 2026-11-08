@@ -9,7 +9,7 @@ from peloton.summaries import summarize_workout
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count
 from peloton.config import load_config, load_dotenv
 from peloton.records import is_pr_workout
-from display.ui.last_workout_screen import _fmt_pace, _fmt_split, _middle_stats, _stat_details
+from display.ui.last_workout_screen import _fmt_pace, _fmt_split, _stat_details
 from models import get_model_for_discipline
 from models.core import GeneralWorkout
 
@@ -70,7 +70,8 @@ def test_metric_pace_and_duration_fallback():
     assert summary['avg_speed_unit'] == 'km/h'
     assert summary['avg_pace'] == 6
     assert summary['avg_pace_unit'] == 'min/km'
-    assert _middle_stats(summary)[0][1] == '6:00/km'
+    assert {'label': 'avg pace', 'value': '6:00/km'}.items() <= next(
+        d for d in _stat_details(summary) if d['label'] == 'avg pace').items()
 
 
 def test_imperial_pace_and_rounding():
@@ -362,18 +363,18 @@ def test_known_disciplines_have_registered_summary_models(discipline, family):
         assert {'avg_stroke_rate', 'avg_split_pace'} <= slugs
 
 
-@pytest.mark.parametrize('discipline,expected_rows', [
-    ('Bike Bootcamp', 3), ('Tread Bootcamp', 3), ('Row Bootcamp', 3),
-    ('Strength', 2), ('Yoga', 2), ('Meditation', 2), ('Unknown Future Workout', 2),
+@pytest.mark.parametrize('discipline', [
+    'Bike Bootcamp', 'Tread Bootcamp', 'Row Bootcamp', 'Strength', 'Yoga', 'Meditation', 'Unknown Future Workout',
 ])
-def test_discipline_stat_layouts_have_safe_fallbacks(discipline, expected_rows):
+def test_discipline_stat_layouts_have_safe_fallbacks(discipline):
     summary = {'discipline': discipline, 'total_output_kj': 200, 'strive_score': 25,
                'avg_speed': 10, 'avg_speed_unit': 'mph', 'avg_cadence': 80,
                'avg_resistance': 40, 'distance': 3.1, 'distance_unit': 'mi',
                'avg_pace': 10, 'avg_pace_unit': 'min/mi', 'elevation': 100,
                'elevation_unit': 'ft', 'avg_incline': 2, 'avg_stroke_rate': 24,
                'row_split_sec_per_500m': 130, 'avg_output_w': 110, 'hr_max': 165}
-    assert len(_middle_stats(summary)) == expected_rows
+    details = _stat_details(summary)
+    assert details and all(d['label'] and d['value'] for d in details)
 
 
 @pytest.mark.parametrize('start,end,seconds,brief', [
@@ -431,11 +432,6 @@ def _stat_values(summary):
 ])
 def test_stats_match_the_peloton_apps_formats(summary, expected):
     assert _stat_values(summary) == expected
-    flat = [value for row in _middle_stats(summary) for value in row if value]
-    if 'strive score' in expected:
-        assert f"{expected['strive score']} pts" in flat
-    if 'distance' in expected:
-        assert expected['distance'] in flat
 
 
 @pytest.mark.parametrize('summary,expected', [
@@ -456,6 +452,3 @@ def test_stats_match_the_peloton_apps_formats(summary, expected):
 ])
 def test_tread_and_row_pages_show_strive_and_output(summary, expected):
     assert list(_stat_values(summary)) == expected
-    flat = [value for row in _middle_stats(summary) for value in row if value]
-    assert (f"{summary['strive_score']:.1f} pts" in flat)
-    assert any(value.endswith(' kj') for value in flat) == ('total output' in expected)

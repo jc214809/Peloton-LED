@@ -67,8 +67,8 @@ What's different from 64x64, and why:
 6. The title's second line is shortened when the login padlock or stale-data
    clock is showing, so it doesn't run under the icons.
 
-The old 32-row layout is still there when `display.compact_workout_pages` is
-`true`, so turning that on keeps the old behavior. See Open questions.
+The old two-page 32-row layout (`display.compact_workout_pages`) was removed
+on 2026-11-08 at Joel's request; an old config's setting is ignored.
 
 Code: `LastWorkoutScreen._render_short` and `rotating_details` in
 `display/ui/last_workout_screen.py`; tests in `tests/test_64x32.py`.
@@ -195,8 +195,7 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
 
 ## Open questions for Joel
 
-1. **`compact_workout_pages`**: the new 32-row layout makes this option
-   unnecessary. Remove the option and the old layout, or keep them?
+1. ~~**`compact_workout_pages`**~~: removed with the old layout (2026-11-08).
 2. **Stale-data clock over the heart:** on both 64x64 and 64x32, the clock icon
    (shown after 3 failed refreshes) sits on top of the ♥ HR. I left it alone
    because it's the same on 64x64.

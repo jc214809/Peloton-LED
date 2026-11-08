@@ -44,7 +44,6 @@ def _load(tmp_path, config):
     ({'display': {'overview_duration': -1}}, 'overview_duration must be a number above 0'),
     ({'display': {'show_logo': 'yes'}}, 'show_logo must be true or false'),
     ({'display': {'milestone_step': -5}}, 'milestone_step must be a non-negative integer'),
-    ({'display': {'compact_workout_pages': 'yes'}}, 'compact_workout_pages must be true or false'),
     ({'display': {'brightness_schedule': {'day': 80}}}, 'brightness_schedule requires'),
     ({'display': {'brightness_schedule': {'day': 0, 'night': 20, 'day_start': '07:00', 'night_start': '21:00'}}},
      'brightness day must be from 1 to 100'),

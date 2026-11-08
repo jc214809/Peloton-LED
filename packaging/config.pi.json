@@ -7,7 +7,6 @@
     "color": "white",
     "duration": 4,
     "overview_duration": 4,
-    "last_workout_duration": 30,
     "logo_duration": 5,
     "timezone": "America/New_York",
     "refresh_interval": 300,
@@ -16,10 +15,9 @@
     "performance_cache_size": 32,
     "cache_path": "/var/lib/peloton-led/dashboard-cache.json",
     "rotation": ["latest_workouts", "username", "total_workouts", "lifetime", "milestones", "goals"],
-    "screen_durations": {"latest_workouts": 30, "username": 4, "lifetime": 5, "milestones": 5.8, "goals": 4},
+    "screen_durations": {"username": 4, "lifetime": 5, "milestones": 5.8, "goals": 4},
     "weekly_goals": {"workouts": 0, "minutes": 0},
     "milestones": [],
-    "brightness_schedule": null,
-    "compact_workout_pages": false
+    "brightness_schedule": null
   }
 }

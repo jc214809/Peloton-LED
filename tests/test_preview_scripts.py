@@ -89,7 +89,6 @@ def test_frame_times_per_page_kind():
     assert len(frame_times('pr', {}, 10, 4)) == 2
     assert frame_times('username', {'details': ['a', 'b', 'c']}, 10, 4)[0] == 0.6
     assert len(frame_times('username', {'details': ['a', 'b', 'c']}, 10, 4)) == 3
-    assert frame_times('last_workout', {'compact_page': 1}, 8, 4) == [0.6, 4.6]
     assert len(frame_times('versus', {'riders': []}, 30, 4)) >= 1
     assert frame_times('last_workout', {}, 0, 4) == [0.6]
 

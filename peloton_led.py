@@ -12,7 +12,7 @@ from peloton.dashboard import Dashboard
 from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
                            week_start)
 from peloton.journey import journey_progress
-from peloton.screen_times import configured_seconds, page_seconds
+from peloton.screen_times import page_seconds
 from peloton.selection import normalize_discipline
 from peloton.instructors import top_instructors
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
@@ -62,6 +62,10 @@ def apply_scheduled_brightness(matrix, display, now=None, timezone_name=None):
         matrix.brightness = brightness
 
 
+# The "loading" / "no workouts yet" page that stands in for Latest workouts.
+STATUS_SECONDS = 2
+
+
 def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, rivals=None,
                          pass_index=0):
     """Build one rotation from configured named sections.
@@ -75,25 +79,15 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
     groups = {name: [] for name in rotation}
     # Each screen's page time comes from peloton.screen_times, as the settings page shows it. None is 0:
     # a screen that's off isn't in rotation (old configs' 0s are switched off by load_config).
-    workout_duration = configured_seconds(display, 'latest_workouts')
     detail_interval = display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)
     if 'latest_workouts' in groups:
         if snapshot['summaries']:
             for summary in snapshot['summaries']:
-                states = [summary]
-                compact = matrix_height < 64 and display.get('compact_workout_pages')
-                if compact:
-                    states = [{**summary, 'compact_page': page} for page in (0, 1)]
-                # On the full-board layout the screen intros, then cycles one
-                # stat at a time; size the page to exactly one pass so every
-                # stat shows once — no cut-offs and no wrap-around repeats.
-                if not compact:
-                    page_duration = detail_interval + stats_phase_seconds(
-                        rotating_details(summary, matrix_height), detail_interval)
-                else:
-                    page_duration = workout_duration
-                for state in states:
-                    groups['latest_workouts'].append(('last_workout', state, page_duration))
+                # The screen intros, then cycles one stat at a time; size the page to exactly
+                # one pass so every stat shows once: no cut-offs and no wrap-around repeats.
+                page_duration = detail_interval + stats_phase_seconds(
+                    rotating_details(summary, matrix_height), detail_interval)
+                groups['latest_workouts'].append(('last_workout', summary, page_duration))
                 if dashboard.should_celebrate_pr(summary):
                     # Burst + settle animation, then the card holds one interval.
                     pr_duration = PR_BURST_SECONDS + PR_SETTLE_SECONDS + detail_interval
@@ -101,7 +95,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         else:
             status = snapshot['status'] if snapshot['status'] != 'ready' else 'empty'
             groups['latest_workouts'].append(
-                ('status', status, min(workout_duration, 2)))
+                ('status', status, STATUS_SECONDS))
     if 'username' in groups:
         totals = snapshot.get('totals', {})
         total = total_workout_count(totals)

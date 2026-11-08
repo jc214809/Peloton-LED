@@ -9,7 +9,7 @@ import pytest
 
 from peloton.config import DEFAULTS, MATRIX_DEFAULTS, ROTATION_SECTIONS, load_config
 from settings_page import page
-from settings_page.form import (FORM_FIELD, SCREEN_NAMES, advanced_keys, apply_form, duration_fallback,
+from settings_page.form import (FORM_FIELD, RETIRED_DISPLAY_KEYS, SCREEN_NAMES, advanced_keys, apply_form, duration_fallback,
                                 number_text, panel_size, rotation_rows)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,8 +102,12 @@ def test_saving_the_page_unchanged_keeps_a_config_that_loads_the_same(tmp_path, 
     after.write_text(json.dumps(new))
 
     def same(loaded):
-        """The page spells some settings out: debug false, and a 0 weekly goal (none at all)."""
+        """The page spells some settings out: debug false, and a 0 weekly goal (none at all). Retired
+        settings, which do nothing, it tidies away."""
         loaded.setdefault('debug', False)
+        for key in RETIRED_DISPLAY_KEYS:
+            loaded['display'].pop(key, None)
+        loaded['display']['screen_durations'].pop('latest_workouts', None)
         for owner in [loaded['display']] + (loaded.get('users') or []):
             if 'weekly_goals' in owner:
                 owner['weekly_goals'] = {k: v for k, v in owner['weekly_goals'].items() if v}
@@ -141,10 +145,12 @@ def test_rotation_rows_list_the_rotation_first_then_the_rest_off():
 
 
 def test_screen_times_blank_falls_back_and_numbers_are_kept():
-    form = posted(TWO_RIDERS, duration_username='', duration_goals='6.5', duration_heatmap='0')
+    form = posted(TWO_RIDERS, duration_username='', duration_goals='6.5', duration_heatmap='3')
     new, problems = apply_form(TWO_RIDERS, form)
     assert problems == []
-    assert new['display']['screen_durations'] == {'latest_workouts': 15, 'goals': 6.5, 'heatmap': 0}
+    assert new['display']['screen_durations'] == {'goals': 6.5, 'heatmap': 3}
+    _, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, duration_heatmap='0'))
+    assert problems == ['Activity heatmap needs at least 1 second. To hide it, switch it off.'], 'even when off'
     assert 'duration_total_workouts' not in form  # timed by Lifetime
 
 
@@ -272,13 +278,13 @@ def test_a_board_with_a_gpio_mapping_is_not_offered_none():
 
 
 def test_display_options_and_switches():
-    form = posted(TWO_RIDERS, debug='on', compact_workout_pages='on', streak_reminder_day='off',
+    form = posted(TWO_RIDERS, debug='on', streak_reminder_day='off',
                   username='Rider', font='info', color='gold')
     new, problems = apply_form(TWO_RIDERS, form)
     assert problems == []
     assert new['debug'] is True
     d = new['display']
-    assert d['compact_workout_pages'] is True and d['streak_reminder_day'] is None
+    assert d['streak_reminder_day'] is None
     assert (d['username'], d['font'], d['color']) == ('Rider', 'info', 'gold')
     new, _ = apply_form(new, posted(new, debug=None, streak_reminder_day='0'))
     assert new['debug'] is False and new['display']['streak_reminder_day'] == 0
@@ -357,7 +363,7 @@ def test_name_and_text_is_gone_and_its_settings_live_where_they_belong():
     assert 'name="font"' not in html, 'the name screen fits its own font: the setting did nothing'
     assert 'name="streak_reminder_day"' in _card(html, 'goals')
     general = _card(html, 'general')
-    assert 'Text colour' in general and 'name="compact_workout_pages"' in general
+    assert 'Text colour' in general
     assert 'Text colour' not in _card(html, 'panel')
     assert html.index('href="#general"') < html.index('href="#rotation"'), 'first of the settings'
     assert html.index('id="general"') < html.index('id="rotation"')
@@ -391,15 +397,14 @@ def test_the_text_colours_are_four_plus_an_old_configs_own():
     assert '<option value="down" selected>Red (darker)</option>' in select
 
 
-def test_compact_pages_show_only_on_64x32_and_a_64x64_save_keeps_them():
-    big = {**TWO_RIDERS, 'matrix': {**TWO_RIDERS['matrix'], 'rows': 64},
-           'display': {**TWO_RIDERS['display'], 'compact_workout_pages': True}}
-    assert 'compact_workout_pages' not in page.settings_page(big)
-    new, problems = apply_form(big, posted(big))
-    assert not problems and new['display']['compact_workout_pages'] is True, 'not on the page: kept'
-    small = {**big, 'matrix': TWO_RIDERS['matrix']}
-    new, _ = apply_form(small, posted(small, compact_workout_pages=None))
-    assert new['display']['compact_workout_pages'] is False, 'on the page and unticked: off'
+def test_compact_workout_pages_are_gone_and_a_save_tidies_their_settings_away():
+    old = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'compact_workout_pages': True,
+                                     'last_workout_duration': 20}}
+    assert 'compact' not in page.settings_page(old).lower()
+    new, problems = apply_form(old, posted(old))
+    assert problems == []
+    assert 'compact_workout_pages' not in new['display'] and 'last_workout_duration' not in new['display']
+    assert 'latest_workouts' not in new['display']['screen_durations']
 
 
 def test_the_font_a_config_has_is_kept_though_the_page_no_longer_shows_it():

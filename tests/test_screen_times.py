@@ -147,16 +147,13 @@ def _rotation_row(html, name):
     return html.split(f'value="{name}">', 1)[1].split('</li>', 1)[0]
 
 
-def test_latest_workouts_has_no_seconds_box_unless_its_pages_are_compact():
-    config = {'matrix': {'rows': 32, 'cols': 64}, 'display': {'screen_durations': {'latest_workouts': 15}}}
+@pytest.mark.parametrize('rows', [32, 64])
+def test_latest_workouts_has_no_seconds_box_its_pages_last_every_stat_once(rows):
+    config = {'matrix': {'rows': rows, 'cols': 64},
+              'display': {'screen_durations': {'latest_workouts': 15}, 'compact_workout_pages': True}}
     row = _rotation_row(page.settings_page(config), 'latest_workouts')
     assert 'name="duration_latest_workouts"' not in row and 'Every stat' in row
     assert 'every stat once: 4 s each' in row
-    config['display']['compact_workout_pages'] = True
-    row = _rotation_row(page.settings_page(config), 'latest_workouts')
-    assert 'name="duration_latest_workouts"' in row and 'two still pages of 15 s' in row
-    new, problems = apply_form(config, {**posted(config), 'compact_workout_pages_shown': ['1']})
-    assert problems == [] and new['display']['screen_durations']['latest_workouts'] == 15
 
 
 def test_each_seconds_box_starts_at_what_its_screen_needs():

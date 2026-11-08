@@ -33,8 +33,7 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'streak_reminder_day': 5,
             'journey': DEFAULT_JOURNEY,
             'brightness_schedule': None,
-            'refresh_schedule': None,
-            'compact_workout_pages': False}
+            'refresh_schedule': None}
 
 # Panel/driver settings, one per --led-* flag (flag name minus "led-"). Flags win.
 MATRIX_DEFAULTS = {'rows': 64, 'cols': 64, 'chain': 1, 'parallel': 1, 'pwm_bits': 11,
@@ -321,8 +320,6 @@ def validate_config(config, path='config.json'):
         value = display.get(key)
         if isinstance(value, bool) or not isinstance(value, int) or value < lowest:
             raise ValueError(f'{path}: display.{key} must be a whole number of at least {lowest}')
-    if not isinstance(display.get('compact_workout_pages'), bool):
-        raise ValueError(f'{path}: display.compact_workout_pages must be true or false')
     schedule = display.get('brightness_schedule')
     if schedule is not None:
         required = {'day', 'night', 'day_start', 'night_start'}
