@@ -1,5 +1,7 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import stat
 import requests
 
@@ -141,15 +143,69 @@ def test_pr_acknowledgement_survives_restart(tmp_path):
     assert not restarted.should_celebrate_pr(restored)
 
 
-def test_milestone_acknowledgement_survives_restart(tmp_path):
-    dashboard, _, token = setup_dashboard(tmp_path)
-    dashboard.config['milestones'] = [100, 1000]
+def _at(text, zone='America/New_York'):
+    return datetime.fromisoformat(text).replace(tzinfo=ZoneInfo(zone)).timestamp()
+
+
+def test_milestone_celebrates_until_midnight_and_survives_restart(tmp_path):
+    config = {'milestones': [100, 1000], 'timezone': 'America/New_York'}
+    dashboard, _, token = setup_dashboard(tmp_path, config)
     dashboard.refresh()
     assert dashboard.pending_milestones() == [100, 1000]
-    dashboard.acknowledge_milestone(100)
-    assert dashboard.pending_milestones() == [1000]
-    restarted = Dashboard(token, {'milestones': [100, 1000]})
-    assert restarted.pending_milestones() == [1000]
+    # Showing the newest at 7 am retires the older one at once; the newest keeps its day.
+    dashboard.acknowledge_milestone(1000, now=_at('2026-11-07T07:00'))
+    assert dashboard.pending_milestones(now=_at('2026-11-07T21:00')) == [1000]
+    restarted = Dashboard(token, dict(config))
+    assert restarted.pending_milestones(now=_at('2026-11-07T23:59')) == [1000]
+    # Showing it again doesn't restart its day.
+    restarted.acknowledge_milestone(1000, now=_at('2026-11-07T23:00'))
+    assert restarted.pending_milestones(now=_at('2026-11-08T00:00')) == []
+    # The next acknowledgement after midnight moves it to the done list for good.
+    restarted.acknowledge_milestone(1000, now=_at('2026-11-08T00:01'))
+    after = Dashboard(token, dict(config)).snapshot()
+    assert after['celebrated_milestones'] == [100, 1000] and after['milestone_shown_at'] == {}
+
+
+def test_milestone_day_ends_at_the_boards_midnight_not_utcs(tmp_path):
+    # 8 pm in New York is already tomorrow in UTC; the celebration still runs to New York's midnight.
+    dashboard, _, _ = setup_dashboard(tmp_path, {'milestones': [100], 'timezone': 'America/New_York'})
+    dashboard.refresh()
+    dashboard.acknowledge_milestone(100, now=_at('2026-11-07T20:00'))
+    assert dashboard.pending_milestones(now=_at('2026-11-07T23:30')) == [100]
+    assert dashboard.pending_milestones(now=_at('2026-11-08T00:30')) == []
+
+
+def test_milestone_day_uses_the_profile_zone_without_one_in_config(tmp_path):
+    dashboard, _, _ = setup_dashboard(tmp_path, {'milestones': [100]})
+    dashboard.refresh()
+    dashboard._publish(me={**dashboard.snapshot()['me'], 'timezone': 'America/Los_Angeles'})
+    # 3 pm and 5:30 pm in Los Angeles fall either side of UTC's midnight: still the same day.
+    dashboard.acknowledge_milestone(100, now=_at('2026-11-07T15:00', 'America/Los_Angeles'))
+    assert dashboard.pending_milestones(now=_at('2026-11-07T17:30', 'America/Los_Angeles')) == [100]
+    assert dashboard.pending_milestones(now=_at('2026-11-08T00:01', 'America/Los_Angeles')) == []
+
+
+def test_acknowledging_a_milestone_ignores_bad_values_and_repeat_shows(tmp_path):
+    dashboard, _, _ = setup_dashboard(tmp_path)
+    dashboard.config['milestones'] = [100]
+    dashboard.refresh()
+    for bad in (None, '100', True):
+        dashboard.acknowledge_milestone(bad)
+    assert dashboard.snapshot()['milestone_shown_at'] == {}
+    dashboard.acknowledge_milestone(100, now=10.0)
+    with patch.object(dashboard, '_persist_snapshot') as persist:
+        dashboard.acknowledge_milestone(100, now=20.0)  # nothing new: no write
+    persist.assert_not_called()
+    assert dashboard.snapshot()['milestone_shown_at'] == {'100': 10.0}
+
+
+def test_milestone_state_failing_to_save_is_logged_not_raised(tmp_path, caplog):
+    dashboard, _, _ = setup_dashboard(tmp_path)
+    dashboard.config['milestones'] = [100]
+    dashboard.refresh()
+    with patch.object(dashboard, '_persist_snapshot', side_effect=OSError('disk full')):
+        dashboard.acknowledge_milestone(100, now=10.0)
+    assert 'Could not persist milestone state' in caplog.text
 
 
 def test_rejected_token_pauses_until_file_replaced(tmp_path):

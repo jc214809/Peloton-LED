@@ -48,8 +48,8 @@ def test_rotation_adds_countdown_and_step_celebration_without_configured_milesto
     dashboard = Mock()
     dashboard.pending_milestones.return_value = [2200]
     pages = build_rotation_pages(snapshot, dashboard, display, 'R', 64)
-    assert pages[0] == ('countdown', {'total': 2201, 'previous': 2200, 'target': 2300}, 5)
-    assert pages[1][0] == 'goal' and pages[1][1]['target'] == 2200
+    assert pages[0][0] == 'celebration' and pages[0][1]['milestone'] == 2200
+    assert pages[1] == ('countdown', {'total': 2201, 'previous': 2200, 'target': 2300}, 5)
     display['milestone_step'] = 0
     assert [p[0] for p in build_rotation_pages(snapshot, dashboard, display, 'R', 64)] == []
 

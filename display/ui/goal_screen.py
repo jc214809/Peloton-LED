@@ -1,4 +1,4 @@
-"""Compact weekly-goal and lifetime-milestone screens."""
+"""Compact weekly-goal screen (milestones have their own: celebration_screen)."""
 from driver import graphics
 
 from display.display import draw_centered_text, get_text_width, loaded_fonts
@@ -6,7 +6,6 @@ from .screen import Screen
 
 _WHITE = graphics.Color(255, 255, 255)
 _BLUE = graphics.Color(0, 120, 255)
-_GOLD = graphics.Color(255, 215, 0)
 
 
 class GoalScreen(Screen):
@@ -21,12 +20,6 @@ class GoalScreen(Screen):
         target = max(1, int(state.get('target') or 1))
         unit = str(state.get('unit') or '')
         short = matrix.height < 64
-        if state.get('milestone'):
-            draw_centered_text(matrix, small, 'MILESTONE', 8 if short else 14, _GOLD)
-            draw_centered_text(matrix, large, f'{target:,}', 21 if short else 36, _WHITE)
-            # 32 rows: the unit goes on the bottom rows, under the number.
-            draw_centered_text(matrix, small, unit.upper(), 29 if short else 49, _GOLD)
-            return True
         # 32 rows: everything moves up so the unit fits between value and bar.
         draw_centered_text(matrix, small, title, 6 if short else 12, _WHITE)
         value = f'{current}/{target}'

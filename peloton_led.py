@@ -21,6 +21,7 @@ from display.ui.last_workout_screen import (LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
                                            stats_phase_seconds)
 from display.ui.settings_pin import shown_pin
 from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
+from display.ui.celebration_screen import INTRO_SECONDS, MIN_CARD_SECONDS, milestone_noun
 from display.ui.streak_screen import streak_views
 
 logger = logging.getLogger('peloton-led')
@@ -215,13 +216,19 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                 groups['goals'].append(('goal', {
                     'title': 'Weekly Goal', 'current': progress.get(key, 0),
                     'target': target, 'unit': key}, goal_duration))
+    # A celebration leads the rotation (after the logo), wherever 'milestones' sits in it.
+    # Only the newest milestone: acknowledging it retires any older ones still pending.
+    celebrations = []
     if 'milestones' in groups and (display.get('milestones') or display.get('milestone_step')):
-        for milestone in dashboard.pending_milestones(snapshot):
-            groups['milestones'].append(('goal', {
-                'title': 'Milestone', 'current': milestone, 'target': milestone,
-                'unit': 'Total Workouts', 'milestone': True},
-                _duration(display, 'milestones', display['overview_duration'])))
-    return [page for section in rotation for page in groups[section]]
+        pending = dashboard.pending_milestones(snapshot)
+        if pending:
+            celebration_duration = _duration(display, 'milestones', display['overview_duration'])
+            if celebration_duration > 0:
+                celebration_duration = max(celebration_duration, INTRO_SECONDS + MIN_CARD_SECONDS)
+            celebrations.append(('celebration', {
+                'number': pending[-1], 'noun': milestone_noun(None),
+                'subtitle': username, 'milestone': pending[-1]}, celebration_duration))
+    return celebrations + [page for section in rotation for page in groups[section]]
 
 
 def _overlays(dashboard):
@@ -229,13 +236,25 @@ def _overlays(dashboard):
     return (dashboard.login_indicator_required if dashboard else None, shown_pin())
 
 
+# Seconds between ticks; an animated screen may ask for less with `frame_seconds`.
+TICK_SECONDS = 0.2
+
+
+def _tick_seconds(manager):
+    wanted = getattr(getattr(manager, 'current', None), 'frame_seconds', None)
+    if isinstance(wanted, (int, float)) and not isinstance(wanted, bool) and wanted > 0:
+        return min(wanted, TICK_SECONDS)
+    return TICK_SECONDS
+
+
 def show_and_wait(manager, name, state, duration, dashboard=None):
     manager.show(name, state)
     manager.tick(state)
     deadline = time.monotonic() + duration
     previous = _overlays(dashboard)
+    step = _tick_seconds(manager)
     while time.monotonic() < deadline:
-        time.sleep(min(0.2, max(0, deadline - time.monotonic())))
+        time.sleep(min(step, max(0, deadline - time.monotonic())))
         current = _overlays(dashboard)
         if current != previous:
             # Repaint when authentication or the settings PIN changes, even during a long screen.
@@ -265,8 +284,8 @@ def run_display_loop(manager, dashboard, display, username_override=None, cycles
             show_and_wait(manager, name, state, duration, dashboard)
             if name == 'pr':
                 dashboard.acknowledge_pr(state.get('workout_id'))
-            elif name == 'goal' and state.get('milestone'):
-                dashboard.acknowledge_milestone(state['target'])
+            elif name == 'celebration' and state.get('milestone'):
+                dashboard.acknowledge_milestone(state['milestone'])
         completed += 1
         if not any(page[2] for page in pages):
             time.sleep(0.05)  # Avoid a busy loop when all durations are zero.
@@ -382,6 +401,7 @@ def main():
     from display.ui.logo_mask_screen import LogoMaskScreen
     from display.ui.last_workout_screen import LastWorkoutScreen
     from display.ui.pr_celebration import PrCelebrationScreen
+    from display.ui.celebration_screen import CelebrationScreen
     from display.ui.status_screen import StatusScreen
     from display.ui.goal_screen import GoalScreen
     from display.ui.streak_screen import StreakScreen
@@ -410,6 +430,7 @@ def main():
     manager.register('last_workout', LastWorkoutScreen(
         detail_interval=display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)))
     manager.register('pr', PrCelebrationScreen())
+    manager.register('celebration', CelebrationScreen())
     manager.register('status', StatusScreen())
     manager.register('goal', GoalScreen())
     manager.register('streak', StreakScreen())

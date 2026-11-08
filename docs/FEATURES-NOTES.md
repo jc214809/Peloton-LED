@@ -138,7 +138,8 @@ Workouts page).
 - **64x32:** `NEXT: 2,200`, then the big number with `TO GO` beside it, the
   bar, and the total.
 - **Celebration:** reaching a step milestone (2,200, 2,300, …) now shows
-  the existing gold `MILESTONE` screen once, like configured milestones.
+  the milestone celebration (a trophy in confetti, then `2200TH` / `WORKOUT`;
+  `display/ui/celebration_screen.py`), like configured milestones.
   To avoid celebrating something old, a step milestone only celebrates if
   you crossed it within the last 10 workouts. So turning this on at 2,111
   doesn't celebrate 2,100.

@@ -17,7 +17,7 @@ from .selection import is_brief, last_active_day
 from .summaries import summarize_workout
 from .timestamps import workout_date, workout_timestamp
 from .totals import extract_discipline_totals, parse_streaks
-from .goals import reached_milestones, week_start, weekly_progress
+from .goals import local_date, reached_milestones, week_start, weekly_progress
 from .journey import uses_metric
 from .schedule import in_quiet_hours, scheduled_refresh_interval
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
@@ -93,6 +93,7 @@ class Dashboard:
                       'data_stale': False, 'cache_loaded': False,
                       'consecutive_failures': 0,
                       'celebrated_pr_ids': [], 'celebrated_milestones': [],
+                      'milestone_shown_at': {},
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
                       'distance_totals': {}, 'personal_records': {},
@@ -200,22 +201,51 @@ class Dashboard:
         except (OSError, TypeError, ValueError) as exc:
             logger.warning('Could not persist PR state (%s)', type(exc).__name__)
 
-    def pending_milestones(self, snapshot=None):
+    def _celebration_zone(self, data):
+        return self.config.get('timezone') or (data.get('me') or {}).get('timezone')
+
+    def pending_milestones(self, snapshot=None, now=None):
+        """Reached milestones still to celebrate: never shown, or first shown
+        earlier today (the board's day), so a rider who wasn't watching that
+        one cycle still sees it. Oldest first."""
         data = snapshot or self.snapshot()
         total = data.get('totals', {}).get('Total Workouts')
         reached = reached_milestones(total, self.config.get('milestones', []),
                                      self.config.get('milestone_step', 0))
         celebrated = set(data.get('celebrated_milestones', []))
-        return [value for value in reached if value not in celebrated]
+        shown = data.get('milestone_shown_at') or {}
+        now = time.time() if now is None else now
+        today = local_date(now, self._celebration_zone(data))
+        return [value for value in reached if value not in celebrated
+                and local_date(shown.get(str(value), now), self._celebration_zone(data)) == today]
 
-    def acknowledge_milestone(self, milestone):
-        if not isinstance(milestone, int):
+    def acknowledge_milestone(self, milestone, now=None):
+        """Record that milestone's celebration was shown.
+
+        The first showing starts its day; after midnight it's done for good. Lower milestones still pending are done too: only the newest
+        one is celebrated (e.g. 100/250/500 all reached when first set up).
+        """
+        if not isinstance(milestone, int) or isinstance(milestone, bool):
             return
+        now = time.time() if now is None else now
+        lower = [value for value in self.pending_milestones(now=now) if value < milestone]
         with self._lock:
-            celebrated = self._data['celebrated_milestones']
-            if milestone in celebrated:
+            today = local_date(now, self._celebration_zone(self._data))
+            celebrated = list(self._data['celebrated_milestones'])
+            shown = dict(self._data.get('milestone_shown_at') or {})
+            expired = [int(key) for key, at in shown.items()
+                       if local_date(at, self._celebration_zone(self._data)) != today]
+            done = [value for value in lower + expired if value not in celebrated]
+            for value in expired:
+                del shown[str(value)]
+            started = (str(milestone) not in shown and milestone not in celebrated
+                       and milestone not in done)
+            if started:
+                shown[str(milestone)] = now
+            if not done and not started:
                 return
-            self._data['celebrated_milestones'] = (celebrated + [milestone])[-256:]
+            self._data['celebrated_milestones'] = (celebrated + done)[-256:]
+            self._data['milestone_shown_at'] = shown
         try:
             self._persist_snapshot()
         except (OSError, TypeError, ValueError) as exc:

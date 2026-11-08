@@ -9,6 +9,7 @@ PERSISTED_KEYS = (
     'me', 'totals', 'summaries', 'last_updated', 'generation',
     'active_day_count', 'celebrated_pr_ids',
     'weekly_progress', 'celebrated_milestones', 'personal_records', 'streaks',
+    'milestone_shown_at',
 )
 
 
@@ -51,6 +52,12 @@ def load_snapshot(path):
     if streaks is not None and (not isinstance(streaks, dict) or not all(
             isinstance(v, int) and not isinstance(v, bool) for v in streaks.values())):
         del restored['streaks']
+    # A damaged celebration clock only restarts a milestone's day of celebrating.
+    shown = restored.get('milestone_shown_at')
+    if shown is not None and (not isinstance(shown, dict) or not all(
+            key.isdigit() and isinstance(at, (int, float)) and not isinstance(at, bool)
+            for key, at in shown.items())):
+        del restored['milestone_shown_at']
     return restored
 
 
