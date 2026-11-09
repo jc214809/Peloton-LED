@@ -18,7 +18,9 @@ from .timestamps import workout_timestamp
 
 logger = logging.getLogger('peloton-led.workout-log')
 
-LOG_VERSION = 1
+# 2: `discipline` is the workout's own category, not its class's (Walk + Run classes moved to Running
+# in 2025; the app and the overview still count the earlier workouts as Walking). One re-download.
+LOG_VERSION = 2
 HR_ZONES = 5
 
 
