@@ -66,13 +66,15 @@ def snapshot_for(log, tzname, now, cache_path=None, assume_complete=False):
     (from the cache, else counted from the log) and this week's progress."""
     if assume_complete:
         log.backfill['complete'] = True
-    snapshot = log.derived(tzname=tzname, now=now)
-    totals = None
+    totals, cached = None, {}
     if cache_path:
         from peloton.cache import load_snapshot
         cached = load_snapshot(cache_path)
         if cached is None:
             raise SystemExit(f'Could not read a dashboard cache from {cache_path}')
+    # The anniversary needs the profile's created_at, which only a cache carries.
+    snapshot = log.derived(tzname=tzname, now=now, member_since=(cached.get('me') or {}).get('created_at'))
+    if cache_path:
         totals = cached['totals']
         snapshot['streaks'] = cached.get('streaks') or {}
     if totals is None:
@@ -126,6 +128,8 @@ def show(snapshot, passes):
         print(f'== {key}')
         for fact in frame_facts(snapshot, key):
             print(f'   {fact["label"]:<16} {" / ".join(fact["lines"])}')
+        if key == 'events':
+            continue    # its top three is the all-time one again
         for ranking in frame_rankings(snapshot, key):
             print('   ' + '  |  '.join(f'{d["label"]}: {d["lines"][0]} ({d["lines"][1]})' for d in ranking))
         for headline, ranking in frame_subjects(snapshot, key):

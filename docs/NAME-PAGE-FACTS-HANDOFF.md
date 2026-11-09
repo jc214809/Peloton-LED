@@ -21,7 +21,7 @@ Kick-off message for each session:
 
 ## Rules for every step
 
-- **Six highlights, 24 s.** `TOTAL WORKOUTS`, `THIS WEEK`, a headline, then three highlights
+- **Six highlights, 24 s.** `TOTAL WORKOUTS`, `THIS WEEK` (until step 6 replaces it with a second headline), a headline, then three highlights
   (an instructor top three). Don't change `peloton/screen_times.py`.
 - **15 characters** for every label and line (60 px in the `stats` and `info` fonts, both heights).
   Long labels get a `short_label`. Add each new label to the fit test
@@ -108,7 +108,7 @@ Details are in `docs/NAME-PAGE-FACTS.md` ("Plan"). These notes are the traps.
 - Add `created_at` to `PROFILE_KEYS` in `peloton/dashboard.py`, and nothing else from the profile.
 - "On this day" uses the display timezone's date, not UTC.
 
-**Step 6: scoring** — **stop and ask Joel before starting.** The plan's open questions (headline
+**Step 6: scoring** — Joel answered the open questions on 2026-11-08: see "Decisions for step 6" in the plan (drop THIS WEEK for a second headline, cool-down in passes, same frames on 32 rows). The old note: the plan's open questions (headline
 size, 32-row frames, cool-down length) need his answers.
 - The shown history goes in the dashboard cache, per rider, written the way
   `acknowledge_milestone` writes `milestone_shown_at`. A restart must not reset it.

@@ -697,3 +697,196 @@ def test_screen_draws_the_short_label_when_the_label_is_too_wide():
     # A label that fits keeps its full text.
     assert frame({'label': 'TOP CYCLING', 'short_label': 'TOP X', 'lines': lines}) == frame(
         {'label': 'TOP CYCLING', 'lines': lines})
+
+
+# events (anniversary, this day, comebacks, firsts, since, last class with)
+
+def _event_log():
+    """Sunday 2026-11-08 (New York). Strength: a run of workouts, then a 70-day gap, then one 3 days
+    ago (a comeback). Yoga: five old workouts, the last 40 days ago (since). Cycling with Cody: five,
+    the last 50 days ago. Walking: first done 5 days ago. Two workouts on 8 November 2025."""
+    rows = [_w(f'a{n}', _local(2025, 1, 1 + n), 'strength', 'jess') for n in range(5)]
+    rows.append(_w('s-gap', _local(2026, 8, 1), 'strength', 'jess'))
+    rows.append(_w('s-back', _local(2026, 11, 5), 'strength', 'jess'))
+    rows += [_w(f'y{n}', _local(2026, 9, 20 - n), 'yoga', 'andy') for n in range(5)]
+    rows += [_w(f'c{n}', _local(2026, 9, 19 - n), 'cycling', 'cody') for n in range(5)]
+    rows.append(_w('walk', _local(2026, 11, 3), 'walking', 'robin'))
+    rows += [_w('d-short', _local(2025, 11, 8, 7), 'cycling', 'robin', minutes=20),
+             _w('d-long', _local(2025, 11, 8, 18), 'yoga', 'andy', minutes=45)]
+    rows.append(_w('future', NOW + timedelta(days=2), 'running', 'robin'))
+    rows.append(_w('unfinished', _local(2026, 11, 6), 'meditation', 'robin', status='IN_PROGRESS'))
+    return rows
+
+
+MEMBER_SINCE = int(_local(2020, 11, 8, 9).timestamp())
+
+
+def test_event_stats_are_dates_in_the_display_timezone():
+    from peloton.activity import event_stats
+    events = event_stats(_event_log(), ZONE, NOW, MEMBER_SINCE)
+    assert events['today'] == '2026-11-08' and events['anniversary'] == 6
+    # The longest workout of the nearest earlier year with one: 45 minutes of yoga, not the cycling.
+    assert events['on_this_day'] == [{'years_ago': 1, 'minutes': 45, 'discipline': 'yoga'}]
+    assert events['first_ever'] == '2025-01-01'
+    assert events['disciplines']['strength'] == {'workouts': 7, 'first': '2025-01-01', 'last': '2026-11-05',
+                                                 'before_last': '2026-08-01'}
+    assert events['disciplines']['walking'] == {'workouts': 1, 'first': '2026-11-03', 'last': '2026-11-03',
+                                                'before_last': None}
+    # A workout still going and one in the future are no event; the instructors' last class is a date.
+    assert 'meditation' not in events['disciplines'] and 'running' not in events['disciplines']
+    assert events['instructors']['cody'] == {'workouts': 5, 'last': '2026-09-19'}
+
+
+def test_event_stats_the_day_is_the_display_timezones():
+    from peloton.activity import event_stats
+    # 03:30 UTC on 9 November is still the 8th in New York: today's date, and the anniversary.
+    late = datetime(2026, 11, 9, 3, 30, tzinfo=timezone.utc)
+    events = event_stats([_w('x', _local(2025, 11, 8, 22))], ZONE, late, MEMBER_SINCE)
+    assert events['today'] == '2026-11-08' and events['anniversary'] == 6
+    assert [row['years_ago'] for row in events['on_this_day']] == [1]
+
+
+@pytest.mark.parametrize('created, now, years', [
+    (MEMBER_SINCE, NOW, 6),
+    (MEMBER_SINCE, NOW + timedelta(days=1), None),          # the day after
+    (int(NOW.timestamp()), NOW, None),                      # joined today: no years yet
+    (None, NOW, None), ('junk', NOW, None)])
+def test_anniversary_is_only_on_the_day_and_after_a_full_year(created, now, years):
+    from peloton.activity import anniversary
+    assert anniversary(created, ZONE, now) == years
+
+
+def test_event_stats_with_no_workouts():
+    from peloton.activity import event_stats
+    events = event_stats([], ZONE, NOW)
+    assert events['first_ever'] is None and events['disciplines'] == {} and events['on_this_day'] == []
+    assert events['anniversary'] is None
+
+
+def _events_snapshot(**extra):
+    from peloton.activity import event_stats
+    return _snapshot(events=event_stats(_event_log(), ZONE, NOW, MEMBER_SINCE), **extra)
+
+
+def test_event_facts_in_order():
+    facts = frame_facts(_events_snapshot(), 'events')
+    assert [(f['label'], f['lines']) for f in facts] == [
+        ('ON THIS DAY', ['1 YEAR AGO', '45 MIN YOGA']),
+        ('COMEBACK', ['STRENGTH', 'AFTER 96 DAYS']),
+        ('NEW DISCIPLINE', ['WALKING', 'FIRST TIME']),
+        ('SINCE', ['50 DAYS SINCE', 'LAST CYCLING']),
+        ('SINCE', ['49 DAYS SINCE', 'LAST YOGA']),
+        ('LAST CLASS WITH', ['ANDY SPEER', 'SEP 20 2026']),
+        ('LAST CLASS WITH', ['CODY RIGSBY', 'SEP 19 2026'])]
+
+
+def test_event_facts_leave_out_what_is_thin_or_recent():
+    snapshot = _events_snapshot()
+    snapshot['events'] = dict(snapshot['events'], anniversary=None, on_this_day=[])
+    # Yoga came back 8 days ago after a gap under 60 days, cycling was done 20 days ago, and so on.
+    disciplines = {
+        'yoga': {'workouts': 9, 'first': '2025-01-01', 'last': '2026-11-01', 'before_last': '2026-10-01'},
+        'cycling': {'workouts': 9, 'first': '2025-01-01', 'last': '2026-10-20', 'before_last': '2026-10-19'},
+        'rowing': {'workouts': 4, 'first': '2025-01-01', 'last': '2026-01-01', 'before_last': '2025-12-01'},
+        'walking': {'workouts': 9, 'first': '2026-11-06', 'last': '2026-11-06', 'before_last': '2026-11-05'},
+        'running': {'workouts': 9, 'first': '2026-11-06', 'last': '2026-11-06', 'before_last': None}}
+    # A first needs history behind it: this rider's first workout was on 2026-11-05.
+    snapshot['events'].update(disciplines=disciplines, first_ever='2026-11-05',
+                              instructors={'jess': {'workouts': 4, 'last': '2025-01-01'},
+                                           'cody': {'workouts': 9, 'last': '2026-11-01'},
+                                           'nobody': {'workouts': 9, 'last': '2025-01-01'}})
+    facts = frame_facts(snapshot, 'events')
+    # Only cycling (since 19 days) qualifies: rowing has under 5 workouts, jess too, cody is recent, and
+    # 'nobody' has no name.
+    assert [(f['label'], f['lines']) for f in facts] == [('SINCE', ['19 DAYS SINCE', 'LAST CYCLING'])]
+
+
+def test_event_facts_are_capped_and_long_names_shortened():
+    snapshot = _events_snapshot()
+    many = {slug: {'workouts': 9 - index, 'first': '2025-01-01', 'last': '2026-06-01', 'before_last': '2026-05-30'}
+            for index, slug in enumerate(('bike_bootcamp', 'tread_bootcamp', 'stretching', 'yoga'))}
+    snapshot['events'].update(disciplines=many, on_this_day=[
+        {'years_ago': 2, 'minutes': 120, 'discipline': 'walking_outdoor'}])
+    snapshot['events']['instructors'] = {who: {'workouts': 9, 'last': '2026-01-01'} for who in NAMES}
+    facts = frame_facts(snapshot, 'events')
+    assert facts[0]['lines'] == ['2 YEARS AGO', '120 MIN OUTDOOR']
+    since = [f for f in facts if f['label'] == 'SINCE']
+    assert [f['lines'] for f in since] == [['160 DAYS SINCE', 'LAST BOOTCAMP'], ['160 DAYS SINCE', 'LAST BOOTCAMP']]
+    assert len([f for f in facts if f['label'] == 'LAST CLASS WITH']) == 2
+
+
+def test_on_this_day_without_a_discipline_or_minutes():
+    snapshot = _snapshot(events={'today': '2026-11-08', 'on_this_day': [
+        {'years_ago': 1, 'minutes': 0, 'discipline': 'yoga'}, {'years_ago': 2, 'minutes': 30, 'discipline': None}]})
+    assert [f['lines'] for f in frame_facts(snapshot, 'events')] == [['1 YEAR AGO', 'YOGA']]
+    snapshot['events']['on_this_day'] = [{'years_ago': 2, 'minutes': 30, 'discipline': None}]
+    assert [f['lines'] for f in frame_facts(snapshot, 'events')] == [['2 YEARS AGO', '30 MIN WORKOUT']]
+
+
+def test_the_anniversary_is_every_passes_headline_all_day():
+    snapshot = _full(events={'anniversary': 6})
+    for index in range(len(username_frames(snapshot)) * 3):
+        details = username_details(snapshot, index)
+        assert [d['label'] for d in details].count('ANNIVERSARY') == 1 and len(details) == 6
+        assert details[2]['lines'] == ['6 YEARS', 'ON PELOTON']
+        # The frame's top three stays, so only the headline is replaced.
+        assert details[3:] == username_details(_full(), index)[3:]
+    # A log still filling (only the all-time frame, from the overview): the anniversary still shows.
+    assert [d['label'] for d in username_details(_snapshot(events={'anniversary': 6}))][2] == 'ANNIVERSARY'
+    # With no instructor data at all there's no frame, and the anniversary is still there.
+    bare = {'totals': {'Total Workouts': 5}, 'events': {'anniversary': 6}}
+    assert [d['label'] for d in username_details(bare)] == ['TOTAL WORKOUTS', 'THIS WEEK', 'ANNIVERSARY']
+    assert 'ANNIVERSARY' not in [d['label'] for d in username_details(_full(events={}))]
+
+
+def test_events_without_a_date_for_today_have_no_facts():
+    snapshot = _snapshot(events={'anniversary': 3})
+    assert frame_facts(snapshot, 'events') == []
+    assert frame_facts(_snapshot(), 'events') == [] and frame_facts(_snapshot(events={}), 'events') == []
+
+
+def test_the_events_frame_takes_a_turn_only_when_there_is_something_to_say():
+    assert 'events' not in username_frames(_full())
+    snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
+    frames = username_frames(snapshot)
+    assert frames[-1] == 'events' and frames.index('events') == len(frames) - 1
+    # Its page is the event over the all-time instructor top three.
+    details = username_details(snapshot, frames.index('events'))
+    assert [d['label'] for d in details] == ['TOTAL WORKOUTS', 'THIS WEEK', 'ON THIS DAY',
+                                             'TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
+    assert frame_subjects(snapshot, 'events') == []
+
+
+def test_event_pages_keep_the_other_passes_unchanged_without_events():
+    # No events: the frames and every pass are what they were before events existed.
+    assert username_frames(_full()) == username_frames(_full(events={}))
+    assert [_labels(_full(), n) for n in range(6)] == [_labels(_full(events={}), n) for n in range(6)]
+
+
+def test_event_figures_reach_the_snapshot_through_the_log(tmp_path):
+    log = WorkoutLog(tmp_path / 'log.json')
+    log.merge(_event_log())
+    log.backfill['complete'] = True
+    derived = log.derived(tzname=ZONE, now=NOW, member_since=MEMBER_SINCE)
+    assert derived['events']['anniversary'] == 6 and derived['events']['disciplines']['yoga']['workouts'] == 6
+    # A log still filling has no history figures, but the anniversary needs none.
+    log.backfill['complete'] = False
+    partial = log.derived(tzname=ZONE, now=NOW, member_since=MEMBER_SINCE)
+    assert partial['events'] == {'anniversary': 6}
+    assert log.derived(tzname=ZONE, now=NOW + timedelta(days=1), member_since=MEMBER_SINCE)['events'] == {}
+
+
+def test_event_labels_and_lines_fit():
+    initialize_fonts(64)
+    small, value = loaded_fonts['stats'], loaded_fonts['info']
+    snapshot = _events_snapshot()
+    names = dict(NAMES, long='Adrian Williams')
+    snapshot['events']['on_this_day'] = [{'years_ago': 10, 'minutes': 120, 'discipline': 'bike_bootcamp'}]
+    snapshot['events']['anniversary'] = 10
+    snapshot['events']['disciplines']['stretching'] = {'workouts': 50, 'first': '2020-01-01', 'last': '2020-01-02',
+                                                       'before_last': '2020-01-01'}
+    snapshot['instructor_names'] = names
+    for fact in frame_facts(snapshot, 'events'):
+        assert get_text_width(small, fact['label']) <= 60, fact['label']
+        for line in fact['lines']:
+            assert get_text_width(value, line) <= 60, line

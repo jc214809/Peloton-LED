@@ -68,9 +68,9 @@ def add_log_figures(snapshot, options):
     me = snapshot.get('me') or {}
     log = WorkoutLog.load(path)
     derived = log.derived(journey=preview_journey(options), metric=uses_metric(me),
-                          tzname=me.get('timezone'))
+                          tzname=me.get('timezone'), member_since=me.get('created_at'))
     snapshot.update({key: derived[key] for key in ('instructor_counts', 'instructor_names', 'distance_totals',
-                                                   'activity_days', 'streak_week_workouts', 'time_frames')})
+                                                   'activity_days', 'streak_week_workouts', 'time_frames', 'events')})
 
 
 def load_snapshot_for(options):
