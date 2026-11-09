@@ -1,6 +1,6 @@
 """The name page's varied highlights: time frames over the workout log (peloton.activity), the facts
 each frame has enough data for, and which frame and fact each pass shows."""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import Mock
 from zoneinfo import ZoneInfo
 
@@ -10,8 +10,10 @@ from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.username import UsernameScreen
 from peloton.activity import (MIN_RANK_BLOCKS, SUBJECT_DISCIPLINES, SUBJECT_INSTRUCTORS, block_rank, frame_bounds,
                               frame_stats, period_stats)
-from peloton.username_facts import (FRAME_ORDER, MIN_RANKED_CLASSES, MIN_STREAK_WEEKS, frame_facts, frame_rankings,
-                                    frame_stories, frame_subjects, frame_words, username_details, username_frames)
+from peloton.username_facts import (COOLDOWN_PASSES, FRAME_ORDER, KINDS, MAX_COMPARE_BONUS, MIN_RANKED_CLASSES,
+                                    MIN_STREAK_WEEKS, RANK_FIRST_BONUS, RECENT_RECORD_BONUS, _comparison_fact,
+                                    fact_score, frame_facts, frame_rankings, frame_subjects, frame_words,
+                                    record_name_facts, scored_facts, shown_keys, username_details)
 from peloton.workout_log import WorkoutLog
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
@@ -380,6 +382,11 @@ def _full(**extra):
     return _snapshot(time_frames={'30d': THIRTY, 'year': YEAR, 'all': LIFETIME}, **extra)
 
 
+def _flat(**extra):
+    """_full without per-discipline figures: no discipline headline, so the top threes are the general ones."""
+    return _snapshot(time_frames={'30d': dict(THIRTY, by_discipline={}), 'year': YEAR}, **extra)
+
+
 def _labels(snapshot, index):
     return [d['label'] for d in username_details(snapshot, index)]
 
@@ -501,20 +508,14 @@ def test_a_frames_most_seen_instructors_are_facts_with_the_time_spent_with_them(
     assert frame_facts(_snapshot(time_frames={'30d': long_time}), '30d')[-1]['lines'] == ['JESS SIMS', '60 HOURS']
 
 
-def test_subject_stories_pair_a_discipline_headline_with_its_own_top_three_and_take_every_other_turn():
-    stories = frame_stories(_full(), '30d')
-    assert len(stories) == len(frame_facts(_full(), '30d')) + 1
-    # The general stories come first; the subject takes the next turn, not the last one.
-    assert stories[0][0]['label'] == 'LAST 30 DAYS' and stories[1][0]['label'] == 'STRENGTH'
-    assert stories[1][1][0]['label'] == 'TOP STRENGTH'
-    assert all(fact['label'] != 'STRENGTH' for fact, _ in stories[2:])
-    # A frame with facts but no top three still has stories; the fact alone is a short page.
-    assert frame_stories(_snapshot(time_frames={'30d': dict(THIRTY, instructor_counts={})}), '30d')[0][1] is None
-    # Many subjects and few general stories: all of them still come round.
-    many = dict(THIRTY, by_discipline={slug: _subject(5, 50, {'jess': 3, 'andy': 3, 'cody': 3})
-                                       for slug in ('cycling', 'yoga', 'rowing')})
-    heads = [h['label'] for h, _ in frame_stories(_snapshot(time_frames={'30d': many}), '30d')[1:] if h]
-    assert {'CYCLING', 'YOGA', 'ROWING'} <= set(heads)
+def test_a_discipline_headline_is_a_candidate_that_brings_its_own_top_three():
+    found = {fact['key']: ranking for _, fact, ranking in scored_facts(_full())}
+    assert [d['label'] for d in found['30d:subject:strength']] == ['TOP STRENGTH', '2ND STRENGTH', '3RD STRENGTH']
+    # A general fact has no top three of its own.
+    assert found['30d:total'] is None and found['all:top_discipline'] is None
+    # A frame with a headline but no instructors still has its facts.
+    assert [fact['key'] for _, fact, _ in scored_facts(_snapshot(time_frames={'30d': dict(THIRTY, instructor_counts={})}))
+            if fact['key'].startswith('30d')]
 
 
 def test_period_stats_filters_by_discipline_or_instructor():
@@ -564,76 +565,151 @@ def test_all_time_ranking_keeps_any_count_as_before():
     assert frame_rankings({}, 'all') == []
 
 
-def test_frames_without_anything_to_show_are_skipped_and_the_rest_keep_their_order():
-    assert username_frames(_snapshot()) == ['all']
-    assert username_frames(_full()) == ['all', '30d', 'year']
-    assert username_frames({}) == []
+def test_frames_without_anything_to_show_have_no_candidates():
+    assert {fact['key'].split(':')[0] for _, fact, _ in scored_facts(_snapshot())} == {'all'}
+    assert {fact['key'].split(':')[0] for _, fact, _ in scored_facts(_full())} == {'all', '30d', 'year'}
+    assert scored_facts({}) == []
     assert FRAME_ORDER[0] == 'all' and 'week' not in FRAME_ORDER
-    everything = _snapshot(time_frames={key: YEAR for key in ('30d', '90d', 'year', 'last_year', 'last_week')})
-    assert username_frames(everything) == ['all', '30d', 'year', '90d', 'last_year', 'last_week']
 
 
-def test_a_frame_needs_a_headline_and_a_top_three_so_every_page_is_six_highlights():
-    # Last week had workouts but only two instructors: no top three, so it doesn't take a turn.
+def test_a_page_is_six_highlights_and_a_thin_rider_gets_a_shorter_one():
     last_week = dict(YEAR, instructor_counts={'jess': 3, 'andy': 2}, instructors=2)
     snapshot = _snapshot(time_frames={'30d': THIRTY, 'last_week': last_week})
     assert frame_facts(snapshot, 'last_week') and not frame_rankings(snapshot, 'last_week')
-    assert username_frames(snapshot) == ['all', '30d']
     assert all(len(username_details(snapshot, index)) == 6 for index in range(8))
-    # A rider with no instructor data at all still gets the frames that have facts, on shorter pages.
+    # No instructor data: the total and the two best facts, no top three.
     bare = {'totals': {'Total Workouts': 90, 'Cycling': 60}, 'weekly_progress': {},
             'time_frames': {'30d': dict(THIRTY, instructor_counts={}, instructors=0)}}
-    assert username_frames(bare) == ['all', '30d']
     assert [len(username_details(bare, index)) for index in range(2)] == [3, 3]
 
 
-def test_pass_zero_is_the_page_the_board_always_began_with():
-    assert _labels(_snapshot(), 0) == ['TOTAL WORKOUTS', 'THIS WEEK', 'TOP DISCIPLINE',
+def test_every_kind_has_a_group_and_a_score_and_every_fact_a_known_kind():
+    snapshot = _full(streaks={'best_weekly': 74}, events={'today': '2026-11-08', 'anniversary': 6,
+                     'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
+    for _, fact, _ in scored_facts(snapshot):
+        assert fact['kind'].split(':')[0] in KINDS, fact['kind']
+    assert all(group and score > 0 for group, score in KINDS.values())
+    keys = [fact['key'] for _, fact, _ in scored_facts(snapshot)]
+    assert len(keys) == len(set(keys)) and 'events:on_this_day' in keys and 'all:streak' in keys
+
+
+def test_the_page_is_the_total_two_headlines_of_different_groups_and_a_top_three():
+    details = username_details(_full(), 0)
+    assert [d['label'] for d in details][0] == 'TOTAL WORKOUTS' and len(details) == 6
+    assert 'THIS WEEK' not in [d['label'] for d in details]
+    groups = [KINDS[d['kind'].split(':')[0]][0] for d in details[1:3]]
+    assert len(set(groups)) == 2
+    # With only the overview's totals, the one fact there is, then the all-time top three.
+    assert _labels(_snapshot(), 0) == ['TOTAL WORKOUTS', 'TOP DISCIPLINE',
                                        'TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
-    assert _labels(_full(), 0) == _labels(_snapshot(), 0)
 
 
-def test_each_pass_is_one_frames_story_and_a_frame_coming_round_shows_its_next_fact():
+def test_the_best_scoring_facts_show_first():
+    snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
+    scores = scored_facts(snapshot)
+    assert [score for score, _, _ in scores] == sorted((score for score, _, _ in scores), reverse=True)
+    details = username_details(snapshot, 0)
+    assert details[1]['key'] == scores[0][1]['key'] == 'events:on_this_day'
+    # The second is the best of another group.
+    assert details[2]['key'] == next(f['key'] for _, f, _ in scores if KINDS[f['kind'].split(':')[0]][0] != 'event')
+
+
+def test_a_discipline_headline_brings_its_own_top_three_else_the_general_ones_take_turns():
     snapshot = _full()
-
-    def page(headline, frame_words_or_ranks):
-        ranks = frame_words_or_ranks if isinstance(frame_words_or_ranks, list) else [
-            f'{rank} {frame_words_or_ranks}' for rank in ('TOP', '2ND', '3RD')]
-        return ['TOTAL WORKOUTS', 'THIS WEEK', headline] + ranks
-
-    instructors = ['TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
-    assert [_labels(snapshot, index) for index in range(10)] == [
-        page('TOP DISCIPLINE', instructors),
-        page('LAST 30 DAYS', 'IN 30 DAYS'),
-        page('IN 2026', 'IN 2026'),
-        # All time's first subject: a discipline and that discipline's top three, then 30 days' own.
-        page('CYCLING', ['TOP CYCLING', '2ND CYCLING', '3RD CYCLING']),
-        page('STRENGTH', ['TOP STRENGTH', '2ND STRENGTH', '3RD STRENGTH']),
-        page('IN 2026', 'IN 2026'),
-        page('LIFETIME', instructors),
-        page('MOST IN 30 DAYS', 'IN 30 DAYS'),
-        page('IN 2026', 'IN 2026'),
-        page('STRENGTH', ['TOP STRENGTH', '2ND STRENGTH', '3RD STRENGTH'])]
-    # A subject page's headline says the frame: the 30 days' strength, then all time's.
-    assert username_details(snapshot, 4)[2]['lines'] == ['6 WORKOUTS', 'IN 30 DAYS']
-    assert username_details(snapshot, 9)[2]['lines'] == ['310 WORKOUTS', 'LIFETIME']
-    # A frame's headline moves on each visit: its second general one is the 30 days' most-done discipline.
-    assert username_details(snapshot, 7)[2]['lines'] == ['STRENGTH', '6 WORKOUTS']
-    assert username_details(snapshot, 5)[2]['lines'] == ['ACTIVE DAYS', '248 OF 312']
+    assert not any(ranking is None for _, fact, ranking in scored_facts(snapshot) if fact['kind'].startswith('subject'))
+    rotation = [[d['label'] for d in username_details(_flat(), index)[3:]] for index in range(3)]
+    assert rotation == [['TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR'], ['TOP IN 30 DAYS', '2ND IN 30 DAYS', '3RD IN 30 DAYS'],
+                        ['TOP IN 2026', '2ND IN 2026', '3RD IN 2026']]
+    # Put a discipline first by cooling everything else down: its page ends with that discipline's top three.
+    cooled = {fact['key']: 5 for _, fact, ranking in scored_facts(snapshot) if ranking is None}
+    details = username_details(dict(snapshot, name_facts_passes=5, name_facts_shown=cooled), 0)
+    assert details[1]['kind'].startswith('subject:') or details[2]['kind'].startswith('subject:')
+    name = (details[1] if details[1]['kind'].startswith('subject:') else details[2])['label']
+    assert [d['label'] for d in details[3:]] == [f'{rank} {name}' for rank in ('TOP', '2ND', '3RD')]
 
 
-def test_without_a_frame_the_page_is_just_the_total_and_this_week():
-    assert _labels({'totals': {'Total Workouts': 5}, 'weekly_progress': {}}, 3) == ['TOTAL WORKOUTS', 'THIS WEEK']
+def test_a_fact_just_shown_loses_to_fresh_ones_and_recovers_over_the_cooldown():
+    fact = {'kind': 'rank', 'key': '30d:rank'}
+    base = fact_score(fact)
+    assert fact_score(fact, passes=7, shown={'30d:rank': 7}) < base - 90
+    mid = fact_score(fact, passes=7 + COOLDOWN_PASSES // 2, shown={'30d:rank': 7})
+    assert base - 60 < mid < base - 40
+    assert fact_score(fact, passes=7 + COOLDOWN_PASSES, shown={'30d:rank': 7}) == base
+    # A kind shown from another frame cools it too, less.
+    kind_cooled = fact_score(fact, passes=3, shown={'kind:rank': 3})
+    assert base - 50 < kind_cooled < base - 10
 
 
-def test_rotation_passes_its_pass_index_to_the_name_page():
+def test_the_pages_rotate_through_facts_as_the_cooldown_works():
+    snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
+    snapshot['name_facts_passes'], snapshot['name_facts_shown'] = 0, {}
+    shown = []
+    for _ in range(6):
+        details = username_details(snapshot, 0)
+        shown.append(tuple(d['key'] for d in details[1:3]))
+        snapshot['name_facts_passes'], snapshot['name_facts_shown'] = record_name_facts(
+            snapshot['name_facts_passes'], snapshot['name_facts_shown'], shown_keys(details))
+    assert len(set(shown)) == 6 and shown[0][0] == 'events:on_this_day'
+    # ...and none of the six repeats a fact, nor the same kind back to back.
+    flat = [key for pair in shown for key in pair]
+    assert len(flat) == len(set(flat))
+
+
+def test_recording_a_showing_counts_the_page_stamps_the_facts_and_forgets_the_old():
+    passes, shown = record_name_facts(0, {}, ['a', 'kind:x'])
+    assert (passes, shown) == (1, {'a': 1, 'kind:x': 1})
+    passes, shown = record_name_facts(passes, shown, ['b'])
+    assert (passes, shown) == (2, {'a': 1, 'kind:x': 1, 'b': 2})
+    passes, shown = record_name_facts(COOLDOWN_PASSES + 1, {'old': 1, 'a': 5}, [])
+    assert shown == {'a': 5}
+    assert shown_keys([{'key': '30d:rank', 'kind': 'rank'}, {'label': 'x'}]) == ['30d:rank', 'kind:rank']
+
+
+def test_a_recent_best_scores_higher_than_an_old_one():
+    fact = {'kind': 'busiest_day', 'key': 'all:busiest_day', 'when': '2026-11-05'}
+    old = dict(fact, when='2025-01-05')
+    today = date(2026, 11, 8)
+    assert fact_score(fact, today) - fact_score(old, today) == RECENT_RECORD_BONUS
+    assert fact_score(fact) == fact_score(old)      # no date for today: no bonus
+    assert fact_score({'kind': 'rank', 'key': 'k', 'bonus': 15}) == KINDS['rank'][1] + 15
+
+
+def test_a_best_ever_rank_and_a_big_change_carry_a_bonus():
+    ranked = [f for f in frame_facts(_snapshot(time_frames={'30d': dict(THIRTY, rank={'rank': 1, 'of': 9, 'best': 12})}), '30d')
+              if f['kind'] == 'rank']
+    assert ranked[0]['bonus'] == RANK_FIRST_BONUS
+    second = [f for f in frame_facts(_snapshot(time_frames={'30d': dict(THIRTY, rank={'rank': 2, 'of': 9, 'best': 12})}), '30d')
+              if f['kind'] == 'rank']
+    assert second[0]['bonus'] == 0
+    big = _comparison_fact('30d', dict(THIRTY, workouts=20, before={'workouts': 10, 'minutes': 100}))
+    small = _comparison_fact('30d', dict(THIRTY, workouts=13, before={'workouts': 10, 'minutes': 100}))
+    assert big['bonus'] > small['bonus'] > 0 and big['bonus'] <= MAX_COMPARE_BONUS
+
+
+def test_the_name_page_turns_its_top_threes_by_the_saved_counter_not_the_loops_pass_index():
+    snapshot = dict(_flat(), name_facts_passes=1)
+    assert _labels(snapshot, 0) == _labels(snapshot, 7)
+    assert _labels(dict(snapshot, name_facts_passes=2), 0) != _labels(snapshot, 0)
+    # Without a counter (a preview) the pass index turns them.
+    bare = _flat()
+    assert [d['label'] for d in username_details(bare, 0)[3:]] != [d['label'] for d in username_details(bare, 1)[3:]]
+    # A damaged counter is as good as none.
+    assert _labels(dict(bare, name_facts_passes='x', name_facts_shown={'a': 1}), 1) == _labels(bare, 1)
+
+
+def test_without_a_fact_the_page_is_just_the_total():
+    assert _labels({'totals': {'Total Workouts': 5}, 'weekly_progress': {}}, 3) == ['TOTAL WORKOUTS']
+
+
+def test_rotation_builds_the_name_page_and_tells_the_loop_which_facts_it_showed():
     dashboard = Mock()
     dashboard.pending_discipline_milestones.return_value = []
     display = {'rotation': ['username'], 'screen_durations': {'username': 1}, 'duration': 1,
                'overview_duration': 1, 'last_workout_duration': 1, 'color': 'white'}
     snapshot = _full(me={'username': 'Rider'}, summaries=[], status='ready')
     page = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64, pass_index=2)[0]
-    assert [d['label'] for d in page[1]['details']][2:] == ['IN 2026', 'TOP IN 2026', '2ND IN 2026', '3RD IN 2026']
+    assert [d['label'] for d in page[1]['details']] == [d['label'] for d in username_details(snapshot, 2)]
+    assert page[1]['fact_keys'] == shown_keys(page[1]['details']) and len(page[1]['fact_keys']) == 4
     # Six highlights every pass, so the page is as long as before.
     assert page[2] == pytest.approx(24.0)
 
@@ -823,19 +899,18 @@ def test_on_this_day_without_a_discipline_or_minutes():
     assert [f['lines'] for f in frame_facts(snapshot, 'events')] == [['2 YEARS AGO', '30 MIN WORKOUT']]
 
 
-def test_the_anniversary_is_every_passes_headline_all_day():
+def test_the_anniversary_is_the_first_headline_of_every_page_all_day():
     snapshot = _full(events={'anniversary': 6})
-    for index in range(len(username_frames(snapshot)) * 3):
+    for index in range(6):
         details = username_details(snapshot, index)
         assert [d['label'] for d in details].count('ANNIVERSARY') == 1 and len(details) == 6
-        assert details[2]['lines'] == ['6 YEARS', 'ON PELOTON']
-        # The frame's top three stays, so only the headline is replaced.
-        assert details[3:] == username_details(_full(), index)[3:]
-    # A log still filling (only the all-time frame, from the overview): the anniversary still shows.
-    assert [d['label'] for d in username_details(_snapshot(events={'anniversary': 6}))][2] == 'ANNIVERSARY'
-    # With no instructor data at all there's no frame, and the anniversary is still there.
+        assert details[1]['lines'] == ['6 YEARS', 'ON PELOTON'] and details[2]['kind'] != 'anniversary'
+    # With the overview only, the anniversary still shows, beside the one other fact.
+    assert [d['label'] for d in username_details(_snapshot(events={'anniversary': 6}))][1] == 'ANNIVERSARY'
+    # With no other fact at all it is the only headline, and its pin is never recorded as shown.
     bare = {'totals': {'Total Workouts': 5}, 'events': {'anniversary': 6}}
-    assert [d['label'] for d in username_details(bare)] == ['TOTAL WORKOUTS', 'THIS WEEK', 'ANNIVERSARY']
+    assert [d['label'] for d in username_details(bare)] == ['TOTAL WORKOUTS', 'ANNIVERSARY']
+    assert shown_keys(username_details(bare)) == []
     assert 'ANNIVERSARY' not in [d['label'] for d in username_details(_full(events={}))]
 
 
@@ -845,21 +920,17 @@ def test_events_without_a_date_for_today_have_no_facts():
     assert frame_facts(_snapshot(), 'events') == [] and frame_facts(_snapshot(events={}), 'events') == []
 
 
-def test_the_events_frame_takes_a_turn_only_when_there_is_something_to_say():
-    assert 'events' not in username_frames(_full())
-    snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
-    frames = username_frames(snapshot)
-    assert frames[-1] == 'events' and frames.index('events') == len(frames) - 1
-    # Its page is the event over the all-time instructor top three.
-    details = username_details(snapshot, frames.index('events'))
-    assert [d['label'] for d in details] == ['TOTAL WORKOUTS', 'THIS WEEK', 'ON THIS DAY',
-                                             'TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
+def test_events_are_candidates_only_when_there_is_something_to_say():
+    assert not any(fact['key'].startswith('events:') for _, fact, _ in scored_facts(_full()))
+    snapshot = _flat(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
+    assert 'events:on_this_day' in [fact['key'] for _, fact, _ in scored_facts(snapshot)]
+    # The event has no top three of its own, so the page takes a general one.
+    details = username_details(snapshot, 0)
+    assert details[1]['label'] == 'ON THIS DAY' and details[3]['label'] == 'TOP INSTRUCTOR'
     assert frame_subjects(snapshot, 'events') == []
 
 
-def test_event_pages_keep_the_other_passes_unchanged_without_events():
-    # No events: the frames and every pass are what they were before events existed.
-    assert username_frames(_full()) == username_frames(_full(events={}))
+def test_an_empty_events_section_changes_nothing():
     assert [_labels(_full(), n) for n in range(6)] == [_labels(_full(events={}), n) for n in range(6)]
 
 

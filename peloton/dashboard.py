@@ -17,6 +17,7 @@ from .selection import is_brief, last_active_day
 from .summaries import summarize_workout
 from .timestamps import workout_date, workout_timestamp
 from .totals import extract_discipline_totals, parse_streaks
+from .username_facts import record_name_facts
 from .goals import (local_date, parse_milestone_key, reached_discipline_milestones, reached_milestones,
                     week_start, weekly_progress)
 from .journey import uses_metric
@@ -94,7 +95,7 @@ class Dashboard:
                       'data_stale': False, 'cache_loaded': False,
                       'consecutive_failures': 0,
                       'celebrated_pr_ids': [], 'celebrated_milestones': [],
-                      'milestone_shown_at': {},
+                      'milestone_shown_at': {}, 'name_facts_passes': 0, 'name_facts_shown': {},
                       'celebrated_discipline_milestones': [], 'discipline_milestone_shown_at': {},
                       'weekly_progress': {'workouts': 0, 'minutes': 0},
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
@@ -203,6 +204,17 @@ class Dashboard:
             self._persist_snapshot()
         except (OSError, TypeError, ValueError) as exc:
             logger.warning('Could not persist PR state (%s)', type(exc).__name__)
+
+    def acknowledge_name_facts(self, keys):
+        """Record that a name page showed these facts (their `key`s): one more page, and the cool-down
+        of each starts. Saved at once, so a restart keeps it."""
+        with self._lock:
+            self._data['name_facts_passes'], self._data['name_facts_shown'] = record_name_facts(
+                self._data.get('name_facts_passes') or 0, self._data.get('name_facts_shown') or {}, keys)
+        try:
+            self._persist_snapshot()
+        except (OSError, TypeError, ValueError) as exc:
+            logger.warning('Could not persist name page state (%s)', type(exc).__name__)
 
     def _celebration_zone(self, data):
         return self.config.get('timezone') or (data.get('me') or {}).get('timezone')

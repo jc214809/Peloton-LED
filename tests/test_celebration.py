@@ -191,6 +191,16 @@ def test_display_loop_acknowledges_the_celebration_after_showing_it():
     dashboard.acknowledge_milestone.assert_called_once_with(500)
 
 
+def test_display_loop_records_the_name_page_facts_after_showing_them():
+    dashboard = Mock(login_required=False)
+    dashboard.pending_discipline_milestones.return_value = []
+    dashboard.pending_milestones.return_value = []
+    dashboard.snapshot.return_value = {'me': {'username': 'Rider'}, **_snapshot(),
+                                       'totals': {'Total Workouts': 90, 'Cycling': 60}}
+    run_display_loop(Mock(), dashboard, _display(rotation=['username']), cycles=1)
+    dashboard.acknowledge_name_facts.assert_called_once_with(['all:top_discipline', 'kind:top_discipline'])
+
+
 def test_preview_captures_the_rise_and_the_card():
     times = frame_times('celebration', {}, 8, 4)
     assert times[-1] > INTRO_SECONDS > times[0]
@@ -208,6 +218,15 @@ def test_celebration_clock_loads_and_a_damaged_one_is_dropped_not_the_cache(tmp_
     for bad in ([], {'x': 1.0}, {'600': 'soon'}, {'600': True}):
         snapshot = load_snapshot(_cache(tmp_path, milestone_shown_at=bad))
         assert snapshot is not None and 'milestone_shown_at' not in snapshot
+
+
+def test_name_page_cooldown_loads_and_a_damaged_one_is_dropped_not_the_cache(tmp_path):
+    good = load_snapshot(_cache(tmp_path, name_facts_passes=4, name_facts_shown={'30d:rank': 3, 'kind:rank': 3}))
+    assert good['name_facts_passes'] == 4 and good['name_facts_shown'] == {'30d:rank': 3, 'kind:rank': 3}
+    for passes, shown in ((-1, {}), ('x', {}), (True, {}), (4, []), (4, {'a': 'b'}), (4, {'a': True}), (4, None)):
+        snapshot = load_snapshot(_cache(tmp_path, name_facts_passes=passes, name_facts_shown=shown))
+        assert snapshot is not None and 'name_facts_passes' not in snapshot and 'name_facts_shown' not in snapshot
+    assert 'name_facts_passes' not in load_snapshot(_cache(tmp_path))
 
 
 def test_show_and_wait_ticks_faster_for_the_confetti(monkeypatch):

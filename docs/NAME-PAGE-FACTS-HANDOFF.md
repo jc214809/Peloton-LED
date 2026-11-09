@@ -21,7 +21,7 @@ Kick-off message for each session:
 
 ## Rules for every step
 
-- **Six highlights, 24 s.** `TOTAL WORKOUTS`, `THIS WEEK` (until step 6 replaces it with a second headline), a headline, then three highlights
+- **Six highlights, 24 s.** `TOTAL WORKOUTS`, two scored headlines (step 6 dropped `THIS WEEK`), then three highlights
   (an instructor top three). Don't change `peloton/screen_times.py`.
 - **15 characters** for every label and line (60 px in the `stats` and `info` fonts, both heights).
   Long labels get a `short_label`. Add each new label to the fit test

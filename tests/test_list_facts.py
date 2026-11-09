@@ -53,7 +53,8 @@ def test_demo_prints_the_frames_the_facts_and_the_first_passes(capsys):
     assert list_facts.main(['--demo', '--tz', 'America/New_York', '--passes', '3']) == 0
     out = capsys.readouterr().out
     assert 'TOP DISCIPLINE' in out and 'LAST 30 DAYS' in out and '== year' in out
-    assert 'pass 0: TOTAL WORKOUTS | THIS WEEK | TOP DISCIPLINE | TOP INSTRUCTOR' in out
+    assert 'scores (base + bonuses' in out and '30d:rank' in out or 'year:total' in out
+    assert 'pass 0: TOTAL WORKOUTS | ' in out and 'THIS WEEK' not in out
     assert 'pass 2:' in out and 'pass 3:' not in out
 
 

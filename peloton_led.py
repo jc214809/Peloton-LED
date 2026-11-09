@@ -14,7 +14,7 @@ from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, u
 from peloton.journey import journey_progress
 from peloton.screen_times import page_seconds
 from peloton.selection import normalize_discipline
-from peloton.username_facts import username_details
+from peloton.username_facts import shown_keys, username_details
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
 from utils import heartbeat
 from utils.utils import args, ensure_privileges_dropped, led_matrix_options
@@ -102,7 +102,8 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         # The page's time is shared by its highlights (at least 4 s each), so more time means each
         # stays up longer rather than the list starting over.
         username_duration = page_seconds(display, 'username', matrix_height, frames=len(details))
-        state = {'username': username, 'details': details}
+        state = {'username': username, 'details': details,
+                 'fact_keys': shown_keys(details)}
         if details:
             state['detail_seconds'] = username_duration / len(details)
         groups['username'].append(('username', state, username_duration))
@@ -271,6 +272,8 @@ def run_display_loop(manager, dashboard, display, username_override=None, cycles
             show_and_wait(manager, name, state, duration, dashboard)
             if name == 'pr':
                 dashboard.acknowledge_pr(state.get('workout_id'))
+            elif name == 'username':
+                dashboard.acknowledge_name_facts(state['fact_keys'])
             elif name == 'celebration' and state.get('milestone'):
                 dashboard.acknowledge_milestone(state['milestone'])
         completed += 1

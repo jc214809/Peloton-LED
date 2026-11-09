@@ -571,12 +571,11 @@ def test_username_profile_details_all_receive_display_time():
                'color': 'white'}
     page = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)[0]
     assert [detail['label'] for detail in page[1]['details']] == [
-        'TOTAL WORKOUTS', 'THIS WEEK', 'TOP DISCIPLINE']
-    assert page[1]['details'][2]['value'] == 'Cycling / 60'
+        'TOTAL WORKOUTS', 'TOP DISCIPLINE']
+    assert page[1]['details'][1]['value'] == 'Cycling / 60'
     assert {'lines': ['100'], 'font_key': 'big', 'color_key': 'gold'}.items() <= page[1]['details'][0].items()
-    assert page[1]['details'][1]['lines'] == ['3 WORKOUTS', '75 MINUTES']
-    assert page[1]['details'][2]['lines'] == ['CYCLING', '60 WORKOUTS']
-    assert page[2] == pytest.approx(12.0)
+    assert page[1]['details'][1]['lines'] == ['CYCLING', '60 WORKOUTS']
+    assert page[2] == pytest.approx(8.0)    # two highlights, 4 s each at least
 
 
 def test_username_profile_includes_top_three_instructors_when_present():
@@ -593,13 +592,13 @@ def test_username_profile_includes_top_three_instructors_when_present():
                'color': 'white'}
     page = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)[0]
     labels = [detail['label'] for detail in page[1]['details']]
-    assert labels == ['TOTAL WORKOUTS', 'THIS WEEK', 'TOP DISCIPLINE',
+    assert labels == ['TOTAL WORKOUTS', 'TOP DISCIPLINE',
                       'TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
     initialize_fonts(64)
     from display.display import get_text_width, loaded_fonts
     assert all(get_text_width(loaded_fonts['stats'], label) <= 60
-               for label in labels[3:])
-    instructor_details = page[1]['details'][3:]
+               for label in labels[2:])
+    instructor_details = page[1]['details'][2:]
     assert [d['lines'] for d in instructor_details] == [
         ['CODY RIGSBY', '10 CLASSES'], ['ROBIN ARZON', '7 CLASSES'], ['ALLY LOVE', '4 CLASSES']]
 

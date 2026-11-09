@@ -85,10 +85,10 @@ def test_more_time_on_the_name_page_means_longer_highlights_not_a_repeat():
                 'weekly_progress': {'workouts': 3, 'minutes': 90}}
     display = {**DEFAULTS, 'rotation': ['username'], 'screen_durations': {'username': 24}}
     (_, state, duration), = build_rotation_pages(snapshot, None, display, 'Joel', 64)
-    assert len(state['details']) == 3 and duration == 24 and state['detail_seconds'] == 8
+    assert len(state['details']) == 2 and duration == 24 and state['detail_seconds'] == 12
     display['screen_durations']['username'] = 5  # under 4 s a highlight: raised, never cut short
     (_, state, duration), = build_rotation_pages(snapshot, None, display, 'Joel', 64)
-    assert duration == 12 and state['detail_seconds'] == 4
+    assert duration == 8 and state['detail_seconds'] == 4
 
 
 def _frame(screen, state, height, at):
