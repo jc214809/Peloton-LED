@@ -674,6 +674,31 @@ def test_a_recent_best_scores_higher_than_an_old_one():
     assert fact_score({'kind': 'rank', 'key': 'k', 'bonus': 15}) == KINDS['rank'][1] + 15
 
 
+def test_only_the_all_time_and_year_bests_get_the_recent_record_bonus():
+    today = date(2026, 11, 8)
+    scores = {frame: fact_score({'kind': 'busiest_day', 'key': f'{frame}:busiest_day', 'when': '2026-11-05'}, today)
+              for frame in ('all', 'year', '30d', '90d', 'last_year')}
+    base = KINDS['busiest_day'][1]
+    assert scores == {'all': base + RECENT_RECORD_BONUS, 'year': base + RECENT_RECORD_BONUS,
+                      '30d': base, '90d': base, 'last_year': base}
+
+
+def test_facts_that_read_the_same_in_several_frames_are_one_candidate():
+    day = {'count': 3, 'date': '2026-11-08'}
+    frames = {key: dict(YEAR, busiest_day=day) for key in ('30d', '90d', 'year')}
+    snapshot = _snapshot(time_frames=frames, events={'today': '2026-11-08'})
+    days = [(score, fact['key']) for score, fact, _ in scored_facts(snapshot) if fact['kind'] == 'busiest_day']
+    # One survives: the year's, which has the recent-record bonus; the 30- and 90-day copies are gone.
+    assert days == [(KINDS['busiest_day'][1] + RECENT_RECORD_BONUS, 'year:busiest_day')]
+    # Resting the survivor doesn't bring a copy back in its place.
+    cooled = dict(snapshot, name_facts_passes=1, name_facts_shown={'year:busiest_day': 1})
+    assert [fact['key'] for _, fact, _ in scored_facts(cooled) if fact['kind'] == 'busiest_day'] == ['year:busiest_day']
+    # Different figures are different facts: each frame keeps its own.
+    other = dict(frames, **{'30d': dict(YEAR, busiest_day={'count': 2, 'date': '2026-11-01'})})
+    keys = {fact['key'] for _, fact, _ in scored_facts(_snapshot(time_frames=other)) if fact['kind'] == 'busiest_day'}
+    assert keys == {'30d:busiest_day', 'year:busiest_day'}
+
+
 def test_a_best_ever_rank_and_a_big_change_carry_a_bonus():
     ranked = [f for f in frame_facts(_snapshot(time_frames={'30d': dict(THIRTY, rank={'rank': 1, 'of': 9, 'best': 12})}), '30d')
               if f['kind'] == 'rank']

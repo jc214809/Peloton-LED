@@ -85,6 +85,9 @@ MAX_COMPARE_BONUS = 30
 COMPARE_BONUS_PER_CHANGE = 50
 RECENT_RECORD_BONUS = 30
 RECENT_RECORD_DAYS = 14
+# Only these frames' bests are records worth the bonus: the busiest day of the last 30 or 90 days is
+# nearly always a recent one, which says nothing.
+RECORD_FRAMES = ('all', 'year')
 # A fact just shown loses COOLDOWN_PENALTY, which wears off evenly over COOLDOWN_PASSES name pages
 # (shown ones: the pass counter is the dashboard's own, saved with the cache, so a restart keeps it).
 COOLDOWN_PASSES = 20
@@ -426,9 +429,11 @@ def kind_of(fact):
 
 def fact_score(fact, today=None, passes=0, shown=None):
     """A candidate's score: its kind's base, its own bonus, a bonus for a best set lately (the fact's
-    `when`, within RECENT_RECORD_DAYS of `today`), less the cool-down if shown in the last COOLDOWN_PASSES."""
+    `when`, within RECENT_RECORD_DAYS of `today`, in a RECORD_FRAMES frame), less the cool-down if shown in
+    the last COOLDOWN_PASSES."""
     score = KINDS[kind_of(fact)][1] + fact.get('bonus', 0)
-    if today and fact.get('when') and 0 <= _days_between(fact['when'], today) <= RECENT_RECORD_DAYS:
+    if (today and fact.get('when') and fact['key'].split(':')[0] in RECORD_FRAMES
+            and 0 <= _days_between(fact['when'], today) <= RECENT_RECORD_DAYS):
         score += RECENT_RECORD_BONUS
     for key, penalty in ((fact['key'], COOLDOWN_PENALTY), (kind_key(fact), KIND_COOLDOWN_PENALTY)):
         last = (shown or {}).get(key)
@@ -456,16 +461,22 @@ def _counter(snapshot):
 def scored_facts(snapshot):
     """Every candidate headline as (score, fact, ranking), best first (ties by key). `ranking` is the
     discipline's top three for a discipline's headline, else None. Each fact has its `key`
-    ('30d:rank', 'events:since:yoga'), the same from one refresh to the next, for the cool-down."""
+    ('30d:rank', 'events:since:yoga'), the same from one refresh to the next, for the cool-down.
+    Facts that read the same (a busiest day that is the same in the 30-day, 90-day and year frames) are
+    one candidate: the one that scores best before any cool-down, the earlier frame on a tie."""
     passes, shown = _counter(snapshot)
     today = (snapshot.get('events') or {}).get('today')
     today = date.fromisoformat(today) if today else None
-    found = []
+    best = {}
     for frame in FRAME_ORDER:
         pairs = [(fact, None) for fact in frame_facts(snapshot, frame)] + frame_subjects(snapshot, frame)
         for fact, ranking in pairs:
             fact = dict(fact, key=f'{frame}:{fact["kind"]}')
-            found.append((fact_score(fact, today, passes or 0, shown), fact, ranking))
+            same = (fact['kind'], tuple(fact['lines']))
+            fresh = fact_score(fact, today)
+            if same not in best or fresh > best[same][0]:
+                best[same] = (fresh, fact, ranking)
+    found = [(fact_score(fact, today, passes or 0, shown), fact, ranking) for _, fact, ranking in best.values()]
     return sorted(found, key=lambda item: (-item[0], item[1]['key']))
 
 

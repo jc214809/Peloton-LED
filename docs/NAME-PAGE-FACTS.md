@@ -448,6 +448,11 @@ counts cycles; the pass index is only the preview's fallback. Departure from the
 cools down (`KIND_COOLDOWN_PENALTY`), since otherwise HIGHEST OUTPUT from five frames took every page in
 turn. In the demo log, 24 pages show 20+ different headlines and no fact twice within 5 pages.
 Weights are a first guess; tune them with `list_facts.py` on real logs.
+First tuning (Joel's 2,137-workout log on PelotonPi, 2026-11-08): the recent-record bonus applies only to
+the all-time and year frames (`RECORD_FRAMES`), since the busiest day of the last 30 or 90 days is nearly
+always recent; and facts that read the same in several frames (`BUSIEST DAY 3 WORKOUTS NOV 8 2026` in
+30 days, 90 days and the year) are one candidate. Still open: a best's label doesn't name its window
+(`LONGEST WORKOUT` 163 MIN for 30 days and 299 for lifetime read alike); a fix needs the 15-character fit test.
 
 Planned:
 
