@@ -1,18 +1,15 @@
-"""The name page's highlights, varied from pass to pass.
+"""The name page's highlights, chosen by score.
 
-Every pass shows the total and this week, then one time frame's story: a headline fact, then that
-frame's instructor top three (three highlights). Each pass takes the next frame (all time, the last
-30 days, this year, ...); a frame that comes round again shows its next fact, so a full page is six
-highlights, as before, whatever it shows. After a frame's general facts come its subjects: one of its
-most-done disciplines (the discipline's count, then that discipline's instructor top three), and
-its most-seen instructors. A last pseudo-frame, `events`, has the facts measured from a date instead
-(this day in an earlier year, a comeback, a first, time since): it drops out when there are none.
-On the day of the account's anniversary, every pass has it as its headline (anniversary_fact).
-Everything comes from the dashboard cache and the workout
-log (peloton.activity.frame_stats); the log's figures stay empty until its backfill is complete,
-and then the page falls back to what's left.
-
-Pass 0 is all time: the top discipline and the all-time top three, as the page always began.
+Every page shows the total, two headline facts of different kinds, then an instructor top three: six
+highlights, as before. Every fact the other steps build (time frames, measures and bests, comparisons,
+events; frame_facts) is a candidate with a kind and a score: a base score for its kind (KINDS), plus a
+bonus for a first place, a big change or a fresh record. A fact shown lately scores lower (a cool-down
+of COOLDOWN_PASSES pages, remembered in the dashboard cache so a restart doesn't repeat it), so the best
+facts take turns. The top three is a headline's own when that headline is a discipline's, else the
+general ones take turns (frame_rankings). On the day of the account's anniversary, it is the first headline
+(anniversary_fact).
+Everything comes from the dashboard cache and the workout log (peloton.activity.frame_stats); the log's
+figures stay empty until its backfill is complete, and then the page falls back to what's left.
 """
 from datetime import date
 
@@ -21,8 +18,8 @@ from .selection import normalize_discipline
 from .totals import total_workout_count
 
 RANKS = ('TOP', '2ND', '3RD')
-# The order frames take turns in. Not 'week' (THIS WEEK is on every page).
-# 'events' (dates, not a window) comes last and drops out when there is nothing to say.
+# The frames whose facts are candidates, in the order the general top threes take turns. Not 'week'
+# (the Goals screen covers it). 'events' (dates, not a window) has no top three of its own.
 FRAME_ORDER = ('all', '30d', 'year', '90d', 'last_year', 'last_week', 'events')
 # A ranking for a frame or one discipline needs three instructors with at least this many classes
 # each; fewer is too little to call a ranking (e.g. one strength class in 30 days).
@@ -65,6 +62,38 @@ MAX_LAST_WITH_FACTS = 2
 EVENT_WINDOW_DAYS = 14
 MIN_COMEBACK_DAYS = 60
 MIN_HISTORY_DAYS = 30
+# Scoring. A kind's (group, base score); two headlines are never the same group. A kind is the part of a
+# fact's `kind` before a colon ('instructor:jess' is 'instructor'), so a kind's per-subject facts share it.
+KINDS = {
+    'on_this_day': ('event', 90), 'comeback': ('event', 85), 'new_discipline': ('event', 85),
+    'since': ('event', 60), 'last_class_with': ('event', 50),
+    'rank': ('record', 80), 'streak': ('record', 65), 'busiest_week': ('record', 55),
+    'busiest_month': ('record', 55), 'busiest_day': ('record', 55), 'best_output': ('record', 55),
+    'best_strive': ('record', 55), 'longest': ('record', 50),
+    'comparison': ('trend', 70),
+    'subject': ('discipline', 45), 'most': ('discipline', 40), 'share': ('discipline', 35),
+    'top_discipline': ('discipline', 40),
+    'total': ('count', 45), 'active_days': ('count', 30),
+    'classes': ('variety', 30), 'instructors': ('variety', 30), 'instructor': ('instructor', 35),
+    'average_week': ('average', 25), 'average_class': ('average', 20),
+    'anniversary': ('anniversary', 100),
+}
+# A first place ("BEST EVER") scores this much more; a comparison up to MAX_COMPARE_BONUS more (each
+# percent of change is COMPARE_BONUS_PER_CHANGE / 100); a best set within RECENT_RECORD_DAYS this much.
+RANK_FIRST_BONUS = 15
+MAX_COMPARE_BONUS = 30
+COMPARE_BONUS_PER_CHANGE = 50
+RECENT_RECORD_BONUS = 30
+RECENT_RECORD_DAYS = 14
+# A fact just shown loses COOLDOWN_PENALTY, which wears off evenly over COOLDOWN_PASSES name pages
+# (shown ones: the pass counter is the dashboard's own, saved with the cache, so a restart keeps it).
+COOLDOWN_PASSES = 20
+COOLDOWN_PENALTY = 100
+# Showing a kind (HIGHEST OUTPUT, from any frame) also cools the whole kind down, less, so one kind's
+# many frames don't take every page in turn.
+KIND_COOLDOWN_PENALTY = 40
+# Headlines on a page, between the total and the instructor top three.
+HEADLINES = 2
 ORDINALS = {2: '2ND', 3: '3RD', 4: '4TH', 5: '5TH'}
 MONTHS = ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
 # A label holds 15 characters of the stats font; a longer discipline name uses its last word.
@@ -146,7 +175,7 @@ def frame_subjects(snapshot, key):
             lambda rank, noun=noun: f'{rank} {noun}', found.get('instructor_counts'), names, MIN_RANKED_CLASSES,
             short_for=lambda rank, noun=noun: f'{rank} {noun.split()[-1]}')
         if ranking:
-            headline = {'label': noun, 'value': f'{found["workouts"]} WORKOUTS',
+            headline = {'kind': f'subject:{slug}', 'label': noun, 'value': f'{found["workouts"]} WORKOUTS',
                         'lines': [_plural(found['workouts'], 'WORKOUT'), in_words]}
             if len(noun) > MAX_LABEL_CHARS:
                 headline['short_label'] = noun.split()[-1]
@@ -189,41 +218,43 @@ def _measure_facts(stats, title):
     facts = []
     minutes = stats.get('minutes') or 0
     if minutes:
-        facts.append({'label': title, 'value': f'{round(minutes / workouts)} MIN AVERAGE',
+        facts.append({'kind': 'average_class', 'label': title, 'value': f'{round(minutes / workouts)} MIN AVERAGE',
                       'lines': ['AVERAGE CLASS', _plural(round(minutes / workouts), 'MINUTE')]})
     if (stats.get('days') or 0) >= MIN_AVERAGE_WEEK_DAYS:
         average = workouts * 7 / stats['days']
-        facts.append({'label': title, 'value': f'{average:.1f} PER WEEK',
+        facts.append({'kind': 'average_week', 'label': title, 'value': f'{average:.1f} PER WEEK',
                       'lines': ['AVERAGE WEEK', f'{average:.1f} WORKOUTS']})
     done = sorted((stats.get('disciplines') or {}).items(), key=lambda item: (-item[1], item[0]))
     if workouts >= MIN_SHARE_WORKOUTS and done and done[0][1] >= MIN_COUNT:
-        facts.append({'label': title, 'value': f'{done[0][0]} {done[0][1]} OF {workouts}',
+        facts.append({'kind': 'share', 'label': title, 'value': f'{done[0][0]} {done[0][1]} OF {workouts}',
                       'lines': [_share_line(done[0][1], workouts, done[0][0]), 'OF WORKOUTS']})
     rank = stats.get('rank')
     if rank and rank['rank'] <= MAX_SHOWN_RANK:
         words = 'BEST EVER' if rank['rank'] == 1 else f'{ORDINALS[rank["rank"]]} BEST EVER'
-        facts.append({'label': title, 'value': f'{words} / {workouts}', 'lines': [words, _plural(workouts, 'WORKOUT')]})
+        facts.append({'kind': 'rank', 'label': title, 'value': f'{words} / {workouts}',
+                      'lines': [words, _plural(workouts, 'WORKOUT')],
+                      'bonus': RANK_FIRST_BONUS if rank['rank'] == 1 else 0})
     for key, label, least, month in (('busiest_day', 'BUSIEST DAY', MIN_BEST_DAY, False),
                                      ('busiest_week', 'BUSIEST WEEK', MIN_BEST_PERIOD, False),
                                      ('busiest_month', 'BUSIEST MONTH', MIN_BEST_PERIOD, True)):
         best = stats.get(key)
         if best and best['count'] >= least:
             when = _date_words(best['date'], month_only=month)
-            facts.append({'label': label, 'value': f'{best["count"]} / {when}',
+            facts.append({'kind': key, 'label': label, 'value': f'{best["count"]} / {when}', 'when': best['date'],
                           'lines': [_plural(best['count'], 'WORKOUT'), f'OF {when}' if key == 'busiest_week' else when]})
     longest = stats.get('longest')
     if longest and longest.get('minutes'):
-        facts.append({'label': 'LONGEST WORKOUT', 'value': f'{longest["minutes"]} MIN',
+        facts.append({'kind': 'longest', 'label': 'LONGEST WORKOUT', 'value': f'{longest["minutes"]} MIN',
                       'lines': [_plural(longest['minutes'], 'MINUTE'), discipline_name(longest.get('discipline') or '')]})
     output = stats.get('best_output')
     if output:
         kind = discipline_name(output.get('discipline') or '')
-        facts.append({'label': 'HIGHEST OUTPUT', 'value': f'{_round_half_up(output["kj"])} KJ',
+        facts.append({'kind': 'best_output', 'label': 'HIGHEST OUTPUT', 'value': f'{_round_half_up(output["kj"])} KJ',
                       'lines': [f'{_round_half_up(output["kj"]):,} KJ',
                                 f'{output["minutes"]} MIN {kind}' if output.get('minutes') else kind]})
     strive = stats.get('best_strive')
     if strive:
-        facts.append({'label': 'BEST STRIVE', 'value': f'{_round_half_up(strive["points"])} POINTS',
+        facts.append({'kind': 'best_strive', 'label': 'BEST STRIVE', 'value': f'{_round_half_up(strive["points"])} POINTS',
                       'lines': [f'{_round_half_up(strive["points"]):,} POINTS',
                                 discipline_name(strive.get('discipline') or '')]})
     return facts
@@ -241,7 +272,8 @@ def _comparison_fact(key, stats):
     if abs(change) < MIN_COMPARE_DIFF or abs(change) < MIN_COMPARE_CHANGE * before['workouts']:
         return None
     label = f'{stats["year"]} VS {stats["year"] - 1}' if key == 'year' else f'VS {key[:-1]} BEFORE'
-    return {'label': label, 'value': f'{now} VS {before["workouts"]}',
+    return {'kind': 'comparison', 'label': label, 'value': f'{now} VS {before["workouts"]}',
+            'bonus': min(MAX_COMPARE_BONUS, int(abs(change) / before['workouts'] * COMPARE_BONUS_PER_CHANGE)),
             'lines': [f'{now:,} VS {before["workouts"]:,}', f'{change:+,} WORKOUTS']}
 
 
@@ -266,7 +298,7 @@ def anniversary_fact(snapshot):
     years = (snapshot.get('events') or {}).get('anniversary')
     if not years:
         return None
-    return {'label': 'ANNIVERSARY', 'value': f'{years} ON PELOTON', 'lines': [_plural(years, 'YEAR'), 'ON PELOTON']}
+    return {'kind': 'anniversary', 'label': 'ANNIVERSARY', 'value': f'{years} ON PELOTON', 'lines': [_plural(years, 'YEAR'), 'ON PELOTON']}
 
 
 def event_facts(snapshot):
@@ -281,7 +313,7 @@ def event_facts(snapshot):
         return facts
     for found in events.get('on_this_day') or []:
         noun = discipline_name(found['discipline']) if found.get('discipline') else 'WORKOUT'
-        facts.append({'label': 'ON THIS DAY', 'value': f'{found["years_ago"]} YEARS AGO / {noun}',
+        facts.append({'kind': 'on_this_day', 'label': 'ON THIS DAY', 'value': f'{found["years_ago"]} YEARS AGO / {noun}',
                       'lines': [f'{_plural(found["years_ago"], "YEAR")} AGO',
                                 _fit_line(f'{found["minutes"]} MIN {noun}', f'{found["minutes"]} MIN {noun.split()[-1]}',
                                           noun.split()[-1]) if found['minutes'] else noun.split()[-1]]})
@@ -296,12 +328,12 @@ def event_facts(snapshot):
         gap = (date.fromisoformat(found['last']) - date.fromisoformat(found['before_last'])).days
         if _days_between(found['last'], today) <= EVENT_WINDOW_DAYS and gap >= MIN_COMEBACK_DAYS:
             after = f'AFTER {gap} DAYS' if gap <= MAX_SINCE_DAYS else f'AFTER {round(gap / 365)} YEARS'
-            facts.append({'label': 'COMEBACK', 'value': f'{slug} {after}', 'lines': [_short_noun(slug), after]})
+            facts.append({'kind': f'comeback:{slug}', 'label': 'COMEBACK', 'value': f'{slug} {after}', 'lines': [_short_noun(slug), after]})
     for slug in sorted(disciplines, key=lambda name: (disciplines[name]['first'], name)):
         found = disciplines[slug]
         if (began and _days_between(found['first'], today) <= EVENT_WINDOW_DAYS
                 and (date.fromisoformat(found['first']) - date.fromisoformat(began)).days >= MIN_HISTORY_DAYS):
-            facts.append({'label': 'NEW DISCIPLINE', 'value': f'{slug} FIRST TIME',
+            facts.append({'kind': f'new_discipline:{slug}', 'label': 'NEW DISCIPLINE', 'value': f'{slug} FIRST TIME',
                           'lines': [_short_noun(slug), 'FIRST TIME']})
     since = 0
     for slug in ranked:
@@ -309,7 +341,7 @@ def event_facts(snapshot):
         days = _days_between(found['last'], today)
         if found['workouts'] >= MIN_EVENT_WORKOUTS and MIN_SINCE_DAYS <= days <= MAX_SINCE_DAYS and since < MAX_SINCE_FACTS:
             since += 1
-            facts.append({'label': 'SINCE', 'value': f'{days} DAYS SINCE {slug}',
+            facts.append({'kind': f'since:{slug}', 'label': 'SINCE', 'value': f'{days} DAYS SINCE {slug}',
                           'lines': [f'{days:,} DAYS SINCE', _fit_line(f'LAST {discipline_name(slug)}',
                                                                       f'LAST {discipline_name(slug).split()[-1]}')]})
     names = snapshot.get('instructor_names') or {}
@@ -320,7 +352,7 @@ def event_facts(snapshot):
         if (names.get(identity) and found['workouts'] >= MIN_EVENT_WORKOUTS
                 and _days_between(found['last'], today) >= MIN_LAST_WITH_DAYS and last_with < MAX_LAST_WITH_FACTS):
             last_with += 1
-            facts.append({'label': 'LAST CLASS WITH', 'value': f'{names[identity]} / {found["last"]}',
+            facts.append({'kind': f'last_class_with:{identity}', 'label': 'LAST CLASS WITH', 'value': f'{names[identity]} / {found["last"]}',
                           'lines': [names[identity].upper(), _date_words(found['last'])]})
     return facts
 
@@ -338,29 +370,29 @@ def frame_facts(snapshot, key):
     title = frame_words(key, stats)[0] if key == 'all' or stats else None
     if key == 'all':
         if favorite:
-            facts.append({'label': 'TOP DISCIPLINE', 'value': f'{favorite[0]} / {favorite[1]:,}',
+            facts.append({'kind': 'top_discipline', 'label': 'TOP DISCIPLINE', 'value': f'{favorite[0]} / {favorite[1]:,}',
                           'lines': [favorite[0].upper(), _plural(favorite[1], 'WORKOUT')]})
     elif stats and stats.get('workouts'):
         workouts, minutes = stats['workouts'], stats.get('minutes') or 0
-        facts.append({'label': title, 'value': f'{workouts} WORKOUTS / {minutes} MIN',
+        facts.append({'kind': 'total', 'label': title, 'value': f'{workouts} WORKOUTS / {minutes} MIN',
                       'lines': [_plural(workouts, 'WORKOUT'), _time_line(minutes)]})
         done = sorted((stats.get('disciplines') or {}).items(), key=lambda item: (-item[1], item[0]))
         if (done and done[0][1] >= MIN_COUNT
                 and (not favorite or done[0][0] != normalize_discipline(favorite[0]))):
             slug, count = done[0]
             # MOST IN 30 DAYS is exactly 15 characters, the most a label holds.
-            facts.append({'label': f'MOST {frame_words(key, stats)[1]}',
+            facts.append({'kind': 'most', 'label': f'MOST {frame_words(key, stats)[1]}',
                           'value': f'{discipline_name(slug)} / {count}',
                           'lines': [discipline_name(slug), _plural(count, 'WORKOUT')]})
         if (stats.get('active_days') or 0) >= MIN_COUNT and stats.get('days'):
-            facts.append({'label': title, 'value': f'{stats["active_days"]} / {stats["days"]} DAYS',
+            facts.append({'kind': 'active_days', 'label': title, 'value': f'{stats["active_days"]} / {stats["days"]} DAYS',
                           'lines': ['ACTIVE DAYS', f'{stats["active_days"]:,} OF {stats["days"]:,}']})
     if stats:
         if (stats.get('classes') or 0) >= MIN_COUNT:
-            facts.append({'label': title, 'value': f'{stats["classes"]:,} DIFFERENT CLASSES',
+            facts.append({'kind': 'classes', 'label': title, 'value': f'{stats["classes"]:,} DIFFERENT CLASSES',
                           'lines': [f'{stats["classes"]:,} DIFFERENT', 'CLASSES']})
         if (stats.get('instructors') or 0) >= MIN_COUNT:
-            facts.append({'label': title, 'value': f'{stats["instructors"]:,} DIFFERENT INSTRUCTORS',
+            facts.append({'kind': 'instructors', 'label': title, 'value': f'{stats["instructors"]:,} DIFFERENT INSTRUCTORS',
                           'lines': [f'{stats["instructors"]:,} DIFFERENT', 'INSTRUCTORS']})
         facts.extend(_measure_facts(stats, title))
         comparison = _comparison_fact(key, stats)
@@ -369,7 +401,7 @@ def frame_facts(snapshot, key):
         facts.extend(_instructor_facts(snapshot, stats, title))
     best_weekly = (snapshot.get('streaks') or {}).get('best_weekly')
     if key == 'all' and isinstance(best_weekly, int) and best_weekly >= MIN_STREAK_WEEKS:
-        facts.append({'label': title, 'value': f'{best_weekly} WEEK STREAK',
+        facts.append({'kind': 'streak', 'label': title, 'value': f'{best_weekly} WEEK STREAK',
                       'lines': [f'{best_weekly} WEEK STREAK', 'YOUR BEST']})
     return facts
 
@@ -383,58 +415,97 @@ def _instructor_facts(snapshot, stats, title):
     for identity in sorted(by_instructor, key=lambda who: (-by_instructor[who].get('workouts', 0), who)):
         found, name = by_instructor[identity], names.get(identity)
         if name and (found.get('workouts') or 0) >= MIN_COUNT:
-            facts.append({'label': title, 'value': f'{name} / {found["minutes"]} MIN',
+            facts.append({'kind': f'instructor:{identity}', 'label': title, 'value': f'{name} / {found["minutes"]} MIN',
                           'lines': [name.upper(), _time_line(found.get('minutes') or 0)]})
     return facts
 
 
-def frame_stories(snapshot, key):
-    """A frame's pages as (headline, top three) pairs, either of which can be None: the general
-    facts and top threes pair off in order (the shorter list wraps), and the subjects (frame_subjects)
-    take every other turn, so a discipline's page comes round soon, not after all the general ones."""
-    facts, rankings = frame_facts(snapshot, key), frame_rankings(snapshot, key)
-    stories = [(facts[index % len(facts)] if facts else None, rankings[index % len(rankings)] if rankings else None)
-               for index in range(max(len(facts), len(rankings)))]
-    subjects = frame_subjects(snapshot, key)
-    merged = []
-    for index in range(max(len(stories), len(subjects))):
-        merged += stories[index:index + 1] + subjects[index:index + 1]
-    return merged
+def kind_of(fact):
+    return fact['kind'].split(':')[0]
 
 
-def username_frames(snapshot):
-    """The frames that take a turn, in order. A frame needs a headline and an instructor top three,
-    so every page is six highlights: LAST WEEK, which rarely has three instructors, drops out. When
-    no frame has both (a rider with no instructor data), any frame with something to show takes
-    a turn, and its page is shorter."""
-    stories = {key: frame_stories(snapshot, key) for key in FRAME_ORDER}
-    whole = [key for key in FRAME_ORDER if any(fact and ranking for fact, ranking in stories[key])]
-    return whole or [key for key in FRAME_ORDER if stories[key]]
+def fact_score(fact, today=None, passes=0, shown=None):
+    """A candidate's score: its kind's base, its own bonus, a bonus for a best set lately (the fact's
+    `when`, within RECENT_RECORD_DAYS of `today`), less the cool-down if shown in the last COOLDOWN_PASSES."""
+    score = KINDS[kind_of(fact)][1] + fact.get('bonus', 0)
+    if today and fact.get('when') and 0 <= _days_between(fact['when'], today) <= RECENT_RECORD_DAYS:
+        score += RECENT_RECORD_BONUS
+    for key, penalty in ((fact['key'], COOLDOWN_PENALTY), (kind_key(fact), KIND_COOLDOWN_PENALTY)):
+        last = (shown or {}).get(key)
+        if last is not None and passes - last < COOLDOWN_PASSES:
+            score -= penalty * (1 - max(0, passes - last) / COOLDOWN_PASSES)
+    return score
+
+
+def kind_key(fact):
+    return f'kind:{kind_of(fact)}'
+
+
+def shown_keys(details):
+    """What a name page's showing records: each chosen fact's key and its kind's."""
+    return [key for detail in details if detail.get('key') for key in (detail['key'], kind_key(detail))]
+
+
+def _counter(snapshot):
+    """(passes, shown): how many name pages have been shown, and the count at each fact's last showing."""
+    passes, shown = snapshot.get('name_facts_passes'), snapshot.get('name_facts_shown')
+    ok = isinstance(passes, int) and not isinstance(passes, bool)
+    return (passes if ok else None), (shown if isinstance(shown, dict) and ok else {})
+
+
+def scored_facts(snapshot):
+    """Every candidate headline as (score, fact, ranking), best first (ties by key). `ranking` is the
+    discipline's top three for a discipline's headline, else None. Each fact has its `key`
+    ('30d:rank', 'events:since:yoga'), the same from one refresh to the next, for the cool-down."""
+    passes, shown = _counter(snapshot)
+    today = (snapshot.get('events') or {}).get('today')
+    today = date.fromisoformat(today) if today else None
+    found = []
+    for frame in FRAME_ORDER:
+        pairs = [(fact, None) for fact in frame_facts(snapshot, frame)] + frame_subjects(snapshot, frame)
+        for fact, ranking in pairs:
+            fact = dict(fact, key=f'{frame}:{fact["kind"]}')
+            found.append((fact_score(fact, today, passes or 0, shown), fact, ranking))
+    return sorted(found, key=lambda item: (-item[0], item[1]['key']))
+
+
+def _general_ranking(snapshot, turn):
+    """The general instructor top threes (all time, 30 days, ...) take turns, one per page."""
+    rankings = [ranking for frame in FRAME_ORDER if frame != 'events' for ranking in frame_rankings(snapshot, frame)]
+    return rankings[turn % len(rankings)] if rankings else []
+
+
+def record_name_facts(passes, shown, keys):
+    """The counter after a name page showed `keys`: one more page, those facts stamped with it, and
+    facts whose cool-down is over forgotten."""
+    passes += 1
+    shown = {key: at for key, at in shown.items() if passes - at < COOLDOWN_PASSES}
+    shown.update({key: passes for key in keys})
+    return passes, shown
 
 
 def username_details(snapshot, pass_index=0):
-    """This pass's highlights: the total, this week, then the pass's frame: a headline fact and an
-    instructor top three. A frame that comes round again shows its next fact and top three."""
+    """This page's highlights: the total, two headlines (the best-scoring facts, of different groups;
+    the anniversary first on its day), then an instructor top three. `pass_index` turns the top threes
+    when the snapshot has no name-page counter (a preview)."""
     details = []
     total = total_workout_count(snapshot.get('totals') or {})
     if total is not None:
         details.append({'label': 'TOTAL WORKOUTS', 'value': f'{total:,}',
                         'lines': [f'{total:,}'], 'font_key': 'big', 'color_key': 'gold'})
-    progress = snapshot.get('weekly_progress') or {}
-    weekly_workouts = progress.get('workouts', 0)
-    weekly_minutes = progress.get('minutes', 0)
-    details.append({'label': 'THIS WEEK',
-                    'value': f'{weekly_workouts} WORKOUTS / {weekly_minutes} MIN',
-                    'lines': [f'{weekly_workouts} WORKOUTS', f'{weekly_minutes} MINUTES']})
-    frames = username_frames(snapshot)
+    chosen, rankings = [], []
     pinned = anniversary_fact(snapshot)
-    if frames:
-        key, visit = frames[pass_index % len(frames)], pass_index // len(frames)
-        stories = frame_stories(snapshot, key)
-        fact, ranking = stories[visit % len(stories)]
-        if fact or pinned:
-            details.append(pinned or fact)
-        details.extend(ranking or [])
-    elif pinned:
-        details.append(pinned)
-    return details
+    if pinned:
+        chosen.append(pinned)
+    groups = {KINDS[kind_of(fact)][0] for fact in chosen}
+    for _, fact, ranking in scored_facts(snapshot):
+        if len(chosen) == HEADLINES:
+            break
+        if KINDS[kind_of(fact)][0] not in groups:
+            chosen.append(fact)
+            groups.add(KINDS[kind_of(fact)][0])
+            rankings.append(ranking)
+    passes = _counter(snapshot)[0]
+    ranking = next((own for own in rankings if own), None) or _general_ranking(
+        snapshot, pass_index if passes is None else passes)
+    return details + chosen + ranking

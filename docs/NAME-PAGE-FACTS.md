@@ -10,19 +10,21 @@ Code: `peloton/username_facts.py` picks the highlights, `display/ui/username.py`
 
 ## How a page is built
 
-Every pass shows six highlights, 4 s each (24 s):
+Since step 6 (2026-11-08) a page is chosen by score, not by turns:
 
-1. `TOTAL WORKOUTS`: every pass.
-2. `THIS WEEK`: every pass.
-3. **Slot A**: one discipline fact, the next one each pass (`pass_index % available`).
-4. **Slots B (x3)**: one instructor top three, the next one each pass.
+1. `TOTAL WORKOUTS`: every page.
+2. **Headline 1** and 3. **Headline 2**: the two best-scoring facts, of different groups (`KINDS` in
+   `peloton/username_facts.py`). On the day of the account's anniversary, the anniversary is headline 1.
+4. to 6. **An instructor top three**: the first chosen discipline headline's own, else the general ones
+   (all time, 30 days, year, 90 days, last year, last week) take turns.
 
-A fact with too little data is left out of its slot's turn for that pass, so the page stays six
-highlights long. Facts from the workout log appear only once the log holds the whole history.
-
-Each slot cycles on its own, so every fact added to a slot makes each one in it come round less
-often: with 8 facts, each shows once every 8 passes. Past about 4 facts in a slot, add a slot
-(and one more 4 s highlight) instead.
+`THIS WEEK` is gone (the Goals screen covers it; Joel, 2026-11-08). A fact has a base score for its
+kind, a bonus (first place, a big change, a best set in the last 14 days), and loses 100 for 20 name
+pages after it shows (its kind loses 40), counted by the dashboard's own saved counter (`name_facts_passes`
+and `name_facts_shown` in the cache), so a restart doesn't repeat it. A fact with too little data
+isn't a candidate. A board with few facts (a log still downloading) shows a shorter page. Facts
+from the workout log appear only once the log holds the whole history.
+`python scripts/list_facts.py --demo` prints every candidate with its score and the first passes.
 
 ## Fitting rules
 
@@ -47,18 +49,15 @@ No idea below needs a new API call.
 
 ## Built
 
-Pass `n` takes frame `n % (frames that qualify)`; a frame coming round again (`n // frames`) shows
-its next headline fact and next top three.
+Every fact below is a candidate headline (step 6 scores them; see "How a page is built"); the frame
+only says what window it measures.
 
-| Every pass | Label | Lines | Shown when |
+| Every page | Label | Lines | Shown when |
 |---|---|---|---|
 | Highlight 1 | `TOTAL WORKOUTS` | `2,123` (big, gold) | the overview has a total |
-| Highlight 2 | `THIS WEEK` | `4 WORKOUTS` / `110 MINUTES` | always |
 
-**Frames**, in turn order: all time, last 30 days, this year, last 90 days, last year, last week
-(`FRAME_ORDER` in `peloton/username_facts.py`), then `events` (below). A frame takes a turn only if it has a headline and a
-top three (so every page is six highlights); last week rarely does and drops out. If no frame has
-both (a rider with no instructor data), any frame with something to show takes a turn.
+**Frames** (`FRAME_ORDER` in `peloton/username_facts.py`): all time, last 30 days, this year, last 90
+days, last year, last week, then `events` (below), which has no top three of its own.
 
 | Headline (highlight 3) | Label | Lines | Shown when |
 |---|---|---|---|
@@ -373,13 +372,8 @@ complete (except this week).
 | Highlight | What | Changes |
 |---|---|---|
 | 1 | `TOTAL WORKOUTS` | never |
-| 2 | `THIS WEEK` | never |
-| 3 | **Headline**: the best-scoring fact from any dimension | every pass |
-| 4–6 | **The pass's frame**: one instructor top three for that frame | every pass |
-
-Until step 6 adds scoring, the headline is the pass's frame's next fact in turn, so the page is one
-frame's story per pass. After step 6, the headline is whatever is most notable, and the frame
-keeps the top three varied.
+| 2, 3 | **Headlines**: the two best-scoring facts, of different groups (step 6; `THIS WEEK` is dropped) | every page |
+| 4–6 | **An instructor top three**: a chosen discipline's own, else the general ones in turn | every page |
 
 ### Step 0: ship what's built: done (PR #65, `varied-username-facts`)
 
@@ -440,7 +434,22 @@ Planned:
 - Anniversary: keep `created_at` in `PROFILE_KEYS` (`peloton/dashboard.py`); a test checks the
   slimmed profile still holds no personal fields beyond it.
 
-### Step 6: choosing what's interesting
+### Step 6: choosing what's interesting: done (branch `facts-step-6-scoring`)
+
+Built: every fact carries a `kind` and (in `scored_facts`) a `key`; `KINDS` maps a kind to its group and base
+score; `fact_score` adds the bonuses (`RANK_FIRST_BONUS`, `MAX_COMPARE_BONUS` scaled by the change,
+`RECENT_RECORD_BONUS` for a best dated within `RECENT_RECORD_DAYS`) and subtracts the cool-down.
+`username_details` is the total, the best two headlines of different groups, and a top three
+(a discipline headline's own, else `_general_ranking`). `frame_stories` and `username_frames` are gone
+(pass-per-frame turns no longer exist), so are THIS WEEK and pass 0's old page. The cool-down counts name
+pages in the dashboard's own saved counter (`Dashboard.acknowledge_name_facts` after the page is shown,
+`name_facts_passes` / `name_facts_shown` in the cache), not `pass_index`, which restarts at 0 and
+counts cycles; the pass index is only the preview's fallback. Departure from the plan: the kind itself also
+cools down (`KIND_COOLDOWN_PENALTY`), since otherwise HIGHEST OUTPUT from five frames took every page in
+turn. In the demo log, 24 pages show 20+ different headlines and no fact twice within 5 pages.
+Weights are a first guess; tune them with `list_facts.py` on real logs.
+
+Planned:
 
 - Every fact from steps 1–5 becomes a candidate with a kind, a key (e.g. `best:30d:workouts`) and a
   score from the signals in dimension 5.

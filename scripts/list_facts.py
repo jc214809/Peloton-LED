@@ -5,7 +5,9 @@
     python scripts/list_facts.py --log LOG --cache CACHE   # the discipline totals and names from the cache
 
 Shows each time frame's figures, then every highlight a frame has enough data for (headline facts,
-instructor top threes and one page per discipline, as the board would draw them), then what the first passes show.
+instructor top threes and one page per discipline, as the board would draw them), then every headline
+with its score (best first, before any cool-down), then the pages the first passes would show, each
+recorded as shown so the cool-down works as it does on the board.
 A log that isn't complete (its backfill unfinished) has no time-frame figures on the board; use
 --assume-complete to look at one anyway.
 """
@@ -20,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 from peloton.selection import normalize_discipline  # noqa: E402
 from peloton.username_facts import (FRAME_ORDER, frame_facts, frame_rankings, frame_subjects,  # noqa: E402
-                                    username_details, username_frames)
+                                    record_name_facts, scored_facts, shown_keys, username_details)
 from peloton.workout_log import WorkoutLog  # noqa: E402
 
 DEMO_DISCIPLINES = (('cycling', 5), ('strength', 4), ('stretching', 2), ('walking', 2), ('running', 1),
@@ -124,7 +126,9 @@ def show(snapshot, passes):
             note = '' if overview == logged else '   <-- differs'
             print(f'   {label:<16} overview {overview if overview is not None else "-":>5}  log {logged:>5}{note}')
         print()
-    for key in username_frames(snapshot):
+    for key in FRAME_ORDER:
+        if not (frame_facts(snapshot, key) or frame_rankings(snapshot, key) or frame_subjects(snapshot, key)):
+            continue
         print(f'== {key}')
         for fact in frame_facts(snapshot, key):
             print(f'   {fact["label"]:<16} {" / ".join(fact["lines"])}')
@@ -136,9 +140,16 @@ def show(snapshot, passes):
             print(f'   {headline["label"]:<16} {" / ".join(headline["lines"])}   then   '
                   + '  |  '.join(f'{d["label"]}: {d["lines"][0]} ({d["lines"][1]})' for d in ranking))
     print()
+    print('scores (base + bonuses, before any cool-down):')
+    for score, fact, ranking in scored_facts(snapshot):
+        print(f'   {score:>5.0f}  {fact["key"]:<34} {fact["label"]}: {" / ".join(fact["lines"])}')
+    print()
+    snapshot = dict(snapshot, name_facts_passes=0, name_facts_shown={})
     for index in range(passes):
         details = username_details(snapshot, index)
         print(f'pass {index}: ' + ' | '.join(d['label'] for d in details))
+        snapshot['name_facts_passes'], snapshot['name_facts_shown'] = record_name_facts(
+            snapshot['name_facts_passes'], snapshot['name_facts_shown'], shown_keys(details))
 
 
 def main(argv=None):

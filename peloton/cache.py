@@ -12,6 +12,7 @@ PERSISTED_KEYS = (
     'active_day_count', 'celebrated_pr_ids',
     'weekly_progress', 'celebrated_milestones', 'personal_records', 'streaks',
     'milestone_shown_at', 'celebrated_discipline_milestones', 'discipline_milestone_shown_at',
+    'name_facts_passes', 'name_facts_shown',
 )
 
 
@@ -70,6 +71,13 @@ def load_snapshot(path):
             parse_milestone_key(key) and isinstance(at, (int, float)) and not isinstance(at, bool)
             for key, at in shown.items())):
         del restored['discipline_milestone_shown_at']
+    # The name page's cool-down: damage only means facts may repeat sooner.
+    passes, facts = restored.get('name_facts_passes'), restored.get('name_facts_shown')
+    if 'name_facts_passes' in restored or 'name_facts_shown' in restored:
+        if (isinstance(passes, bool) or not isinstance(passes, int) or passes < 0 or not isinstance(facts, dict)
+                or not all(isinstance(at, int) and not isinstance(at, bool) for at in facts.values())):
+            restored.pop('name_facts_passes', None)
+            restored.pop('name_facts_shown', None)
     return restored
 
 

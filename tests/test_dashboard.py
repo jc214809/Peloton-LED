@@ -166,6 +166,29 @@ def test_milestone_celebrates_until_midnight_and_survives_restart(tmp_path):
     assert after['celebrated_milestones'] == [100, 1000] and after['milestone_shown_at'] == {}
 
 
+def test_name_page_cooldown_counts_pages_and_survives_restart(tmp_path):
+    dashboard, _, token = setup_dashboard(tmp_path, {})
+    dashboard.refresh()
+    assert dashboard.snapshot()['name_facts_passes'] == 0 and dashboard.snapshot()['name_facts_shown'] == {}
+    dashboard.acknowledge_name_facts(['30d:rank', 'kind:rank'])
+    dashboard.acknowledge_name_facts(['year:total'])
+    restarted = Dashboard(token, {}).snapshot()
+    assert restarted['name_facts_passes'] == 2
+    assert restarted['name_facts_shown'] == {'30d:rank': 1, 'kind:rank': 1, 'year:total': 2}
+    # A page with nothing recordable still counts, so the top threes keep turning.
+    again = Dashboard(token, {})
+    again.acknowledge_name_facts([])
+    assert again.snapshot()['name_facts_passes'] == 3
+
+
+def test_name_page_cooldown_survives_a_failed_write(tmp_path, caplog):
+    dashboard, _, _ = setup_dashboard(tmp_path, {})
+    dashboard.refresh()
+    with patch.object(dashboard, '_persist_snapshot', side_effect=OSError('disk full')):
+        dashboard.acknowledge_name_facts(['a'])
+    assert dashboard.snapshot()['name_facts_passes'] == 1 and 'Could not persist name page state' in caplog.text
+
+
 def test_milestone_day_ends_at_the_boards_midnight_not_utcs(tmp_path):
     # 8 pm in New York is already tomorrow in UTC; the celebration still runs to New York's midnight.
     dashboard, _, _ = setup_dashboard(tmp_path, {'milestones': [100], 'timezone': 'America/New_York'})
