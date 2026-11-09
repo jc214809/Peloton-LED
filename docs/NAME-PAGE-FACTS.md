@@ -444,7 +444,7 @@ Planned:
 
 - Every fact from steps 1–5 becomes a candidate with a kind, a key (e.g. `best:30d:workouts`) and a
   score from the signals in dimension 5.
-- Highlight 3 shows the top-scoring candidate whose kind isn't already on the page.
+- Highlights 2 and 3 show the two top-scoring candidates, of different kinds (THIS WEEK is dropped: see "Decisions for step 6").
 - Cool-down: `name_facts_shown` in the dashboard cache (`{key: last shown}`, per rider, like
   `milestone_shown_at`) lowers a fact's score for a day after it shows, so a restart doesn't repeat
   it.
@@ -465,10 +465,16 @@ Planned:
 - New log fields (live vs on-demand, class type) only if a fact needs them; one `LOG_VERSION` bump
   for all of them at once.
 
-### Open questions
+### Decisions for step 6 (Joel, 2026-11-08)
 
-- Should highlight 3 sometimes be two facts (and the top three only two names) when something very
-  notable is due, or is one headline per pass enough?
-- Frames on 32 rows: the same, or fewer (week, 30 days, year, all time) since each highlight is
-  tighter there?
-- Cool-down length: a day, or a number of passes?
+- **THIS WEEK goes, always.** The Goals screen covers the week. Highlight 2 becomes a second
+  headline, so the page is `TOTAL WORKOUTS`, two scored headlines of different kinds, then the
+  instructor top three: still six highlights, 24 s, `screen_times.py` untouched. (A board with no
+  weekly goals loses the weekly count on the name page; accepted.) The anniversary pin stays: it
+  takes the first headline.
+- **Cool-down is a number of passes**, not a day: `name_facts_shown` holds the pass counter at the
+  last showing, per rider, in the dashboard cache (a named constant for the length, about 20).
+  A restart must not reset it, so the counter is saved too. Check how the pass counter behaves
+  across restarts and multi-rider cycles before relying on it.
+- **Same frames on 32 rows** as on 64.
+- The top three keeps three names.
