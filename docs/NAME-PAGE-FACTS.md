@@ -47,16 +47,39 @@ No idea below needs a new API call.
 
 ## Built
 
-| Slot | Label | Lines | Shown when |
+Pass `n` takes frame `n % (frames that qualify)`; a frame coming round again (`n // frames`) shows
+its next headline fact and next top three.
+
+| Every pass | Label | Lines | Shown when |
 |---|---|---|---|
-| Every pass | `TOTAL WORKOUTS` | `2,123` (big, gold) | the overview has a total |
-| Every pass | `THIS WEEK` | `4 WORKOUTS` / `110 MINUTES` | always |
-| A | `TOP DISCIPLINE` | `CYCLING` / `641 WORKOUTS` | any discipline totals |
-| A | `LAST 30 DAYS` | `12 WORKOUTS` / `340 MINUTES` | 1+ workout in 30 days |
-| A | `MOST IN 30 DAYS` | `STRENGTH` / `6 WORKOUTS` | 2+ workouts, and not the all-time top discipline |
-| B | `TOP` / `2ND` / `3RD INSTRUCTOR` | `JESS SIMS` / `300 CLASSES` | any named instructor |
-| B | `TOP` / `2ND` / `3RD IN 30 DAYS` | `JESS SIMS` / `4 CLASSES` | 3 instructors with 2+ classes each |
-| B | `TOP` / `2ND` / `3RD STRENGTH` (each discipline, most-done first) | `JESS SIMS` / `150 CLASSES` | 3 instructors with 2+ classes each in it |
+| Highlight 1 | `TOTAL WORKOUTS` | `2,123` (big, gold) | the overview has a total |
+| Highlight 2 | `THIS WEEK` | `4 WORKOUTS` / `110 MINUTES` | always |
+
+**Frames**, in turn order: all time, last 30 days, this year, last 90 days, last year, last week
+(`FRAME_ORDER` in `peloton/username_facts.py`). A frame takes a turn only if it has a headline and a
+top three (so every page is six highlights); last week rarely does and drops out. If no frame has
+both (a rider with no instructor data), any frame with something to show takes a turn.
+
+| Headline (highlight 3) | Label | Lines | Shown when |
+|---|---|---|---|
+| All time | `TOP DISCIPLINE` | `CYCLING` / `641 WORKOUTS` | any discipline totals |
+| Workouts and time | `LAST 30 DAYS`, `LAST 90 DAYS`, `IN 2026`, `IN 2025`, `LAST WEEK` | `12 WORKOUTS` / `340 MINUTES` (`164 HOURS` from 600 minutes) | 1+ workout in the frame |
+| Most-done discipline | `MOST IN 30 DAYS` (`MOST IN 2026`, ...) | `STRENGTH` / `6 WORKOUTS` | 2+ workouts, and not the all-time top discipline |
+| Active days | the frame's title | `ACTIVE DAYS` / `10 OF 30` | 2+ active days |
+| Different classes | the frame's title (`LIFETIME` for all time) | `318 DIFFERENT` / `CLASSES` | 2+, by class ID |
+| Different instructors | the frame's title | `31 DIFFERENT` / `INSTRUCTORS` | 2+ |
+
+| Top three (highlights 4-6) | Labels | Lines | Shown when |
+|---|---|---|---|
+| All time, every class | `TOP` / `2ND` / `3RD INSTRUCTOR` | `JESS SIMS` / `300 CLASSES` | any named instructor |
+| All time, one discipline (each, most-done first; step 2 moves these onto the frames) | `TOP` / `2ND` / `3RD STRENGTH` | `JESS SIMS` / `150 CLASSES` | 3 instructors with 2+ classes each in it |
+| A frame's own classes | `TOP` / `2ND` / `3RD IN 30 DAYS` (`IN 90 DAYS`, `IN 2026`, ...) | `JESS SIMS` / `4 CLASSES` | 3 instructors with 2+ classes each in the frame |
+
+Pass 0 is all time: `TOP DISCIPLINE` and the all-time top three, byte for byte what the board showed
+before any of this.
+
+Check any log against these with `python scripts/list_facts.py --log <log> --cache <cache> --tz <zone>`
+(or `--demo`): it prints each frame's figures, every fact above, and the first passes.
 
 Tried and dropped (Joel, 2026-11-08): **least-done discipline** (not interesting), and **calendar months** (`IN NOV` is nearly empty on the 1st or the 3rd; use a rolling 30 days).
 
@@ -210,7 +233,7 @@ Check each label against the 15-character limit: `TOP OF LIFETIME` is exactly 15
 
 One helper in `peloton/activity.py`, `period_stats(workouts, start, end)`, makes one pass over the
 log for a frame and returns every stat above. Frames are a list of (key, label word, start, end),
-and today's `recent_activity` becomes `period_stats` for the last 30 days. The facts module then picks the
+and `recent_activity` became `period_stats` for the last 30 days (step 1). The facts module then picks the
 pass's frame and builds highlights from its stats.
 
 Head to head (ROADMAP item 6) wants the same thing, "the last 30 days instead of this week" for a set of
@@ -333,24 +356,25 @@ Until step 6 adds scoring, the headline is the pass's frame's next fact in turn,
 frame's story per pass. After step 6, the headline is whatever is most notable, and the frame
 keeps the top three varied.
 
-### Step 0: ship what's built (this branch, `varied-username-facts`)
+### Step 0: ship what's built: done (PR #65, `varied-username-facts`)
 
 Slot A (top discipline, last 30 days, most in 30 days) and slot B (instructor top threes for all
-time, 30 days and each discipline). Already tested and documented.
+time, 30 days and each discipline). Step 1 reshaped these into frames.
 
-### Step 1: time frames and `period_stats`
+### Step 1: time frames and `period_stats`: done (branch `facts-step-1-frames`)
 
-- `peloton/activity.py`: `FRAMES` (this week, last week, 30 days, 90 days, this year, last year, all
-  time: key, label word, start, end) and `period_stats(workouts, start, end)`, one pass over the log
-  returning every total and distinct count for that window. `recent_activity` becomes
-  `period_stats` for 30 days.
-- `WorkoutLog.derived` returns `{frame_key: stats}` for each frame.
-- `peloton/username_facts.py`: one frame per pass. Highlight 3 cycles through that frame's facts;
-  4–6 are that frame's instructor top three.
-- `scripts/list_facts.py`: prints every candidate fact for a log, so new facts can be checked
-  against real data without the panel.
-- Tests: every frame's edges in the display timezone (incl. a DST change and 1 January), each
-  total, each distinct count, and the 15-character fit for every label.
+- `peloton/activity.py`: `frame_bounds` (week, last week, 30 days, 90 days, year, last year, all
+  time: start inclusive, end exclusive, local midnight), `period_stats(workouts, start, end,
+  timezone_name, now)` for one window, and `frame_stats` for every frame with the timestamps parsed
+  once. A window's stats: workouts, minutes, per-discipline counts, per-instructor counts, how many
+  different instructors and classes (by `ride_id`), active days; `frame_stats` adds `days` and, for
+  the two year frames, `year`. `recent_activity` is gone.
+- `WorkoutLog.derived` returns `time_frames` (`{frame key: stats}`, empty until the backfill is
+  complete). `as_workout` now carries `ride_id` so classes can be counted.
+- `peloton/username_facts.py`: one frame per pass, as under "Built".
+- `scripts/list_facts.py`, with `--demo`.
+- Deliberately not done here: filters (step 2), so the all-time top three still takes turns through
+  each discipline, and last week's and the other frames' top threes have no per-discipline form.
 
 ### Step 2: filters
 

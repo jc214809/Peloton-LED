@@ -1,6 +1,6 @@
-"""Activity from workout history: the heatmap, the streak reminder and the name page's last-30-days and
+"""Activity from workout history: the heatmap, the streak reminder and the name page's time-frame and
 per-discipline figures."""
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 
 from .goals import week_start
 from .instructors import merge_instructor_counts
@@ -9,8 +9,6 @@ from .timestamps import display_timezone, parse_timestamp, workout_date, workout
 from .workout_log import length_seconds
 
 HEATMAP_WEEKS = 12
-# The name page's "LAST 30 DAYS" facts.
-RECENT_DAYS = 30
 
 
 def counts_for_streaks(workout):
@@ -47,31 +45,88 @@ def daily_minutes(workouts, timezone_name=None, now=None, weeks=HEATMAP_WEEKS):
     return {day.isoformat(): int(round(total / 60)) for day, total in sorted(seconds.items())}
 
 
-def recent_start(timezone_name=None, now=None, days=RECENT_DAYS):
-    """00:00 in the display timezone on the first of the last `days` days (today is one), and now."""
-    _, current = week_start(timezone_name, now)
-    first = current.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days - 1)
-    return first, current
+def frame_bounds(timezone_name=None, now=None):
+    """Each time frame's (start, end) in the display timezone: start inclusive, end exclusive, and
+    None when open (no start: all time; no end: up to now). Calendar months are deliberately not
+    here (a month is nearly empty on the 1st): the windows are rolling days, weeks and years."""
+    monday, current = week_start(timezone_name, now)
+    zone = current.tzinfo
+    today = current.date()
+
+    def midnight(day):
+        return datetime(day.year, day.month, day.day, tzinfo=zone)
+
+    this_year, last_year = midnight(date(today.year, 1, 1)), midnight(date(today.year - 1, 1, 1))
+    return {'week': (monday, None),
+            'last_week': (midnight(monday.date() - timedelta(days=7)), monday),
+            '30d': (midnight(today - timedelta(days=29)), None),
+            '90d': (midnight(today - timedelta(days=89)), None),
+            'year': (this_year, None),
+            'last_year': (last_year, this_year),
+            'all': (None, None)}
 
 
-def recent_activity(workouts, timezone_name=None, now=None, days=RECENT_DAYS):
-    """The last `days` days' completed workouts (rolling, so never thin the way the 1st of a month
-    is): how many, their minutes, how many of each discipline ({'strength': 12}) and each
-    instructor's classes ({instructor_id: count})."""
-    first, current = recent_start(timezone_name, now, days)
-    done, seconds, disciplines = [], 0, {}
+def _stamped(workouts, timezone_name):
+    """[(local timestamp, workout)] for completed workouts that have a time."""
+    rows = []
     for workout in workouts:
         stamp = workout_timestamp(workout, timezone_name)
-        if not is_completed(workout) or stamp is None or not first <= stamp.astimezone(first.tzinfo) <= current:
-            continue
-        done.append(workout)
+        if is_completed(workout) and stamp is not None:
+            rows.append((stamp, workout))
+    return rows
+
+
+def _in_window(stamp, start, end, current):
+    if start is not None and stamp < start:
+        return False
+    return stamp < end if end is not None else stamp <= current
+
+
+def _stats(rows, zone):
+    """Totals and distinct counts for already-filtered (timestamp, workout) rows."""
+    done = [workout for _, workout in rows]
+    seconds, disciplines, classes = 0, {}, set()
+    for workout in done:
         seconds += max(0, length_seconds(workout))
         discipline = discipline_of(workout)
         if discipline:
             disciplines[discipline] = disciplines.get(discipline, 0) + 1
+        ride = workout.get('ride') if isinstance(workout.get('ride'), dict) else {}
+        if isinstance(ride.get('id'), str) and ride['id']:
+            classes.add(ride['id'])
     counts, _ = merge_instructor_counts({}, {}, done)
-    return {'workouts': len(done), 'minutes': int(round(seconds / 60)),
-            'disciplines': disciplines, 'instructor_counts': counts}
+    return {'workouts': len(done), 'minutes': int(round(seconds / 60)), 'disciplines': disciplines,
+            'instructor_counts': counts, 'instructors': len(counts), 'classes': len(classes),
+            'active_days': len({stamp.astimezone(zone).date() for stamp, _ in rows})}
+
+
+def period_stats(workouts, start=None, end=None, timezone_name=None, now=None):
+    """Completed workouts from `start` (inclusive) to `end` (exclusive; None is now): how many,
+    their minutes, how many of each discipline ({'strength': 12}), each instructor's classes
+    ({instructor_id: count}), how many different instructors and classes (by class ID: workouts
+    with no class, like Just Ride, don't count) and how many days had a workout."""
+    _, current = week_start(timezone_name, now)
+    rows = [(stamp, workout) for stamp, workout in _stamped(workouts, timezone_name)
+            if _in_window(stamp, start, end, current)]
+    return _stats(rows, current.tzinfo)
+
+
+def frame_stats(workouts, timezone_name=None, now=None):
+    """period_stats for every frame in frame_bounds, from one pass of timestamp parsing, each with
+    `days` (how many days the frame spans so far; None for all time) and, for the two year
+    frames, `year`."""
+    _, current = week_start(timezone_name, now)
+    rows = _stamped(workouts, timezone_name)
+    result = {}
+    for key, (start, end) in frame_bounds(timezone_name, now).items():
+        stats = _stats([(stamp, workout) for stamp, workout in rows if _in_window(stamp, start, end, current)],
+                       current.tzinfo)
+        stats['days'] = None if start is None else (
+            ((end.date() if end is not None else current.date() + timedelta(days=1)) - start.date()).days)
+        if key in ('year', 'last_year'):
+            stats['year'] = start.year
+        result[key] = stats
+    return result
 
 
 def discipline_instructor_counts(workouts):
