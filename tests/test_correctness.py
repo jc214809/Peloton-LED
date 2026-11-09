@@ -422,10 +422,14 @@ def _stat_values(summary):
     ({'discipline': 'Walking', 'distance': 1.0439, 'distance_unit': 'mi', 'elevation': 0.0,
       'elevation_unit': 'ft', 'avg_incline': 0.0},
      {'distance': '1.04 mi', 'elevation gain': '0 ft', 'avg incline': '0.0%'}),
-    # Real row: Peloton sends metres with centimetres (1906.47); the board shows whole metres.
+    # Real row: Peloton sends metres with centimetres (1906.47); the board shows whole metres with a comma.
     ({'discipline': 'Rowing', 'distance': 1906.47, 'distance_unit': 'm', 'avg_stroke_rate': 26.0,
       'row_split_sec_per_500m': 157.2, 'avg_output_w': 111.0},
-     {'distance': '1906m', 'stroke rate': '26 spm', 'split per 500m': '2:37'}),
+     {'distance': '1,906m', 'stroke rate': '26 spm', 'split per 500m': '2:37'}),
+    # A long row (3,929 m is the longest saved) and a long walk get a thousands comma.
+    ({'discipline': 'Rowing', 'distance': 3929.83, 'distance_unit': 'm'}, {'distance': '3,930m'}),
+    ({'discipline': 'Rowing', 'distance': 999.4, 'distance_unit': 'm'}, {'distance': '999m'}),
+    ({'discipline': 'Walking', 'distance': 1234.567, 'distance_unit': 'km'}, {'distance': '1,234.57 km'}),
     # Total Output from total_work (no graph summary) rounds half up rather than truncating.
     ({'discipline': 'Cycling', 'total_output_kj': 139.7, 'strive_score': 0.1},
      {'total output': '140 kj', 'strive score': '0.1'}),

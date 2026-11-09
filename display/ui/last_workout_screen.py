@@ -132,8 +132,8 @@ def _fmt_output(output) -> Optional[str]:
 
 
 def _fmt_distance(distance, unit) -> str:
-    """Miles and km to two decimals, as the Peloton app shows them."""
-    return f"{distance:.2f} {unit}".rstrip()
+    """Miles and km to two decimals, as the Peloton app shows them, with a comma from 1,000."""
+    return f"{distance:,.2f} {unit}".rstrip()
 
 
 def _fmt_pace(pace_min_per_mile) -> str:
@@ -216,7 +216,7 @@ def _stat_details(summary: dict) -> List[dict]:
         strive = summary.get("strive_score")
         add("total output", _fmt_output(summary.get("total_output_kj")))
         add("strive score", _fmt_strive(strive) if isinstance(strive, (int, float)) else None)
-        add("distance", f"{_whole(dist_val)}{dist_unit}" if isinstance(dist_val, (int, float)) else None)
+        add("distance", f"{_whole(dist_val):,}{dist_unit}" if isinstance(dist_val, (int, float)) else None)
         add("stroke rate", f"{_whole(spm_val)} spm" if isinstance(spm_val, (int, float)) else None)
         add("split per 500m", _fmt_split(split_val) if split_val else None)
     else:
@@ -600,6 +600,10 @@ class LastWorkoutScreen(Screen):
                 return True
             else:
                 value_y = 24 if value_font is value_big else 23
+                if ',' in value and value_font is value_big:
+                    # 6x9's comma hangs 2 rows below the baseline: lift the value 1 row so it
+                    # leaves the blank row above the HR bar.
+                    value_y -= 1
                 vx = max((w - get_text_width(value_font, value)) // 2, 2)
                 graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value)
                 if summary.get("is_output_pr") and detail['label'] == 'total output':
