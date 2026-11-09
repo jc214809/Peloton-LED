@@ -34,6 +34,7 @@ from the workout log appear only once the log holds the whole history.
 - A too-long label can carry a `short_label` that the screen uses instead (`3RD TREAD BOOTCAMP` →
   `3RD BOOTCAMP`).
 - Name the period in the label (`IN 2026`, `IN NOV`) so a fact never needs a third line.
+- A value line that is still too wide (a long instructor name) scrolls on the board (`UsernameScreen`: hold, glide, hold; back again from 8 s), so the fit test doesn't need to shorten names; labels still can't scroll and need a `short_label`.
 - Test each fact at both heights with the longest likely values (see
   `test_every_label_and_line_fits_or_has_a_short_label_that_does`).
 
