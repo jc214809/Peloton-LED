@@ -8,7 +8,7 @@ import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.username import UsernameScreen
-from peloton.activity import SUBJECT_DISCIPLINES, SUBJECT_INSTRUCTORS, discipline_instructor_counts, frame_bounds, frame_stats, period_stats
+from peloton.activity import SUBJECT_DISCIPLINES, SUBJECT_INSTRUCTORS, frame_bounds, frame_stats, period_stats
 from peloton.username_facts import (FRAME_ORDER, MIN_RANKED_CLASSES, frame_facts, frame_rankings,
                                     frame_stories, frame_subjects, frame_words, username_details, username_frames)
 from peloton.workout_log import WorkoutLog
@@ -120,21 +120,12 @@ def test_the_first_of_a_month_still_has_the_last_30_days():
     assert frame_stats(workouts, ZONE, first_of_month)['30d']['workouts'] == 19
 
 
-def test_discipline_instructor_counts_split_the_tally_by_discipline():
-    workouts = [_w('a', NOW, instructor='jess'), _w('b', NOW, instructor='jess'),
-                _w('c', NOW, instructor='andy'), _w('d', NOW, discipline='cycling', instructor='jess'),
-                _w('e', NOW, discipline='meditation', instructor=None),
-                _w('f', NOW, discipline='strength', instructor='andy', status='IN_PROGRESS')]
-    assert discipline_instructor_counts(workouts) == {'strength': {'jess': 2, 'andy': 1},
-                                                      'cycling': {'jess': 1}}
-
-
 def test_log_derives_time_frames_only_once_complete():
     log = WorkoutLog('unused')
     log.merge([_w('a', NOW - timedelta(days=1)), _w('b', NOW - timedelta(days=2), discipline='cycling',
                                                    instructor='cody')])
     partial = log.derived(tzname=ZONE, now=NOW)
-    assert partial['time_frames'] == {} and partial['discipline_instructor_counts'] == {}
+    assert partial['time_frames'] == {}
     log.backfill['complete'] = True
     full = log.derived(tzname=ZONE, now=NOW)
     assert set(full['time_frames']) == set(frame_bounds(ZONE, NOW))
@@ -142,7 +133,7 @@ def test_log_derives_time_frames_only_once_complete():
     # The log keeps each class's ID, so distinct classes survive the trip through the log's rows.
     assert full['time_frames']['30d']['classes'] == 2
     assert full['time_frames']['30d']['disciplines'] == {'strength': 1, 'cycling': 1}
-    assert full['discipline_instructor_counts'] == {'strength': {'jess': 1}, 'cycling': {'cody': 1}}
+    assert set(full['time_frames']['30d']['by_discipline']) == {'strength', 'cycling'}
 
 
 # facts

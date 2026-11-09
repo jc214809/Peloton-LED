@@ -66,6 +66,7 @@ Notes:
 ### Name page: facts engine
 The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65), 1 (time frames and `period_stats`, PR #66) and 2 (filters, branch `facts-step-2-filters`) are built. Remaining: 3 measures and bests, 4 comparisons, 5 events, 6 choosing what's interesting (scores and a cool-down, the step that changes pass 0), 7 together facts, 8 optional settings and new log fields. The page stays six highlights (24 s) throughout.
 - Build brief for a Sonnet 5.5 session, one step each: `docs/NAME-PAGE-FACTS-HANDOFF.md`.
+- Open check (step 2): compare Peloton's overview totals with the workout log's all-time counts per discipline on a real board: `python scripts/list_facts.py --log <log> --cache <cache> --tz <zone>` prints "overview vs log" with every difference flagged. The all-time discipline pages use the log's counts and `TOP DISCIPLINE` the overview's, so any difference shows on the board. Not measurable from the Mac (its tokens are expired and it holds no real log). If they differ, make the all-time page use the overview's number (or explain why not). Remove this item once checked.
 - Depends on: step 2 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
 
 ## Joel, by hand

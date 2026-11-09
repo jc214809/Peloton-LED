@@ -100,7 +100,7 @@ class Dashboard:
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
                       'distance_totals': {}, 'personal_records': {},
                       'streak_week_workouts': None, 'activity_days': {},
-                      'time_frames': {}, 'discipline_instructor_counts': {}}
+                      'time_frames': {}}
         self.demo = demo
         if demo:
             data = demo_data()

@@ -242,7 +242,7 @@ class WorkoutLog:
         too-small total. This week's figures are always complete: refreshes
         fetch back to Monday while the log is still filling.
         """
-        from .activity import daily_minutes, discipline_instructor_counts, frame_stats, streak_week_workouts
+        from .activity import daily_minutes, frame_stats, streak_week_workouts
         workouts = self.as_workouts()
         result = {'weekly_progress': weekly_progress(workouts, tzname, now=now),
                   'streak_week_workouts': streak_week_workouts(workouts, tzname, now=now)}
@@ -252,11 +252,10 @@ class WorkoutLog:
             result.update(instructor_counts=counts, instructor_names=names,
                           distance_totals=merge_distance_totals({}, workouts, metric, since=since, tzname=tzname),
                           activity_days=daily_minutes(workouts, tzname, now=now),
-                          time_frames=frame_stats(workouts, tzname, now=now),
-                          discipline_instructor_counts=discipline_instructor_counts(workouts))
+                          time_frames=frame_stats(workouts, tzname, now=now))
         else:
             result.update(instructor_counts={}, instructor_names={}, distance_totals={}, activity_days={},
-                          time_frames={}, discipline_instructor_counts={})
+                          time_frames={})
         return result
 
 

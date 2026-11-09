@@ -159,21 +159,6 @@ def frame_stats(workouts, timezone_name=None, now=None):
     return result
 
 
-def discipline_instructor_counts(workouts):
-    """All-time classes per instructor within each discipline: {'strength': {instructor_id: count}}."""
-    by_discipline = {}
-    for workout in workouts:
-        discipline = discipline_of(workout)
-        if discipline:
-            by_discipline.setdefault(discipline, []).append(workout)
-    result = {}
-    for discipline, group in by_discipline.items():
-        counts, _ = merge_instructor_counts({}, {}, group)
-        if counts:
-            result[discipline] = counts
-    return result
-
-
 def daily_streak_start(current_daily, today, days=None, started_at=None, timezone_name=None):
     """First day of a `current_daily`-day streak: Peloton's own start
     (`started_at`, a timestamp) on the display calendar when it has one.

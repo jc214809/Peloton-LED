@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from peloton.activity import frame_stats  # noqa: E402
+from peloton.selection import normalize_discipline  # noqa: E402
 from peloton.username_facts import (FRAME_ORDER, frame_facts, frame_rankings, frame_subjects,  # noqa: E402
                                     username_details, username_frames)
 from peloton.workout_log import WorkoutLog  # noqa: E402
@@ -80,6 +80,23 @@ def snapshot_for(log, tzname, now, cache_path=None, assume_complete=False):
     return snapshot
 
 
+def compare_totals(snapshot):
+    """Peloton's overview totals (the cache) against the log's all-time counts, per discipline, as
+    (label, overview, log) rows: the name page says TOP DISCIPLINE from one and the discipline pages
+    from the other, so a difference here is a difference on the board. Empty without both."""
+    stats = (snapshot.get('time_frames') or {}).get('all')
+    totals = snapshot.get('totals') or {}
+    if not stats or not totals:
+        return []
+    in_log = dict(stats.get('disciplines') or {})
+    rows = [('Total Workouts', totals.get('Total Workouts'), stats['workouts'])]
+    for label, count in totals.items():
+        if label != 'Total Workouts':
+            rows.append((label, count, in_log.pop(normalize_discipline(label), 0)))
+    rows += [(slug, None, count) for slug, count in sorted(in_log.items())]
+    return rows
+
+
 def show(snapshot, passes):
     frames = snapshot.get('time_frames') or {}
     if not frames:
@@ -91,6 +108,13 @@ def show(snapshot, passes):
                   f'  instructors {stats["instructors"]:>3}  active days {stats["active_days"]:>3}'
                   f'/{stats["days"] if stats["days"] is not None else "-"}')
     print()
+    rows = compare_totals(snapshot)
+    if rows:
+        print('overview vs log (all time):')
+        for label, overview, logged in rows:
+            note = '' if overview == logged else '   <-- differs'
+            print(f'   {label:<16} overview {overview if overview is not None else "-":>5}  log {logged:>5}{note}')
+        print()
     for key in username_frames(snapshot):
         print(f'== {key}')
         for fact in frame_facts(snapshot, key):
