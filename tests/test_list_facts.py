@@ -38,6 +38,10 @@ def test_snapshot_takes_the_totals_from_a_cache_when_given(tmp_path):
     save_snapshot(cache, {'me': {}, 'totals': {'Total Workouts': 2123, 'Cycling': 641}, 'summaries': [], 'last_updated': 1773496800})
     snapshot = snapshot_for(demo_log(NOW), None, NOW, cache, assume_complete=True)
     assert snapshot['totals'] == {'Total Workouts': 2123, 'Cycling': 641}
+    assert snapshot['streaks'] == {}
+    save_snapshot(cache, {'me': {}, 'totals': {'Total Workouts': 2123}, 'summaries': [], 'last_updated': 1773496800,
+                          'streaks': {'best_weekly': 74}})
+    assert snapshot_for(demo_log(NOW), None, NOW, cache, assume_complete=True)['streaks'] == {'best_weekly': 74}
 
 
 def test_an_unreadable_cache_stops_the_script(tmp_path):

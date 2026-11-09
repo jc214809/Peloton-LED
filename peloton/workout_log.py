@@ -100,7 +100,7 @@ def as_workout(identity, row, instructors):
     return {'id': identity, 'start_time': row.get('start'), 'timezone': row.get('tz'),
             'status': row.get('status'), 'fitness_discipline': row.get('discipline'),
             'distance': row.get('distance'), 'total_work': row.get('total_work_j'),
-            'duration': row.get('class_length_s'),
+            'duration': row.get('class_length_s'), 'effort_points': row.get('effort_points'),
             'is_3p_fit_feed_workout_excluded_from_streaks': row.get('counts_for_streaks') is False,
             'ride': {'id': row.get('ride_id'), 'instructor': instructor}}
 

@@ -12,6 +12,15 @@ HEATMAP_WEEKS = 12
 # How many of a frame's most-done disciplines and instructors get their own figures (frame_stats).
 SUBJECT_DISCIPLINES = 5
 SUBJECT_INSTRUCTORS = 3
+# A rank (3RD BEST 30 DAYS) compares the current block of days with the equal blocks before it, so it
+# needs this many blocks (the current one included) to mean anything.
+MIN_RANK_BLOCKS = 6
+# Frames that get a rank, with the block length in days.
+RANKED_FRAMES = {'30d': 30, '90d': 90}
+# Frames whose busiest month is worth naming (a month inside a 30-day window isn't a "best").
+MONTH_FRAMES = ('year', 'last_year', 'all')
+# Biggest output is a bike figure (the rower's and the tread's aren't comparable with it).
+OUTPUT_DISCIPLINES = ('cycling',)
 
 
 def counts_for_streaks(workout):
@@ -151,12 +160,79 @@ def frame_stats(workouts, timezone_name=None, now=None):
                                   for slug in _top(disciplines, SUBJECT_DISCIPLINES)}
         stats['by_instructor'] = {identity: _stats(instructors[identity], zone)
                                   for identity in _top(instructors, SUBJECT_INSTRUCTORS)}
+        stats.update(_bests(inside, zone, start, key in MONTH_FRAMES))
+        if key in RANKED_FRAMES:
+            stats['rank'] = block_rank(rows, RANKED_FRAMES[key], current.date(), zone)
         stats['days'] = None if start is None else (
             ((end.date() if end is not None else current.date() + timedelta(days=1)) - start.date()).days)
         if key in ('year', 'last_year'):
             stats['year'] = start.year
         result[key] = stats
     return result
+
+
+def _best(counts):
+    """The (count, day) with the highest count, the most recent day on a tie; None when empty."""
+    return max(((count, day) for day, count in counts.items()), default=None)
+
+
+def _entry(best):
+    return {'count': best[0], 'date': best[1].isoformat()} if best else None
+
+
+def _bests(rows, zone, start, months):
+    """The biggest pieces inside a frame, from its (timestamp, workout, discipline, instructors) rows:
+    the busiest day, the busiest Monday-to-Sunday week (only weeks that start inside the frame, so a
+    window's cut-off first week isn't undercounted), the busiest month (`months`; likewise whole
+    months), the longest workout, the highest bike output (kJ) and the best Strive score. Each is None
+    when the frame has nothing for it."""
+    days, weeks, months_seen = {}, {}, {}
+    longest = output = strive = None
+    first = start.date() if start is not None else None
+    for stamp, workout, discipline, _ in rows:
+        day = stamp.astimezone(zone).date()
+        days[day] = days.get(day, 0) + 1
+        monday = day - timedelta(days=day.weekday())
+        if first is None or monday >= first:
+            weeks[monday] = weeks.get(monday, 0) + 1
+        month = day.replace(day=1)
+        if months and (first is None or month >= first):
+            months_seen[month] = months_seen.get(month, 0) + 1
+        seconds = max(0, length_seconds(workout))
+        if seconds and (longest is None or seconds >= longest['seconds']):
+            longest = {'seconds': seconds, 'minutes': int(round(seconds / 60)), 'discipline': discipline}
+        work = workout.get('total_work')
+        if (discipline in OUTPUT_DISCIPLINES and isinstance(work, (int, float)) and not isinstance(work, bool)
+                and work > 0 and (output is None or work >= output['joules'])):
+            output = {'joules': work, 'kj': work / 1000, 'minutes': int(round(seconds / 60)), 'discipline': discipline}
+        points = workout.get('effort_points')
+        if (isinstance(points, (int, float)) and not isinstance(points, bool) and points > 0
+                and (strive is None or points >= strive['points'])):
+            strive = {'points': points, 'discipline': discipline}
+    return {'busiest_day': _entry(_best(days)), 'busiest_week': _entry(_best(weeks)),
+            'busiest_month': _entry(_best(months_seen)),
+            'longest': longest and {k: v for k, v in longest.items() if k != 'seconds'},
+            'best_output': output and {k: v for k, v in output.items() if k != 'joules'},
+            'best_strive': strive}
+
+
+def block_rank(rows, days, today, zone):
+    """How this block of `days` days (ending today) ranks among every equal block before it, going
+    back from today (non-overlapping, so the 2nd best isn't just yesterday's window): {'rank': 1 is the
+    most workouts, 'of': blocks, 'best': the biggest block's workouts}. Ties share the better rank.
+    None with fewer than MIN_RANK_BLOCKS blocks of history. Each row is counted once, however many
+    frames ask."""
+    counts = {}
+    for stamp, *_ in rows:
+        age = (today - stamp.astimezone(zone).date()).days
+        if age >= 0:
+            counts[age // days] = counts.get(age // days, 0) + 1
+    oldest = max(counts, default=-1)
+    if oldest + 1 < MIN_RANK_BLOCKS:
+        return None
+    totals = [counts.get(block, 0) for block in range(oldest + 1)]
+    return {'rank': 1 + sum(1 for total in totals[1:] if total > totals[0]), 'of': len(totals),
+            'best': max(totals)}
 
 
 def daily_streak_start(current_daily, today, days=None, started_at=None, timezone_name=None):
