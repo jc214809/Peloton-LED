@@ -226,6 +226,66 @@ def test_only_the_30_and_90_day_frames_have_a_rank():
     assert 'rank' not in frames['year'] and 'rank' not in frames['all']
 
 
+def test_frames_carry_the_workouts_of_the_same_stretch_before_them():
+    # 30 days: 3 workouts in the last 30, 5 in the 30 before; 90 days: 1 in the 90 before. Year: this year up to 8 Nov
+    # against last year up to 8 Nov (a workout on 20 Nov 2025 is after that point, so it isn't counted).
+    workouts = ([_w(f'a{i}', NOW - timedelta(days=i + 1)) for i in range(3)]
+                + [_w(f'b{i}', NOW - timedelta(days=31 + i), minutes=30) for i in range(5)]
+                + [_w('old', NOW - timedelta(days=120)), _w('after', _local(2025, 11, 20))])
+    frames = frame_stats(workouts, ZONE, NOW)
+    assert frames['30d']['before'] == {'workouts': 5, 'minutes': 150}
+    assert frames['90d']['before'] == {'workouts': 1, 'minutes': 20}
+    assert frames['year']['before']['workouts'] == 0       # the 20 Nov 2025 workout is after 8 Nov
+    assert all('before' not in frames[key] for key in ('week', 'last_week', 'last_year', 'all'))
+
+
+def test_the_year_is_compared_with_last_year_up_to_the_same_date_and_time():
+    workouts = [_w('in-range', _local(2025, 11, 8, 9)), _w('too-late', _local(2025, 11, 8, 15)),
+                _w('next-day', _local(2025, 11, 9)), _w('early', _local(2025, 1, 1, 0)),
+                _w('before-year', _local(2024, 12, 31, 23))]
+    assert frame_stats(workouts, ZONE, NOW)['year']['before']['workouts'] == 2
+
+
+def test_a_leap_day_compares_with_the_28th():
+    leap = datetime(2028, 2, 29, 17, 0, tzinfo=timezone.utc)
+    workouts = [_w('a', _local(2027, 2, 28, 9)), _w('b', _local(2027, 3, 1))]
+    assert frame_stats(workouts, ZONE, leap)['year']['before']['workouts'] == 1
+
+
+def test_a_comparison_window_starts_and_ends_on_local_midnight():
+    # The 30 days before start on 10 Sep and end at the start of 10 Oct (the 30-day frame's first day).
+    workouts = [_w('late', _local(2026, 9, 9, 23)), _w('first', _local(2026, 9, 10, 0)),
+                _w('last', _local(2026, 10, 9, 23)), _w('in-frame', _local(2026, 10, 10, 0))]
+    stats = frame_stats(workouts, ZONE, NOW)['30d']
+    assert stats['before']['workouts'] == 2 and stats['workouts'] == 1
+
+
+def _compared(now, before, key='30d', **extra):
+    stats = dict(THIRTY, workouts=now, before={'workouts': before, 'minutes': 0}, **extra)
+    if key == 'year':
+        stats['year'] = 2026
+    return [f for f in frame_facts(_snapshot(time_frames={key: stats}), key) if 'VS' in f['label']]
+
+
+def test_a_comparison_names_the_frame_and_the_change():
+    assert [(f['label'], f['lines']) for f in _compared(15, 9)] == [('VS 30 BEFORE', ['15 VS 9', '+6 WORKOUTS'])]
+    assert _compared(8, 12)[0]['lines'] == ['8 VS 12', '-4 WORKOUTS']
+    assert _compared(412, 380, 'year') == []                     # +8%: not a big change
+    assert [(f['label'], f['lines']) for f in _compared(500, 380, 'year')] == [
+        ('2026 VS 2025', ['500 VS 380', '+120 WORKOUTS'])]
+    assert _compared(10, 5, '90d')[0]['label'] == 'VS 90 BEFORE'
+
+
+def test_a_comparison_needs_enough_on_both_sides_and_a_real_change():
+    assert _compared(12, 12) == [] and _compared(13, 12) == []   # no change
+    assert _compared(12, 10) == []                               # +2: under MIN_COMPARE_DIFF
+    assert _compared(20, 18) == []                               # +2 of 18: tiny
+    assert _compared(9, 4) == [] and _compared(4, 9) == []       # a side under 5 workouts
+    assert _compared(20, 9, 'last_year') == []                   # only 30 days, 90 days and the year compare
+    stats = dict(THIRTY)
+    assert all('VS' not in f['label'] for f in frame_facts(_snapshot(time_frames={'30d': stats}), '30d'))
+
+
 def _measured(**extra):
     stats = dict(THIRTY, rank={'rank': 3, 'of': 12, 'best': 20},
                  busiest_day={'count': 2, 'date': '2026-10-05'}, busiest_week={'count': 6, 'date': '2026-10-12'},
@@ -599,7 +659,8 @@ def test_every_label_and_line_fits_or_has_a_short_label_that_does(height):
            'busiest_week': {'count': 25, 'date': '2026-09-28'}, 'busiest_month': {'count': 120, 'date': '2026-09-01'},
            'longest': {'minutes': 120, 'discipline': 'walking_outdoor'},
            'best_output': {'kj': 1234.5, 'minutes': 120, 'discipline': 'cycling'},
-           'best_strive': {'points': 1234.5, 'discipline': 'tread_bootcamp'}}
+           'best_strive': {'points': 1234.5, 'discipline': 'tread_bootcamp'},
+           'before': {'workouts': 4321, 'minutes': 1}}
     snapshot = _snapshot(time_frames={key: big for key in ('all', '30d', '90d', 'year', 'last_year', 'last_week')},
                          streaks={'best_weekly': 999})
     details = []

@@ -163,12 +163,37 @@ def frame_stats(workouts, timezone_name=None, now=None):
         stats.update(_bests(inside, zone, start, key in MONTH_FRAMES))
         if key in RANKED_FRAMES:
             stats['rank'] = block_rank(rows, RANKED_FRAMES[key], current.date(), zone)
+        before = comparison_window(key, start, current)
+        if before:
+            stats['before'] = _totals([row for row in rows if _in_window(row[0], before[0], before[1], current)])
         stats['days'] = None if start is None else (
             ((end.date() if end is not None else current.date() + timedelta(days=1)) - start.date()).days)
         if key in ('year', 'last_year'):
             stats['year'] = start.year
         result[key] = stats
     return result
+
+
+def comparison_window(key, start, current):
+    """The (start, end) of the window a frame is compared with, or None for a frame with no fair
+    comparison. The 30- and 90-day frames compare with the same number of days just before; the year
+    with the same stretch of last year (1 January up to today's date and time), so a part-year is
+    never set against a whole one."""
+    if key in RANKED_FRAMES:
+        return start - timedelta(days=RANKED_FRAMES[key]), start
+    if key == 'year':
+        try:
+            same_day = current.replace(year=current.year - 1)
+        except ValueError:      # 29 February
+            same_day = current.replace(year=current.year - 1, day=28)
+        return start.replace(year=start.year - 1), same_day
+    return None
+
+
+def _totals(rows):
+    """Workouts and minutes of (timestamp, workout, ...) rows, all a comparison needs."""
+    seconds = sum(max(0, length_seconds(row[1])) for row in rows)
+    return {'workouts': len(rows), 'minutes': int(round(seconds / 60))}
 
 
 def _best(counts):

@@ -64,10 +64,10 @@ Notes:
 - Depends on: the journey redesign (branch `journey-mile-groups`).
 
 ### Name page: facts engine
-The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65), 1 (time frames and `period_stats`, PR #66), 2 (filters, PR #67) and 3 (measures and bests, branch `facts-step-3-bests`) are built. Remaining: 4 comparisons, 5 events, 6 choosing what's interesting (scores and a cool-down, the step that changes pass 0), 7 together facts, 8 optional settings and new log fields. The page stays six highlights (24 s) throughout.
+The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65), 1 (time frames and `period_stats`, PR #66), 2 (filters, PR #67) and 3 (measures and bests, PR #68) and 4 (comparisons, branch `facts-step-4-comparisons`) are built. Remaining: 5 events, 6 choosing what's interesting (scores and a cool-down, the step that changes pass 0), 7 together facts, 8 optional settings and new log fields. The page stays six highlights (24 s) throughout.
 - Build brief for a Sonnet 5.5 session, one step each: `docs/NAME-PAGE-FACTS-HANDOFF.md`.
 - After the update, on each board: `python scripts/list_facts.py --log <log> --cache <cache> --tz <zone>` should show no `<-- differs` in "overview vs log" (the log rebuilds once, LOG_VERSION 2). Checked on Joel's full history from the Mac on 2026-11-08: all 13 rows matched. Remove this item once the boards agree.
-- Depends on: step 3 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
+- Depends on: step 4 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
 
 ## Joel, by hand
 

@@ -39,6 +39,11 @@ MIN_BEST_PERIOD = 3
 MAX_SHOWN_RANK = 5
 # The weekly streak record is shown from this many weeks.
 MIN_STREAK_WEEKS = 4
+# A comparison with the frame before is shown only when both have at least MIN_COMPARE_WORKOUTS and the
+# count changed by at least MIN_COMPARE_CHANGE (a fraction) and MIN_COMPARE_DIFF workouts.
+MIN_COMPARE_WORKOUTS = 5
+MIN_COMPARE_CHANGE = 0.2
+MIN_COMPARE_DIFF = 3
 ORDINALS = {2: '2ND', 3: '3RD', 4: '4TH', 5: '5TH'}
 MONTHS = ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
 # A label holds 15 characters of the stats font; a longer discipline name uses its last word.
@@ -201,6 +206,22 @@ def _measure_facts(stats, title):
     return facts
 
 
+def _comparison_fact(key, stats):
+    """This frame's workouts against the same stretch before it (frame_stats' `before`: the 30 or 90
+    days just before, or last year up to today's date): '2026 VS 2025' / '412 VS 380' / '+32 WORKOUTS'.
+    Left out unless both sides have MIN_COMPARE_WORKOUTS and the change passes the thresholds."""
+    before = stats.get('before') if key in ('30d', '90d', 'year') else None
+    now = stats.get('workouts') or 0
+    if not before or min(now, before['workouts']) < MIN_COMPARE_WORKOUTS:
+        return None
+    change = now - before['workouts']
+    if abs(change) < MIN_COMPARE_DIFF or abs(change) < MIN_COMPARE_CHANGE * before['workouts']:
+        return None
+    label = f'{stats["year"]} VS {stats["year"] - 1}' if key == 'year' else f'VS {key[:-1]} BEFORE'
+    return {'label': label, 'value': f'{now} VS {before["workouts"]}',
+            'lines': [f'{now:,} VS {before["workouts"]:,}', f'{change:+,} WORKOUTS']}
+
+
 def frame_facts(snapshot, key):
     """The single-highlight facts a frame has enough data for, in the order its visits show them.
     All time: the top discipline. Others: workouts and time, the most-done discipline (when it
@@ -237,6 +258,9 @@ def frame_facts(snapshot, key):
             facts.append({'label': title, 'value': f'{stats["instructors"]:,} DIFFERENT INSTRUCTORS',
                           'lines': [f'{stats["instructors"]:,} DIFFERENT', 'INSTRUCTORS']})
         facts.extend(_measure_facts(stats, title))
+        comparison = _comparison_fact(key, stats)
+        if comparison:
+            facts.append(comparison)
         facts.extend(_instructor_facts(snapshot, stats, title))
     best_weekly = (snapshot.get('streaks') or {}).get('best_weekly')
     if key == 'all' and isinstance(best_weekly, int) and best_weekly >= MIN_STREAK_WEEKS:
