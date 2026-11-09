@@ -158,6 +158,24 @@ def test_frame_stats_find_the_busiest_day_week_and_month_and_the_longest_workout
     assert frame_stats([], ZONE, NOW)['all']['busiest_day'] is None
 
 
+def test_longest_output_and_strive_come_from_real_classes_not_free_workouts():
+    free = _w('free', _local(2026, 10, 3), discipline='cycling', minutes=90)
+    free['ride'].pop('id')
+    free.update(total_work=999000, effort_zones={'total_effort_points': 500})
+    real = _w('real', _local(2026, 10, 2), discipline='cycling', minutes=30)
+    real.update(total_work=200000, effort_zones={'total_effort_points': 100})
+    log = WorkoutLog('unused')
+    log.merge([free, real])
+    log.backfill['complete'] = True
+    year = log.derived(tzname=ZONE, now=NOW)['time_frames']['year']
+    assert year['longest']['minutes'] == 30 and year['best_output']['kj'] == 200 and year['best_strive']['points'] == 100
+    # They still count as workouts: the busiest day is about activity, not classes.
+    assert year['workouts'] == 2
+    log.workouts.pop(next(i for i, r in log.workouts.items() if r['ride_id'] is not None))
+    only_free = log.derived(tzname=ZONE, now=NOW)['time_frames']['year']
+    assert only_free['longest'] is None and only_free['best_output'] is None and only_free['best_strive'] is None
+
+
 def test_a_windows_cut_off_week_is_not_counted_as_a_week():
     # 30 days back from Sunday 8 Nov is Saturday 10 Oct: the week of Mon 5 Oct starts before the window.
     workouts = [_w('a0', _local(2026, 10, 10)), _w('a1', _local(2026, 10, 11)), _w('a2', _local(2026, 10, 12)),

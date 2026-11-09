@@ -180,12 +180,17 @@ def _entry(best):
     return {'count': best[0], 'date': best[1].isoformat()} if best else None
 
 
+def _class_id(workout):
+    ride = workout.get('ride') if isinstance(workout.get('ride'), dict) else {}
+    return ride.get('id') if isinstance(ride.get('id'), str) and ride['id'] else None
+
+
 def _bests(rows, zone, start, months):
     """The biggest pieces inside a frame, from its (timestamp, workout, discipline, instructors) rows:
     the busiest day, the busiest Monday-to-Sunday week (only weeks that start inside the frame, so a
     window's cut-off first week isn't undercounted), the busiest month (`months`; likewise whole
-    months), the longest workout, the highest bike output (kJ) and the best Strive score. Each is None
-    when the frame has nothing for it."""
+    months), the longest class, the highest bike output (kJ) and the best Strive score (these three only from
+    real classes, never a no-class workout like Just Ride). Each is None when the frame has nothing for it."""
     days, weeks, months_seen = {}, {}, {}
     longest = output = strive = None
     first = start.date() if start is not None else None
@@ -198,6 +203,9 @@ def _bests(rows, zone, start, months):
         month = day.replace(day=1)
         if months and (first is None or month >= first):
             months_seen[month] = months_seen.get(month, 0) + 1
+        # Just Ride, Just Walk and the like have no class, so they never set a longest or best class.
+        if not _class_id(workout):
+            continue
         seconds = max(0, length_seconds(workout))
         if seconds and (longest is None or seconds >= longest['seconds']):
             longest = {'seconds': seconds, 'minutes': int(round(seconds / 60)), 'discipline': discipline}
