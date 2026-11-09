@@ -407,11 +407,9 @@ Planned (as written):
   refresh, not per fact.
 - Best weekly streak from the cache.
 
-### Step 4: comparisons
+### Step 4: comparisons: done (branch `facts-step-4-comparisons`)
 
-- The window before and the same point last year for each total; your 12-week average for this
-  week; "best ever" when a window beats every earlier one of its length.
-- Show a comparison only when the change is worth saying (e.g. at least 10% or 2 workouts).
+Built: `frame_stats` adds `before` (`{workouts, minutes}`) to the 30-day, 90-day and year frames (`comparison_window`): the same number of days just before for 30 and 90 days, and last year from 1 January up to today's date and time for the year (29 February compares with the 28th), so a part-year is never set against a whole one. One fact, `_comparison_fact`, after a frame's measures: `VS 30 BEFORE` / `1,234 VS 999` / `+235 WORKOUTS` (`VS 90 BEFORE`, `2026 VS 2025`). Shown only when both sides have `MIN_COMPARE_WORKOUTS` (5) and the change is at least `MIN_COMPARE_CHANGE` (20%) and `MIN_COMPARE_DIFF` (3 workouts). Departures from the plan, which listed more: "best ever" is already step 3's rank; the 12-week average is for this week, which isn't a frame that takes turns (THIS WEEK is on every page), so it's left out; last week, last year and all time have no fair comparison. A comparison of minutes wasn't added (workouts say it, and the headline already shows minutes). The demo log is steady, so it rarely clears the 20% threshold.
 
 ### Step 5: events
 
