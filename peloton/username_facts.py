@@ -26,6 +26,21 @@ MIN_RANKED_CLASSES = 2
 MIN_COUNT = 2
 # Past this many minutes a frame's time is told in hours.
 HOURS_FROM_MINUTES = 600
+# Averages, a share and the bests need a frame with at least this many workouts to be worth saying.
+MIN_MEASURE_WORKOUTS = 5
+# A share of the workouts ("38% STRENGTH") needs more than that, or one class moves it 10%.
+MIN_SHARE_WORKOUTS = 10
+# An average week needs this many days of the frame (fewer than four weeks is mostly the edge).
+MIN_AVERAGE_WEEK_DAYS = 28
+# The busiest day, and the busiest week or month, must reach these to be a best worth naming.
+MIN_BEST_DAY = 2
+MIN_BEST_PERIOD = 3
+# A rank is shown for the top of the blocks only ("3RD BEST EVER"; below this it's just not notable).
+MAX_SHOWN_RANK = 5
+# The weekly streak record is shown from this many weeks.
+MIN_STREAK_WEEKS = 4
+ORDINALS = {2: '2ND', 3: '3RD', 4: '4TH', 5: '5TH'}
+MONTHS = ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
 # A label holds 15 characters of the stats font; a longer discipline name uses its last word.
 MAX_LABEL_CHARS = 15
 
@@ -118,6 +133,74 @@ def _all_time_top_discipline(snapshot):
     return max(disciplines, key=lambda item: item[1], default=None)
 
 
+def _date_words(iso, month_only=False):
+    """'2025-03-03' -> 'MAR 3 2025' (the English month names, whatever the machine's locale);
+    'MAR 2025' for a month."""
+    year, month, day = (int(part) for part in iso.split('-'))
+    return f'{MONTHS[month - 1]} {year}' if month_only else f'{MONTHS[month - 1]} {day} {year}'
+
+
+def _round_half_up(value):
+    return int(value + 0.5)
+
+
+def _share_line(count, workouts, slug):
+    """'38% STRENGTH', or the discipline's last word when the whole doesn't fit a line."""
+    name, percent = discipline_name(slug), round(100 * count / workouts)
+    return f'{percent}% {name}' if len(f'{percent}% {name}') <= MAX_LABEL_CHARS else f'{percent}% {name.split()[-1]}'
+
+
+def _measure_facts(stats, title):
+    """The measures and bests a frame has enough data for: average class and week, the share of the
+    most-done discipline, the frame's rank among equal blocks of days, then the busiest day, week and
+    month, the longest workout, the highest bike output and the best Strive score. A fact with too
+    little behind it is left out (MIN_MEASURE_WORKOUTS and friends), so it never says 1 or 0."""
+    workouts = stats.get('workouts') or 0
+    if workouts < MIN_MEASURE_WORKOUTS:
+        return []
+    facts = []
+    minutes = stats.get('minutes') or 0
+    if minutes:
+        facts.append({'label': title, 'value': f'{round(minutes / workouts)} MIN AVERAGE',
+                      'lines': ['AVERAGE CLASS', _plural(round(minutes / workouts), 'MINUTE')]})
+    if (stats.get('days') or 0) >= MIN_AVERAGE_WEEK_DAYS:
+        average = workouts * 7 / stats['days']
+        facts.append({'label': title, 'value': f'{average:.1f} PER WEEK',
+                      'lines': ['AVERAGE WEEK', f'{average:.1f} WORKOUTS']})
+    done = sorted((stats.get('disciplines') or {}).items(), key=lambda item: (-item[1], item[0]))
+    if workouts >= MIN_SHARE_WORKOUTS and done and done[0][1] >= MIN_COUNT:
+        facts.append({'label': title, 'value': f'{done[0][0]} {done[0][1]} OF {workouts}',
+                      'lines': [_share_line(done[0][1], workouts, done[0][0]), 'OF WORKOUTS']})
+    rank = stats.get('rank')
+    if rank and rank['rank'] <= MAX_SHOWN_RANK:
+        words = 'BEST EVER' if rank['rank'] == 1 else f'{ORDINALS[rank["rank"]]} BEST EVER'
+        facts.append({'label': title, 'value': f'{words} / {workouts}', 'lines': [words, _plural(workouts, 'WORKOUT')]})
+    for key, label, least, month in (('busiest_day', 'BUSIEST DAY', MIN_BEST_DAY, False),
+                                     ('busiest_week', 'BUSIEST WEEK', MIN_BEST_PERIOD, False),
+                                     ('busiest_month', 'BUSIEST MONTH', MIN_BEST_PERIOD, True)):
+        best = stats.get(key)
+        if best and best['count'] >= least:
+            when = _date_words(best['date'], month_only=month)
+            facts.append({'label': label, 'value': f'{best["count"]} / {when}',
+                          'lines': [_plural(best['count'], 'WORKOUT'), f'OF {when}' if key == 'busiest_week' else when]})
+    longest = stats.get('longest')
+    if longest and longest.get('minutes'):
+        facts.append({'label': 'LONGEST WORKOUT', 'value': f'{longest["minutes"]} MIN',
+                      'lines': [_plural(longest['minutes'], 'MINUTE'), discipline_name(longest.get('discipline') or '')]})
+    output = stats.get('best_output')
+    if output:
+        kind = discipline_name(output.get('discipline') or '')
+        facts.append({'label': 'HIGHEST OUTPUT', 'value': f'{_round_half_up(output["kj"])} KJ',
+                      'lines': [f'{_round_half_up(output["kj"]):,} KJ',
+                                f'{output["minutes"]} MIN {kind}' if output.get('minutes') else kind]})
+    strive = stats.get('best_strive')
+    if strive:
+        facts.append({'label': 'BEST STRIVE', 'value': f'{_round_half_up(strive["points"])} POINTS',
+                      'lines': [f'{_round_half_up(strive["points"]):,} POINTS',
+                                discipline_name(strive.get('discipline') or '')]})
+    return facts
+
+
 def frame_facts(snapshot, key):
     """The single-highlight facts a frame has enough data for, in the order its visits show them.
     All time: the top discipline. Others: workouts and time, the most-done discipline (when it
@@ -153,7 +236,12 @@ def frame_facts(snapshot, key):
         if (stats.get('instructors') or 0) >= MIN_COUNT:
             facts.append({'label': title, 'value': f'{stats["instructors"]:,} DIFFERENT INSTRUCTORS',
                           'lines': [f'{stats["instructors"]:,} DIFFERENT', 'INSTRUCTORS']})
+        facts.extend(_measure_facts(stats, title))
         facts.extend(_instructor_facts(snapshot, stats, title))
+    best_weekly = (snapshot.get('streaks') or {}).get('best_weekly')
+    if key == 'all' and isinstance(best_weekly, int) and best_weekly >= MIN_STREAK_WEEKS:
+        facts.append({'label': title, 'value': f'{best_weekly} WEEK STREAK',
+                      'lines': [f'{best_weekly} WEEK STREAK', 'YOUR BEST']})
     return facts
 
 

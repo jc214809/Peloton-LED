@@ -8,8 +8,9 @@ import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.username import UsernameScreen
-from peloton.activity import SUBJECT_DISCIPLINES, SUBJECT_INSTRUCTORS, frame_bounds, frame_stats, period_stats
-from peloton.username_facts import (FRAME_ORDER, MIN_RANKED_CLASSES, frame_facts, frame_rankings,
+from peloton.activity import (MIN_RANK_BLOCKS, SUBJECT_DISCIPLINES, SUBJECT_INSTRUCTORS, block_rank, frame_bounds,
+                              frame_stats, period_stats)
+from peloton.username_facts import (FRAME_ORDER, MIN_RANKED_CLASSES, MIN_STREAK_WEEKS, frame_facts, frame_rankings,
                                     frame_stories, frame_subjects, frame_words, username_details, username_frames)
 from peloton.workout_log import WorkoutLog
 from peloton_led import build_rotation_pages
@@ -136,6 +137,150 @@ def test_log_derives_time_frames_only_once_complete():
     assert set(full['time_frames']['30d']['by_discipline']) == {'strength', 'cycling'}
 
 
+# measures and bests (step 3)
+
+def _row(identity, when, **extra):
+    return dict(_w(identity, when), **extra)
+
+
+def test_frame_stats_find_the_busiest_day_week_and_month_and_the_longest_workout():
+    workouts = [_w('a', _local(2026, 10, 5), minutes=20), _w('b', _local(2026, 10, 5, 18), minutes=45),
+                _w('c', _local(2026, 10, 6), minutes=20), _w('d', _local(2026, 10, 7), minutes=20),
+                _w('e', _local(2026, 11, 3), minutes=30, discipline='cycling')]
+    year = frame_stats(workouts, ZONE, NOW)['year']
+    assert year['busiest_day'] == {'count': 2, 'date': '2026-10-05'}
+    assert year['busiest_week'] == {'count': 4, 'date': '2026-10-05'}
+    assert year['busiest_month'] == {'count': 4, 'date': '2026-10-01'}
+    assert year['longest'] == {'minutes': 45, 'discipline': 'strength'}
+    assert year['best_output'] is None and year['best_strive'] is None
+    # A 30-day window is no place for a month; and with nothing in a frame every best is None.
+    assert frame_stats(workouts, ZONE, NOW)['30d']['busiest_month'] is None
+    assert frame_stats([], ZONE, NOW)['all']['busiest_day'] is None
+
+
+def test_longest_output_and_strive_come_from_real_classes_not_free_workouts():
+    free = _w('free', _local(2026, 10, 3), discipline='cycling', minutes=90)
+    free['ride'].pop('id')
+    free.update(total_work=999000, effort_zones={'total_effort_points': 500})
+    real = _w('real', _local(2026, 10, 2), discipline='cycling', minutes=30)
+    real.update(total_work=200000, effort_zones={'total_effort_points': 100})
+    log = WorkoutLog('unused')
+    log.merge([free, real])
+    log.backfill['complete'] = True
+    year = log.derived(tzname=ZONE, now=NOW)['time_frames']['year']
+    assert year['longest']['minutes'] == 30 and year['best_output']['kj'] == 200 and year['best_strive']['points'] == 100
+    # They still count as workouts: the busiest day is about activity, not classes.
+    assert year['workouts'] == 2
+    log.workouts.pop(next(i for i, r in log.workouts.items() if r['ride_id'] is not None))
+    only_free = log.derived(tzname=ZONE, now=NOW)['time_frames']['year']
+    assert only_free['longest'] is None and only_free['best_output'] is None and only_free['best_strive'] is None
+
+
+def test_a_windows_cut_off_week_is_not_counted_as_a_week():
+    # 30 days back from Sunday 8 Nov is Saturday 10 Oct: the week of Mon 5 Oct starts before the window.
+    workouts = [_w('a0', _local(2026, 10, 10)), _w('a1', _local(2026, 10, 11)), _w('a2', _local(2026, 10, 12)),
+                _w('b', _local(2026, 10, 7))]
+    stats = frame_stats(workouts, ZONE, NOW)
+    assert stats['30d']['busiest_week'] == {'count': 1, 'date': '2026-10-12'}
+    assert stats['year']['busiest_week'] == {'count': 3, 'date': '2026-10-05'}
+
+
+def test_highest_output_is_a_bike_figure_and_best_strive_comes_through_the_log():
+    log = WorkoutLog('unused')
+    ride = _w('r', _local(2026, 10, 1), discipline='cycling', minutes=30)
+    ride.update(total_work=289900, effort_zones={'total_effort_points': 212.4})
+    row = _w('t', _local(2026, 10, 2), discipline='walking', minutes=60)
+    row.update(total_work=900000, effort_zones={'total_effort_points': 300})
+    log.merge([ride, row])
+    log.backfill['complete'] = True
+    year = log.derived(tzname=ZONE, now=NOW)['time_frames']['year']
+    assert year['best_output'] == {'kj': 289.9, 'minutes': 30, 'discipline': 'cycling'}
+    assert year['best_strive'] == {'points': 300, 'discipline': 'walking'}
+    assert year['longest'] == {'minutes': 60, 'discipline': 'walking'}
+
+
+def test_block_rank_compares_the_latest_block_with_equal_blocks_before_it():
+    zone = ZoneInfo(ZONE)
+    today = NOW.astimezone(zone).date()
+
+    def rows(per_block):
+        stamps = []
+        for block, count in enumerate(per_block):
+            for _ in range(count):
+                stamps.append((datetime(today.year, today.month, today.day, 12, tzinfo=zone) - timedelta(days=block * 30 + 1), None))
+        return stamps
+
+    assert block_rank(rows([5, 9, 4, 7, 3, 6]), 30, today, zone) == {'rank': 4, 'of': 6, 'best': 9}
+    assert block_rank(rows([9, 5, 4, 7, 3, 6]), 30, today, zone)['rank'] == 1
+    # Ties share the better rank, and an empty block in between still counts as a block.
+    assert block_rank(rows([5, 5, 0, 5, 1, 2]), 30, today, zone)['rank'] == 1
+    # Too little history to call a rank.
+    assert block_rank(rows([5] * (MIN_RANK_BLOCKS - 1)), 30, today, zone) is None
+    assert block_rank([], 30, today, zone) is None
+
+
+def test_only_the_30_and_90_day_frames_have_a_rank():
+    workouts = [_w(f'w{i}', NOW - timedelta(days=i * 7)) for i in range(120)]
+    frames = frame_stats(workouts, ZONE, NOW)
+    assert frames['30d']['rank']['of'] >= MIN_RANK_BLOCKS and frames['90d']['rank'] is not None
+    assert 'rank' not in frames['year'] and 'rank' not in frames['all']
+
+
+def _measured(**extra):
+    stats = dict(THIRTY, rank={'rank': 3, 'of': 12, 'best': 20},
+                 busiest_day={'count': 2, 'date': '2026-10-05'}, busiest_week={'count': 6, 'date': '2026-10-12'},
+                 busiest_month={'count': 22, 'date': '2025-10-01'}, longest={'minutes': 90, 'discipline': 'cycling'},
+                 best_output={'kj': 289.9, 'minutes': 30, 'discipline': 'cycling'},
+                 best_strive={'points': 212.4, 'discipline': 'bike_bootcamp'})
+    stats.update(extra)
+    return stats
+
+
+def test_measures_and_bests_say_what_they_are_and_when():
+    facts = frame_facts(_snapshot(time_frames={'30d': _measured()}), '30d')
+    shown = {(f['label'], tuple(f['lines'])) for f in facts}
+    assert {('LAST 30 DAYS', ('3RD BEST EVER', '12 WORKOUTS')), ('BUSIEST DAY', ('2 WORKOUTS', 'OCT 5 2026')),
+            ('BUSIEST WEEK', ('6 WORKOUTS', 'OF OCT 12 2026')), ('BUSIEST MONTH', ('22 WORKOUTS', 'OCT 2025')),
+            ('LONGEST WORKOUT', ('90 MINUTES', 'CYCLING')), ('HIGHEST OUTPUT', ('290 KJ', '30 MIN CYCLING')),
+            ('BEST STRIVE', ('212 POINTS', 'BIKE BOOTCAMP'))} <= shown
+    first = frame_facts(_snapshot(time_frames={'30d': _measured(rank={'rank': 1, 'of': 12, 'best': 12})}), '30d')
+    assert ('LAST 30 DAYS', ('BEST EVER', '12 WORKOUTS')) in {(f['label'], tuple(f['lines'])) for f in first}
+
+
+def test_a_best_needs_enough_behind_it():
+    def lines(**extra):
+        return {tuple(f['lines']) for f in frame_facts(_snapshot(time_frames={'30d': _measured(**extra)}), '30d')}
+
+    assert ('2 WORKOUTS', 'OCT 5 2026') in lines()
+    # A single-workout day, a two-workout week and a rank of 6th are not worth saying.
+    thin = lines(busiest_day={'count': 1, 'date': '2026-10-05'}, busiest_week={'count': 2, 'date': '2026-10-12'},
+                 rank={'rank': 6, 'of': 12, 'best': 20})
+    words = ' | '.join(' '.join(line) for line in thin)
+    assert 'OCT 5 2026' not in words and 'OF OCT 12' not in words and 'BEST EVER' not in words
+    # A frame with fewer than five workouts has no averages, share or bests at all.
+    few = frame_facts(_snapshot(time_frames={'30d': _measured(workouts=4)}), '30d')
+    assert all(f['lines'][0] != 'AVERAGE CLASS' and f['label'] not in ('BUSIEST DAY', 'LONGEST WORKOUT', 'HIGHEST OUTPUT')
+               for f in few)
+    # No average week for a frame shorter than four weeks, and no share under ten workouts.
+    week = {tuple(f['lines'][:1]) for f in frame_facts(_snapshot(time_frames={'30d': _measured(days=14, workouts=9)}), '30d')}
+    assert ('AVERAGE WEEK',) not in week and ('AVERAGE CLASS',) in week
+    assert not any(line[1] == 'OF WORKOUTS' for line in lines(workouts=9))
+
+
+def test_a_long_discipline_name_in_a_share_uses_its_last_word():
+    stats = dict(THIRTY, workouts=20, disciplines={'tread_bootcamp': 12, 'cycling': 8})
+    shares = [f['lines'][0] for f in frame_facts(_snapshot(time_frames={'30d': stats}), '30d') if f['lines'][1] == 'OF WORKOUTS']
+    assert shares == ['60% BOOTCAMP']
+
+
+def test_the_best_weekly_streak_is_an_all_time_fact():
+    facts = frame_facts(_snapshot(streaks={'best_weekly': 74, 'current_weekly': 3}), 'all')
+    assert facts[-1]['label'] == 'LIFETIME' and facts[-1]['lines'] == ['74 WEEK STREAK', 'YOUR BEST']
+    for streaks in ({'best_weekly': MIN_STREAK_WEEKS - 1}, {}, None):
+        assert all('STREAK' not in ' '.join(f['lines']) for f in frame_facts(_snapshot(streaks=streaks), 'all'))
+    assert all('STREAK' not in ' '.join(f['lines']) for f in frame_facts(_snapshot(streaks={'best_weekly': 74}), '30d'))
+
+
 # facts
 
 THIRTY = {'workouts': 12, 'minutes': 340, 'disciplines': {'strength': 6, 'cycling': 4, 'yoga': 1, 'rowing': 1},
@@ -204,13 +349,17 @@ def test_a_frames_facts_in_order():
         ('LAST 30 DAYS', ['ACTIVE DAYS', '10 OF 30']),
         ('LAST 30 DAYS', ['11 DIFFERENT', 'CLASSES']),
         ('LAST 30 DAYS', ['4 DIFFERENT', 'INSTRUCTORS']),
+        ('LAST 30 DAYS', ['AVERAGE CLASS', '28 MINUTES']),
+        ('LAST 30 DAYS', ['AVERAGE WEEK', '2.8 WORKOUTS']),
+        ('LAST 30 DAYS', ['50% STRENGTH', 'OF WORKOUTS']),
         ('LAST 30 DAYS', ['JESS SIMS', '90 MINUTES']),
         ('LAST 30 DAYS', ['ANDY SPEER', '70 MINUTES']),
         ('LAST 30 DAYS', ['CODY RIGSBY', '50 MINUTES'])]
     # A year of time is told in hours, and its favourite is the all-time one, so no MOST.
     year = frame_facts(_full(), 'year')
     assert (year[0]['label'], year[0]['lines']) == ('IN 2026', ['412 WORKOUTS', '164 HOURS'])
-    assert [f['lines'][0] for f in year] == ['412 WORKOUTS', 'ACTIVE DAYS', '318 DIFFERENT', '31 DIFFERENT']
+    assert [f['lines'][0] for f in year] == ['412 WORKOUTS', 'ACTIVE DAYS', '318 DIFFERENT', '31 DIFFERENT',
+                                             'AVERAGE CLASS', 'AVERAGE WEEK', '49% CYCLING']
 
 
 def test_a_frames_most_done_discipline_is_skipped_when_it_is_the_all_time_one():
@@ -445,8 +594,14 @@ def test_every_label_and_line_fits_or_has_a_short_label_that_does(height):
            'instructor_counts': {'adrian': 999, 'andy': 888, 'cody': 777}, 'instructors': 1234, 'classes': 9999,
            'active_days': 365, 'days': 366, 'year': 2026,
            'by_discipline': {slug: _subject(1234, 99999, counts) for slug, counts in by_discipline.items()},
-           'by_instructor': {'adrian': _subject(999, 99999), 'andy': _subject(888, 5)}}
-    snapshot = _snapshot(time_frames={key: big for key in ('all', '30d', '90d', 'year', 'last_year', 'last_week')})
+           'by_instructor': {'adrian': _subject(999, 99999), 'andy': _subject(888, 5)},
+           'rank': {'rank': 5, 'of': 99, 'best': 99}, 'busiest_day': {'count': 12, 'date': '2026-09-28'},
+           'busiest_week': {'count': 25, 'date': '2026-09-28'}, 'busiest_month': {'count': 120, 'date': '2026-09-01'},
+           'longest': {'minutes': 120, 'discipline': 'walking_outdoor'},
+           'best_output': {'kj': 1234.5, 'minutes': 120, 'discipline': 'cycling'},
+           'best_strive': {'points': 1234.5, 'discipline': 'tread_bootcamp'}}
+    snapshot = _snapshot(time_frames={key: big for key in ('all', '30d', '90d', 'year', 'last_year', 'last_week')},
+                         streaks={'best_weekly': 999})
     details = []
     for key in FRAME_ORDER:
         details += frame_facts(snapshot, key) + [d for ranking in frame_rankings(snapshot, key) for d in ranking]

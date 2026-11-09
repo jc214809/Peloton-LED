@@ -49,8 +49,13 @@ def demo_log(now, years=3, seed=7):
             ride = {'fitness_discipline': discipline, 'duration': rng.choice((600, 1200, 1800, 2700)),
                     'id': f'class-{discipline}-{rng.randrange(60)}',
                     'instructor': {'id': instructor, 'name': DEMO_INSTRUCTORS[instructor]}}
-            workouts.append({'id': f'w{len(workouts)}', 'status': 'COMPLETE', 'start_time': int(stamp.timestamp()),
-                             'fitness_discipline': discipline, 'ride': ride})
+            workout = {'id': f'w{len(workouts)}', 'status': 'COMPLETE', 'start_time': int(stamp.timestamp()),
+                       'fitness_discipline': discipline, 'ride': ride}
+            if discipline == 'cycling':
+                workout['total_work'] = ride['duration'] * rng.randrange(120, 260)
+            if rng.random() < 0.5:
+                workout['effort_zones'] = {'total_effort_points': rng.randrange(20, 250)}
+            workouts.append(workout)
         day += timedelta(days=1)
     log.merge(workouts)
     return log
@@ -69,6 +74,7 @@ def snapshot_for(log, tzname, now, cache_path=None, assume_complete=False):
         if cached is None:
             raise SystemExit(f'Could not read a dashboard cache from {cache_path}')
         totals = cached['totals']
+        snapshot['streaks'] = cached.get('streaks') or {}
     if totals is None:
         counts = {}
         for row in log.workouts.values():
@@ -77,6 +83,7 @@ def snapshot_for(log, tzname, now, cache_path=None, assume_complete=False):
                 counts[label] = counts.get(label, 0) + 1
         totals = {'Total Workouts': sum(counts.values()), **counts}
     snapshot['totals'] = totals
+    snapshot.setdefault('streaks', {})
     return snapshot
 
 

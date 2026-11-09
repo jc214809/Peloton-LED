@@ -68,6 +68,12 @@ both (a rider with no instructor data), any frame with something to show takes a
 | Active days | the frame's title | `ACTIVE DAYS` / `10 OF 30` | 2+ active days |
 | Different classes | the frame's title (`LIFETIME` for all time) | `318 DIFFERENT` / `CLASSES` | 2+, by class ID |
 | Different instructors | the frame's title | `31 DIFFERENT` / `INSTRUCTORS` | 2+ |
+| Averages (5+ workouts) | the frame's title | `AVERAGE CLASS` / `28 MINUTES`; `AVERAGE WEEK` / `2.8 WORKOUTS` (28+ days) | |
+| Share (10+ workouts) | the frame's title | `50% STRENGTH` / `OF WORKOUTS` | top discipline has 2+ |
+| Rank (30 and 90 days) | the frame's title | `3RD BEST EVER` / `21 WORKOUTS` | top five of 6+ blocks |
+| Busiest day / week / month | `BUSIEST DAY` etc. | `6 WORKOUTS` / `MAR 3 2025` | 2+ (day), 3+ (week, month; month for year and all time) |
+| Longest, output, Strive | `LONGEST WORKOUT`, `HIGHEST OUTPUT`, `BEST STRIVE` | `45 MINUTES` / `CYCLING`; `290 KJ` / `30 MIN CYCLING`; `212 POINTS` / `STRENGTH` | the stat exists (output: bike) |
+| Best weekly streak (all time) | `LIFETIME` | `74 WEEK STREAK` / `YOUR BEST` | 4+ weeks |
 | One instructor (the frame's 3 most-seen) | the frame's title | `JESS SIMS` / `340 MINUTES` | 2+ workouts with them, name known |
 
 | Top three (highlights 4-6) | Labels | Lines | Shown when |
@@ -389,7 +395,11 @@ Planned:
 - Which discipline or instructor: the pass's turn through the rider's top ones in that frame, so
   a filter never picks something done once.
 
-### Step 3: measures and bests
+### Step 3: measures and bests: done (branch `facts-step-3-bests`)
+
+Built: `frame_stats` adds, per frame, `busiest_day` / `busiest_week` / `busiest_month` (`{count, date}`; weeks and months only if they start inside the frame, months only for year, last year and all time), `longest`, `best_output` (bike only, kJ) and `best_strive` (these three only from real classes, never a no-class workout like Just Ride), all from the one pass over a frame's rows (`_bests`); the 30- and 90-day frames also get `rank` (`block_rank`). `as_workout` now carries `effort_points` (already in the log, so no `LOG_VERSION` bump). Facts (`_measure_facts`, after a frame's distinct counts and before its instructors): `AVERAGE CLASS`, `AVERAGE WEEK` (frame of 28+ days), the top discipline's share (`38% CYCLING` / `OF WORKOUTS`, 10+ workouts), rank (`LAST 30 DAYS` / `3RD BEST EVER` / `21 WORKOUTS`, top five only), `BUSIEST DAY` (2+), `BUSIEST WEEK` (3+, `OF OCT 12 2026`), `BUSIEST MONTH` (3+, `OCT 2025`), `LONGEST WORKOUT`, `HIGHEST OUTPUT`, `BEST STRIVE`, and for all time `74 WEEK STREAK` / `YOUR BEST` (cache `streaks.best_weekly`, 4+). A frame with under 5 workouts has no measures or bests. Two departures from the plan: rank compares non-overlapping blocks counted back from today (6+ blocks), not every sliding window, because the 2nd-best sliding window is just a day off the best, so the plan's per-day totals aren't needed; and the rank's words sit in the lines (`3RD BEST` + `EVER`) since `3RD BEST 30 DAYS` is 16 characters. `list_facts.py --cache` now carries the cache's streaks; the demo log has output and Strive.
+
+Planned (as written):
 
 - Average, maximum, share and rank beside the totals; bests (biggest week, month and day, longest
   workout, highest output, best Strive class) inside a frame.
