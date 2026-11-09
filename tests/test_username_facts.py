@@ -401,11 +401,10 @@ def test_frame_words_fit_in_front_of_a_rank_or_most():
 def test_all_time_facts_start_with_the_top_discipline():
     facts = frame_facts(_snapshot(), 'all')
     assert [(f['label'], f['lines']) for f in facts] == [('TOP DISCIPLINE', ['CYCLING', '700 WORKOUTS'])]
-    # With the log's all-time figures there are distinct counts too, after the top discipline.
+    # With the log's all-time figures there is the unique instructors count too (unique classes are no fact).
     lifetime = {'workouts': 1234, 'classes': 900, 'instructors': 38}
     labels = [(f['label'], f['lines']) for f in frame_facts(_snapshot(time_frames={'all': lifetime}), 'all')]
-    assert labels == [('TOP DISCIPLINE', ['CYCLING', '700 WORKOUTS']), ('LIFETIME', ['900 DIFFERENT', 'CLASSES']),
-                      ('LIFETIME', ['38 DIFFERENT', 'INSTRUCTORS'])]
+    assert labels == [('TOP DISCIPLINE', ['CYCLING', '700 WORKOUTS']), ('LIFETIME', ['38 UNIQUE', 'INSTRUCTORS'])]
 
 
 def test_a_frames_facts_in_order():
@@ -414,8 +413,7 @@ def test_a_frames_facts_in_order():
         ('LAST 30 DAYS', ['12 WORKOUTS', '340 MINUTES']),
         ('MOST IN 30 DAYS', ['STRENGTH', '6 WORKOUTS']),
         ('LAST 30 DAYS', ['ACTIVE DAYS', '10 OF 30']),
-        ('LAST 30 DAYS', ['11 DIFFERENT', 'CLASSES']),
-        ('LAST 30 DAYS', ['4 DIFFERENT', 'INSTRUCTORS']),
+        ('LAST 30 DAYS', ['4 UNIQUE', 'INSTRUCTORS']),
         ('LAST 30 DAYS', ['AVERAGE CLASS', '28 MINUTES']),
         ('LAST 30 DAYS', ['AVERAGE WEEK', '2.8 WORKOUTS']),
         ('LAST 30 DAYS', ['50% STRENGTH', 'OF WORKOUTS']),
@@ -425,7 +423,7 @@ def test_a_frames_facts_in_order():
     # A year of time is told in hours, and its favourite is the all-time one, so no MOST.
     year = frame_facts(_full(), 'year')
     assert (year[0]['label'], year[0]['lines']) == ('IN 2026', ['412 WORKOUTS', '164 HOURS'])
-    assert [f['lines'][0] for f in year] == ['412 WORKOUTS', 'ACTIVE DAYS', '318 DIFFERENT', '31 DIFFERENT',
+    assert [f['lines'][0] for f in year] == ['412 WORKOUTS', 'ACTIVE DAYS', '31 UNIQUE',
                                              'AVERAGE CLASS', 'AVERAGE WEEK', '49% CYCLING']
 
 
@@ -640,6 +638,21 @@ def test_a_fact_just_shown_loses_to_fresh_ones_and_recovers_over_the_cooldown():
     assert base - 50 < kind_cooled < base - 10
 
 
+def test_a_lifetime_discipline_count_is_not_a_headline_but_its_instructors_still_get_a_page():
+    snapshot = _full()
+    keys = [fact['key'] for _, fact, _ in scored_facts(snapshot)]
+    assert not any(key.startswith('all:subject:') for key in keys) and '30d:subject:strength' in keys
+    # The all-time discipline top threes are in the turns, right after the overall one.
+    pages = [[d['label'] for d in username_details(dict(_flat(), time_frames={'all': LIFETIME}), index)[3:]]
+             for index in range(4)]
+    assert pages[0] == ['TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
+    assert pages[1] == ['TOP CYCLING', '2ND CYCLING', '3RD CYCLING']      # the most-done discipline first
+    assert pages[2] == ['TOP STRENGTH', '2ND STRENGTH', '3RD STRENGTH']
+    # ...and never with a lifetime-count headline in front.
+    assert all(d['label'] not in ('STRENGTH', 'CYCLING') or d['lines'][1] != 'LIFETIME'
+               for index in range(6) for d in username_details(snapshot, index))
+
+
 def test_the_pages_rotate_through_facts_as_the_cooldown_works():
     snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
     snapshot['name_facts_passes'], snapshot['name_facts_shown'] = 0, {}
@@ -672,6 +685,31 @@ def test_a_recent_best_scores_higher_than_an_old_one():
     assert fact_score(fact, today) - fact_score(old, today) == RECENT_RECORD_BONUS
     assert fact_score(fact) == fact_score(old)      # no date for today: no bonus
     assert fact_score({'kind': 'rank', 'key': 'k', 'bonus': 15}) == KINDS['rank'][1] + 15
+
+
+def test_only_the_all_time_and_year_bests_get_the_recent_record_bonus():
+    today = date(2026, 11, 8)
+    scores = {frame: fact_score({'kind': 'busiest_day', 'key': f'{frame}:busiest_day', 'when': '2026-11-05'}, today)
+              for frame in ('all', 'year', '30d', '90d', 'last_year')}
+    base = KINDS['busiest_day'][1]
+    assert scores == {'all': base + RECENT_RECORD_BONUS, 'year': base + RECENT_RECORD_BONUS,
+                      '30d': base, '90d': base, 'last_year': base}
+
+
+def test_facts_that_read_the_same_in_several_frames_are_one_candidate():
+    day = {'count': 3, 'date': '2026-11-08'}
+    frames = {key: dict(YEAR, busiest_day=day) for key in ('30d', '90d', 'year')}
+    snapshot = _snapshot(time_frames=frames, events={'today': '2026-11-08'})
+    days = [(score, fact['key']) for score, fact, _ in scored_facts(snapshot) if fact['kind'] == 'busiest_day']
+    # One survives: the year's, which has the recent-record bonus; the 30- and 90-day copies are gone.
+    assert days == [(KINDS['busiest_day'][1] + RECENT_RECORD_BONUS, 'year:busiest_day')]
+    # Resting the survivor doesn't bring a copy back in its place.
+    cooled = dict(snapshot, name_facts_passes=1, name_facts_shown={'year:busiest_day': 1})
+    assert [fact['key'] for _, fact, _ in scored_facts(cooled) if fact['kind'] == 'busiest_day'] == ['year:busiest_day']
+    # Different figures are different facts: each frame keeps its own.
+    other = dict(frames, **{'30d': dict(YEAR, busiest_day={'count': 2, 'date': '2026-11-01'})})
+    keys = {fact['key'] for _, fact, _ in scored_facts(_snapshot(time_frames=other)) if fact['kind'] == 'busiest_day'}
+    assert keys == {'30d:busiest_day', 'year:busiest_day'}
 
 
 def test_a_best_ever_rank_and_a_big_change_carry_a_bonus():

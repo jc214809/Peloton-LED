@@ -8,7 +8,8 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 Icon touch-ups (by hand) ── independent
 6 More head-to-head stats ── after facts-engine step 1 (period_stats) merges
 7 Journey moments ── after the journey redesign (journey-mile-groups) merges
-Name page facts engine ── steps 1-6 built (step 6 on branch facts-step-6-scoring); retune weights on real logs
+Name page facts engine ── steps 1-6 built; retune weights on real logs (first pass: PR #72)
+Workout graphs ── research first; builds on `performance_graph` in peloton/summaries.py and the workout pages
 Name page together facts ── after the facts engine; shares figures with item 6 (head to head)
 Name page facts settings and log fields ── maybe; after the facts engine
 ```
@@ -66,10 +67,40 @@ Notes:
 - Depends on: the journey redesign (branch `journey-mile-groups`).
 
 ### Name page: facts engine
-The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65), 1 (time frames and `period_stats`, PR #66), 2 (filters, PR #67), 3 (measures and bests, PR #68), 4 (comparisons, PR #69), 5 (events, PR #70) and 6 (scoring and a cool-down, branch `facts-step-6-scoring`) are built. Steps 7 and 8 of the plan are their own items below. Left from step 6: tune `KINDS` weights from `list_facts.py` on Joel's real logs on the boards.
+The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65), 1 (time frames and `period_stats`, PR #66), 2 (filters, PR #67), 3 (measures and bests, PR #68), 4 (comparisons, PR #69), 5 (events, PR #70) and 6 (scoring and a cool-down, PR #71) are built; PR #72 is the first tuning. Steps 7 and 8 of the plan are their own items below. Left from step 6: tune `KINDS` weights from `list_facts.py` on Joel's real logs on the boards.
 - Build brief for a Sonnet 5.5 session, one step each: `docs/NAME-PAGE-FACTS-HANDOFF.md`.
 - After the update, on each board: `python scripts/list_facts.py --log <log> --cache <cache> --tz <zone>` should show no `<-- differs` in "overview vs log" (the log rebuilds once, LOG_VERSION 2). Checked on Joel's full history from the Mac on 2026-11-08: all 13 rows matched. Remove this item once the boards agree.
 - Depends on: step 4 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
+
+### Workout graphs: more of what Peloton records during a class
+Peloton records heart rate, output, cadence and more every 5 seconds of a class, and the board draws only one of them. This item is to decide which of the others deserve a graph slide on the workout pages, then build those. Research first: a mock-up of each candidate at 64x64 and 64x32 from the saved real workouts in `perf_graphs/` (91 of them), and Joel picks.
+
+**What the board draws today.** One graph slide per workout: output (W) when the workout has it, otherwise heart rate (BPM), then the heart-rate zones bar. `peloton/summaries.py` `performance_graph` averages the series into 60 columns (`GRAPH_POINTS`, one per pixel column of a 64-px panel) and colours each column by heart-rate zone; `display/ui/last_workout_screen.py` draws it. `rotating_details` appends the slides (`kind`: `graph`, `zones`, `muscles`), each holds `GRAPH_FRAME_EXTRA_SECONDS` longer, and `build_rotation_pages` sizes the page from the same list. Everything else the workout pages show is a number.
+
+**What Peloton sends that isn't a graph yet** (counts are of the 91 saved workouts, in `docs/DATA-POINTS.md` terms):
+- Time series, one sample every 5 s: `cadence`, `resistance` and `speed` (bike, 13 workouts); `pace` (tread, 11) and `incline` (treadmill only, 7); `altitude` (outdoor, 3); `stroke_rate` and `split_pace` (row, 13). Heart rate (86) and output (33) are the two already used.
+- `splits_data`: per-mile (or per-km) splits with elevation change (21 workouts): bars would show a negative split or a fading pace at a glance.
+- `location_data`: GPS coordinates (3, outdoor only): a route outline.
+- `segment_list`: the class's own structure (warm-up, climbs, cool-down; 84 workouts), which could shade the graph's background in bands.
+- Not useful yet: `target_metrics_performance_data` is empty in all 91 saved workouts, so there is no target range to overlay; check a fresh Power Zone ride before ruling it out.
+- Peloton also sends each stat's max, which the board doesn't show except max heart rate (`docs/DATA-POINTS.md`, "The gaps"); a graph's peak can be a caption.
+
+**Candidates**, by equipment:
+- Bike: cadence and resistance (the two a rider actually steers), speed; output with class segments shaded.
+- Treadmill and outdoor: pace with incline, or elevation profile from altitude; per-mile split bars; the GPS route.
+- Row: split per 500 m and stroke rate.
+- Heart rate as its own graph on workouts where output is shown (today heart rate only appears as zone colours and the zones bar).
+
+**Decisions to make first.**
+- One slide per metric, or one slide that alternates metrics? Each slide adds `GRAPH_FRAME_EXTRA_SECONDS` (a bike page is 38 s today), so several more could make workout pages too long; some of the averages screens (avg cadence, avg resistance) could be replaced by their graph, since it shows the same figure and more.
+- Which metric per equipment, and whether `MUSCLE_DISCIPLINES`-style per-discipline lists are the right pattern for choosing.
+- 64x32 has half the height (about 15 usable rows with a title and caption), so a graph there may need to drop the zone colouring or the caption.
+
+**Constraints.** 60 columns, no axes (a caption states the peak and unit; labels fit 15 characters of the `stats` font); workouts without a heart-rate monitor or without a series must drop the slide, as they do now (see "Why some workouts lack a stat" in `docs/DATA-POINTS.md`); the downsampling must stay in `peloton/summaries.py` (business logic out of the screen) and be tested with real saved payloads.
+
+**To do the work.** Extend `performance_graph` (or add siblings) to return any named series; add the slide `kind`s to `rotating_details`; drawing in `display/ui/`; update `docs/DATA-POINTS.md` (its "Output / heart-rate graph" row and stats-per-workout table) and the README's workout-page section. Preview with `scripts/render_rotation.py` at both heights; the other pages must stay byte-identical. Depends on: nothing.
+
+A separate, later idea: charts of trends over time from the workout log (workouts per week as bars, this year against last year, the mix of disciplines by month, which weekdays and hours you work out), reusing `peloton/activity.py` windows the way the heatmap page does. Not part of this item.
 
 ### Name page: together facts (was facts-engine step 7)
 Facts about both riders on a two-rider board (`TOGETHER` / `31 WORKOUTS`, `BOTH TOOK` an instructor, `SAME CLASS`), from each rider's `period_stats`, shown once a cycle on the rider whose rotation gets `rivals`. Details: `docs/NAME-PAGE-FACTS.md` ("Step 7").
