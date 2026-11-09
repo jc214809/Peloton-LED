@@ -6,8 +6,9 @@ frame's instructor top three (three highlights). Each pass takes the next frame 
 highlights, as before, whatever it shows. After a frame's general facts come its subjects: one of its
 most-done disciplines (the discipline's count, then that discipline's instructor top three), and
 its most-seen instructors. A last pseudo-frame, `events`, has the facts measured from a date instead
-(an anniversary, this day in an earlier year, a comeback, a first, time since): it drops out when
-there are none. Everything comes from the dashboard cache and the workout
+(this day in an earlier year, a comeback, a first, time since): it drops out when there are none.
+On the day of the account's anniversary, every pass has it as its headline (anniversary_fact).
+Everything comes from the dashboard cache and the workout
 log (peloton.activity.frame_stats); the log's figures stay empty until its backfill is complete,
 and then the page falls back to what's left.
 
@@ -259,17 +260,22 @@ def _short_noun(slug):
     return noun if len(noun) <= MAX_LABEL_CHARS - 5 else noun.split()[-1]
 
 
+def anniversary_fact(snapshot):
+    """The anniversary highlight, or None: username_details pins it as the headline of every pass all
+    day, because it's too rare to leave to a turn."""
+    years = (snapshot.get('events') or {}).get('anniversary')
+    if not years:
+        return None
+    return {'label': 'ANNIVERSARY', 'value': f'{years} ON PELOTON', 'lines': [_plural(years, 'YEAR'), 'ON PELOTON']}
+
+
 def event_facts(snapshot):
     """The facts measured from a date (frame_stats' neighbour, activity.event_stats), in the order
-    they're shown: the anniversary (only on the day), this day in an earlier year, a comeback, a first,
+    they're shown (the anniversary is pinned, not here: anniversary_fact): this day in an earlier year, a comeback, a first,
     time since a discipline's last workout, the last class with a most-seen instructor. Every one has
     a threshold above, so nothing shows a 1 or a 0 unless that's the point."""
     events = snapshot.get('events') or {}
     facts = []
-    years = events.get('anniversary')
-    if years:
-        facts.append({'label': 'ANNIVERSARY', 'value': f'{years} ON PELOTON',
-                      'lines': [_plural(years, 'YEAR'), 'ON PELOTON']})
     today = date.fromisoformat(events['today']) if events.get('today') else None
     if today is None:
         return facts
@@ -421,11 +427,14 @@ def username_details(snapshot, pass_index=0):
                     'value': f'{weekly_workouts} WORKOUTS / {weekly_minutes} MIN',
                     'lines': [f'{weekly_workouts} WORKOUTS', f'{weekly_minutes} MINUTES']})
     frames = username_frames(snapshot)
+    pinned = anniversary_fact(snapshot)
     if frames:
         key, visit = frames[pass_index % len(frames)], pass_index // len(frames)
         stories = frame_stories(snapshot, key)
         fact, ranking = stories[visit % len(stories)]
-        if fact:
-            details.append(fact)
+        if fact or pinned:
+            details.append(pinned or fact)
         details.extend(ranking or [])
+    elif pinned:
+        details.append(pinned)
     return details

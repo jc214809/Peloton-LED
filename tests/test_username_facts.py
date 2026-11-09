@@ -771,7 +771,6 @@ def _events_snapshot(**extra):
 def test_event_facts_in_order():
     facts = frame_facts(_events_snapshot(), 'events')
     assert [(f['label'], f['lines']) for f in facts] == [
-        ('ANNIVERSARY', ['6 YEARS', 'ON PELOTON']),
         ('ON THIS DAY', ['1 YEAR AGO', '45 MIN YOGA']),
         ('COMEBACK', ['STRENGTH', 'AFTER 96 DAYS']),
         ('NEW DISCIPLINE', ['WALKING', 'FIRST TIME']),
@@ -806,12 +805,11 @@ def test_event_facts_are_capped_and_long_names_shortened():
     snapshot = _events_snapshot()
     many = {slug: {'workouts': 9 - index, 'first': '2025-01-01', 'last': '2026-06-01', 'before_last': '2026-05-30'}
             for index, slug in enumerate(('bike_bootcamp', 'tread_bootcamp', 'stretching', 'yoga'))}
-    snapshot['events'].update(anniversary=1, disciplines=many, on_this_day=[
+    snapshot['events'].update(disciplines=many, on_this_day=[
         {'years_ago': 2, 'minutes': 120, 'discipline': 'walking_outdoor'}])
     snapshot['events']['instructors'] = {who: {'workouts': 9, 'last': '2026-01-01'} for who in NAMES}
     facts = frame_facts(snapshot, 'events')
-    assert facts[0]['lines'] == ['1 YEAR', 'ON PELOTON']
-    assert facts[1]['lines'] == ['2 YEARS AGO', '120 MIN OUTDOOR']
+    assert facts[0]['lines'] == ['2 YEARS AGO', '120 MIN OUTDOOR']
     since = [f for f in facts if f['label'] == 'SINCE']
     assert [f['lines'] for f in since] == [['160 DAYS SINCE', 'LAST BOOTCAMP'], ['160 DAYS SINCE', 'LAST BOOTCAMP']]
     assert len([f for f in facts if f['label'] == 'LAST CLASS WITH']) == 2
@@ -825,20 +823,36 @@ def test_on_this_day_without_a_discipline_or_minutes():
     assert [f['lines'] for f in frame_facts(snapshot, 'events')] == [['2 YEARS AGO', '30 MIN WORKOUT']]
 
 
-def test_an_anniversary_is_the_only_event_without_a_date_for_today():
+def test_the_anniversary_is_every_passes_headline_all_day():
+    snapshot = _full(events={'anniversary': 6})
+    for index in range(len(username_frames(snapshot)) * 3):
+        details = username_details(snapshot, index)
+        assert [d['label'] for d in details].count('ANNIVERSARY') == 1 and len(details) == 6
+        assert details[2]['lines'] == ['6 YEARS', 'ON PELOTON']
+        # The frame's top three stays, so only the headline is replaced.
+        assert details[3:] == username_details(_full(), index)[3:]
+    # A log still filling (only the all-time frame, from the overview): the anniversary still shows.
+    assert [d['label'] for d in username_details(_snapshot(events={'anniversary': 6}))][2] == 'ANNIVERSARY'
+    # With no instructor data at all there's no frame, and the anniversary is still there.
+    bare = {'totals': {'Total Workouts': 5}, 'events': {'anniversary': 6}}
+    assert [d['label'] for d in username_details(bare)] == ['TOTAL WORKOUTS', 'THIS WEEK', 'ANNIVERSARY']
+    assert 'ANNIVERSARY' not in [d['label'] for d in username_details(_full(events={}))]
+
+
+def test_events_without_a_date_for_today_have_no_facts():
     snapshot = _snapshot(events={'anniversary': 3})
-    assert [f['lines'] for f in frame_facts(snapshot, 'events')] == [['3 YEARS', 'ON PELOTON']]
+    assert frame_facts(snapshot, 'events') == []
     assert frame_facts(_snapshot(), 'events') == [] and frame_facts(_snapshot(events={}), 'events') == []
 
 
 def test_the_events_frame_takes_a_turn_only_when_there_is_something_to_say():
     assert 'events' not in username_frames(_full())
-    snapshot = _full(events={'anniversary': 6})
+    snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
     frames = username_frames(snapshot)
     assert frames[-1] == 'events' and frames.index('events') == len(frames) - 1
     # Its page is the event over the all-time instructor top three.
     details = username_details(snapshot, frames.index('events'))
-    assert [d['label'] for d in details] == ['TOTAL WORKOUTS', 'THIS WEEK', 'ANNIVERSARY',
+    assert [d['label'] for d in details] == ['TOTAL WORKOUTS', 'THIS WEEK', 'ON THIS DAY',
                                              'TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
     assert frame_subjects(snapshot, 'events') == []
 

@@ -89,16 +89,16 @@ timezone; the thresholds are named constants in `username_facts.py`):
 
 | Event | Label | Lines | Shown when |
 |---|---|---|---|
-| Anniversary | `ANNIVERSARY` | `6 YEARS` / `ON PELOTON` | today is the day of the profile's `created_at` (a partial log too), 1+ years |
+| Anniversary (pinned) | `ANNIVERSARY` | `6 YEARS` / `ON PELOTON` | today is the day of the profile's `created_at` (a partial log too), 1+ years. It replaces the headline of **every pass all day** (the frame's top three stays), so it's never missed; it isn't in the `events` turn |
 | On this day | `ON THIS DAY` | `2 YEARS AGO` / `45 MIN CYCLING` | a workout on today's date in an earlier year (the nearest year, its longest workout) |
 | Comeback | `COMEBACK` | `YOGA` / `AFTER 185 DAYS` | a discipline with 5+ workouts done in the last 14 days after 60+ days without (years past 999 days) |
 | New discipline | `NEW DISCIPLINE` | `WALKING` / `FIRST TIME` | first workout in the last 14 days, by a rider with 30+ days of earlier history |
 | Since | `SINCE` | `49 DAYS SINCE` / `LAST STRETCHING` | 5+ workouts, last one 14 to 999 days ago (two at most, most-done first) |
 | Last class with | `LAST CLASS WITH` | `ADRIAN WILLIAMS` / `MAR 3 2026` | one of the 5 most-seen instructors, 5+ classes, 30+ days ago, named (two at most) |
 
-Long discipline names use their last word (`LAST BOOTCAMP`). Until step 6 scores them, an event
-shows once every few passes, in the `events` turn, even on the day it's about; step 6's "today is the
-day" score is what will pull an anniversary or this day forward.
+Long discipline names use their last word (`LAST BOOTCAMP`). Except the anniversary, which is pinned all day (Joel, 2026-11-08: too rare to leave to a turn), an event
+shows once every few passes in the `events` turn, even on the day it's about; step 6's "today is the
+day" score should pull "on this day" forward. Pass 0 differs from the old page only on the anniversary.
 
 Pass 0 is all time: `TOP DISCIPLINE` and the all-time top three, byte for byte what the board showed
 before any of this.
