@@ -1,5 +1,6 @@
 /.idea/
 config.json
+config.local.json
 config.old.json
 .env
 cookies.txt

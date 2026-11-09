@@ -31,7 +31,8 @@ def test_the_shared_numbers_match_the_screens_and_config_they_stand_for():
     from display.ui import username, versus_screen
     from display.ui.celebration_screen import INTRO_SECONDS, MIN_CARD_SECONDS
     assert screen_times.VERSUS_STATS == len(versus_screen.STATS)
-    assert screen_times.FRAME_SECONDS == username.DETAIL_INTERVAL_SECONDS == versus_screen.DETAIL_INTERVAL_SECONDS
+    assert screen_times.HIGHLIGHT_SECONDS == username.DETAIL_INTERVAL_SECONDS
+    assert screen_times.FRAME_SECONDS == versus_screen.DETAIL_INTERVAL_SECONDS
     assert screen_times.CELEBRATION_MIN_SECONDS == pytest.approx(INTRO_SECONDS + MIN_CARD_SECONDS)
     assert all(DEFAULTS[key] == value for key, value in screen_times.FALLBACK_DEFAULTS.items())
 
@@ -86,9 +87,9 @@ def test_more_time_on_the_name_page_means_longer_highlights_not_a_repeat():
     display = {**DEFAULTS, 'rotation': ['username'], 'screen_durations': {'username': 24}}
     (_, state, duration), = build_rotation_pages(snapshot, None, display, 'Joel', 64)
     assert len(state['details']) == 2 and duration == 24 and state['detail_seconds'] == 12
-    display['screen_durations']['username'] = 5  # under 4 s a highlight: raised, never cut short
+    display['screen_durations']['username'] = 5  # under 5 s a highlight: raised, never cut short
     (_, state, duration), = build_rotation_pages(snapshot, None, display, 'Joel', 64)
-    assert duration == 8 and state['detail_seconds'] == 4
+    assert duration == 10 and state['detail_seconds'] == 5
 
 
 def _frame(screen, state, height, at):
@@ -172,7 +173,7 @@ def test_each_seconds_box_starts_at_what_its_screen_needs():
         html = page.settings_page({'matrix': {'rows': rows, 'cols': 64}, 'display': {}})
         mins = dict(re.findall(r'id="duration_(\w+)" name="duration_\w+" value="[^"]*" inputmode="decimal" '
                                r'step="any" min="([^"]+)"', html))
-        assert mins['lifetime'] == '5' and mins['milestones'] == '5.8' and mins['username'] == '4'
+        assert mins['lifetime'] == '5' and mins['milestones'] == '5.8' and mins['username'] == '5'
         assert mins['versus'] == versus and mins['goals'] == '1'
         assert re.search(r'id="logo_duration" [^>]*min="1"', html)
 

@@ -15,7 +15,7 @@
     "performance_cache_size": 32,
     "cache_path": "/var/lib/peloton-led/dashboard-cache.json",
     "rotation": ["latest_workouts", "username", "total_workouts", "lifetime", "milestones", "goals"],
-    "screen_durations": {"username": 4, "lifetime": 5, "milestones": 5.8, "goals": 4},
+    "screen_durations": {"username": 5, "lifetime": 5, "milestones": 5.8, "goals": 4},
     "weekly_goals": {"workouts": 0, "minutes": 0},
     "milestones": [],
     "brightness_schedule": null

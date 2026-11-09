@@ -575,7 +575,7 @@ def test_username_profile_details_all_receive_display_time():
     assert page[1]['details'][1]['value'] == 'Cycling / 60'
     assert {'lines': ['100'], 'font_key': 'big', 'color_key': 'gold'}.items() <= page[1]['details'][0].items()
     assert page[1]['details'][1]['lines'] == ['CYCLING', '60 WORKOUTS']
-    assert page[2] == pytest.approx(8.0)    # two highlights, 4 s each at least
+    assert page[2] == pytest.approx(10.0)    # two highlights, 5 s each at least
 
 
 def test_username_profile_includes_top_three_instructors_when_present():
@@ -629,7 +629,7 @@ def test_username_detail_animation_changes_lower_panel_only():
     screen.update(0.4)
     screen.render(matrix, state)
     first = matrix.image.copy()
-    screen.update(4.0)
+    screen.update(5.0)
     matrix.Clear()
     screen.render(matrix, state)
     assert first.crop((0, 0, 64, 24)).tobytes() == matrix.image.crop((0, 0, 64, 24)).tobytes()

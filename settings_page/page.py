@@ -19,7 +19,7 @@ from self_update.update import (BETA, BETA_BRANCH, CURRENT, RELEASES, WAITING, W
 from settings_page import logo
 from settings_page.logins import RENEW_BEFORE_S, renews_at, when
 from settings_page.updates import BUSY, START_FAILED, STARTED, STEPS
-from peloton.screen_times import (FRAME_SECONDS, VERSUS_STATS, least_seconds, page_seconds,
+from peloton.screen_times import (FRAME_SECONDS, HIGHLIGHT_SECONDS, VERSUS_STATS, least_seconds, page_seconds,
                                   retire_zero_times)
 from settings_page.form import (COLORS, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
                                 SHARED_DURATION, STREAK_REMINDER_DEFAULT, SWITCH_KEYS, TIMING, TIMING_LEAST, WEEKDAYS,
@@ -728,8 +728,8 @@ def shows_for(name, display, rows):
         return (f'Each workout shows every stat once: {_secs(stat)} each (the stat time under Timing), charts '
                 f'1 s longer. A ride is about {_secs(ride)}.')
     if name == 'username':
-        three = max(t, 3 * FRAME_SECONDS)
-        return (f'Shared by its highlights, at least {_secs(FRAME_SECONDS)} each: with 3, '
+        three = max(t, 3 * HIGHLIGHT_SECONDS)
+        return (f'Shared by its highlights, at least {_secs(HIGHLIGHT_SECONDS)} each: with 3, '
                 f'{_secs(three / 3)} each ({_secs(three)} in all).')
     if name == 'versus':
         if rows < 64:
