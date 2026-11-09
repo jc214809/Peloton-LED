@@ -83,6 +83,16 @@ def test_32_row_stats_show_label_value_and_bar_without_overlap():
                 assert value[-1] < BAR_TOP - 1, (summary['discipline'], detail['label'])
 
 
+def test_32_row_comma_in_a_long_row_distance_leaves_a_blank_row_above_the_bar():
+    # 6x9's comma hangs below the baseline; the value is lifted a row so it doesn't touch the bar.
+    summary = {'discipline': 'Rowing', 'title': '45 min Row', 'duration_min': 45, 'distance': 3929.83,
+               'distance_unit': 'm', 'calories': 300, 'hr_avg': 130}
+    turn = [d['label'] for d in rotating_details(summary, 32)].index('distance')
+    matrix = frame(summary, 4 * (turn + 1) + 0.5)
+    value = [y for y in rows_of(matrix, WHITE, range(12, 52)) if rows_of(matrix, GREY)[-1] < y < BAR_TOP]
+    assert value and value[-1] < BAR_TOP - 1
+
+
 def test_32_row_long_instructor_name_keeps_caption_and_drops_bar():
     summary = {**STRENGTH, 'instructor': 'Jermaine Johnson'}
     matrix = frame(summary, 4.5)  # first stats turn is the instructor

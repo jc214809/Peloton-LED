@@ -117,7 +117,7 @@ The board writes each stat the way Peloton sends it:
 |---|---|
 | Strive Score | one decimal, even when whole: `27.7`, `11.0` |
 | Distance (mi, km) | two decimals: `6.33 mi` |
-| Distance (rows) | whole metres: `1906m` |
+| Distance (rows) | whole metres with a thousands comma: `1,906m` |
 | Incline | one decimal, even when flat: `2.5%`, `0.0%` |
 | Speed | one decimal: `15.0 mph` |
 | Pace, split | minutes and seconds: `10:20/mi`, `2:37/500` |
