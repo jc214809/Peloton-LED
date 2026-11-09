@@ -5,8 +5,9 @@ highlights, as before. Every fact the other steps build (time frames, measures a
 events; frame_facts) is a candidate with a kind and a score: a base score for its kind (KINDS), plus a
 bonus for a first place, a big change or a fresh record. A fact shown lately scores lower (a cool-down
 of COOLDOWN_PASSES pages, remembered in the dashboard cache so a restart doesn't repeat it), so the best
-facts take turns. The top three is a headline's own when that headline is a discipline's, else the
-general ones take turns (frame_rankings). On the day of the account's anniversary, it is the first headline
+facts take turns. The top three is a headline's own when that headline is a discipline's (in a frame other than
+all time: lifetime counts are the Lifetime pages'), else the general ones take turns (frame_rankings,
+and each discipline's all-time top three). On the day of the account's anniversary, it is the first headline
 (anniversary_fact).
 Everything comes from the dashboard cache and the workout log (peloton.activity.frame_stats); the log's
 figures stay empty until its backfill is complete, and then the page falls back to what's left.
@@ -24,7 +25,7 @@ FRAME_ORDER = ('all', '30d', 'year', '90d', 'last_year', 'last_week', 'events')
 # A ranking for a frame or one discipline needs three instructors with at least this many classes
 # each; fewer is too little to call a ranking (e.g. one strength class in 30 days).
 MIN_RANKED_CLASSES = 2
-# A frame's most-done discipline, different classes, different instructors and active days need at
+# A frame's most-done discipline, unique instructors and active days need at
 # least this many.
 MIN_COUNT = 2
 # Past this many minutes a frame's time is told in hours.
@@ -74,7 +75,7 @@ KINDS = {
     'subject': ('discipline', 45), 'most': ('discipline', 40), 'share': ('discipline', 35),
     'top_discipline': ('discipline', 40),
     'total': ('count', 45), 'active_days': ('count', 30),
-    'classes': ('variety', 30), 'instructors': ('variety', 30), 'instructor': ('instructor', 35),
+    'instructors': ('variety', 30), 'instructor': ('instructor', 35),
     'average_week': ('average', 25), 'average_class': ('average', 20),
     'anniversary': ('anniversary', 100),
 }
@@ -363,8 +364,8 @@ def event_facts(snapshot):
 def frame_facts(snapshot, key):
     """The single-highlight facts a frame has enough data for, in the order its visits show them.
     All time: the top discipline. Others: workouts and time, the most-done discipline (when it
-    isn't the all-time top, which TOP DISCIPLINE already says), active days. Then different classes
-    and different instructors, for every frame."""
+    isn't the all-time top, which TOP DISCIPLINE already says), active days. Then unique instructors
+    for every frame (unique classes were dropped: that's a given)."""
     if key == 'events':
         return event_facts(snapshot)
     facts = []
@@ -391,12 +392,9 @@ def frame_facts(snapshot, key):
             facts.append({'kind': 'active_days', 'label': title, 'value': f'{stats["active_days"]} / {stats["days"]} DAYS',
                           'lines': ['ACTIVE DAYS', f'{stats["active_days"]:,} OF {stats["days"]:,}']})
     if stats:
-        if (stats.get('classes') or 0) >= MIN_COUNT:
-            facts.append({'kind': 'classes', 'label': title, 'value': f'{stats["classes"]:,} DIFFERENT CLASSES',
-                          'lines': [f'{stats["classes"]:,} DIFFERENT', 'CLASSES']})
         if (stats.get('instructors') or 0) >= MIN_COUNT:
-            facts.append({'kind': 'instructors', 'label': title, 'value': f'{stats["instructors"]:,} DIFFERENT INSTRUCTORS',
-                          'lines': [f'{stats["instructors"]:,} DIFFERENT', 'INSTRUCTORS']})
+            facts.append({'kind': 'instructors', 'label': title, 'value': f'{stats["instructors"]:,} UNIQUE INSTRUCTORS',
+                          'lines': [f'{stats["instructors"]:,} UNIQUE', 'INSTRUCTORS']})
         facts.extend(_measure_facts(stats, title))
         comparison = _comparison_fact(key, stats)
         if comparison:
@@ -469,7 +467,10 @@ def scored_facts(snapshot):
     today = date.fromisoformat(today) if today else None
     best = {}
     for frame in FRAME_ORDER:
-        pairs = [(fact, None) for fact in frame_facts(snapshot, frame)] + frame_subjects(snapshot, frame)
+        # A discipline's lifetime count is the Lifetime pages' figure, so it isn't a headline (its top
+        # three still is a page: _general_ranking).
+        subjects = [] if frame == 'all' else frame_subjects(snapshot, frame)
+        pairs = [(fact, None) for fact in frame_facts(snapshot, frame)] + subjects
         for fact, ranking in pairs:
             fact = dict(fact, key=f'{frame}:{fact["kind"]}')
             same = (fact['kind'], tuple(fact['lines']))
@@ -481,8 +482,14 @@ def scored_facts(snapshot):
 
 
 def _general_ranking(snapshot, turn):
-    """The general instructor top threes (all time, 30 days, ...) take turns, one per page."""
-    rankings = [ranking for frame in FRAME_ORDER if frame != 'events' for ranking in frame_rankings(snapshot, frame)]
+    """The general instructor top threes take turns, one per page: all time, then each discipline's all
+    time (TOP STRETCHING: its count is on the Lifetime pages, its instructors aren't), then 30 days, ..."""
+    rankings = []
+    for frame in FRAME_ORDER:
+        if frame != 'events':
+            rankings += frame_rankings(snapshot, frame)
+        if frame == 'all':
+            rankings += [ranking for _, ranking in frame_subjects(snapshot, 'all')]
     return rankings[turn % len(rankings)] if rankings else []
 
 

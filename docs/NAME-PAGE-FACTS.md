@@ -65,8 +65,9 @@ days, last year, last week, then `events` (below), which has no top three of its
 | Workouts and time | `LAST 30 DAYS`, `LAST 90 DAYS`, `IN 2026`, `IN 2025`, `LAST WEEK` | `12 WORKOUTS` / `340 MINUTES` (`164 HOURS` from 600 minutes) | 1+ workout in the frame |
 | Most-done discipline | `MOST IN 30 DAYS` (`MOST IN 2026`, ...) | `STRENGTH` / `6 WORKOUTS` | 2+ workouts, and not the all-time top discipline |
 | Active days | the frame's title | `ACTIVE DAYS` / `10 OF 30` | 2+ active days |
-| Different classes | the frame's title (`LIFETIME` for all time) | `318 DIFFERENT` / `CLASSES` | 2+, by class ID |
-| Different instructors | the frame's title | `31 DIFFERENT` / `INSTRUCTORS` | 2+ |
+| Unique instructors | the frame's title | `31 UNIQUE` / `INSTRUCTORS` | 2+ |
+
+("Different classes" was a fact until 2026-11-08 and was dropped: a given. `period_stats` still counts them.)
 | Averages (5+ workouts) | the frame's title | `AVERAGE CLASS` / `28 MINUTES`; `AVERAGE WEEK` / `2.8 WORKOUTS` (28+ days) | |
 | Share (10+ workouts) | the frame's title | `50% STRENGTH` / `OF WORKOUTS` | top discipline has 2+ |
 | Rank (30 and 90 days) | the frame's title | `3RD BEST EVER` / `21 WORKOUTS` | top five of 6+ blocks |
@@ -448,6 +449,7 @@ counts cycles; the pass index is only the preview's fallback. Departure from the
 cools down (`KIND_COOLDOWN_PENALTY`), since otherwise HIGHEST OUTPUT from five frames took every page in
 turn. In the demo log, 24 pages show 20+ different headlines and no fact twice within 5 pages.
 Weights are a first guess; tune them with `list_facts.py` on real logs.
+Also dropped at Joel's request (2026-11-08): the lifetime discipline headline (`STRETCHING` / `219 WORKOUTS` / `LIFETIME`), because the Lifetime pages show the count; each discipline's all-time top three stays and takes its turn after the overall one (`_general_ranking`). `DIFFERENT INSTRUCTORS` is `UNIQUE INSTRUCTORS`.
 First tuning (Joel's 2,137-workout log on PelotonPi, 2026-11-08): the recent-record bonus applies only to
 the all-time and year frames (`RECORD_FRAMES`), since the busiest day of the last 30 or 90 days is nearly
 always recent; and facts that read the same in several frames (`BUSIEST DAY 3 WORKOUTS NOV 8 2026` in
