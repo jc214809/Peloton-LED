@@ -6,7 +6,7 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 
 ```
 Icon touch-ups (by hand) ── independent
-6 More head-to-head stats ── after facts-engine step 1 (period_stats)
+6 More head-to-head stats ── after facts-engine step 1 (period_stats) merges
 7 Journey moments ── after the journey redesign (journey-mile-groups) merges
 Name page facts engine ── steps 1-8 in docs/NAME-PAGE-FACTS.md, in order; item 6 builds on step 1
 ```
@@ -48,7 +48,7 @@ Notes:
 - This changes today's 64x64 page, so its byte-identical check doesn't apply to `versus`; check the other pages are unchanged and preview with `scripts/render_rotation.py --height 64 --rival <cache>`.
 - 32 rows keeps one stat at a time (labels and big numbers already rotate there); the page's minimum duration grows with the number of stats shown, so pick a per-pass set there too.
 - Optional: a settings-page choice of which stats compete (the Rotation card's Head to head row, or a small section).
-- Depends on: nothing. Per-week and per-month figures come from a helper over the workout log in `peloton/activity.py`, fed via `WorkoutLog.derived` like `streak_week_workouts`; every candidate field is already in the log, so no `LOG_VERSION` bump. Item 5 added `recent_activity` in `peloton/activity.py` (the last 30 days' counts from the log; Joel prefers a rolling 30 days to the calendar month); extend it or add a per-week sibling rather than a new pass over the log.
+- Depends on: nothing. Per-week and per-month figures come from a helper over the workout log in `peloton/activity.py`, fed via `WorkoutLog.derived` like `streak_week_workouts`; every candidate field is already in the log, so no `LOG_VERSION` bump. Facts-engine step 1 added `period_stats` / `frame_stats` in `peloton/activity.py` (per-window counts from the log, rolling windows, in `WorkoutLog.derived` as `time_frames`; Joel prefers a rolling 30 days to the calendar month); extend them rather than adding a new pass over the log.
 
 ### 7. Journey moments: arrival, turning for home, and the 32-row hand-off
 The redesigned journey page (`display/ui/journey_screen.py`, 2026-11-08) opens each step with a fill, a count-up, a pulsing tip and the groups coming in. Joel chose these three for later:
@@ -64,9 +64,9 @@ Notes:
 - Depends on: the journey redesign (branch `journey-mile-groups`).
 
 ### Name page: facts engine
-The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Step 0 is the current branch (`varied-username-facts`). Then: 1 time frames and `period_stats` (replacing `recent_activity`), 2 filters, 3 measures and bests, 4 comparisons, 5 events, 6 choosing what's interesting (scores and a cool-down, the step that changes pass 0), 7 together facts, 8 optional settings and new log fields. The page stays six highlights (24 s) throughout.
+The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65) and 1 (time frames and `period_stats`, branch `facts-step-1-frames`) are built. Remaining: 2 filters, 3 measures and bests, 4 comparisons, 5 events, 6 choosing what's interesting (scores and a cool-down, the step that changes pass 0), 7 together facts, 8 optional settings and new log fields. The page stays six highlights (24 s) throughout.
 - Build brief for a Sonnet 5.5 session, one step each: `docs/NAME-PAGE-FACTS-HANDOFF.md`.
-- Depends on: step 0 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
+- Depends on: step 1 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
 
 ## Joel, by hand
 

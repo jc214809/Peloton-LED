@@ -70,7 +70,7 @@ def add_log_figures(snapshot, options):
     derived = log.derived(journey=preview_journey(options), metric=uses_metric(me),
                           tzname=me.get('timezone'))
     snapshot.update({key: derived[key] for key in ('instructor_counts', 'instructor_names', 'distance_totals',
-                                                   'activity_days', 'streak_week_workouts', 'recent_activity',
+                                                   'activity_days', 'streak_week_workouts', 'time_frames',
                                                    'discipline_instructor_counts')})
 
 
