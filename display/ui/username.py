@@ -5,7 +5,7 @@ from display.display import loaded_fonts, color_dict, get_text_width
 from utils import debug
 from driver import graphics
 
-DETAIL_INTERVAL_SECONDS = 4.0
+DETAIL_INTERVAL_SECONDS = 5.0
 # A value line wider than the panel's room scrolls: hold, glide to the end, hold; and when the highlight
 # lasts long enough, back again. SCROLL_SPEED is pixels per second; the holds are seconds.
 SCROLL_SPEED = 14.0

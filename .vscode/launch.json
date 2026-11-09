@@ -9,6 +9,7 @@
       "console": "integratedTerminal",
       "args": [
         "--emulated",
+        "--config=${workspaceFolder}/config.local.json",
         "--led-cols=64",
         "--led-rows=64"
       ],
@@ -22,6 +23,7 @@
       "console": "integratedTerminal",
       "args": [
         "--emulated",
+        "--config=${workspaceFolder}/config.local.json",
         "--led-cols=64",
         "--led-rows=32"
       ],

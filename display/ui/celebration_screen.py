@@ -110,17 +110,16 @@ def _set(matrix, x, y, color, fade=1.0):
         matrix.SetPixel(x, y, *(max(0, min(255, round(c * fade))) for c in color))
 
 
-def draw_confetti(matrix, elapsed: float, keep_out=()) -> None:
-    """Flecks drifting down and swaying, looping for as long as the page shows. None land in
-    the keep_out boxes (x0, y0, x1, y1), so text stays readable. Fixed seed: always the same."""
+def draw_confetti(matrix, elapsed: float) -> None:
+    """Flecks drifting down and swaying, looping for as long as the page shows. Drawn first, so the
+    trophy and text paint over them: any pixel they leave off is fair game. Fixed seed: always the same."""
     rng = random.Random(7)
     for i in range(40 if matrix.height >= 64 else 24):
         x0, speed, phase = rng.uniform(0, matrix.width), rng.uniform(9, 18), rng.uniform(0, matrix.height + 8)
         y = round((phase + speed * elapsed) % (matrix.height + 8) - 4)
         x = round(x0 + 2 * math.sin(elapsed * 3 + i))
         for px in ((x, x + 1) if i % 2 else (x,)):
-            if not any(a <= px <= c and b <= y <= d for a, b, c, d in keep_out):
-                _set(matrix, px, y, _CONFETTI[i % len(_CONFETTI)], 0.8)
+            _set(matrix, px, y, _CONFETTI[i % len(_CONFETTI)], 0.8)
 
 
 def draw_trophy(matrix, rows, left, top, elapsed: float) -> None:
@@ -233,13 +232,7 @@ class CelebrationScreen(Screen):
         lines = []
         if self.elapsed >= INTRO_SECONDS:
             lines = (self._lines_32 if short else self._lines_64)(matrix, big, noun, subtitle)
-        # One box per line (round the raised TH too), so no confetti lands under the small letters,
-        # with a pixel's margin either side so a fleck can't pass for a full stop.
-        keep_out = [(min(x for _, x, _, _, _ in parts) - 2,
-                     min(y - font.baseline for font, _, y, _, _ in parts),
-                     max(x + get_text_width(font, text) for font, x, _, _, text in parts) + 1,
-                     max(y - font.baseline + font.height for font, _, y, _, _ in parts)) for parts in lines]
-        draw_confetti(matrix, self.elapsed, keep_out)
+        draw_confetti(matrix, self.elapsed)
         rise = 1 - (1 - min(1.0, self.elapsed / RISE_SECONDS)) ** 3
         if short:
             draw_trophy(matrix, TROPHY_SMALL, 3, round(matrix.height - (matrix.height - 11) * rise),

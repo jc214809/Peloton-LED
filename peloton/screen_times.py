@@ -6,10 +6,11 @@ switch), and the logo has display.show_logo; retire_zero_times turns an older co
 No imports from the app, so the settings service can use it without the LED driver.
 """
 
-# The least time for one highlight on the name page, one Head to head stat on 32 rows, or one of the
+# The least time for one Head to head stat on 32 rows, or one of the
 # journey's two steps on 32 rows (the trip, then the miles by type). A page with
 # more time shares it out, so each frame stays up longer instead of the page starting over.
 FRAME_SECONDS = 4.0
+HIGHLIGHT_SECONDS = 5.0  # the least one name-page highlight shows (a second more than the other frames)
 VERSUS_STATS = 3  # display.ui.versus_screen.STATS; a test keeps them equal
 LIFETIME_MIN_SECONDS = 5.0
 # The trophy rises, then the number: celebration_screen.INTRO_SECONDS + MIN_CARD_SECONDS (tested).
@@ -45,7 +46,7 @@ def least_seconds(section, matrix_height, frames=1):
     """The least time a screen's page can have and still show all of itself. frames: the name page's
     highlights, or the journey's steps (the settings page asks with one)."""
     if section == 'username':
-        return FRAME_SECONDS * max(1, frames)
+        return HIGHLIGHT_SECONDS * max(1, frames)
     if section == 'journey' and frames > 1:
         return FRAME_SECONDS * frames
     if section == 'versus' and matrix_height < 64:

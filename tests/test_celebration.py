@@ -84,16 +84,21 @@ def test_trophy_rises_through_confetti_before_the_text(height):
 
 
 @pytest.mark.parametrize('height', [32, 64])
-def test_confetti_keeps_moving_and_never_lands_on_the_text(height):
+def test_confetti_keeps_moving(height):
     frames = [_render(height, INTRO_SECONDS + i * 0.05, STATE) for i in range(40)]
     assert len({f.tobytes() for f in frames}) > 30
     confetti = {(255 * 4 // 5, 60 * 4 // 5, 60 * 4 // 5)}  # any confetti colour would do: red here
-    for frame in frames:
-        for color in (WHITE, BLUE):
-            x0, y0, x1, y1 = _text_box(frame, color)
-            inside = {frame.getpixel((x, y)) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
-            assert inside <= {(0, 0, 0), color}, (color, inside - {(0, 0, 0), color})
     assert any(confetti & _lit_colors(f) for f in frames)
+
+
+def test_confetti_shows_in_the_gaps_of_the_text():
+    # Behind the text: inside a line's box, off pixels can hold confetti, and the ink stays on top.
+    inside = set()
+    for i in range(60):
+        frame = _render(64, INTRO_SECONDS + i * 0.05, STATE)
+        x0, y0, x1, y1 = _text_box(frame, WHITE)
+        inside |= {frame.getpixel((x, y)) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
+    assert inside - {(0, 0, 0), WHITE}
 
 
 def test_64_row_lines_under_the_trophy_in_order():

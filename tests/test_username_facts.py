@@ -749,7 +749,7 @@ def test_rotation_builds_the_name_page_and_tells_the_loop_which_facts_it_showed(
     assert [d['label'] for d in page[1]['details']] == [d['label'] for d in username_details(snapshot, 2)]
     assert page[1]['fact_keys'] == shown_keys(page[1]['details']) and len(page[1]['fact_keys']) == 4
     # Six highlights every pass, so the page is as long as before.
-    assert page[2] == pytest.approx(24.0)
+    assert page[2] == pytest.approx(30.0)
 
 
 # fitting
