@@ -497,3 +497,22 @@ def test_a_workout_under_a_minute_is_not_a_latest_workout(tmp_path):
     client.history = [workout('tap', day.replace(hour=12), 41), workout('yesterday', earlier.replace(hour=9), 1800)]
     dashboard.refresh()
     assert [s['workout_id'] for s in dashboard.snapshot()['summaries']] == ['yesterday']
+
+
+def test_profile_keeps_created_at_and_no_personal_fields(tmp_path):
+    me = {'id': 'u1', 'username': 'joel', 'timezone': 'America/New_York', 'height_unit': 'in',
+          'created_at': 1604844000, 'email': 'a@b.c', 'birthday': 123, 'phone_number': '555', 'weight': 180,
+          'total_followers': 3}
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    client.get_me.return_value = me
+    dashboard.refresh()
+    assert dashboard.snapshot()['me'] == {'id': 'u1', 'username': 'joel', 'timezone': 'America/New_York',
+                                          'height_unit': 'in', 'created_at': 1604844000}
+
+
+def test_the_anniversary_comes_from_the_profile_in_the_derived_figures(tmp_path):
+    dashboard, client, _ = setup_dashboard(tmp_path, {'timezone': 'America/New_York'})
+    client.get_me.return_value = dict(client.get_me.return_value, created_at=1604844000)   # 2020-11-08 09:20 EST
+    with patch('peloton.workout_log.WorkoutLog.derived', return_value={}) as derived:
+        dashboard.refresh()
+    assert derived.call_args.kwargs['member_since'] == 1604844000

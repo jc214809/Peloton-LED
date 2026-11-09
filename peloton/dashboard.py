@@ -30,7 +30,7 @@ logger = logging.getLogger('peloton-led.dashboard')
 RENEWAL_MARKER_CHECK_SECONDS = 30
 # The only profile fields the board reads; the rest of /api/me (email,
 # birthday, phone, weight, ...) is never stored.
-PROFILE_KEYS = ('id', 'username', 'timezone', 'height_unit')
+PROFILE_KEYS = ('id', 'username', 'timezone', 'height_unit', 'created_at')
 # id never changes and the rest rarely does, so the profile is fetched at
 # startup and then once a day.
 PROFILE_REFRESH_SECONDS = 24 * 3600
@@ -100,7 +100,7 @@ class Dashboard:
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
                       'distance_totals': {}, 'personal_records': {},
                       'streak_week_workouts': None, 'activity_days': {},
-                      'time_frames': {}}
+                      'time_frames': {}, 'events': {}}
         self.demo = demo
         if demo:
             data = demo_data()
@@ -431,7 +431,8 @@ class Dashboard:
 
     def _derive(self, me):
         return {'journey': self.config.get('journey'), 'metric': uses_metric(me),
-                'tzname': self.config.get('timezone') or me.get('timezone')}
+                'tzname': self.config.get('timezone') or me.get('timezone'),
+                'member_since': me.get('created_at')}
 
     def _compute_derived(self, args):
         """Log figures plus their sequence number. Call with the log lock held

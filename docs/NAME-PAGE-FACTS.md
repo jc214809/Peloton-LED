@@ -43,7 +43,7 @@ No idea below needs a new API call.
 |---|---|
 | Workout log (`<cache>.workouts.json`, `peloton/workout_log.py`) | Per workout: start time (date, weekday, hour), discipline, class ID (`ride_id`), title, class length, output (kJ), distance, calories, instructor (or group), output and splits PR flags, Strive score (`effort_points`), seconds in each heart-rate zone, streak eligibility |
 | Dashboard cache | Discipline totals, streaks (`best_weekly`, `current_weekly`, `current_daily`), personal records by discipline and length (`cycling\|30 min: 289.9 kJ`), weekly progress |
-| Profile (fetched daily) | Only `id`, `username`, `timezone`, `height_unit` are kept (`PROFILE_KEYS` in `peloton/dashboard.py`). Adding a key costs nothing: `created_at`, `total_followers`, `cycling_workout_ftp`, `estimated_cycling_ftp`, `badge_level` |
+| Profile (fetched daily) | Only `id`, `username`, `timezone`, `height_unit`, `created_at` are kept (`PROFILE_KEYS` in `peloton/dashboard.py`; `created_at` since step 5). Adding a key costs nothing: `total_followers`, `cycling_workout_ftp`, `estimated_cycling_ftp`, `badge_level` |
 
 ## Built
 
@@ -56,7 +56,7 @@ its next headline fact and next top three.
 | Highlight 2 | `THIS WEEK` | `4 WORKOUTS` / `110 MINUTES` | always |
 
 **Frames**, in turn order: all time, last 30 days, this year, last 90 days, last year, last week
-(`FRAME_ORDER` in `peloton/username_facts.py`). A frame takes a turn only if it has a headline and a
+(`FRAME_ORDER` in `peloton/username_facts.py`), then `events` (below). A frame takes a turn only if it has a headline and a
 top three (so every page is six highlights); last week rarely does and drops out. If no frame has
 both (a rider with no instructor data), any frame with something to show takes a turn.
 
@@ -81,6 +81,24 @@ both (a rider with no instructor data), any frame with something to show takes a
 | All time, every class | `TOP` / `2ND` / `3RD INSTRUCTOR` | `JESS SIMS` / `300 CLASSES` | any named instructor |
 | One discipline in any frame (most-done first; headline `STRENGTH` / `12 WORKOUTS` / `IN 30 DAYS` or `LIFETIME`) | `TOP` / `2ND` / `3RD STRENGTH` | `JESS SIMS` / `150 CLASSES` | 2+ workouts and 3 instructors with 2+ classes each in it, in that frame |
 | A frame's own classes | `TOP` / `2ND` / `3RD IN 30 DAYS` (`IN 90 DAYS`, `IN 2026`, ...) | `JESS SIMS` / `4 CLASSES` | 3 instructors with 2+ classes each in the frame |
+
+**Events** (step 5) are a last pseudo-frame, `events`: it takes a turn only while there is an event to
+say, its headline is the event and its top three the all-time one again (`frame_rankings('events')`),
+and each visit shows the next event. They come from `activity.event_stats` (dates in the display
+timezone; the thresholds are named constants in `username_facts.py`):
+
+| Event | Label | Lines | Shown when |
+|---|---|---|---|
+| Anniversary | `ANNIVERSARY` | `6 YEARS` / `ON PELOTON` | today is the day of the profile's `created_at` (a partial log too), 1+ years |
+| On this day | `ON THIS DAY` | `2 YEARS AGO` / `45 MIN CYCLING` | a workout on today's date in an earlier year (the nearest year, its longest workout) |
+| Comeback | `COMEBACK` | `YOGA` / `AFTER 185 DAYS` | a discipline with 5+ workouts done in the last 14 days after 60+ days without (years past 999 days) |
+| New discipline | `NEW DISCIPLINE` | `WALKING` / `FIRST TIME` | first workout in the last 14 days, by a rider with 30+ days of earlier history |
+| Since | `SINCE` | `49 DAYS SINCE` / `LAST STRETCHING` | 5+ workouts, last one 14 to 999 days ago (two at most, most-done first) |
+| Last class with | `LAST CLASS WITH` | `ADRIAN WILLIAMS` / `MAR 3 2026` | one of the 5 most-seen instructors, 5+ classes, 30+ days ago, named (two at most) |
+
+Long discipline names use their last word (`LAST BOOTCAMP`). Until step 6 scores them, an event
+shows once every few passes, in the `events` turn, even on the day it's about; step 6's "today is the
+day" score is what will pull an anniversary or this day forward.
 
 Pass 0 is all time: `TOP DISCIPLINE` and the all-time top three, byte for byte what the board showed
 before any of this.
@@ -411,7 +429,12 @@ Planned (as written):
 
 Built: `frame_stats` adds `before` (`{workouts, minutes}`) to the 30-day, 90-day and year frames (`comparison_window`): the same number of days just before for 30 and 90 days, and last year from 1 January up to today's date and time for the year (29 February compares with the 28th), so a part-year is never set against a whole one. One fact, `_comparison_fact`, after a frame's measures: `VS 30 BEFORE` / `1,234 VS 999` / `+235 WORKOUTS` (`VS 90 BEFORE`, `2026 VS 2025`). Shown only when both sides have `MIN_COMPARE_WORKOUTS` (5) and the change is at least `MIN_COMPARE_CHANGE` (20%) and `MIN_COMPARE_DIFF` (3 workouts). Departures from the plan, which listed more: "best ever" is already step 3's rank; the 12-week average is for this week, which isn't a frame that takes turns (THIS WEEK is on every page), so it's left out; last week, last year and all time have no fair comparison. A comparison of minutes wasn't added (workouts say it, and the headline already shows minutes). The demo log is steady, so it rarely clears the 20% threshold.
 
-### Step 5: events
+### Step 5: events: done (branch `facts-step-5-events`)
+
+Built: as under "Built" > Events. `activity.event_stats` (one pass over the log, plus `anniversary`) goes into `WorkoutLog.derived` as `events` (a partial log has just the anniversary); `PROFILE_KEYS` keeps `created_at` and `Dashboard._derive` passes it as `member_since`. The log already had `title`, but nothing uses it: the lines show the discipline, since a class title doesn't fit 15 characters. Departures from the list below: "last time with an instructor" is the instructor's last class date (`LAST CLASS WITH`), shown only after 30 days, since a recent one is dull; there's no "since your last PR" (the PR flags are per workout, not per discipline, and it needs a count of classes since, so it's left for a later step if wanted); anniversaries on 29 February only show in leap years.
+
+Planned:
+
 
 - Since, last time, on this day, firsts and comebacks, all from the log.
 - Anniversary: keep `created_at` in `PROFILE_KEYS` (`peloton/dashboard.py`); a test checks the

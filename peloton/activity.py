@@ -21,6 +21,8 @@ RANKED_FRAMES = {'30d': 30, '90d': 90}
 MONTH_FRAMES = ('year', 'last_year', 'all')
 # Biggest output is a bike figure (the rower's and the tread's aren't comparable with it).
 OUTPUT_DISCIPLINES = ('cycling',)
+# How many of the most-seen instructors event_stats keeps a last class for.
+EVENT_INSTRUCTORS = 5
 
 
 def counts_for_streaks(workout):
@@ -284,3 +286,61 @@ def daily_streak_start(current_daily, today, days=None, started_at=None, timezon
     if days and not days.get(today.isoformat()):
         ends = today - timedelta(days=1)
     return ends - timedelta(days=current_daily - 1)
+
+
+def _local_date(value, zone):
+    """A profile timestamp (created_at) as a date in the display timezone, or None."""
+    stamp = parse_timestamp(value)
+    return stamp.astimezone(zone).date() if stamp is not None else None
+
+
+def anniversary(member_since, timezone_name=None, now=None):
+    """Whole years on Peloton when today (display timezone) is the day the account was made, else
+    None. `member_since` is the profile's created_at."""
+    _, current = week_start(timezone_name, now)
+    since = _local_date(member_since, current.tzinfo)
+    today = current.date()
+    if since is None or (since.month, since.day) != (today.month, today.day) or today.year <= since.year:
+        return None
+    return today.year - since.year
+
+
+def event_stats(workouts, timezone_name=None, now=None, member_since=None):
+    """Dates the name page measures from, all from the log (dates are ISO, in the display timezone):
+    `today`; `anniversary` (years, only on the day); `on_this_day` (the workouts of earlier years on
+    today's month and day, nearest year first: {years_ago, minutes, discipline}); `first_ever` (the
+    first workout's date); `disciplines` ({slug: {workouts, first, last, before_last}}, before_last the
+    day of the workout before the latest, None with one) and `instructors` ({id: {workouts, last}} for
+    the EVENT_INSTRUCTORS most-seen). Which of these is worth saying is for the facts module."""
+    _, current = week_start(timezone_name, now)
+    zone, today = current.tzinfo, current.date()
+    per_discipline, per_instructor, ever, same_day = {}, {}, [], []
+    for stamp, workout in _stamped(workouts, timezone_name):
+        day = stamp.astimezone(zone).date()
+        if day > today:
+            continue
+        ever.append(day)
+        discipline = discipline_of(workout)
+        if discipline:
+            per_discipline.setdefault(discipline, []).append(day)
+        for identity in _instructor_ids(workout):
+            per_instructor.setdefault(identity, []).append(day)
+        if (day.month, day.day) == (today.month, today.day) and day.year < today.year:
+            same_day.append((day.year, max(0, length_seconds(workout)), discipline))
+    disciplines = {}
+    for slug, days in per_discipline.items():
+        days.sort()
+        disciplines[slug] = {'workouts': len(days), 'first': days[0].isoformat(), 'last': days[-1].isoformat(),
+                             'before_last': days[-2].isoformat() if len(days) > 1 else None}
+    instructors = {identity: {'workouts': len(per_instructor[identity]),
+                              'last': max(per_instructor[identity]).isoformat()}
+                   for identity in _top(per_instructor, EVENT_INSTRUCTORS)}
+    # The longest workout of the nearest earlier year that has one.
+    on_this_day = []
+    for year in sorted({year for year, _, _ in same_day}, reverse=True):
+        longest = max((row for row in same_day if row[0] == year), key=lambda row: row[1])
+        on_this_day.append({'years_ago': today.year - year, 'minutes': int(round(longest[1] / 60)),
+                            'discipline': longest[2]})
+    return {'today': today.isoformat(), 'anniversary': anniversary(member_since, timezone_name, now),
+            'on_this_day': on_this_day, 'first_ever': min(ever).isoformat() if ever else None,
+            'disciplines': disciplines, 'instructors': instructors}

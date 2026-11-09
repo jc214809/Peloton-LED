@@ -236,15 +236,15 @@ class WorkoutLog:
                       reverse=True)
         return [as_workout(identity, row, self.instructors) for identity, row in rows]
 
-    def derived(self, journey=None, metric=False, tzname=None, now=None):
+    def derived(self, journey=None, metric=False, tzname=None, now=None, member_since=None):
         """Figures the screens read, computed from the whole log.
 
-        Instructor counts, journey miles, the heatmap and the time frames' figures stay empty until the
+        Instructor counts, journey miles, the heatmap, the time frames' and the events' figures stay empty until the
         backfill has the full history, so a partial log never shows a
         too-small total. This week's figures are always complete: refreshes
         fetch back to Monday while the log is still filling.
         """
-        from .activity import daily_minutes, frame_stats, streak_week_workouts
+        from .activity import anniversary, daily_minutes, event_stats, frame_stats, streak_week_workouts
         workouts = self.as_workouts()
         result = {'weekly_progress': weekly_progress(workouts, tzname, now=now),
                   'streak_week_workouts': streak_week_workouts(workouts, tzname, now=now)}
@@ -254,10 +254,13 @@ class WorkoutLog:
             result.update(instructor_counts=counts, instructor_names=names,
                           distance_totals=merge_distance_totals({}, workouts, metric, since=since, tzname=tzname),
                           activity_days=daily_minutes(workouts, tzname, now=now),
-                          time_frames=frame_stats(workouts, tzname, now=now))
+                          time_frames=frame_stats(workouts, tzname, now=now),
+                          events=event_stats(workouts, tzname, now=now, member_since=member_since))
         else:
+            # The anniversary needs no history, so it's the one event a partial log can have.
+            years = anniversary(member_since, tzname, now=now)
             result.update(instructor_counts={}, instructor_names={}, distance_totals={}, activity_days={},
-                          time_frames={})
+                          time_frames={}, events={'anniversary': years} if years else {})
         return result
 
 

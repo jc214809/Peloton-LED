@@ -5,19 +5,24 @@ frame's instructor top three (three highlights). Each pass takes the next frame 
 30 days, this year, ...); a frame that comes round again shows its next fact, so a full page is six
 highlights, as before, whatever it shows. After a frame's general facts come its subjects: one of its
 most-done disciplines (the discipline's count, then that discipline's instructor top three), and
-its most-seen instructors. Everything comes from the dashboard cache and the workout
+its most-seen instructors. A last pseudo-frame, `events`, has the facts measured from a date instead
+(an anniversary, this day in an earlier year, a comeback, a first, time since): it drops out when
+there are none. Everything comes from the dashboard cache and the workout
 log (peloton.activity.frame_stats); the log's figures stay empty until its backfill is complete,
 and then the page falls back to what's left.
 
 Pass 0 is all time: the top discipline and the all-time top three, as the page always began.
 """
+from datetime import date
+
 from .instructors import top_instructors
 from .selection import normalize_discipline
 from .totals import total_workout_count
 
 RANKS = ('TOP', '2ND', '3RD')
 # The order frames take turns in. Not 'week' (THIS WEEK is on every page).
-FRAME_ORDER = ('all', '30d', 'year', '90d', 'last_year', 'last_week')
+# 'events' (dates, not a window) comes last and drops out when there is nothing to say.
+FRAME_ORDER = ('all', '30d', 'year', '90d', 'last_year', 'last_week', 'events')
 # A ranking for a frame or one discipline needs three instructors with at least this many classes
 # each; fewer is too little to call a ranking (e.g. one strength class in 30 days).
 MIN_RANKED_CLASSES = 2
@@ -44,6 +49,21 @@ MIN_STREAK_WEEKS = 4
 MIN_COMPARE_WORKOUTS = 5
 MIN_COMPARE_CHANGE = 0.2
 MIN_COMPARE_DIFF = 3
+# Events. A discipline is "since" or a "comeback" only with this many workouts behind it; "since" shows
+# after MIN_SINCE_DAYS without one (at most MAX_SINCE_FACTS of them); an instructor's last class
+# after MIN_LAST_WITH_DAYS (their 5+ workouts, at most MAX_LAST_WITH_FACTS); a comeback is a workout in
+# the last EVENT_WINDOW_DAYS that follows a gap of MIN_COMEBACK_DAYS; a first is a discipline begun in
+# that window by a rider whose history goes back MIN_HISTORY_DAYS further.
+MIN_EVENT_WORKOUTS = 5
+MIN_SINCE_DAYS = 14
+# Past this many days a discipline is one left behind, not news (and the number is four digits).
+MAX_SINCE_DAYS = 999
+MAX_SINCE_FACTS = 2
+MIN_LAST_WITH_DAYS = 30
+MAX_LAST_WITH_FACTS = 2
+EVENT_WINDOW_DAYS = 14
+MIN_COMEBACK_DAYS = 60
+MIN_HISTORY_DAYS = 30
 ORDINALS = {2: '2ND', 3: '3RD', 4: '4TH', 5: '5TH'}
 MONTHS = ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
 # A label holds 15 characters of the stats font; a longer discipline name uses its last word.
@@ -87,6 +107,8 @@ def frame_rankings(snapshot, key):
     highlights: every class in the frame (all time keeps any count; the others need
     MIN_RANKED_CLASSES for third place). One discipline's top three is a subject (frame_subjects)."""
     names = snapshot.get('instructor_names') or {}
+    if key == 'events':
+        key = 'all'     # the events have no instructor ranking of their own: the page keeps the all-time one
     if key == 'all':
         ranking = _instructor_ranking(lambda rank: f'{rank} INSTRUCTOR', snapshot.get('instructor_counts'),
                                       names, 1)
@@ -222,11 +244,88 @@ def _comparison_fact(key, stats):
             'lines': [f'{now:,} VS {before["workouts"]:,}', f'{change:+,} WORKOUTS']}
 
 
+def _days_between(iso, today):
+    return (today - date.fromisoformat(iso)).days
+
+
+def _fit_line(*options):
+    """The first of the candidate lines that fits a label's width (the last, shortest, if none do)."""
+    return next((line for line in options if len(line) <= MAX_LABEL_CHARS), options[-1])
+
+
+def _short_noun(slug):
+    """'STRENGTH', or the last word of a long discipline name ('BOOTCAMP' for TREAD BOOTCAMP)."""
+    noun = discipline_name(slug)
+    return noun if len(noun) <= MAX_LABEL_CHARS - 5 else noun.split()[-1]
+
+
+def event_facts(snapshot):
+    """The facts measured from a date (frame_stats' neighbour, activity.event_stats), in the order
+    they're shown: the anniversary (only on the day), this day in an earlier year, a comeback, a first,
+    time since a discipline's last workout, the last class with a most-seen instructor. Every one has
+    a threshold above, so nothing shows a 1 or a 0 unless that's the point."""
+    events = snapshot.get('events') or {}
+    facts = []
+    years = events.get('anniversary')
+    if years:
+        facts.append({'label': 'ANNIVERSARY', 'value': f'{years} ON PELOTON',
+                      'lines': [_plural(years, 'YEAR'), 'ON PELOTON']})
+    today = date.fromisoformat(events['today']) if events.get('today') else None
+    if today is None:
+        return facts
+    for found in events.get('on_this_day') or []:
+        noun = discipline_name(found['discipline']) if found.get('discipline') else 'WORKOUT'
+        facts.append({'label': 'ON THIS DAY', 'value': f'{found["years_ago"]} YEARS AGO / {noun}',
+                      'lines': [f'{_plural(found["years_ago"], "YEAR")} AGO',
+                                _fit_line(f'{found["minutes"]} MIN {noun}', f'{found["minutes"]} MIN {noun.split()[-1]}',
+                                          noun.split()[-1]) if found['minutes'] else noun.split()[-1]]})
+        break
+    disciplines = events.get('disciplines') or {}
+    ranked = sorted(disciplines, key=lambda slug: (-disciplines[slug]['workouts'], slug))
+    began = events.get('first_ever')
+    for slug in ranked:
+        found = disciplines[slug]
+        if found['workouts'] < MIN_EVENT_WORKOUTS or not found.get('before_last'):
+            continue
+        gap = (date.fromisoformat(found['last']) - date.fromisoformat(found['before_last'])).days
+        if _days_between(found['last'], today) <= EVENT_WINDOW_DAYS and gap >= MIN_COMEBACK_DAYS:
+            after = f'AFTER {gap} DAYS' if gap <= MAX_SINCE_DAYS else f'AFTER {round(gap / 365)} YEARS'
+            facts.append({'label': 'COMEBACK', 'value': f'{slug} {after}', 'lines': [_short_noun(slug), after]})
+    for slug in sorted(disciplines, key=lambda name: (disciplines[name]['first'], name)):
+        found = disciplines[slug]
+        if (began and _days_between(found['first'], today) <= EVENT_WINDOW_DAYS
+                and (date.fromisoformat(found['first']) - date.fromisoformat(began)).days >= MIN_HISTORY_DAYS):
+            facts.append({'label': 'NEW DISCIPLINE', 'value': f'{slug} FIRST TIME',
+                          'lines': [_short_noun(slug), 'FIRST TIME']})
+    since = 0
+    for slug in ranked:
+        found = disciplines[slug]
+        days = _days_between(found['last'], today)
+        if found['workouts'] >= MIN_EVENT_WORKOUTS and MIN_SINCE_DAYS <= days <= MAX_SINCE_DAYS and since < MAX_SINCE_FACTS:
+            since += 1
+            facts.append({'label': 'SINCE', 'value': f'{days} DAYS SINCE {slug}',
+                          'lines': [f'{days:,} DAYS SINCE', _fit_line(f'LAST {discipline_name(slug)}',
+                                                                      f'LAST {discipline_name(slug).split()[-1]}')]})
+    names = snapshot.get('instructor_names') or {}
+    instructors = events.get('instructors') or {}
+    last_with = 0
+    for identity in sorted(instructors, key=lambda who: (-instructors[who]['workouts'], who)):
+        found = instructors[identity]
+        if (names.get(identity) and found['workouts'] >= MIN_EVENT_WORKOUTS
+                and _days_between(found['last'], today) >= MIN_LAST_WITH_DAYS and last_with < MAX_LAST_WITH_FACTS):
+            last_with += 1
+            facts.append({'label': 'LAST CLASS WITH', 'value': f'{names[identity]} / {found["last"]}',
+                          'lines': [names[identity].upper(), _date_words(found['last'])]})
+    return facts
+
+
 def frame_facts(snapshot, key):
     """The single-highlight facts a frame has enough data for, in the order its visits show them.
     All time: the top discipline. Others: workouts and time, the most-done discipline (when it
     isn't the all-time top, which TOP DISCIPLINE already says), active days. Then different classes
     and different instructors, for every frame."""
+    if key == 'events':
+        return event_facts(snapshot)
     facts = []
     favorite = _all_time_top_discipline(snapshot)
     stats = (snapshot.get('time_frames') or {}).get(key) or {}
