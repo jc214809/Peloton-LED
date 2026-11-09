@@ -79,3 +79,23 @@ def test_a_missing_or_empty_log_stops_the_script(tmp_path):
 def test_one_source_is_required():
     with pytest.raises(SystemExit):
         list_facts.main([])
+
+
+def test_compare_totals_lines_overview_up_against_the_log_and_flags_differences(capsys):
+    snapshot = snapshot_for(demo_log(NOW), 'America/New_York', NOW, assume_complete=True)
+    in_log = snapshot['time_frames']['all']['disciplines']
+    # The overview agrees on cycling, is one short on strength, and has a discipline the log lacks.
+    snapshot['totals'] = {'Total Workouts': snapshot['time_frames']['all']['workouts'],
+                          'Cycling': in_log['cycling'], 'Strength': in_log['strength'] - 1, 'Yoga Flow': 4}
+    rows = {label: (overview, logged) for label, overview, logged in list_facts.compare_totals(snapshot)}
+    assert rows['Total Workouts'][0] == rows['Total Workouts'][1]
+    assert rows['Cycling'][0] == rows['Cycling'][1]
+    assert rows['Strength'] == (in_log['strength'] - 1, in_log['strength'])
+    assert rows['Yoga Flow'] == (4, 0)
+    assert rows['walking'] == (None, in_log['walking'])       # in the log, not in the overview
+    list_facts.show(snapshot, 1)
+    out = capsys.readouterr().out
+    assert 'overview vs log' in out and out.count('<-- differs') >= 3
+    # Nothing to compare without the overview totals or the log's figures.
+    assert list_facts.compare_totals(dict(snapshot, totals={})) == []
+    assert list_facts.compare_totals(dict(snapshot, time_frames={})) == []

@@ -165,6 +165,8 @@ def test_save_and_load_round_trip_privately(tmp_path):
 
 @pytest.mark.parametrize('contents', [
     'not json', json.dumps([1]), json.dumps({'version': 99}),
+    # A version-1 log filed workouts under their class's discipline: the rebuild corrects them.
+    json.dumps({'version': 1, 'workouts': {}, 'instructors': {}, 'backfill': {}, 'check': {}}),
     json.dumps({'version': LOG_VERSION, 'workouts': [], 'instructors': {}, 'backfill': {}, 'check': {}}),
     json.dumps({'version': LOG_VERSION, 'workouts': {'w': {'start': 'soon'}}, 'instructors': {},
                 'backfill': {}, 'check': {}}),
@@ -603,3 +605,27 @@ def test_older_log_figures_never_overwrite_newer_ones(tmp_path):
     dashboard._publish_derived(*fresh)
     dashboard._publish_derived({**stale[0], 'instructor_counts': {}}, stale[1])
     assert dashboard.snapshot()['instructor_counts'] == {'cody': 99}
+
+
+def test_a_workout_is_filed_under_its_own_discipline_not_its_classs():
+    # Peloton moved Walk + Run classes from Walking to Running in October 2025. The class now says
+    # running, but a workout done before keeps walking, and the app's totals count it as Walking.
+    old = {'id': 'w1', 'status': 'COMPLETE', 'start_time': 1760999847, 'fitness_discipline': 'walking',
+           'ride': {'id': 'c', 'title': '20 min Walk + Run', 'fitness_discipline': 'running'}}
+    new = dict(old, id='w2', fitness_discipline='running')
+    classless = {'id': 'w3', 'status': 'COMPLETE', 'start_time': 1760999848, 'ride': {'fitness_discipline': 'cycling'}}
+    assert trim(old)[1]['discipline'] == 'walking'
+    assert trim(new)[1]['discipline'] == 'running'
+    assert trim(classless)[1]['discipline'] == 'cycling'           # no workout field: the class's
+    log = WorkoutLog('unused')
+    log.merge([old, new])
+    assert {workout['id']: workout['fitness_discipline'] for workout in log.as_workouts()} == {
+        'w1': 'walking', 'w2': 'running'}
+
+
+def test_discipline_of_prefers_the_workouts_own_category_over_its_classs():
+    from peloton.selection import discipline_of
+    assert discipline_of({'fitness_discipline': 'walking', 'ride': {'fitness_discipline': 'running'}}) == 'walking'
+    assert discipline_of({'ride': {'fitness_discipline': 'running'}}) == 'running'
+    assert discipline_of({'fitness_discipline_display_name': 'Tread Bootcamp'}) == 'tread_bootcamp'
+    assert discipline_of({'discipline': 'yoga'}) == 'yoga' and discipline_of({}) == ''

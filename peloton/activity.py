@@ -9,6 +9,9 @@ from .timestamps import display_timezone, parse_timestamp, workout_date, workout
 from .workout_log import length_seconds
 
 HEATMAP_WEEKS = 12
+# How many of a frame's most-done disciplines and instructors get their own figures (frame_stats).
+SUBJECT_DISCIPLINES = 5
+SUBJECT_INSTRUCTORS = 3
 
 
 def counts_for_streaks(workout):
@@ -100,47 +103,59 @@ def _stats(rows, zone):
             'active_days': len({stamp.astimezone(zone).date() for stamp, _ in rows})}
 
 
-def period_stats(workouts, start=None, end=None, timezone_name=None, now=None):
+def _instructor_ids(workout):
+    """The instructors a workout counts for (a group class counts for each member)."""
+    return set(merge_instructor_counts({}, {}, [workout])[0])
+
+
+def period_stats(workouts, start=None, end=None, timezone_name=None, now=None, discipline=None, instructor=None):
     """Completed workouts from `start` (inclusive) to `end` (exclusive; None is now): how many,
     their minutes, how many of each discipline ({'strength': 12}), each instructor's classes
     ({instructor_id: count}), how many different instructors and classes (by class ID: workouts
-    with no class, like Just Ride, don't count) and how many days had a workout."""
+    with no class, like Just Ride, don't count) and how many days had a workout.
+    `discipline` (a slug) or `instructor` (an ID) keeps only those workouts."""
     _, current = week_start(timezone_name, now)
     rows = [(stamp, workout) for stamp, workout in _stamped(workouts, timezone_name)
-            if _in_window(stamp, start, end, current)]
+            if _in_window(stamp, start, end, current)
+            and (discipline is None or discipline_of(workout) == discipline)
+            and (instructor is None or instructor in _instructor_ids(workout))]
     return _stats(rows, current.tzinfo)
+
+
+def _top(groups, limit):
+    """The `limit` biggest groups of rows, most workouts first (ties by key)."""
+    return sorted(groups, key=lambda key: (-len(groups[key]), key))[:limit]
 
 
 def frame_stats(workouts, timezone_name=None, now=None):
     """period_stats for every frame in frame_bounds, from one pass of timestamp parsing, each with
     `days` (how many days the frame spans so far; None for all time) and, for the two year
-    frames, `year`."""
+    frames, `year`. Also the same stats for the frame's most-done disciplines (`by_discipline`,
+    {slug: stats}, SUBJECT_DISCIPLINES of them) and instructors (`by_instructor`, {id: stats},
+    SUBJECT_INSTRUCTORS), split in the same pass rather than by looping the log again."""
     _, current = week_start(timezone_name, now)
-    rows = _stamped(workouts, timezone_name)
+    rows = [(stamp, workout, discipline_of(workout), _instructor_ids(workout))
+            for stamp, workout in _stamped(workouts, timezone_name)]
     result = {}
+    zone = current.tzinfo
     for key, (start, end) in frame_bounds(timezone_name, now).items():
-        stats = _stats([(stamp, workout) for stamp, workout in rows if _in_window(stamp, start, end, current)],
-                       current.tzinfo)
+        inside = [row for row in rows if _in_window(row[0], start, end, current)]
+        stats = _stats([row[:2] for row in inside], zone)
+        disciplines, instructors = {}, {}
+        for row in inside:
+            if row[2]:
+                disciplines.setdefault(row[2], []).append(row[:2])
+            for identity in row[3]:
+                instructors.setdefault(identity, []).append(row[:2])
+        stats['by_discipline'] = {slug: _stats(disciplines[slug], zone)
+                                  for slug in _top(disciplines, SUBJECT_DISCIPLINES)}
+        stats['by_instructor'] = {identity: _stats(instructors[identity], zone)
+                                  for identity in _top(instructors, SUBJECT_INSTRUCTORS)}
         stats['days'] = None if start is None else (
             ((end.date() if end is not None else current.date() + timedelta(days=1)) - start.date()).days)
         if key in ('year', 'last_year'):
             stats['year'] = start.year
         result[key] = stats
-    return result
-
-
-def discipline_instructor_counts(workouts):
-    """All-time classes per instructor within each discipline: {'strength': {instructor_id: count}}."""
-    by_discipline = {}
-    for workout in workouts:
-        discipline = discipline_of(workout)
-        if discipline:
-            by_discipline.setdefault(discipline, []).append(workout)
-    result = {}
-    for discipline, group in by_discipline.items():
-        counts, _ = merge_instructor_counts({}, {}, group)
-        if counts:
-            result[discipline] = counts
     return result
 
 

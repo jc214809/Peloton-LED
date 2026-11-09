@@ -16,9 +16,13 @@ def normalize_discipline(value):
 
 
 def discipline_of(workout):
+    """A workout's category, as Peloton counts it: the workout's own, then its class's. They differ
+    for old workouts when Peloton moves a class to another category (Walk + Run classes became
+    Running in October 2025: your earlier ones stay Walking, as in the app's totals, while the
+    class now says Running)."""
     ride = workout.get('ride') or {}
-    return normalize_discipline(ride.get('fitness_discipline') or workout.get('fitness_discipline')
-        or ride.get('fitness_discipline_display_name') or workout.get('fitness_discipline_display_name')
+    return normalize_discipline(workout.get('fitness_discipline') or ride.get('fitness_discipline')
+        or workout.get('fitness_discipline_display_name') or ride.get('fitness_discipline_display_name')
         or workout.get('discipline'))
 
 

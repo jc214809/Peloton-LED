@@ -8,9 +8,9 @@ import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.username import UsernameScreen
-from peloton.activity import discipline_instructor_counts, frame_bounds, frame_stats, period_stats
+from peloton.activity import SUBJECT_DISCIPLINES, SUBJECT_INSTRUCTORS, frame_bounds, frame_stats, period_stats
 from peloton.username_facts import (FRAME_ORDER, MIN_RANKED_CLASSES, frame_facts, frame_rankings,
-                                    frame_words, username_details, username_frames)
+                                    frame_stories, frame_subjects, frame_words, username_details, username_frames)
 from peloton.workout_log import WorkoutLog
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
@@ -120,21 +120,12 @@ def test_the_first_of_a_month_still_has_the_last_30_days():
     assert frame_stats(workouts, ZONE, first_of_month)['30d']['workouts'] == 19
 
 
-def test_discipline_instructor_counts_split_the_tally_by_discipline():
-    workouts = [_w('a', NOW, instructor='jess'), _w('b', NOW, instructor='jess'),
-                _w('c', NOW, instructor='andy'), _w('d', NOW, discipline='cycling', instructor='jess'),
-                _w('e', NOW, discipline='meditation', instructor=None),
-                _w('f', NOW, discipline='strength', instructor='andy', status='IN_PROGRESS')]
-    assert discipline_instructor_counts(workouts) == {'strength': {'jess': 2, 'andy': 1},
-                                                      'cycling': {'jess': 1}}
-
-
 def test_log_derives_time_frames_only_once_complete():
     log = WorkoutLog('unused')
     log.merge([_w('a', NOW - timedelta(days=1)), _w('b', NOW - timedelta(days=2), discipline='cycling',
                                                    instructor='cody')])
     partial = log.derived(tzname=ZONE, now=NOW)
-    assert partial['time_frames'] == {} and partial['discipline_instructor_counts'] == {}
+    assert partial['time_frames'] == {}
     log.backfill['complete'] = True
     full = log.derived(tzname=ZONE, now=NOW)
     assert set(full['time_frames']) == set(frame_bounds(ZONE, NOW))
@@ -142,7 +133,7 @@ def test_log_derives_time_frames_only_once_complete():
     # The log keeps each class's ID, so distinct classes survive the trip through the log's rows.
     assert full['time_frames']['30d']['classes'] == 2
     assert full['time_frames']['30d']['disciplines'] == {'strength': 1, 'cycling': 1}
-    assert full['discipline_instructor_counts'] == {'strength': {'jess': 1}, 'cycling': {'cody': 1}}
+    assert set(full['time_frames']['30d']['by_discipline']) == {'strength', 'cycling'}
 
 
 # facts
@@ -156,6 +147,19 @@ YEAR = {'year': 2026, 'workouts': 412, 'minutes': 9840, 'disciplines': {'cycling
 BY_DISCIPLINE = {'strength': {'jess': 150, 'andy': 120, 'adrian': 40},
                  'cycling': {'cody': 250, 'robin': 100, 'jess': 3},
                  'rowing': {'jess': 1}}
+# What frame_stats adds to a frame: the figures for its most-done disciplines and instructors.
+
+
+def _subject(workouts, minutes, counts=None):
+    return {'workouts': workouts, 'minutes': minutes, 'instructor_counts': counts or {}}
+
+
+THIRTY = dict(THIRTY, by_discipline={
+    'strength': _subject(6, 120, {'jess': 3, 'andy': 2, 'cody': 2}), 'cycling': _subject(4, 150, {'cody': 2, 'andy': 1}),
+    'yoga': _subject(1, 20, {'robin': 1})},
+    by_instructor={'jess': _subject(4, 90), 'andy': _subject(3, 70), 'cody': _subject(2, 50)})
+LIFETIME = {'workouts': 1234, 'classes': 900, 'instructors': 38,
+            'by_discipline': {slug: _subject(sum(counts.values()), 0, counts) for slug, counts in BY_DISCIPLINE.items()}}
 
 
 def _snapshot(**extra):
@@ -168,7 +172,7 @@ def _snapshot(**extra):
 
 
 def _full(**extra):
-    return _snapshot(time_frames={'30d': THIRTY, 'year': YEAR}, discipline_instructor_counts=BY_DISCIPLINE, **extra)
+    return _snapshot(time_frames={'30d': THIRTY, 'year': YEAR, 'all': LIFETIME}, **extra)
 
 
 def _labels(snapshot, index):
@@ -199,7 +203,10 @@ def test_a_frames_facts_in_order():
         ('MOST IN 30 DAYS', ['STRENGTH', '6 WORKOUTS']),
         ('LAST 30 DAYS', ['ACTIVE DAYS', '10 OF 30']),
         ('LAST 30 DAYS', ['11 DIFFERENT', 'CLASSES']),
-        ('LAST 30 DAYS', ['4 DIFFERENT', 'INSTRUCTORS'])]
+        ('LAST 30 DAYS', ['4 DIFFERENT', 'INSTRUCTORS']),
+        ('LAST 30 DAYS', ['JESS SIMS', '90 MINUTES']),
+        ('LAST 30 DAYS', ['ANDY SPEER', '70 MINUTES']),
+        ('LAST 30 DAYS', ['CODY RIGSBY', '50 MINUTES'])]
     # A year of time is told in hours, and its favourite is the all-time one, so no MOST.
     year = frame_facts(_full(), 'year')
     assert (year[0]['label'], year[0]['lines']) == ('IN 2026', ['412 WORKOUTS', '164 HOURS'])
@@ -236,14 +243,102 @@ def test_rankings_come_from_the_frames_own_classes():
     assert frame_rankings(_snapshot(), '30d') == []
 
 
-def test_all_time_rankings_are_every_class_then_each_discipline_most_done_first():
-    rankings = frame_rankings(_full(), 'all')
-    assert [[d['label'] for d in r] for r in rankings] == [
-        ['TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR'],
-        # Cycling's third has 3 classes, enough. Rowing has one class, so no ranking.
-        ['TOP CYCLING', '2ND CYCLING', '3RD CYCLING'],
-        ['TOP STRENGTH', '2ND STRENGTH', '3RD STRENGTH']]
-    assert rankings[2][0]['lines'] == ['JESS SIMS', '150 CLASSES']
+def test_a_frames_general_ranking_is_every_class_and_a_discipline_is_a_subject():
+    assert [[d['label'] for d in r] for r in frame_rankings(_full(), 'all')] == [
+        ['TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']]
+    pairs = frame_subjects(_full(), 'all')
+    # Most-done first. Rowing has one workout, so it isn't a subject.
+    assert [(h['label'], h['lines']) for h, _ in pairs] == [
+        ('CYCLING', ['353 WORKOUTS', 'LIFETIME']), ('STRENGTH', ['310 WORKOUTS', 'LIFETIME'])]
+    assert [[d['label'] for d in ranking] for _, ranking in pairs][1] == [
+        'TOP STRENGTH', '2ND STRENGTH', '3RD STRENGTH']
+    assert pairs[1][1][0]['lines'] == ['JESS SIMS', '150 CLASSES']
+    assert pairs[1][1][0]['short_label'] == 'TOP STRENGTH'
+
+
+def test_a_discipline_in_a_frame_is_a_subject_with_its_own_top_three():
+    pairs = frame_subjects(_full(), '30d')
+    # Strength has a whole top three of 2+ classes; cycling has two instructors, yoga one workout.
+    assert [(h['label'], h['lines']) for h, _ in pairs] == [('STRENGTH', ['6 WORKOUTS', 'IN 30 DAYS'])]
+    assert [(d['label'], d['lines']) for d in pairs[0][1]] == [
+        ('TOP STRENGTH', ['JESS SIMS', '3 CLASSES']), ('2ND STRENGTH', ['ANDY SPEER', '2 CLASSES']),
+        ('3RD STRENGTH', ['CODY RIGSBY', '2 CLASSES'])]
+    assert frame_subjects(_snapshot(), '30d') == [] and frame_subjects(_full(), 'last_week') == []
+    year = dict(YEAR, by_discipline={'bike_bootcamp': _subject(30, 900, {'jess': 9, 'andy': 8, 'cody': 7}),
+                                     'tread_bootcamp': _subject(1, 9, {'jess': 1})})
+    headline = frame_subjects(_snapshot(time_frames={'year': year}), 'year')[0][0]
+    assert headline['lines'] == ['30 WORKOUTS', 'IN 2026']
+
+
+def test_a_long_discipline_name_carries_its_last_word_as_a_short_label():
+    found = {'walking_outdoor': _subject(5, 99, {'jess': 3, 'andy': 3, 'cody': 3})}
+    headline = frame_subjects(_snapshot(time_frames={'30d': dict(THIRTY, by_discipline=found)}), '30d')[0][0]
+    assert headline['label'] == 'WALKING OUTDOOR' and 'short_label' not in headline    # exactly 15
+    found = {'running_outdoor_long': _subject(5, 99, {'jess': 3, 'andy': 3, 'cody': 3})}
+    headline = frame_subjects(_snapshot(time_frames={'30d': dict(THIRTY, by_discipline=found)}), '30d')[0][0]
+    assert headline['short_label'] == 'LONG'
+
+
+def test_a_frames_most_seen_instructors_are_facts_with_the_time_spent_with_them():
+    facts = frame_facts(_full(), '30d')
+    assert [f['lines'] for f in facts[-3:]] == [
+        ['JESS SIMS', '90 MINUTES'], ['ANDY SPEER', '70 MINUTES'], ['CODY RIGSBY', '50 MINUTES']]
+    assert facts[-1]['label'] == 'LAST 30 DAYS'
+    # An instructor seen once, or with no known name, isn't a fact.
+    thin = dict(THIRTY, by_instructor={'jess': _subject(1, 20), 'ghost': _subject(9, 200)})
+    assert frame_facts(_snapshot(time_frames={'30d': thin}), '30d')[-1]['lines'] != ['JESS SIMS', '20 MINUTES']
+    assert all('GHOST' not in ' '.join(f['lines']) for f in frame_facts(_snapshot(time_frames={'30d': thin}), '30d'))
+    long_time = dict(THIRTY, by_instructor={'jess': _subject(80, 3600)})
+    assert frame_facts(_snapshot(time_frames={'30d': long_time}), '30d')[-1]['lines'] == ['JESS SIMS', '60 HOURS']
+
+
+def test_subject_stories_pair_a_discipline_headline_with_its_own_top_three_and_take_every_other_turn():
+    stories = frame_stories(_full(), '30d')
+    assert len(stories) == len(frame_facts(_full(), '30d')) + 1
+    # The general stories come first; the subject takes the next turn, not the last one.
+    assert stories[0][0]['label'] == 'LAST 30 DAYS' and stories[1][0]['label'] == 'STRENGTH'
+    assert stories[1][1][0]['label'] == 'TOP STRENGTH'
+    assert all(fact['label'] != 'STRENGTH' for fact, _ in stories[2:])
+    # A frame with facts but no top three still has stories; the fact alone is a short page.
+    assert frame_stories(_snapshot(time_frames={'30d': dict(THIRTY, instructor_counts={})}), '30d')[0][1] is None
+    # Many subjects and few general stories: all of them still come round.
+    many = dict(THIRTY, by_discipline={slug: _subject(5, 50, {'jess': 3, 'andy': 3, 'cody': 3})
+                                       for slug in ('cycling', 'yoga', 'rowing')})
+    heads = [h['label'] for h, _ in frame_stories(_snapshot(time_frames={'30d': many}), '30d')[1:] if h]
+    assert {'CYCLING', 'YOGA', 'ROWING'} <= set(heads)
+
+
+def test_period_stats_filters_by_discipline_or_instructor():
+    workouts = [_w('a', NOW - timedelta(days=1), instructor='jess', minutes=30),
+                _w('b', NOW - timedelta(days=2), discipline='cycling', instructor='cody', minutes=45),
+                _w('c', NOW - timedelta(days=3), discipline='cycling', instructor='jess', minutes=20)]
+    group = _w('d', NOW - timedelta(days=4), discipline='yoga', instructor=None)
+    group['ride']['instructor'] = {'id': 'duo', 'name': 'Duo', 'is_instructor_group': True,
+                                   'individual_instructor_ids': ['jess', 'andy']}
+    workouts.append(group)
+    cycling = period_stats(workouts, None, None, ZONE, NOW, discipline='cycling')
+    assert (cycling['workouts'], cycling['minutes'], cycling['instructor_counts']) == (2, 65, {'cody': 1, 'jess': 1})
+    assert period_stats(workouts, None, None, ZONE, NOW, instructor='jess')['workouts'] == 3   # a group counts
+    assert period_stats(workouts, None, None, ZONE, NOW, discipline='cycling', instructor='jess')['workouts'] == 1
+    assert period_stats(workouts, None, None, ZONE, NOW, discipline='rowing')['workouts'] == 0
+
+
+def test_frame_stats_split_each_frame_by_discipline_and_instructor_in_one_pass():
+    workouts = [_w(str(n), NOW - timedelta(days=n), discipline='strength' if n % 2 else 'cycling',
+                   instructor='jess' if n < 5 else 'andy') for n in range(1, 9)]
+    workouts.append(_w('old', NOW - timedelta(days=60), discipline='yoga', instructor='cody'))
+    stats = frame_stats(workouts, ZONE, NOW)
+    month, ninety = stats['30d'], stats['90d']
+    assert set(month['by_discipline']) == {'strength', 'cycling'} and 'yoga' in ninety['by_discipline']
+    # Each split matches period_stats with the same filter.
+    start = frame_bounds(ZONE, NOW)['30d'][0]
+    assert month['by_discipline']['strength'] == period_stats(workouts, start, None, ZONE, NOW, discipline='strength')
+    assert month['by_instructor']['jess'] == period_stats(workouts, start, None, ZONE, NOW, instructor='jess')
+    # Only the most-seen: the 4th instructor and the 6th discipline are left out.
+    many = [_w(f'x{n}', NOW - timedelta(days=1), discipline=f'd{n}', instructor=None) for n in range(7)]
+    assert len(frame_stats(many, ZONE, NOW)['30d']['by_discipline']) == SUBJECT_DISCIPLINES
+    assert len(frame_stats(workouts, ZONE, NOW)['all']['by_instructor']) <= SUBJECT_INSTRUCTORS
+    assert frame_stats([], ZONE, NOW)['all']['by_discipline'] == {}
 
 
 def test_a_ranking_with_a_thin_third_place_is_skipped():
@@ -297,17 +392,24 @@ def test_each_pass_is_one_frames_story_and_a_frame_coming_round_shows_its_next_f
             f'{rank} {frame_words_or_ranks}' for rank in ('TOP', '2ND', '3RD')]
         return ['TOTAL WORKOUTS', 'THIS WEEK', headline] + ranks
 
-    assert [_labels(snapshot, index) for index in range(7)] == [
-        page('TOP DISCIPLINE', ['TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']),
+    instructors = ['TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
+    assert [_labels(snapshot, index) for index in range(10)] == [
+        page('TOP DISCIPLINE', instructors),
         page('LAST 30 DAYS', 'IN 30 DAYS'),
         page('IN 2026', 'IN 2026'),
-        # All time again: the top discipline is its only fact, and the next ranking is cycling's.
-        page('TOP DISCIPLINE', ['TOP CYCLING', '2ND CYCLING', '3RD CYCLING']),
+        # All time's first subject: a discipline and that discipline's top three, then 30 days' own.
+        page('CYCLING', ['TOP CYCLING', '2ND CYCLING', '3RD CYCLING']),
+        page('STRENGTH', ['TOP STRENGTH', '2ND STRENGTH', '3RD STRENGTH']),
+        page('IN 2026', 'IN 2026'),
+        page('LIFETIME', instructors),
         page('MOST IN 30 DAYS', 'IN 30 DAYS'),
         page('IN 2026', 'IN 2026'),
-        page('TOP DISCIPLINE', ['TOP STRENGTH', '2ND STRENGTH', '3RD STRENGTH'])]
-    # A frame's headline moves on each visit: its second one is the 30 days' most-done discipline.
-    assert username_details(snapshot, 4)[2]['lines'] == ['STRENGTH', '6 WORKOUTS']
+        page('STRENGTH', ['TOP STRENGTH', '2ND STRENGTH', '3RD STRENGTH'])]
+    # A subject page's headline says the frame: the 30 days' strength, then all time's.
+    assert username_details(snapshot, 4)[2]['lines'] == ['6 WORKOUTS', 'IN 30 DAYS']
+    assert username_details(snapshot, 9)[2]['lines'] == ['310 WORKOUTS', 'LIFETIME']
+    # A frame's headline moves on each visit: its second general one is the 30 days' most-done discipline.
+    assert username_details(snapshot, 7)[2]['lines'] == ['STRENGTH', '6 WORKOUTS']
     assert username_details(snapshot, 5)[2]['lines'] == ['ACTIVE DAYS', '248 OF 312']
 
 
@@ -341,16 +443,20 @@ def test_every_label_and_line_fits_or_has_a_short_label_that_does(height):
     by_discipline = {slug: {'jess': 9, 'andy': 8, 'adrian': 7} for slug in LONG_DISCIPLINES}
     big = {'workouts': 1234, 'minutes': 99999, 'disciplines': {'tread_bootcamp': 30, 'walking_outdoor': 1},
            'instructor_counts': {'adrian': 999, 'andy': 888, 'cody': 777}, 'instructors': 1234, 'classes': 9999,
-           'active_days': 365, 'days': 366, 'year': 2026}
-    snapshot = _snapshot(time_frames={key: big for key in ('all', '30d', '90d', 'year', 'last_year', 'last_week')},
-                         discipline_instructor_counts=by_discipline)
+           'active_days': 365, 'days': 366, 'year': 2026,
+           'by_discipline': {slug: _subject(1234, 99999, counts) for slug, counts in by_discipline.items()},
+           'by_instructor': {'adrian': _subject(999, 99999), 'andy': _subject(888, 5)}}
+    snapshot = _snapshot(time_frames={key: big for key in ('all', '30d', '90d', 'year', 'last_year', 'last_week')})
     details = []
     for key in FRAME_ORDER:
         details += frame_facts(snapshot, key) + [d for ranking in frame_rankings(snapshot, key) for d in ranking]
+        for headline, ranking in frame_subjects(snapshot, key):
+            details += [headline] + ranking
     labels = {d['label'] for d in details}
     # Every frame's longest labels are there.
     assert {'MOST IN 90 DAYS', 'LAST 90 DAYS', 'MOST LAST WEEK', 'IN 2026', 'LIFETIME', '3RD IN 90 DAYS'} <= labels
-    assert len(details) > 60
+    assert {'BIKE BOOTCAMP', 'WALKING OUTDOOR', '3RD BOOTCAMP'} <= {d.get('short_label', d['label']) for d in details} | labels
+    assert len(details) > 100
     for detail in details:
         label = detail['label'] if get_text_width(small, detail['label']) <= room else detail.get('short_label')
         assert label and get_text_width(small, label) <= room, detail['label']
