@@ -64,9 +64,9 @@ Notes:
 - Depends on: the journey redesign (branch `journey-mile-groups`).
 
 ### Name page: facts engine
-The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65) and 1 (time frames and `period_stats`, branch `facts-step-1-frames`) are built. Remaining: 2 filters, 3 measures and bests, 4 comparisons, 5 events, 6 choosing what's interesting (scores and a cool-down, the step that changes pass 0), 7 together facts, 8 optional settings and new log fields. The page stays six highlights (24 s) throughout.
+The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65), 1 (time frames and `period_stats`, PR #66) and 2 (filters, branch `facts-step-2-filters`) are built. Remaining: 3 measures and bests, 4 comparisons, 5 events, 6 choosing what's interesting (scores and a cool-down, the step that changes pass 0), 7 together facts, 8 optional settings and new log fields. The page stays six highlights (24 s) throughout.
 - Build brief for a Sonnet 5.5 session, one step each: `docs/NAME-PAGE-FACTS-HANDOFF.md`.
-- Depends on: step 1 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
+- Depends on: step 2 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
 
 ## Joel, by hand
 

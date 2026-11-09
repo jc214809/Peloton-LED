@@ -4,8 +4,8 @@
     python scripts/list_facts.py --log /var/lib/peloton-led/dashboard-cache-joel.workouts.json --tz America/New_York
     python scripts/list_facts.py --log LOG --cache CACHE   # the discipline totals and names from the cache
 
-Shows each time frame's figures, then every highlight a frame has enough data for (headline facts
-and instructor top threes, as the board would draw them), then what the first passes show.
+Shows each time frame's figures, then every highlight a frame has enough data for (headline facts,
+instructor top threes and one page per discipline, as the board would draw them), then what the first passes show.
 A log that isn't complete (its backfill unfinished) has no time-frame figures on the board; use
 --assume-complete to look at one anyway.
 """
@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from peloton.activity import frame_stats  # noqa: E402
-from peloton.username_facts import (FRAME_ORDER, frame_facts, frame_rankings, username_details,  # noqa: E402
-                                    username_frames)
+from peloton.username_facts import (FRAME_ORDER, frame_facts, frame_rankings, frame_subjects,  # noqa: E402
+                                    username_details, username_frames)
 from peloton.workout_log import WorkoutLog  # noqa: E402
 
 DEMO_DISCIPLINES = (('cycling', 5), ('strength', 4), ('stretching', 2), ('walking', 2), ('running', 1),
@@ -97,6 +97,9 @@ def show(snapshot, passes):
             print(f'   {fact["label"]:<16} {" / ".join(fact["lines"])}')
         for ranking in frame_rankings(snapshot, key):
             print('   ' + '  |  '.join(f'{d["label"]}: {d["lines"][0]} ({d["lines"][1]})' for d in ranking))
+        for headline, ranking in frame_subjects(snapshot, key):
+            print(f'   {headline["label"]:<16} {" / ".join(headline["lines"])}   then   '
+                  + '  |  '.join(f'{d["label"]}: {d["lines"][0]} ({d["lines"][1]})' for d in ranking))
     print()
     for index in range(passes):
         details = username_details(snapshot, index)

@@ -68,11 +68,12 @@ both (a rider with no instructor data), any frame with something to show takes a
 | Active days | the frame's title | `ACTIVE DAYS` / `10 OF 30` | 2+ active days |
 | Different classes | the frame's title (`LIFETIME` for all time) | `318 DIFFERENT` / `CLASSES` | 2+, by class ID |
 | Different instructors | the frame's title | `31 DIFFERENT` / `INSTRUCTORS` | 2+ |
+| One instructor (the frame's 3 most-seen) | the frame's title | `JESS SIMS` / `340 MINUTES` | 2+ workouts with them, name known |
 
 | Top three (highlights 4-6) | Labels | Lines | Shown when |
 |---|---|---|---|
 | All time, every class | `TOP` / `2ND` / `3RD INSTRUCTOR` | `JESS SIMS` / `300 CLASSES` | any named instructor |
-| All time, one discipline (each, most-done first; step 2 moves these onto the frames) | `TOP` / `2ND` / `3RD STRENGTH` | `JESS SIMS` / `150 CLASSES` | 3 instructors with 2+ classes each in it |
+| One discipline in any frame (most-done first; headline `STRENGTH` / `12 WORKOUTS` / `IN 30 DAYS` or `LIFETIME`) | `TOP` / `2ND` / `3RD STRENGTH` | `JESS SIMS` / `150 CLASSES` | 2+ workouts and 3 instructors with 2+ classes each in it, in that frame |
 | A frame's own classes | `TOP` / `2ND` / `3RD IN 30 DAYS` (`IN 90 DAYS`, `IN 2026`, ...) | `JESS SIMS` / `4 CLASSES` | 3 instructors with 2+ classes each in the frame |
 
 Pass 0 is all time: `TOP DISCIPLINE` and the all-time top three, byte for byte what the board showed
@@ -376,7 +377,11 @@ time, 30 days and each discipline). Step 1 reshaped these into frames.
 - Deliberately not done here: filters (step 2), so the all-time top three still takes turns through
   each discipline, and last week's and the other frames' top threes have no per-discipline form.
 
-### Step 2: filters
+### Step 2: filters: done (branch `facts-step-2-filters`)
+
+Built: `period_stats(..., discipline=, instructor=)`; `frame_stats` splits each frame once into `by_discipline` (5 most-done) and `by_instructor` (3 most-seen), so a filter never picks a one-off and the log isn't looped per subject. `frame_subjects` makes a discipline page: headline `STRENGTH` / `12 WORKOUTS` / `IN 30 DAYS` (`LIFETIME` for all time) then `TOP` / `2ND` / `3RD STRENGTH` from that discipline in that frame; the discipline needs 2+ workouts and three instructors with 2+ classes. The headline names the frame so the top three's label needn't (`3RD STRENGTH 2026` is 17 characters). `frame_facts` adds one fact per most-seen instructor: `LAST 30 DAYS` / `JESS SIMS` / `340 MINUTES` (2+ workouts, named; the minutes add to the top three's class counts, so it overlaps the top three's names). Stories alternate general, subject, general, subject, so a discipline page comes round soon. The all-time per-discipline top threes now come from the log's `by_discipline`, so their discipline counts are the log's, not the overview's. Not done: `discipline_instructor_counts` is still derived but unused by the name page.
+
+Planned:
 
 - `period_stats` takes a filter (discipline or instructor) and returns the same stats for it.
 - New facts: one discipline in a frame (`STRENGTH 2026`), one instructor in a frame

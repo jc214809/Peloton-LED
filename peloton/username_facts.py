@@ -3,7 +3,9 @@
 Every pass shows the total and this week, then one time frame's story: a headline fact, then that
 frame's instructor top three (three highlights). Each pass takes the next frame (all time, the last
 30 days, this year, ...); a frame that comes round again shows its next fact, so a full page is six
-highlights, as before, whatever it shows. Everything comes from the dashboard cache and the workout
+highlights, as before, whatever it shows. After a frame's general facts come its subjects: one of its
+most-done disciplines (the discipline's count, then that discipline's instructor top three), and
+its most-seen instructors. Everything comes from the dashboard cache and the workout
 log (peloton.activity.frame_stats); the log's figures stay empty until its backfill is complete,
 and then the page falls back to what's left.
 
@@ -24,6 +26,8 @@ MIN_RANKED_CLASSES = 2
 MIN_COUNT = 2
 # Past this many minutes a frame's time is told in hours.
 HOURS_FROM_MINUTES = 600
+# A label holds 15 characters of the stats font; a longer discipline name uses its last word.
+MAX_LABEL_CHARS = 15
 
 
 def discipline_name(slug):
@@ -59,21 +63,14 @@ def _instructor_ranking(label_for, counts, names, least, short_for=None):
 
 
 def frame_rankings(snapshot, key):
-    """The instructor top threes a frame has enough data for, each a list of up to three
-    highlights. All time starts with every class, then each discipline, most-done first; the other
-    frames have one, from that frame's own classes."""
+    """The general instructor top threes a frame has enough data for, each a list of up to three
+    highlights: every class in the frame (all time keeps any count; the others need
+    MIN_RANKED_CLASSES for third place). One discipline's top three is a subject (frame_subjects)."""
     names = snapshot.get('instructor_names') or {}
     if key == 'all':
-        rankings = [_instructor_ranking(lambda rank: f'{rank} INSTRUCTOR', snapshot.get('instructor_counts'),
-                                        names, 1)]
-        by_discipline = snapshot.get('discipline_instructor_counts') or {}
-        for slug in sorted(by_discipline, key=lambda name: (-sum(by_discipline[name].values()), name)):
-            noun = discipline_name(slug)
-            # 3RD TREAD BOOTCAMP is too wide for the label; the screen falls back to 3RD BOOTCAMP.
-            rankings.append(_instructor_ranking(
-                lambda rank, noun=noun: f'{rank} {noun}', by_discipline[slug], names, MIN_RANKED_CLASSES,
-                short_for=lambda rank, noun=noun: f'{rank} {noun.split()[-1]}'))
-        return [ranking for ranking in rankings if ranking]
+        ranking = _instructor_ranking(lambda rank: f'{rank} INSTRUCTOR', snapshot.get('instructor_counts'),
+                                      names, 1)
+        return [ranking] if ranking else []
     stats = (snapshot.get('time_frames') or {}).get(key) or {}
     if not stats:
         return []
@@ -81,6 +78,37 @@ def frame_rankings(snapshot, key):
     ranking = _instructor_ranking(lambda rank: f'{rank} {in_words}', stats.get('instructor_counts'),
                                   names, MIN_RANKED_CLASSES)
     return [ranking] if ranking else []
+
+
+def _time_line(minutes):
+    return _plural(round(minutes / 60), 'HOUR') if minutes >= HOURS_FROM_MINUTES else _plural(minutes, 'MINUTE')
+
+
+def frame_subjects(snapshot, key):
+    """A frame's most-done disciplines as (headline, top three) pairs, most-done first: the headline
+    is the discipline's name over its workouts and the frame ('STRENGTH' / '12 WORKOUTS' / 'IN 30
+    DAYS'), the top three the instructors in that discipline in that frame. A discipline needs
+    MIN_COUNT workouts and a whole top three (MIN_RANKED_CLASSES each), so it's never a one-off."""
+    names = snapshot.get('instructor_names') or {}
+    stats = (snapshot.get('time_frames') or {}).get(key) or {}
+    in_words = frame_words(key, stats)[1] if stats else None
+    pairs = []
+    by_discipline = stats.get('by_discipline') or {}
+    for slug in sorted(by_discipline, key=lambda name: (-by_discipline[name].get('workouts', 0), name)):
+        found, noun = by_discipline[slug], discipline_name(slug)
+        if (found.get('workouts') or 0) < MIN_COUNT:
+            continue
+        # 3RD TREAD BOOTCAMP is too wide for the label; the screen falls back to 3RD BOOTCAMP.
+        ranking = _instructor_ranking(
+            lambda rank, noun=noun: f'{rank} {noun}', found.get('instructor_counts'), names, MIN_RANKED_CLASSES,
+            short_for=lambda rank, noun=noun: f'{rank} {noun.split()[-1]}')
+        if ranking:
+            headline = {'label': noun, 'value': f'{found["workouts"]} WORKOUTS',
+                        'lines': [_plural(found['workouts'], 'WORKOUT'), in_words]}
+            if len(noun) > MAX_LABEL_CHARS:
+                headline['short_label'] = noun.split()[-1]
+            pairs.append((headline, ranking))
+    return pairs
 
 
 def _all_time_top_discipline(snapshot):
@@ -105,10 +133,8 @@ def frame_facts(snapshot, key):
                           'lines': [favorite[0].upper(), _plural(favorite[1], 'WORKOUT')]})
     elif stats and stats.get('workouts'):
         workouts, minutes = stats['workouts'], stats.get('minutes') or 0
-        time_line = (_plural(round(minutes / 60), 'HOUR') if minutes >= HOURS_FROM_MINUTES
-                     else _plural(minutes, 'MINUTE'))
         facts.append({'label': title, 'value': f'{workouts} WORKOUTS / {minutes} MIN',
-                      'lines': [_plural(workouts, 'WORKOUT'), time_line]})
+                      'lines': [_plural(workouts, 'WORKOUT'), _time_line(minutes)]})
         done = sorted((stats.get('disciplines') or {}).items(), key=lambda item: (-item[1], item[0]))
         if (done and done[0][1] >= MIN_COUNT
                 and (not favorite or done[0][0] != normalize_discipline(favorite[0]))):
@@ -127,7 +153,36 @@ def frame_facts(snapshot, key):
         if (stats.get('instructors') or 0) >= MIN_COUNT:
             facts.append({'label': title, 'value': f'{stats["instructors"]:,} DIFFERENT INSTRUCTORS',
                           'lines': [f'{stats["instructors"]:,} DIFFERENT', 'INSTRUCTORS']})
+        facts.extend(_instructor_facts(snapshot, stats, title))
     return facts
+
+
+def _instructor_facts(snapshot, stats, title):
+    """One highlight per most-seen instructor in the frame (frame_stats' by_instructor): their name
+    over the time spent with them. The top three above show the classes; this adds the minutes."""
+    names = snapshot.get('instructor_names') or {}
+    by_instructor = stats.get('by_instructor') or {}
+    facts = []
+    for identity in sorted(by_instructor, key=lambda who: (-by_instructor[who].get('workouts', 0), who)):
+        found, name = by_instructor[identity], names.get(identity)
+        if name and (found.get('workouts') or 0) >= MIN_COUNT:
+            facts.append({'label': title, 'value': f'{name} / {found["minutes"]} MIN',
+                          'lines': [name.upper(), _time_line(found.get('minutes') or 0)]})
+    return facts
+
+
+def frame_stories(snapshot, key):
+    """A frame's pages as (headline, top three) pairs, either of which can be None: the general
+    facts and top threes pair off in order (the shorter list wraps), and the subjects (frame_subjects)
+    take every other turn, so a discipline's page comes round soon, not after all the general ones."""
+    facts, rankings = frame_facts(snapshot, key), frame_rankings(snapshot, key)
+    stories = [(facts[index % len(facts)] if facts else None, rankings[index % len(rankings)] if rankings else None)
+               for index in range(max(len(facts), len(rankings)))]
+    subjects = frame_subjects(snapshot, key)
+    merged = []
+    for index in range(max(len(stories), len(subjects))):
+        merged += stories[index:index + 1] + subjects[index:index + 1]
+    return merged
 
 
 def username_frames(snapshot):
@@ -135,10 +190,9 @@ def username_frames(snapshot):
     so every page is six highlights: LAST WEEK, which rarely has three instructors, drops out. When
     no frame has both (a rider with no instructor data), any frame with something to show takes
     a turn, and its page is shorter."""
-    facts = {key: frame_facts(snapshot, key) for key in FRAME_ORDER}
-    rankings = {key: frame_rankings(snapshot, key) for key in FRAME_ORDER}
-    whole = [key for key in FRAME_ORDER if facts[key] and rankings[key]]
-    return whole or [key for key in FRAME_ORDER if facts[key] or rankings[key]]
+    stories = {key: frame_stories(snapshot, key) for key in FRAME_ORDER}
+    whole = [key for key in FRAME_ORDER if any(fact and ranking for fact, ranking in stories[key])]
+    return whole or [key for key in FRAME_ORDER if stories[key]]
 
 
 def username_details(snapshot, pass_index=0):
@@ -158,9 +212,9 @@ def username_details(snapshot, pass_index=0):
     frames = username_frames(snapshot)
     if frames:
         key, visit = frames[pass_index % len(frames)], pass_index // len(frames)
-        facts, rankings = frame_facts(snapshot, key), frame_rankings(snapshot, key)
-        if facts:
-            details.append(facts[visit % len(facts)])
-        if rankings:
-            details.extend(rankings[visit % len(rankings)])
+        stories = frame_stories(snapshot, key)
+        fact, ranking = stories[visit % len(stories)]
+        if fact:
+            details.append(fact)
+        details.extend(ranking or [])
     return details
