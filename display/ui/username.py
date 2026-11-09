@@ -6,6 +6,12 @@ from utils import debug
 from driver import graphics
 
 DETAIL_INTERVAL_SECONDS = 4.0
+# A value line wider than the panel's room scrolls: hold, glide to the end, hold; and when the highlight
+# lasts long enough, back again. SCROLL_SPEED is pixels per second; the holds are seconds.
+SCROLL_SPEED = 14.0
+SCROLL_HOLD_START = 0.6
+SCROLL_HOLD_END = 0.6
+MARGIN = 2
 
 
 class UsernameScreen(Screen):
@@ -41,6 +47,38 @@ class UsernameScreen(Screen):
     def _center(matrix, font, text, y, color, x_offset=0):
         x = max(1, (matrix.width - get_text_width(font, text)) // 2 + x_offset)
         graphics.DrawText(matrix, font, x, y, color, text)
+
+    @staticmethod
+    def scroll_offset(overflow, phase, interval):
+        """How many pixels a line `overflow` px too wide has scrolled `phase` seconds into a highlight that
+        lasts `interval`: hold, glide to the end, hold, and back again only if there is time for the whole
+        trip. A one-way glide slows down or speeds up (never below the time left) to be done with the hold
+        at the end still ahead."""
+        if overflow <= 0:
+            return 0
+        glide = overflow / SCROLL_SPEED
+        both_ways = interval >= 2 * (SCROLL_HOLD_START + glide + SCROLL_HOLD_END)
+        if not both_ways:
+            glide = max(0.5, interval - SCROLL_HOLD_START - SCROLL_HOLD_END)
+        t = phase - SCROLL_HOLD_START
+        if t <= 0:
+            return 0
+        if t < glide:
+            return round(overflow * t / glide)
+        t -= glide + SCROLL_HOLD_END
+        if not both_ways or t <= 0:
+            return overflow
+        return round(overflow * max(0.0, 1 - t / glide))
+
+    def _scrolling(self, matrix, font, text, baseline, color, phase, interval):
+        """Draw a line wider than the room, scrolled to where `phase` puts it; the margins are blanked so
+        the text slides under them instead of off the panel's edge."""
+        room = matrix.width - 2 * MARGIN
+        offset = self.scroll_offset(get_text_width(font, text) - room, phase, interval)
+        graphics.DrawText(matrix, font, MARGIN - offset, baseline, color, text)
+        for y in range(baseline - 6, baseline + 2):
+            for x in list(range(0, MARGIN)) + list(range(matrix.width - MARGIN, matrix.width)):
+                matrix.SetPixel(x, y, 0, 0, 0)
 
     def render(self, matrix, state=None):
         username = (state or {}).get("username") if isinstance(state, dict) else state
@@ -95,6 +133,9 @@ class UsernameScreen(Screen):
             # 32 rows: 7px line pitch leaves a blank row between the two 4x6 lines.
             baselines = (24, 31) if compact else (50, 59)
             for line, baseline in zip(lines[:2], baselines):
-                line = self._fit(value_font, str(line).upper(), matrix.width - 4)
-                self._center(matrix, value_font, line, baseline + offset, line_color)
+                line = str(line).upper().strip()
+                if get_text_width(value_font, line) > matrix.width - 2 * MARGIN:
+                    self._scrolling(matrix, value_font, line, baseline + offset, line_color, phase_seconds, interval)
+                else:
+                    self._center(matrix, value_font, line, baseline + offset, line_color)
         return True
