@@ -452,13 +452,13 @@ Planned:
 - This is the step that changes pass 0, so the byte-identical check stops applying to the name
   page here; the other pages must stay identical.
 
-### Step 7: together
+### Step 7: together (now a ROADMAP item)
 
 - Only on boards with two or more riders, from each rider's `period_stats`.
 - Candidates for the headline of the rider whose rotation gets `rivals`, so they show once a cycle.
 - Shares figures with Head to head (ROADMAP item 6), which should be built on `period_stats` too.
 
-### Step 8 (optional): settings and new log fields
+### Step 8 (optional): settings and new log fields (now a ROADMAP item)
 
 - Settings page: switches for the dimensions (e.g. no comparisons, no together facts) on the name
   page's Rotation row. Not a switch per fact.
