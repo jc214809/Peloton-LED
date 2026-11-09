@@ -8,7 +8,8 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 Icon touch-ups (by hand) ── independent
 6 More head-to-head stats ── after facts-engine step 1 (period_stats) merges
 7 Journey moments ── after the journey redesign (journey-mile-groups) merges
-Name page facts engine ── steps 1-6 built (step 6 on branch facts-step-6-scoring); retune weights on real logs
+Name page facts engine ── steps 1-6 built; retune weights on real logs (first pass: PR #72)
+Graph-able stats ── research first; builds on the workout log and `peloton/activity.py`
 Name page together facts ── after the facts engine; shares figures with item 6 (head to head)
 Name page facts settings and log fields ── maybe; after the facts engine
 ```
@@ -66,10 +67,19 @@ Notes:
 - Depends on: the journey redesign (branch `journey-mile-groups`).
 
 ### Name page: facts engine
-The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65), 1 (time frames and `period_stats`, PR #66), 2 (filters, PR #67), 3 (measures and bests, PR #68), 4 (comparisons, PR #69), 5 (events, PR #70) and 6 (scoring and a cool-down, branch `facts-step-6-scoring`) are built. Steps 7 and 8 of the plan are their own items below. Left from step 6: tune `KINDS` weights from `list_facts.py` on Joel's real logs on the boards.
+The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65), 1 (time frames and `period_stats`, PR #66), 2 (filters, PR #67), 3 (measures and bests, PR #68), 4 (comparisons, PR #69), 5 (events, PR #70) and 6 (scoring and a cool-down, PR #71) are built; PR #72 is the first tuning. Steps 7 and 8 of the plan are their own items below. Left from step 6: tune `KINDS` weights from `list_facts.py` on Joel's real logs on the boards.
 - Build brief for a Sonnet 5.5 session, one step each: `docs/NAME-PAGE-FACTS-HANDOFF.md`.
 - After the update, on each board: `python scripts/list_facts.py --log <log> --cache <cache> --tz <zone>` should show no `<-- differs` in "overview vs log" (the log rebuilds once, LOG_VERSION 2). Checked on Joel's full history from the Mac on 2026-11-08: all 13 rows matched. Remove this item once the boards agree.
 - Depends on: step 4 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
+
+### Graph-able stats: what could be a chart that isn't yet
+Look into which numbers the board already has (or can get from the workout log) that read better as a small chart than as a line of text, then pick a few to build. Research first: list candidates with a mock-up of each at 64x64 and 64x32, and Joel picks.
+- Already graphs: the `heatmap` page (daily minutes, last 12 weeks), and the workout pages' output/heart-rate graph and zones bar. Everything else is text.
+- Candidates, all from the log with no new API calls (`start_time`, discipline, duration, output, Strive): workouts or minutes per week as bars (last 12 or 26 weeks); this year against last year, month by month; the mix of disciplines over time (a stacked bar per month); weekdays (which days you ride) and time of day; bike output per class over time (a trend line, real classes only); the running total climbing toward the next milestone; weekly streak history; instructor share as a bar.
+- Constraints to design around: 64 columns by 64 or 32 rows, so about 12 to 26 bars at one or two pixels wide and no axis labels beyond a few characters (labels fit 15 characters of the `stats` font); colour only from the existing palettes (`lifetime_overview.discipline_color`, `ZONE_COLORS`); a rider with a short history needs an empty state, and a log still downloading shows nothing (log figures only once `WorkoutLog.complete`).
+- Shape of the work: figures in `peloton/activity.py` (fed through `WorkoutLog.derived` like `daily_minutes`), drawing in `display/ui/`, and each new page is a rotation section, which means `peloton/screen_times.py` (`least_seconds`, `shows_for`), the settings page's Rotation rows and `docs/64x32-NOTES.md`; or a chart could be a slide inside an existing page (as the workout pages' graph slides are), which avoids a new section. Decide that first.
+- Preview with `scripts/render_rotation.py` at both heights; every other page must stay byte-identical.
+- Depends on: nothing; some candidates reuse step 3's bests and `frame_stats` windows, so extend those rather than adding a new pass over the log.
 
 ### Name page: together facts (was facts-engine step 7)
 Facts about both riders on a two-rider board (`TOGETHER` / `31 WORKOUTS`, `BOTH TOOK` an instructor, `SAME CLASS`), from each rider's `period_stats`, shown once a cycle on the rider whose rotation gets `rivals`. Details: `docs/NAME-PAGE-FACTS.md` ("Step 7").
