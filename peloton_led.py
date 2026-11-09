@@ -14,7 +14,7 @@ from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, u
 from peloton.journey import journey_progress
 from peloton.screen_times import page_seconds
 from peloton.selection import normalize_discipline
-from peloton.instructors import top_instructors
+from peloton.username_facts import username_details
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
 from utils import heartbeat
 from utils.utils import args, ensure_privileges_dropped, led_matrix_options
@@ -73,7 +73,8 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
     rivals: every configured rider's weekly progress, passed for only one
     rider per multi-user cycle so the head-to-head page shows once.
     pass_index: which rotation pass this is; the streak page shows the
-    weekly streak on even passes and the daily one on odd passes.
+    weekly streak on even passes and the daily one on odd passes, and the
+    name page picks its varied highlights by it (peloton.username_facts).
     """
     rotation = display.get('rotation', DEFAULT_ROTATION)
     groups = {name: [] for name in rotation}
@@ -97,31 +98,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
             groups['latest_workouts'].append(
                 ('status', status, STATUS_SECONDS))
     if 'username' in groups:
-        totals = snapshot.get('totals', {})
-        total = total_workout_count(totals)
-        progress = snapshot.get('weekly_progress', {})
-        disciplines = [(label, count) for label, count in totals.items()
-                       if label != 'Total Workouts' and isinstance(count, int)]
-        favorite = max(disciplines, key=lambda item: item[1], default=None)
-        details = []
-        if total is not None:
-            details.append({'label': 'TOTAL WORKOUTS', 'value': f'{total:,}',
-                            'lines': [f'{total:,}'], 'font_key': 'big', 'color_key': 'gold'})
-        weekly_workouts = progress.get('workouts', 0)
-        weekly_minutes = progress.get('minutes', 0)
-        details.append({'label': 'THIS WEEK',
-                        'value': f'{weekly_workouts} WORKOUTS / {weekly_minutes} MIN',
-                        'lines': [f'{weekly_workouts} WORKOUTS', f'{weekly_minutes} MINUTES']})
-        if favorite:
-            details.append({'label': 'TOP DISCIPLINE',
-                            'value': f'{favorite[0]} / {favorite[1]:,}',
-                            'lines': [favorite[0].upper(), f'{favorite[1]:,} WORKOUTS']})
-        instructor_ranks = top_instructors(snapshot.get('instructor_counts', {}),
-                                           snapshot.get('instructor_names', {}), limit=3)
-        rank_labels = ('TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR')
-        for rank_label, (name, count) in zip(rank_labels, instructor_ranks):
-            details.append({'label': rank_label, 'value': f'{name} / {count:,}',
-                            'lines': [name.upper(), f'{count:,} CLASSES']})
+        details = username_details(snapshot, pass_index)
         # The page's time is shared by its highlights (at least 4 s each), so more time means each
         # stays up longer rather than the list starting over.
         username_duration = page_seconds(display, 'username', matrix_height, frames=len(details))

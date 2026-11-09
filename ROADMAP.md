@@ -6,28 +6,14 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 
 ```
 Icon touch-ups (by hand) ── independent
-5 Varied username facts ── independent
-6 More head-to-head stats ── independent (shares 5's per-period helper if 5 lands first)
+6 More head-to-head stats ── after facts-engine step 1 (period_stats)
 7 Journey moments ── after the journey redesign (journey-mile-groups) merges
+Name page facts engine ── steps 1-8 in docs/NAME-PAGE-FACTS.md, in order; item 6 builds on step 1
 ```
 
-Suggested order: 5, then 6. Both add frames to screens that share their page time across frames (`peloton/screen_times.py`), so more facts or stats mean a longer minimum page. Icon touch-ups whenever Joel has time.
+Suggested order: facts-engine step 1, then 6, then the remaining steps. Item 6 adds frames to a screen that shares its page time across frames (`peloton/screen_times.py`), so more stats mean a longer minimum page. Icon touch-ups whenever Joel has time.
 
 ## Up next
-
-### 5. Varied facts on the username page
-The username page's detail lines (built in `peloton_led.py` around the `top_instructors` call) are the same every cycle: total workouts, this week, top discipline, then the top three instructors overall. Rotate through a wider set of facts so each cycle shows something different, for example:
-- top three instructors for one discipline (e.g. strength), changing discipline each cycle
-- this month's top instructors
-- this month's most and least done disciplines
-- other all-time or this-month rankings that come cheaply from the workout log
-
-Notes:
-- Everything comes from the workout log (no extra API calls); instructor facts stay empty until the backfill is complete, like today.
-- Pick a fixed-size set per cycle (rotating which ones appear) so the page length stays predictable; total workouts and this week probably stay every time.
-- Skip a fact when there's too little data (e.g. one strength class this month).
-- Check name fitting on 32 rows; tests for each fact and for the rotation order.
-- Depends on: nothing. Per-period counts (this month's disciplines and instructors) need a helper over the workout log in `peloton/activity.py`, fed via `WorkoutLog.derived` like `daily_minutes`; the log keeps `discipline`, `instructor_id` and `start`, so no `LOG_VERSION` bump. (Item 4's discipline milestones, now part of the Next milestone page, counted from Peloton's overview totals instead, which have no per-period split, so there's no shared helper to reuse.)
 
 ### 6. More stats to compete on in Head to head
 The `versus` page (`display/ui/versus_screen.py`) compares two riders on the same three stats every time: this week's workouts, minutes and output (`STATS`, fed by `weekly_rivals` in `peloton_led.py` from `weekly_progress`). Add more things to compete on and rotate through them, so the rivalry has more angles. Candidates, all from the workout log:
@@ -38,7 +24,7 @@ The `versus` page (`display/ui/versus_screen.py`) compares two riders on the sam
 - PRs this week (`pr_output` / `pr_splits`)
 - longest single workout
 - one discipline's minutes or count (e.g. strength), changing discipline each pass
-- this month instead of this week, for some or all of the above
+- the last 30 days instead of this week, for some or all of the above (rolling, not the calendar month: Joel's preference)
 
 **Chosen layout for 64x64 (mocked up 2026-11-08 with the board's fonts): five rows, each number beside its word.** One line per stat: the left rider's number at the left edge, the word centred on the panel, the right rider's number at the right edge (`5  WORKOUTS  4`, `2,105  CAL  1,480`). Numbers keep today's 5x8 font (`titles`), labels today's tom-thumb (`stats`), the bigger number gold. Rows 9 apart from baseline 20 (20, 29, 38, 47, 56), between the names (baseline 9) and the week strip (rows 60-61). Workouts is always the top row; the other four change every 4 s (`DETAIL_INTERVAL_SECONDS`), so a 12 s page shows 1 + 4 x 3 = 13 slots, more than the candidate list, so some frames can repeat or the page can be shorter.
 
@@ -62,7 +48,7 @@ Notes:
 - This changes today's 64x64 page, so its byte-identical check doesn't apply to `versus`; check the other pages are unchanged and preview with `scripts/render_rotation.py --height 64 --rival <cache>`.
 - 32 rows keeps one stat at a time (labels and big numbers already rotate there); the page's minimum duration grows with the number of stats shown, so pick a per-pass set there too.
 - Optional: a settings-page choice of which stats compete (the Rotation card's Head to head row, or a small section).
-- Depends on: nothing. Per-week and per-month figures come from a helper over the workout log in `peloton/activity.py`, fed via `WorkoutLog.derived` like `streak_week_workouts`; every candidate field is already in the log, so no `LOG_VERSION` bump. If item 5 lands first, reuse its per-period helper.
+- Depends on: nothing. Per-week and per-month figures come from a helper over the workout log in `peloton/activity.py`, fed via `WorkoutLog.derived` like `streak_week_workouts`; every candidate field is already in the log, so no `LOG_VERSION` bump. Item 5 added `recent_activity` in `peloton/activity.py` (the last 30 days' counts from the log; Joel prefers a rolling 30 days to the calendar month); extend it or add a per-week sibling rather than a new pass over the log.
 
 ### 7. Journey moments: arrival, turning for home, and the 32-row hand-off
 The redesigned journey page (`display/ui/journey_screen.py`, 2026-11-08) opens each step with a fill, a count-up, a pulsing tip and the groups coming in. Joel chose these three for later:
@@ -76,6 +62,11 @@ Notes:
 - The arrival confetti must stay off the text, like the milestone celebration's.
 - Check both boards with `scripts/render_rotation.py` and frame strips (the journey's `frame_times` captures settled frames only); the other pages must stay byte-identical.
 - Depends on: the journey redesign (branch `journey-mile-groups`).
+
+### Name page: facts engine
+The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Step 0 is the current branch (`varied-username-facts`). Then: 1 time frames and `period_stats` (replacing `recent_activity`), 2 filters, 3 measures and bests, 4 comparisons, 5 events, 6 choosing what's interesting (scores and a cool-down, the step that changes pass 0), 7 together facts, 8 optional settings and new log fields. The page stays six highlights (24 s) throughout.
+- Build brief for a Sonnet 5.5 session, one step each: `docs/NAME-PAGE-FACTS-HANDOFF.md`.
+- Depends on: step 0 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
 
 ## Joel, by hand
 

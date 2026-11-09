@@ -1,0 +1,414 @@
+# Name page facts: built and ideas
+
+The name page (`username` in `rotation`) shows the rider's name over rotating highlights. This
+file lists what it shows today and every idea for more, so the next pick is a choice from a list
+rather than a fresh brainstorm. Ideas are laid out as a time frame × a stat, then six more
+dimensions that widen it, then the plan to build all of it in steps. Collected 2026-11-08.
+
+Code: `peloton/username_facts.py` picks the highlights, `display/ui/username.py` draws them, and
+`peloton/activity.py` computes the log figures (fed through `WorkoutLog.derived`).
+
+## How a page is built
+
+Every pass shows six highlights, 4 s each (24 s):
+
+1. `TOTAL WORKOUTS`: every pass.
+2. `THIS WEEK`: every pass.
+3. **Slot A**: one discipline fact, the next one each pass (`pass_index % available`).
+4. **Slots B (x3)**: one instructor top three, the next one each pass.
+
+A fact with too little data is left out of its slot's turn for that pass, so the page stays six
+highlights long. Facts from the workout log appear only once the log holds the whole history.
+
+Each slot cycles on its own, so every fact added to a slot makes each one in it come round less
+often: with 8 facts, each shows once every 8 passes. Past about 4 facts in a slot, add a slot
+(and one more 4 s highlight) instead.
+
+## Fitting rules
+
+- A highlight is a label (tom-thumb, `stats` font) and two lines (4x6, `info` font), or one big number.
+- Labels and lines hold **15 characters** (60 px) on both 64x64 and 64x32. `LEAST THIS MONTH`
+  (16) doesn't fit; `MOST IN 30 DAYS` (15) fits exactly.
+- A too-long label can carry a `short_label` that the screen uses instead (`3RD TREAD BOOTCAMP` →
+  `3RD BOOTCAMP`).
+- Name the period in the label (`IN 2026`, `IN NOV`) so a fact never needs a third line.
+- Test each fact at both heights with the longest likely values (see
+  `test_every_label_and_line_fits_or_has_a_short_label_that_does`).
+
+## Data on hand
+
+No idea below needs a new API call.
+
+| Source | What it holds |
+|---|---|
+| Workout log (`<cache>.workouts.json`, `peloton/workout_log.py`) | Per workout: start time (date, weekday, hour), discipline, class ID (`ride_id`), title, class length, output (kJ), distance, calories, instructor (or group), output and splits PR flags, Strive score (`effort_points`), seconds in each heart-rate zone, streak eligibility |
+| Dashboard cache | Discipline totals, streaks (`best_weekly`, `current_weekly`, `current_daily`), personal records by discipline and length (`cycling\|30 min: 289.9 kJ`), weekly progress |
+| Profile (fetched daily) | Only `id`, `username`, `timezone`, `height_unit` are kept (`PROFILE_KEYS` in `peloton/dashboard.py`). Adding a key costs nothing: `created_at`, `total_followers`, `cycling_workout_ftp`, `estimated_cycling_ftp`, `badge_level` |
+
+## Built
+
+| Slot | Label | Lines | Shown when |
+|---|---|---|---|
+| Every pass | `TOTAL WORKOUTS` | `2,123` (big, gold) | the overview has a total |
+| Every pass | `THIS WEEK` | `4 WORKOUTS` / `110 MINUTES` | always |
+| A | `TOP DISCIPLINE` | `CYCLING` / `641 WORKOUTS` | any discipline totals |
+| A | `LAST 30 DAYS` | `12 WORKOUTS` / `340 MINUTES` | 1+ workout in 30 days |
+| A | `MOST IN 30 DAYS` | `STRENGTH` / `6 WORKOUTS` | 2+ workouts, and not the all-time top discipline |
+| B | `TOP` / `2ND` / `3RD INSTRUCTOR` | `JESS SIMS` / `300 CLASSES` | any named instructor |
+| B | `TOP` / `2ND` / `3RD IN 30 DAYS` | `JESS SIMS` / `4 CLASSES` | 3 instructors with 2+ classes each |
+| B | `TOP` / `2ND` / `3RD STRENGTH` (each discipline, most-done first) | `JESS SIMS` / `150 CLASSES` | 3 instructors with 2+ classes each in it |
+
+Tried and dropped (Joel, 2026-11-08): **least-done discipline** (not interesting), and **calendar months** (`IN NOV` is nearly empty on the 1st or the 3rd; use a rolling 30 days).
+
+## Ideas: a time frame × a stat
+
+Almost every idea is one **time frame** with one **stat**: "hours" works for this week, the last 30 days,
+this year or all time, and so does "different instructors". So both are listed once below, then a
+grid says which pairs are worth showing. The built facts are pairs too: `LAST 30 DAYS` is
+workouts + minutes for the last 30 days, and `TOP` / `2ND` / `3RD INSTRUCTOR` is the instructor top
+three for all time.
+
+### Time frames
+
+| Frame | In a label | Covers | Notes |
+|---|---|---|---|
+| This week | `THIS WEEK` | Monday 00:00 to now | Complete even while the log is still filling |
+| Last week | `LAST WEEK` | the Monday-to-Sunday before | |
+| Last 30 days | `30 DAYS` | today and the 29 days before | Built. Used instead of the calendar month, which is nearly empty on the 1st |
+| Last 90 days | `90 DAYS` | rolling, like 30 days | A season without a calendar edge |
+| This year | `IN 2026` | 1 January to now | Thin in early January |
+| Last year | `IN 2025` | the whole previous year | |
+| All time | `LIFETIME` / `ALL TIME` | everything | Workout count and discipline totals come from Peloton's overview, the rest from the log |
+
+All are in the display timezone, like `THIS WEEK`. Every frame except this week needs the complete
+log, as the 30-day facts do now. Calendar months are out (Joel, 2026-11-08): this week and this year
+have the same thin start, but a week is short and the year label says which year it is.
+
+### Stats, by kind
+
+The kind decides what the highlight looks like.
+
+**Totals**: a number for the frame. Lines: `412 WORKOUTS` / `164 HOURS`.
+
+| Stat | From | Notes |
+|---|---|---|
+| Workouts | log (overview for all time) | |
+| Minutes / hours | `class_length_s` | Hours past ~600 minutes |
+| Output (kJ) | `total_work_j` | Bike and rower only |
+| Calories | `calories` | |
+| Miles (or km) | `distance` | Same groups as the journey |
+| Strive points | `effort_points` | Heart-rate monitor only |
+| Hard minutes | `hr_zone_s` zones 4–5 | Heart-rate monitor only |
+| PRs | `pr_output`, `pr_splits` | |
+| Active days | `start` | Optionally as a share: `248` / `79% OF DAYS` |
+
+**Distinct counts**: how many different things. Lines: `318 DIFFERENT` / `CLASSES`.
+
+| Stat | From | Notes |
+|---|---|---|
+| Different classes | `ride_id` | Just Ride / Just Walk have no class |
+| Different instructors | `instructor_id`, `group_ids` | Group classes count each member, like the tally |
+| Disciplines | `discipline` | |
+| New classes | `ride_id`, earlier rows | First time ever in that class; also as a share (`82% NEW`) |
+| New instructors | `instructor_id`, earlier rows | First-ever class with them |
+
+**Tops**: who or what came first. Lines: name / count. One highlight, or three for a top three.
+
+| Stat | From | Notes |
+|---|---|---|
+| Top discipline | `discipline` | Skip when it's the all-time top (see `MOST IN 30 DAYS`) |
+| Instructor top three | instructor tally | Built for all time and the last 30 days |
+| Instructor top three in one discipline | instructor tally per discipline | Built for all time |
+| Most repeated class | `ride_id`, `title` | Titles trimmed to 15 characters |
+| Favourite weekday | `start` | `MONDAY` / `22% OF WORKOUTS` |
+| Time of day | `start` hour | `MORNINGS` / `6-9 AM`, or `41% BEFORE 9` |
+| Go-to class length | `class_length_s` | `20 MIN` |
+
+**Bests**: the biggest smaller piece inside the frame. Lines: value / when.
+
+| Stat | From | Notes |
+|---|---|---|
+| Biggest week | weeks in the frame | `14 WORKOUTS` / `OCT 2024` |
+| Biggest month | months in the frame | Year and all time only (a finished month is fine as a best) |
+| Busiest day | days in the frame | `6 WORKOUTS` / `MAR 3 2025` |
+| Longest workout | `class_length_s` | `90 MIN RIDE` |
+| Highest output | `total_work_j`, or the cache's personal records | All time real: 289.9 kJ, 30 min ride |
+| Best Strive class | `effort_points` | Heart-rate monitor only |
+| Best weekly streak | cache `streaks.best_weekly` | All time only (real: 74 weeks) |
+
+**Comparisons**: any total against the frame before, up to the same point so it's fair
+(the last 30 days against the 30 before). Lines: `412 VS 380` or `+3 WORKOUTS`.
+
+### Which pairs are worth showing
+
+★ built · ✓ worth showing · ◇ already on another page · – adds nothing
+
+| Stat | Week | Last week | 30 days | Year | Last year | All time |
+|---|---|---|---|---|---|---|
+| Workouts | ★ `THIS WEEK` | ✓ | ★ `LAST 30 DAYS` | ✓ | ✓ | ★ `TOTAL WORKOUTS` |
+| Minutes / hours | ★ | ✓ | ★ | ✓ | ✓ | ✓ |
+| Output | ◇ Head to head | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Calories | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Miles | ✓ | ✓ | ✓ | ✓ | ✓ | ◇ Journey |
+| Strive points | ✓ | ✓ | ✓ | ✓ | ✓ | – |
+| Hard minutes | ✓ | ✓ | ✓ | ✓ | ✓ | – |
+| PRs | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Active days | ◇ Heatmap | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Different classes | – | – | ✓ | ✓ | ✓ | ✓ |
+| Different instructors | – | – | ✓ | ✓ | ✓ | ✓ |
+| Disciplines | – | – | ✓ | ✓ | ✓ | ◇ Lifetime |
+| New classes | ✓ | – | ✓ | ✓ | ✓ | – |
+| New instructors | ✓ | – | ✓ | ✓ | ✓ | – |
+| Top discipline | ✓ | – | ★ `MOST IN 30 DAYS` | ✓ | ✓ | ★ `TOP DISCIPLINE` |
+| Instructor top three | – | – | ★ | ✓ | ✓ | ★ |
+| Instructor top three, one discipline | – | – | – | ✓ | ✓ | ★ |
+| Most repeated class | – | – | ✓ | ✓ | ✓ | ✓ |
+| Favourite weekday | – | – | – | ✓ | ✓ | ✓ |
+| Time of day | – | – | ✓ | ✓ | ✓ | ✓ |
+| Go-to class length | – | – | – | ✓ | ✓ | ✓ |
+| Biggest week | – | – | – | ✓ | ✓ | ✓ |
+| Biggest month | – | – | – | ✓ | ✓ | ✓ |
+| Busiest day | – | – | ✓ | ✓ | ✓ | ✓ |
+| Longest workout | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Highest output | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Best Strive class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Best weekly streak | – | – | – | – | – | ✓ |
+| Comparison with the frame before | ✓ | – | ✓ | ✓ | – | – |
+
+That's well over a hundred ✓ pairs, far more than a rotation can show. Something has to choose.
+
+### Choosing pairs
+
+1. **One frame per pass (recommended).** Each pass picks the next frame, and every slot fills from
+   it. Pass 1 is all time, pass 2 the last 30 days, pass 3 this year, pass 4 last year, and so on; slot A
+   takes the frame's next total, distinct count or best, and slot B its instructor top three. The
+   page reads as one story ("2026: 412 workouts, 318 different classes, top instructor Jess Sims"),
+   and the label only needs to name the frame. Today's page is already close: its pass 2 is all
+   the last 30 days.
+2. **A fixed list.** Pick about a dozen pairs by hand and rotate through them. Simple, but every
+   new pair is a code change.
+3. **Settings page.** A grid of frame and stat switches on the name page's Rotation row. Most
+   flexible, and the most to build and test.
+
+### Labels
+
+Put the frame in the label and the stat in the lines, so a label never has to say both:
+
+| Kind | Label | Lines |
+|---|---|---|
+| Totals | `IN 2026` | `412 WORKOUTS` / `164 HOURS` (two totals in one highlight) |
+| Distinct count | `IN 2026` | `318 DIFFERENT` / `CLASSES` |
+| Top | `TOP OF 2026` | `JESS SIMS` / `61 CLASSES` |
+| Top three | `TOP` / `2ND` / `3RD IN 2026` | `JESS SIMS` / `61 CLASSES` |
+| Best | `BEST WEEK 2026` | `14 WORKOUTS` / `OCT 2024` |
+| Comparison | `VS 30 BEFORE` | `+3 WORKOUTS` |
+
+Check each label against the 15-character limit: `TOP OF LIFETIME` is exactly 15, and
+`TOP OF LAST WEEK` (16) is too long, though that pair is – in the grid anyway.
+
+### Code shape
+
+One helper in `peloton/activity.py`, `period_stats(workouts, start, end)`, makes one pass over the
+log for a frame and returns every stat above. Frames are a list of (key, label word, start, end),
+and today's `recent_activity` becomes `period_stats` for the last 30 days. The facts module then picks the
+pass's frame and builds highlights from its stats.
+
+Head to head (ROADMAP item 6) wants the same thing, "the last 30 days instead of this week" for a set of
+stats, so it should use the same helper.
+
+## Beyond frame × stat: six more dimensions
+
+Time frame × stat is the core, but on its own it makes a page that is varied rather than
+interesting. These six widen it. A fact in full is:
+
+**who** × **which workouts** × **time frame or event** × **stat** × **how it's worked out** ×
+**compared with what**, and then a step that picks the interesting ones.
+
+### 1. Which workouts count (filters)
+
+A third axis that narrows the workouts before the stat is worked out.
+
+| Filter | Example | From |
+|---|---|---|
+| Discipline | `STRENGTH 2026` / `140 WORKOUTS` / `61 HOURS` | `discipline` |
+| Instructor | `WITH JESS SIMS` / `61 CLASSES` / `1,830 MIN` | `instructor_id`, `group_ids` |
+| Class length | `20 MIN RIDES` / `212 IN 2026` | `class_length_s` |
+| With a heart-rate monitor | Strive and zone stats only count these | `hr_zone_s` present |
+
+Today's "instructor top three in one discipline" is already a filter (discipline) on a top.
+
+### 2. How it's worked out
+
+The same stat can be a total, an average, a maximum, a share or a rank.
+
+| Measure | Example |
+|---|---|
+| Total | `164 HOURS` in 2026 |
+| Average | `AVERAGE CLASS` / `24 MIN` in 30 days; `AVERAGE WEEK` / `7.9 WORKOUTS` |
+| Maximum | `LONGEST` / `90 MIN RIDE` |
+| Share | `38% STRENGTH` in 30 days; `79% OF DAYS` active in 2026 |
+| Rank | `3RD BEST 30 DAYS` (this window among every 30-day window you've had) |
+
+"Bests" in the stats list are the maximum applied to a smaller unit inside the frame (the biggest
+week in 2026).
+
+### 3. Compared with what
+
+A modifier that can go on any total.
+
+| Reference | Example | Notes |
+|---|---|---|
+| The window before | `VS 30 BEFORE` / `+3 WORKOUTS` | Same length, so it's fair |
+| Same point last year | `2026 VS 2025` / `412 VS 380` | Up to today's date |
+| Your own average | `THIS WEEK` / `ABOVE AVERAGE` / `+2` | 12-week average, like the heatmap |
+| Your record | `BEST 30 DAYS` / `EVER` / `52 WORKOUTS` | This window is your best of its kind |
+| A goal | | Already the goals page; leave it there |
+| The other rider | | Already Head to head; leave it there |
+
+### 4. Time measured from an event
+
+Not a calendar window but a distance from something that happened.
+
+| Kind | Example | From |
+|---|---|---|
+| Since | `12 DAYS SINCE` / `YOUR LAST ROW`; `41 CLASSES` / `SINCE YOUR LAST PR` | `start`, `discipline`, PR flags |
+| Last time | `LAST RIDE WITH` / `CODY RIGSBY` / `MAR 3` | `instructor_id`, `start` |
+| On this day | `A YEAR AGO TODAY` / `45 MIN RIDE` / `JESS SIMS` | `start`, `title` |
+| Anniversary | `6 YEARS` / `ON PELOTON` (on the day) | profile `created_at` (add to `PROFILE_KEYS`) |
+| First | `FIRST YOGA` / `IN 3 MONTHS` | `discipline`, `start` |
+
+### 5. Choosing what's interesting
+
+The step that makes the page feel fresh. With hundreds of possible facts, most are dull most of the
+time; a few are notable at any moment. Score each candidate and show the best ones:
+
+| Signal | Example | Weight |
+|---|---|---|
+| A record being set | `BEST 30 DAYS EVER` | highest |
+| Today is the day | anniversary, `A YEAR AGO TODAY` | high, only that day |
+| A first or a comeback | `FIRST YOGA IN 3 MONTHS`, a new instructor | high |
+| A run of something | `5 STRENGTH IN A ROW`, `LAST 4 WITH JESS SIMS` | medium, grows with the run |
+| A big change | `+40% VS 30 BEFORE` | medium, grows with the change |
+| Nothing special | `IN 2026` / `412 WORKOUTS` | low baseline, so there's always something |
+
+Two rules keep it from getting stuck: a fact shown recently scores lower (a cool-down, remembered
+across restarts), and one page doesn't show two facts of the same kind.
+
+### 6. Who it covers
+
+On a board with two riders: facts about both together.
+
+| Example | Notes |
+|---|---|
+| `TOGETHER` / `31 WORKOUTS` / `IN 30 DAYS` | Sums both riders' figures |
+| `BOTH TOOK` / `JESS SIMS` / `40 CLASSES` | An instructor in both top threes |
+| `SAME CLASS` / `4 TIMES IN 2026` | Same `ride_id` on the same day |
+
+Shown once per cycle, like Head to head (the rider whose rotation gets `rivals`).
+
+### What the log can't tell us yet
+
+Some filters people would want aren't in the log: live vs on-demand, class type (HIIT, power zone,
+low impact), music genre, cadence and resistance. Each would mean extending `trim()` in
+`peloton/workout_log.py` and bumping `LOG_VERSION` (one re-download per board), so they're at the
+end of the plan, if ever.
+
+## Plan
+
+Each step is one branch and one PR into `develop-beta`. Every step keeps the page at six highlights
+(24 s, so `peloton/screen_times.py` doesn't change), keeps the 64x64 pass-0 page byte-identical
+until a step says otherwise, needs no new API calls, and shows a fact only once the workout log is
+complete (except this week).
+
+### The page's shape, from step 1 on
+
+| Highlight | What | Changes |
+|---|---|---|
+| 1 | `TOTAL WORKOUTS` | never |
+| 2 | `THIS WEEK` | never |
+| 3 | **Headline**: the best-scoring fact from any dimension | every pass |
+| 4–6 | **The pass's frame**: one instructor top three for that frame | every pass |
+
+Until step 6 adds scoring, the headline is the pass's frame's next fact in turn, so the page is one
+frame's story per pass. After step 6, the headline is whatever is most notable, and the frame
+keeps the top three varied.
+
+### Step 0: ship what's built (this branch, `varied-username-facts`)
+
+Slot A (top discipline, last 30 days, most in 30 days) and slot B (instructor top threes for all
+time, 30 days and each discipline). Already tested and documented.
+
+### Step 1: time frames and `period_stats`
+
+- `peloton/activity.py`: `FRAMES` (this week, last week, 30 days, 90 days, this year, last year, all
+  time: key, label word, start, end) and `period_stats(workouts, start, end)`, one pass over the log
+  returning every total and distinct count for that window. `recent_activity` becomes
+  `period_stats` for 30 days.
+- `WorkoutLog.derived` returns `{frame_key: stats}` for each frame.
+- `peloton/username_facts.py`: one frame per pass. Highlight 3 cycles through that frame's facts;
+  4–6 are that frame's instructor top three.
+- `scripts/list_facts.py`: prints every candidate fact for a log, so new facts can be checked
+  against real data without the panel.
+- Tests: every frame's edges in the display timezone (incl. a DST change and 1 January), each
+  total, each distinct count, and the 15-character fit for every label.
+
+### Step 2: filters
+
+- `period_stats` takes a filter (discipline or instructor) and returns the same stats for it.
+- New facts: one discipline in a frame (`STRENGTH 2026`), one instructor in a frame
+  (`WITH JESS SIMS`), and the per-discipline top three moved onto the frame (`TOP STRENGTH 2026`).
+- Which discipline or instructor: the pass's turn through the rider's top ones in that frame, so
+  a filter never picks something done once.
+
+### Step 3: measures and bests
+
+- Average, maximum, share and rank beside the totals; bests (biggest week, month and day, longest
+  workout, highest output, best Strive class) inside a frame.
+- "Rank" needs every window of the same length: compute 30-day totals for each day once per
+  refresh, not per fact.
+- Best weekly streak from the cache.
+
+### Step 4: comparisons
+
+- The window before and the same point last year for each total; your 12-week average for this
+  week; "best ever" when a window beats every earlier one of its length.
+- Show a comparison only when the change is worth saying (e.g. at least 10% or 2 workouts).
+
+### Step 5: events
+
+- Since, last time, on this day, firsts and comebacks, all from the log.
+- Anniversary: keep `created_at` in `PROFILE_KEYS` (`peloton/dashboard.py`); a test checks the
+  slimmed profile still holds no personal fields beyond it.
+
+### Step 6: choosing what's interesting
+
+- Every fact from steps 1–5 becomes a candidate with a kind, a key (e.g. `best:30d:workouts`) and a
+  score from the signals in dimension 5.
+- Highlight 3 shows the top-scoring candidate whose kind isn't already on the page.
+- Cool-down: `name_facts_shown` in the dashboard cache (`{key: last shown}`, per rider, like
+  `milestone_shown_at`) lowers a fact's score for a day after it shows, so a restart doesn't repeat
+  it.
+- `scripts/list_facts.py` prints the scores, which is how the weights get tuned on real logs.
+- This is the step that changes pass 0, so the byte-identical check stops applying to the name
+  page here; the other pages must stay identical.
+
+### Step 7: together
+
+- Only on boards with two or more riders, from each rider's `period_stats`.
+- Candidates for the headline of the rider whose rotation gets `rivals`, so they show once a cycle.
+- Shares figures with Head to head (ROADMAP item 6), which should be built on `period_stats` too.
+
+### Step 8 (optional): settings and new log fields
+
+- Settings page: switches for the dimensions (e.g. no comparisons, no together facts) on the name
+  page's Rotation row. Not a switch per fact.
+- New log fields (live vs on-demand, class type) only if a fact needs them; one `LOG_VERSION` bump
+  for all of them at once.
+
+### Open questions
+
+- Should highlight 3 sometimes be two facts (and the top three only two names) when something very
+  notable is due, or is one headline per pass enough?
+- Frames on 32 rows: the same, or fewer (week, 30 days, year, all time) since each highlight is
+  tighter there?
+- Cool-down length: a day, or a number of passes?
