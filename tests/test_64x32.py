@@ -108,6 +108,14 @@ def test_32_row_bottom_title_line_clears_corner_icons(flag, columns):
     assert [y for y in rows_of(matrix, WHITE, columns) if y >= 23] == []
 
 
+def test_32_row_instructor_name_is_drawn_the_same_with_or_without_corner_icons():
+    # The icons may cover the name's ends; the name itself never changes to dodge them.
+    name = 'Leanne Hainsby-Alldis'
+    plain = frame({**STRENGTH, 'instructor': name}, 4.5)
+    for flags in ({'login_required': True}, {'data_stale': True}, {'login_required': True, 'data_stale': True}):
+        assert frame({**STRENGTH, 'instructor': name, **flags}, 4.5).image.tobytes() == plain.image.tobytes()
+
+
 def test_32_row_output_pr_star_stays_on_the_panel():
     summary = next(s for s in demo_summaries() if s.get('is_output_pr'))
     matrix = frame(summary, 4.5)  # total output is the first cycling stat

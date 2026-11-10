@@ -12,6 +12,11 @@ SCROLL_SPEED = 14.0
 SCROLL_HOLD_START = 0.6
 SCROLL_HOLD_END = 0.6
 MARGIN = 2
+# A 64-row panel wraps a first value line that is too wide onto two lines (the label rises this many rows
+# to make room); a 32-row panel has no spare rows, so it lets a line that is only a little too wide run
+# edge to edge instead (what fits in the panel's own width) and scrolls the rest.
+WRAP_LABEL_RISE = 3
+WRAPPED_BASELINES = (45, 52, 59)
 
 
 class UsernameScreen(Screen):
@@ -70,6 +75,17 @@ class UsernameScreen(Screen):
             return overflow
         return round(overflow * max(0.0, 1 - t / glide))
 
+    @staticmethod
+    def wrap_two_lines(font, text, room):
+        """`text` split at a space into two lines that each fit `room` px, or None when it doesn't
+        fit one line, can't split, or a piece is still too wide."""
+        words = text.split()
+        for cut in range(len(words) - 1, 0, -1):
+            first, second = ' '.join(words[:cut]), ' '.join(words[cut:])
+            if get_text_width(font, first) <= room:
+                return [first, second] if get_text_width(font, second) <= room else None
+        return None
+
     def _scrolling(self, matrix, font, text, baseline, color, phase, interval):
         """Draw a line wider than the room, scrolled to where `phase` puts it; the margins are blanked so
         the text slides under them instead of off the panel's edge."""
@@ -121,20 +137,37 @@ class UsernameScreen(Screen):
             if get_text_width(small_font, label) > matrix.width - 4 and detail.get('short_label'):
                 label = str(detail['short_label']).upper()
             label = self._fit(small_font, label, matrix.width - 4)
-            self._center(matrix, small_font, label, (17 if compact else 38) + offset,
-                         graphics.Color(145, 165, 190))
             lines = detail.get('lines') or [detail.get('value', '')]
+            room = matrix.width - 2 * MARGIN
+            wrapped = None
+            if not compact and len(lines) == 2:
+                first = str(lines[0]).upper().strip()
+                if get_text_width(value_font, first) > room:
+                    wrapped = self.wrap_two_lines(value_font, first, room)
+            label_y = (17 if compact else 38 - (WRAP_LABEL_RISE if wrapped else 0)) + offset
+            self._center(matrix, small_font, label, label_y, graphics.Color(145, 165, 190))
             line_color = color_dict.get(detail.get('color_key'), graphics.Color(255, 255, 255))
             big_font = loaded_fonts.get(detail.get('font_key'))
             if big_font and len(lines) == 1 and get_text_width(big_font, str(lines[0])) <= matrix.width - 4:
                 # A single headline number (e.g. total workouts) fills the space below the label.
                 self._center(matrix, big_font, str(lines[0]), (30 if compact else 58) + offset, line_color)
                 return True
+            if wrapped:
+                # 64 rows: the long name on two lines, the count (or minutes) still under it.
+                rows = wrapped + [str(lines[1]).upper().strip()]
+                for line, baseline in zip(rows, WRAPPED_BASELINES):
+                    self._center(matrix, value_font, line, baseline + offset, line_color)
+                return True
             # 32 rows: 7px line pitch leaves a blank row between the two 4x6 lines.
             baselines = (24, 31) if compact else (50, 59)
             for line, baseline in zip(lines[:2], baselines):
                 line = str(line).upper().strip()
-                if get_text_width(value_font, line) > matrix.width - 2 * MARGIN:
+                width = get_text_width(value_font, line)
+                if compact and room < width <= matrix.width:
+                    # Only a little too wide for the margins: edge to edge, no scrolling.
+                    graphics.DrawText(matrix, value_font, (matrix.width - width) // 2, baseline + offset,
+                                      line_color, line)
+                elif width > room:
                     self._scrolling(matrix, value_font, line, baseline + offset, line_color, phase_seconds, interval)
                 else:
                     self._center(matrix, value_font, line, baseline + offset, line_color)

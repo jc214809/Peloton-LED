@@ -447,15 +447,18 @@ def _draw_hr_calories(matrix, summary: dict, stat_font, bottom_y: int) -> None:
                    max(0, right - mid), right_align=True)
 
 
-def _draw_short_lines(matrix, font, lines: List[str], top_y: int, summary: dict) -> None:
+def _draw_short_lines(matrix, font, lines: List[str], top_y: int, summary: dict,
+                      clear_icons: bool = True) -> None:
     """Up to two centered 4x6 lines, 7px apart, for the 32-row layout.
 
-    The second line sits on the bottom rows, so it is narrowed to clear the
-    login padlock (bottom right) and stale-data clock (bottom left) when shown.
+    The second line sits on the bottom rows, so a workout title narrows it to clear the
+    login padlock (bottom right) and stale-data clock (bottom left) when shown. An instructor
+    name passes clear_icons=False: it is drawn the same every time and an icon may cover its
+    ends, which is the point of the icon.
     """
     w = matrix.width
     for i, line in enumerate(lines[:2]):
-        if i == 1:
+        if i == 1 and clear_icons:
             left = 9 if summary.get('data_stale') else 2
             right = 9 if summary.get('login_required') else 2
             line = _truncate(font, line, w - 2 * max(left, right))
@@ -596,7 +599,7 @@ class LastWorkoutScreen(Screen):
                 # Long instructor names wrap into the bar's rows, so this one
                 # detail goes without the HR/calories bar.
                 _draw_short_lines(matrix, text_font, _wrap_two_lines(text_font, value, w - 4),
-                                  22 + offset, summary)
+                                  22 + offset, summary, clear_icons=False)
                 return True
             else:
                 value_y = 24 if value_font is value_big else 23
