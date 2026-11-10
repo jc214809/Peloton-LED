@@ -211,6 +211,7 @@ def summarize_workout(workout, perf=None):
         'workout_id': workout.get('id'),
         'date_time': ts_to_local_str(stamp.timestamp(), workout.get('timezone')) if stamp else '',
         'tz': workout.get('timezone') or '', 'discipline': discipline,
+        'workout_at': stamp.timestamp() if stamp else None,
         'title': ride.get('title') or workout.get('title') or workout.get('name') or 'Workout',
         # Class-free workouts (Just Walk, Just Ride, free outdoor) carry a placeholder instructor
         # named after the workout and with no ID; it isn't anyone, so it isn't shown.

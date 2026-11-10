@@ -129,22 +129,60 @@ def test_corrupt_or_wrong_version_cache_is_ignored(tmp_path):
         assert snapshot['cache_loaded'] is False
 
 
-def test_pr_acknowledgement_survives_restart(tmp_path):
-    dashboard, _, token = setup_dashboard(tmp_path)
-    dashboard.refresh()
-    summary = dashboard.snapshot()['summaries'][0]
-    assert summary['is_pr']
-    assert dashboard.should_celebrate_pr(summary)
-    dashboard.acknowledge_pr(summary['workout_id'])
-    assert not dashboard.should_celebrate_pr(summary)
-
-    restarted = Dashboard(token, {})
-    restored = restarted.snapshot()['summaries'][0]
-    assert not restarted.should_celebrate_pr(restored)
-
-
 def _at(text, zone='America/New_York'):
     return datetime.fromisoformat(text).replace(tzinfo=ZoneInfo(zone)).timestamp()
+
+
+def test_pr_celebrates_until_midnight_then_retires_and_survives_restart(tmp_path):
+    config = {'timezone': 'America/New_York'}
+    dashboard, _, token = setup_dashboard(tmp_path, config)
+    dashboard.refresh()
+    summary = dashboard.snapshot()['summaries'][0]
+    assert dashboard.should_celebrate_pr(summary, now=_at('2026-11-07T07:00'))
+    dashboard.acknowledge_pr(summary['workout_id'], now=_at('2026-11-07T07:00'))
+    restarted = Dashboard(token, dict(config))
+    restored = restarted.snapshot()['summaries'][0]
+    assert restarted.should_celebrate_pr(restored, now=_at('2026-11-07T23:59'))
+    # A repeat showing doesn't restart its day.
+    restarted.acknowledge_pr(summary['workout_id'], now=_at('2026-11-07T23:00'))
+    assert not restarted.should_celebrate_pr(restored, now=_at('2026-11-08T00:00'))
+    # The next acknowledgement after midnight moves it to the done list for good.
+    restarted.acknowledge_pr('other', now=_at('2026-11-08T00:01'))
+    after = Dashboard(token, dict(config)).snapshot()
+    assert summary['workout_id'] in after['celebrated_pr_ids']
+    assert summary['workout_id'] not in after['pr_shown_at']
+    assert not restarted.should_celebrate_pr(restored, now=_at('2026-11-07T08:00'))
+
+
+def test_pr_day_ends_at_the_boards_midnight_not_utcs(tmp_path):
+    dashboard, _, _ = setup_dashboard(tmp_path, {'timezone': 'America/New_York'})
+    dashboard.refresh()
+    summary = dashboard.snapshot()['summaries'][0]
+    dashboard.acknowledge_pr(summary['workout_id'], now=_at('2026-11-07T20:00'))  # already tomorrow in UTC
+    assert dashboard.should_celebrate_pr(summary, now=_at('2026-11-07T23:30'))
+    assert not dashboard.should_celebrate_pr(summary, now=_at('2026-11-08T00:30'))
+
+
+def test_pr_max_age_days_skips_old_workouts_only_when_set(tmp_path):
+    dashboard, _, _ = setup_dashboard(tmp_path, {'pr_max_age_days': 3})
+    dashboard.refresh()
+    summary = dashboard.snapshot()['summaries'][0]
+    day = 86400
+    old = dict(summary, workout_at=1000.0)
+    assert not dashboard.should_celebrate_pr(old, now=1000.0 + 3 * day + 1)
+    assert dashboard.should_celebrate_pr(old, now=1000.0 + 3 * day)
+    # Without a timestamp (a cache from before it existed) the age can't be judged: celebrate.
+    assert dashboard.should_celebrate_pr(dict(summary, workout_at=None), now=1000.0 + 99 * day)
+    unlimited, _, _ = setup_dashboard(tmp_path, {})
+    assert unlimited.should_celebrate_pr(old, now=1000.0 + 99 * day)
+
+
+def test_pr_state_failing_to_save_is_logged_not_raised(tmp_path, caplog):
+    dashboard, _, _ = setup_dashboard(tmp_path)
+    dashboard.refresh()
+    with patch.object(dashboard, '_persist_snapshot', side_effect=OSError('disk full')):
+        dashboard.acknowledge_pr('x')
+    assert 'Could not persist' in caplog.text
 
 
 def test_milestone_celebrates_until_midnight_and_survives_restart(tmp_path):

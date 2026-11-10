@@ -348,3 +348,15 @@ def test_config_defaults_and_rejects_bad_milestone_countdown_settings(tmp_path):
         path.write_text(json.dumps({'display': {key: value}}))
         with pytest.raises(ValueError, match=key):
             load_config(str(path))
+
+
+def test_config_pr_max_age_days_defaults_off_and_rejects_bad_values(tmp_path):
+    path = tmp_path / 'config.json'
+    path.write_text('{"display": {}}')
+    assert load_config(str(path))['display']['pr_max_age_days'] is None
+    path.write_text('{"display": {"pr_max_age_days": 7}}')
+    assert load_config(str(path))['display']['pr_max_age_days'] == 7
+    for value in (0, -1, True, 2.5, '7'):
+        path.write_text(json.dumps({'display': {'pr_max_age_days': value}}))
+        with pytest.raises(ValueError, match='pr_max_age_days'):
+            load_config(str(path))
