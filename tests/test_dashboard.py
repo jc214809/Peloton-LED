@@ -133,34 +133,26 @@ def _at(text, zone='America/New_York'):
     return datetime.fromisoformat(text).replace(tzinfo=ZoneInfo(zone)).timestamp()
 
 
-def test_pr_celebrates_until_midnight_then_retires_and_survives_restart(tmp_path):
-    config = {'timezone': 'America/New_York'}
-    dashboard, _, token = setup_dashboard(tmp_path, config)
+def test_pr_celebrates_for_24_hours_then_retires_and_survives_restart(tmp_path):
+    dashboard, _, token = setup_dashboard(tmp_path, {})
     dashboard.refresh()
     summary = dashboard.snapshot()['summaries'][0]
-    assert dashboard.should_celebrate_pr(summary, now=_at('2026-11-07T07:00'))
-    dashboard.acknowledge_pr(summary['workout_id'], now=_at('2026-11-07T07:00'))
-    restarted = Dashboard(token, dict(config))
+    start = _at('2026-11-07T07:00')
+    assert dashboard.should_celebrate_pr(summary, now=start)
+    dashboard.acknowledge_pr(summary['workout_id'], now=start)
+    restarted = Dashboard(token, {})
     restored = restarted.snapshot()['summaries'][0]
-    assert restarted.should_celebrate_pr(restored, now=_at('2026-11-07T23:59'))
-    # A repeat showing doesn't restart its day.
-    restarted.acknowledge_pr(summary['workout_id'], now=_at('2026-11-07T23:00'))
-    assert not restarted.should_celebrate_pr(restored, now=_at('2026-11-08T00:00'))
-    # The next acknowledgement after midnight moves it to the done list for good.
-    restarted.acknowledge_pr('other', now=_at('2026-11-08T00:01'))
-    after = Dashboard(token, dict(config)).snapshot()
+    # Across midnight it's still on, until 24 hours after the first showing.
+    assert restarted.should_celebrate_pr(restored, now=start + 24 * 3600 - 1)
+    # A repeat showing doesn't restart the clock.
+    restarted.acknowledge_pr(summary['workout_id'], now=start + 3600)
+    assert not restarted.should_celebrate_pr(restored, now=start + 24 * 3600)
+    # The next acknowledgement after that moves it to the done list for good.
+    restarted.acknowledge_pr('other', now=start + 24 * 3600 + 1)
+    after = Dashboard(token, {}).snapshot()
     assert summary['workout_id'] in after['celebrated_pr_ids']
     assert summary['workout_id'] not in after['pr_shown_at']
-    assert not restarted.should_celebrate_pr(restored, now=_at('2026-11-07T08:00'))
-
-
-def test_pr_day_ends_at_the_boards_midnight_not_utcs(tmp_path):
-    dashboard, _, _ = setup_dashboard(tmp_path, {'timezone': 'America/New_York'})
-    dashboard.refresh()
-    summary = dashboard.snapshot()['summaries'][0]
-    dashboard.acknowledge_pr(summary['workout_id'], now=_at('2026-11-07T20:00'))  # already tomorrow in UTC
-    assert dashboard.should_celebrate_pr(summary, now=_at('2026-11-07T23:30'))
-    assert not dashboard.should_celebrate_pr(summary, now=_at('2026-11-08T00:30'))
+    assert not restarted.should_celebrate_pr(restored, now=start + 60)
 
 
 def test_pr_max_age_days_skips_old_workouts_only_when_set(tmp_path):

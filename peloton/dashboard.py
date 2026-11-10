@@ -37,6 +37,8 @@ PROFILE_KEYS = ('id', 'username', 'timezone', 'height_unit', 'created_at')
 PROFILE_REFRESH_SECONDS = 24 * 3600
 # Each refresh reads the newest page; more only to finish the latest day, cover
 # this week while the log is still filling, or close a gap after downtime.
+# A PR celebration keeps replaying this long after its first showing.
+PR_CELEBRATION_SECONDS = 24 * 3600
 MAX_RECENT_PAGES = 10
 # History walks: pause between batches, and a safety limit on batches.
 HISTORY_BATCH_PAUSE_SECONDS = 1.0
@@ -185,8 +187,8 @@ class Dashboard:
             save_snapshot(self.cache_path, self.snapshot())
 
     def should_celebrate_pr(self, summary, now=None):
-        """A PR workout's celebration is due until the board's midnight after its first showing (so a
-        rider who wasn't watching that one cycle still sees it, as with milestones). With
+        """A PR workout's celebration is due for 24 hours after its first showing (so a rider who
+        wasn't watching that one cycle still sees it; milestones use the board's day instead). With
         `pr_max_age_days` set, a workout older than that is never celebrated."""
         identity = summary.get('workout_id') if isinstance(summary, dict) else None
         if not identity or not summary.get('is_pr'):
@@ -201,16 +203,15 @@ class Dashboard:
             if identity in self._data['celebrated_pr_ids']:
                 return False
             shown = (self._data.get('pr_shown_at') or {}).get(identity)
-            zone = self._celebration_zone(self._data)
-        return shown is None or local_date(shown, zone) == local_date(now, zone)
+        return shown is None or now - shown < PR_CELEBRATION_SECONDS
 
     def acknowledge_pr(self, workout_id, now=None):
         """Record a displayed PR celebration immediately and durably. The first showing starts its
-        day; a later acknowledgement after midnight retires it (and any other expired one) for good."""
+        24 hours; a later acknowledgement after that retires it (and any other expired one) for good."""
         if not workout_id:
             return
         now = time.time() if now is None else now
-        self._acknowledge(workout_id, [], 'celebrated_pr_ids', 'pr_shown_at', str, now)
+        self._acknowledge(workout_id, [], 'celebrated_pr_ids', 'pr_shown_at', str, now, rolling=True)
 
     def acknowledge_name_facts(self, keys):
         """Record that a name page showed these facts (their `key`s): one more page, and the cool-down
@@ -273,13 +274,14 @@ class Dashboard:
         self._acknowledge(milestone, lower, 'celebrated_discipline_milestones',
                           'discipline_milestone_shown_at', str, now)
 
-    def _acknowledge(self, milestone, lower, celebrated_key, shown_key, parse, now):
+    def _acknowledge(self, milestone, lower, celebrated_key, shown_key, parse, now, rolling=False):
         with self._lock:
             today = local_date(now, self._celebration_zone(self._data))
             celebrated = list(self._data.get(celebrated_key) or [])
             shown = dict(self._data.get(shown_key) or {})
             expired = [parse(key) for key, at in shown.items()
-                       if local_date(at, self._celebration_zone(self._data)) != today]
+                       if (now - at >= PR_CELEBRATION_SECONDS if rolling
+                           else local_date(at, self._celebration_zone(self._data)) != today)]
             done = [value for value in lower + expired if value not in celebrated]
             for value in expired:
                 del shown[str(value)]
