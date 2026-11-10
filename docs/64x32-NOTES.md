@@ -65,7 +65,9 @@ What's different from 64x64, and why:
 5. **The page is one stat longer** on 32 rows (the instructor's turn), so the
    rotation still shows every stat exactly once.
 6. The title's second line is shortened when the login padlock or stale-data
-   clock is showing, so it doesn't run under the icons.
+   clock is showing, so it doesn't run under the icons. A two-line instructor
+   name is not: it is drawn the same every time (2026-11-09, Joel) and an icon
+   may cover its ends, since the icon says the board isn't fully working.
 
 The old two-page 32-row layout (`display.compact_workout_pages`) was removed
 on 2026-11-08 at Joel's request; an old config's setting is ignored.
