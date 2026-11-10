@@ -1,6 +1,25 @@
 import pytest
 
 
+@pytest.fixture(scope='session', autouse=True)
+def parse_each_font_once():
+    """bdfparser reads a BDF in pure Python (~0.5 s a font) and every render re-runs initialize_fonts, which
+    was most of the suite's run time. Parsed fonts are read-only, so share one per path."""
+    from RGBMatrixEmulator.graphics import font as emulator_font
+    parsed = {}
+    real_load = emulator_font.Font.LoadFont
+
+    def load_font(self, path):
+        if path not in parsed:
+            real_load(self, path)
+            parsed[path] = (self.bdf_font, self.headers, self.props, self.default_character)
+        self.bdf_font, self.headers, self.props, self.default_character = parsed[path]
+
+    emulator_font.Font.LoadFont = load_font
+    yield
+    emulator_font.Font.LoadFont = real_load
+
+
 @pytest.fixture(autouse=True)
 def no_history_batch_pause(monkeypatch):
     """History walks pause a second between batches on a board; not in tests."""
