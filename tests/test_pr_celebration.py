@@ -123,9 +123,9 @@ def test_32_row_card_fits_panel_without_star_badge():
     assert max(gold) < min(white) and max(white) < min(blue) and max(blue) <= 31
 
 
-def test_rotation_gives_pr_card_one_interval_after_the_burst():
+def test_rotation_gives_pr_card_one_interval_and_the_extra_hold_after_the_burst():
     from unittest.mock import Mock
-    from display.ui.pr_celebration import SETTLE_SECONDS
+    from display.ui.pr_celebration import CARD_HOLD_SECONDS, SETTLE_SECONDS
     from peloton_led import build_rotation_pages
     dashboard = Mock()
     dashboard.should_celebrate_pr.return_value = True
@@ -137,7 +137,7 @@ def test_rotation_gives_pr_card_one_interval_after_the_burst():
     pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
     assert [p[0] for p in pages] == ['last_workout', 'pr']
     assert pages[1][1] is summary
-    assert pages[1][2] == pytest.approx(BURST_SECONDS + SETTLE_SECONDS + 3)
+    assert pages[1][2] == pytest.approx(BURST_SECONDS + SETTLE_SECONDS + 3 + CARD_HOLD_SECONDS)
 
 
 def test_records_parse_skips_unset_lengths_and_converts_to_kj():

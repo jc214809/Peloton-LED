@@ -15,6 +15,8 @@ _BLUE = graphics.Color(0, 120, 255)
 
 BURST_SECONDS = 1.2
 SETTLE_SECONDS = 0.3
+# Extra time the finished card holds on top of one detail interval: a PR is a big moment (Joel, 2026-11-09).
+CARD_HOLD_SECONDS = 1.5
 # Kept in the top band beside the star badge so they never land on text.
 _SPARKLE_SPOTS = [(5, 5), (58, 6), (13, 13), (50, 13), (3, 16), (60, 15)]
 

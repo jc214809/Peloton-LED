@@ -23,7 +23,8 @@ from utils.wifi_setup import hotspot_name
 from display.ui.last_workout_screen import (LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details,
                                            stats_phase_seconds)
 from display.ui.settings_pin import shown_pin
-from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS, SETTLE_SECONDS as PR_SETTLE_SECONDS
+from display.ui.pr_celebration import (BURST_SECONDS as PR_BURST_SECONDS, CARD_HOLD_SECONDS as PR_CARD_HOLD_SECONDS,
+                                       SETTLE_SECONDS as PR_SETTLE_SECONDS)
 from display.ui.celebration_screen import discipline_noun, milestone_noun
 from display.ui.streak_screen import streak_views
 
@@ -90,8 +91,8 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
                     rotating_details(summary, matrix_height), detail_interval)
                 groups['latest_workouts'].append(('last_workout', summary, page_duration))
                 if dashboard.should_celebrate_pr(summary):
-                    # Burst + settle animation, then the card holds one interval.
-                    pr_duration = PR_BURST_SECONDS + PR_SETTLE_SECONDS + detail_interval
+                    # Burst + settle animation, then the card holds one interval plus a little more.
+                    pr_duration = PR_BURST_SECONDS + PR_SETTLE_SECONDS + detail_interval + PR_CARD_HOLD_SECONDS
                     groups['latest_workouts'].append(('pr', summary, pr_duration))
         else:
             status = snapshot['status'] if snapshot['status'] != 'ready' else 'empty'
