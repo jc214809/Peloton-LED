@@ -129,22 +129,52 @@ def test_corrupt_or_wrong_version_cache_is_ignored(tmp_path):
         assert snapshot['cache_loaded'] is False
 
 
-def test_pr_acknowledgement_survives_restart(tmp_path):
-    dashboard, _, token = setup_dashboard(tmp_path)
-    dashboard.refresh()
-    summary = dashboard.snapshot()['summaries'][0]
-    assert summary['is_pr']
-    assert dashboard.should_celebrate_pr(summary)
-    dashboard.acknowledge_pr(summary['workout_id'])
-    assert not dashboard.should_celebrate_pr(summary)
-
-    restarted = Dashboard(token, {})
-    restored = restarted.snapshot()['summaries'][0]
-    assert not restarted.should_celebrate_pr(restored)
-
-
 def _at(text, zone='America/New_York'):
     return datetime.fromisoformat(text).replace(tzinfo=ZoneInfo(zone)).timestamp()
+
+
+def test_pr_celebrates_for_24_hours_then_retires_and_survives_restart(tmp_path):
+    dashboard, _, token = setup_dashboard(tmp_path, {})
+    dashboard.refresh()
+    summary = dashboard.snapshot()['summaries'][0]
+    start = _at('2026-11-07T07:00')
+    assert dashboard.should_celebrate_pr(summary, now=start)
+    dashboard.acknowledge_pr(summary['workout_id'], now=start)
+    restarted = Dashboard(token, {})
+    restored = restarted.snapshot()['summaries'][0]
+    # Across midnight it's still on, until 24 hours after the first showing.
+    assert restarted.should_celebrate_pr(restored, now=start + 24 * 3600 - 1)
+    # A repeat showing doesn't restart the clock.
+    restarted.acknowledge_pr(summary['workout_id'], now=start + 3600)
+    assert not restarted.should_celebrate_pr(restored, now=start + 24 * 3600)
+    # The next acknowledgement after that moves it to the done list for good.
+    restarted.acknowledge_pr('other', now=start + 24 * 3600 + 1)
+    after = Dashboard(token, {}).snapshot()
+    assert summary['workout_id'] in after['celebrated_pr_ids']
+    assert summary['workout_id'] not in after['pr_shown_at']
+    assert not restarted.should_celebrate_pr(restored, now=start + 60)
+
+
+def test_pr_max_age_days_skips_old_workouts_only_when_set(tmp_path):
+    dashboard, _, _ = setup_dashboard(tmp_path, {'pr_max_age_days': 3})
+    dashboard.refresh()
+    summary = dashboard.snapshot()['summaries'][0]
+    day = 86400
+    old = dict(summary, workout_at=1000.0)
+    assert not dashboard.should_celebrate_pr(old, now=1000.0 + 3 * day + 1)
+    assert dashboard.should_celebrate_pr(old, now=1000.0 + 3 * day)
+    # Without a timestamp (a cache from before it existed) the age can't be judged: celebrate.
+    assert dashboard.should_celebrate_pr(dict(summary, workout_at=None), now=1000.0 + 99 * day)
+    unlimited, _, _ = setup_dashboard(tmp_path, {})
+    assert unlimited.should_celebrate_pr(old, now=1000.0 + 99 * day)
+
+
+def test_pr_state_failing_to_save_is_logged_not_raised(tmp_path, caplog):
+    dashboard, _, _ = setup_dashboard(tmp_path)
+    dashboard.refresh()
+    with patch.object(dashboard, '_persist_snapshot', side_effect=OSError('disk full')):
+        dashboard.acknowledge_pr('x')
+    assert 'Could not persist' in caplog.text
 
 
 def test_milestone_celebrates_until_midnight_and_survives_restart(tmp_path):

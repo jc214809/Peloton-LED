@@ -421,14 +421,15 @@ def test_configured_profiles_applies_per_user_goals_and_milestones(tmp_path):
     assert dashboard.call_args_list[1].args[1]['milestones'] == []
 
 
-def test_pr_celebration_only_appears_once_across_rotations(tmp_path):
+def test_pr_celebration_replays_within_its_day_across_rotations(tmp_path):
     from peloton_led import run_display_loop
 
     dashboard = Dashboard(tmp_path / 'missing-token', {}, demo=True)
     manager = Mock()
     display = {'color': 'white'}
     run_display_loop(manager, dashboard, display, cycles=2)
-    assert [call.args[0] for call in manager.show.call_args_list].count('pr') == 1
+    # Same board day: the second rotation celebrates it again (until midnight, like milestones).
+    assert [call.args[0] for call in manager.show.call_args_list].count('pr') == 2
 
 
 def test_display_loop_alternates_the_streak_view_each_pass(tmp_path):

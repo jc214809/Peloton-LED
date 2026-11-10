@@ -108,6 +108,13 @@ def test_tally_keys_from_before_the_workout_log_are_ignored(tmp_path):
         assert key not in snapshot
 
 
+def test_pr_shown_at_round_trips_and_damage_is_dropped(tmp_path):
+    assert load_snapshot(_cache(tmp_path, pr_shown_at={'w1': 12.5}))['pr_shown_at'] == {'w1': 12.5}
+    for bad in ([], {'w1': 'x'}, {'w1': True}):
+        snapshot = load_snapshot(_cache(tmp_path, pr_shown_at=bad))
+        assert snapshot is not None and 'pr_shown_at' not in snapshot
+
+
 def test_damaged_optional_tables_are_dropped_not_the_cache(tmp_path):
     snapshot = load_snapshot(_cache(tmp_path, personal_records={'x': 'bad'}, streaks={'current': 'x'}))
     assert snapshot is not None

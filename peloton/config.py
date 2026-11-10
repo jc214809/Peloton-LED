@@ -30,6 +30,8 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             # (25, 50, 100, then every 100), at most this many pages.
             'milestone_within': 5,
             'milestone_pages': 3,
+            # A PR older than this many days isn't celebrated; None celebrates any not yet shown.
+            'pr_max_age_days': None,
             'streak_reminder_day': 5,
             'journey': DEFAULT_JOURNEY,
             'brightness_schedule': None,
@@ -316,6 +318,9 @@ def validate_config(config, path='config.json'):
     step = display.get('milestone_step')
     if isinstance(step, bool) or not isinstance(step, int) or step < 0:
         raise ValueError(f'{path}: display.milestone_step must be a non-negative integer')
+    max_age = display.get('pr_max_age_days')
+    if max_age is not None and (isinstance(max_age, bool) or not isinstance(max_age, int) or max_age < 1):
+        raise ValueError(f'{path}: display.pr_max_age_days must be a whole number of days of at least 1, or null')
     for key, lowest in (('milestone_within', 1), ('milestone_pages', 1)):
         value = display.get(key)
         if isinstance(value, bool) or not isinstance(value, int) or value < lowest:
