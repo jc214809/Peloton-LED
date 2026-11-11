@@ -24,7 +24,7 @@ from .journey import uses_metric
 from .schedule import in_quiet_hours, scheduled_refresh_interval
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
 from .workout_log import WorkoutLog, default_log_path
-from .insight_lines import first_board_insight
+from .insight_lines import board_insights
 from .workout_compare import DISCIPLINES as INSIGHT_DISCIPLINES
 from .workout_features import build_row, discipline as row_discipline
 from .workout_insights import insights
@@ -62,10 +62,10 @@ def slim_profile(me):
 
 
 def with_demo_insight(summary, data, config):
-    """The demo's canned insight for this workout, only when display.workout_insights is on."""
-    insight = (data.get('insights') or {}).get(summary.get('workout_id'))
-    if insight and config.get('workout_insights'):
-        summary = {**summary, 'insight': insight}
+    """The demo's canned insights for this workout, only when display.workout_insights is on."""
+    views = (data.get('insights') or {}).get(summary.get('workout_id'))
+    if views and config.get('workout_insights'):
+        summary = {**summary, 'insights': views}
     return summary
 
 
@@ -140,11 +140,13 @@ class Dashboard:
             if cached is not None:
                 if isinstance(cached.get('me'), dict):
                     cached['me'] = slim_profile(cached['me'])
-                if not config.get('workout_insights'):
-                    # Switched off: a cached insight must not keep showing.
-                    for summary in cached.get('summaries') or []:
-                        if isinstance(summary, dict):
-                            summary.pop('insight', None)
+                for summary in cached.get('summaries') or []:
+                    if isinstance(summary, dict):
+                        # Version 2's single two-line insight is never drawn again.
+                        summary.pop('insight', None)
+                        if not config.get('workout_insights'):
+                            # Switched off: cached insights must not keep showing.
+                            summary.pop('insights', None)
                 self._publish(**cached, status='cached', data_stale=True, cache_loaded=True)
             self._log = WorkoutLog.load(self.log_path)
             # Lifetime figures come from the log, so they show at once after a restart.
@@ -356,7 +358,7 @@ class Dashboard:
             return None
 
     def _workout_insight(self, client, workout, perf, settling):
-        """{'code', 'lines', 'facts'} comparing this workout with similar earlier ones, or None.
+        """The board's views (insight_lines.board_view) comparing this workout with similar earlier ones, or None.
 
         The class and workout detail are fetched once per workout (the row is then stored); the
         insight itself is recomputed each refresh, since the peers change. Only a 401 escapes."""
@@ -387,7 +389,7 @@ class Dashboard:
                         store.save()
                     except OSError as exc:
                         logger.warning('Could not save the workout rows (%s)', type(exc).__name__)
-                return first_board_insight(insights(store.rows[identity], store.current_rows()))
+                return board_insights(insights(store.rows[identity], store.current_rows())) or None
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 401:
                 raise
@@ -467,9 +469,9 @@ class Dashboard:
                 summary = summarize_workout(workout, perf)
                 summary['previous_best_kj'] = previous_best_kj(identity, personal_records)
                 if self.config.get('workout_insights'):
-                    insight = self._workout_insight(client, workout, perf, settling)
-                    if insight:
-                        summary['insight'] = insight
+                    views = self._workout_insight(client, workout, perf, settling)
+                    if views:
+                        summary['insights'] = views
                 summaries.append(summary)
             self._derive_args = self._derive(me)
             with self._log_lock:

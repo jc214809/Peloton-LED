@@ -10,8 +10,8 @@ saved under --raw-dir (default training-data/) before a row is built, so a ROW_V
 rebuild from those files with no API calls. A run: rebuild any row missing or stale from saved
 files; list the newest workouts (1 call; the rider's workout log adds the last 730 days for
 catch-up); fetch up to --limit missing ones newest first (2-3 calls each); print the insights of
-each new workout, or of the latest one when nothing is new. Under each workout, `board:` is the
-slide the LED board would show for it (peloton/insight_lines.py), or that it shows none.
+each new workout, or of the latest one when nothing is new. Under each workout, a `board:` line per
+insight the LED board would show for it (peloton/insight_lines.py: headline | sentence), or that it shows none.
 
 --dry-run makes no API calls and writes nothing. A 401 stops the run (exit 2) and keeps every row
 already saved. Uses the Mac's own token from the config, never a board's.
@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from peloton.api import PelotonClient, make_session  # noqa: E402
-from peloton.insight_lines import first_board_insight  # noqa: E402
+from peloton.insight_lines import board_insights  # noqa: E402
 from peloton.config import load_config, user_slug, user_token_path  # noqa: E402
 from peloton.workout_compare import DISCIPLINES  # noqa: E402
 from peloton.workout_insights import insights  # noqa: E402
@@ -76,8 +76,8 @@ def describe(row, rows):
     lines = [f"{row['date']} {row.get('title') or row['disc']} ({row['id'][:8]})"]
     messages = insights(row, rows)
     lines += [f'  [{code}] {text}' for code, text, _ in messages]
-    board = first_board_insight(messages)
-    lines.append(f"  board: {' / '.join(board['lines'])}" if board else '  board: (no slide)')
+    views = board_insights(messages)
+    lines += [f"  board: {view['headline']} | {view['sentence']}" for view in views] or ['  board: (no slide)']
     return '\n'.join(lines)
 
 

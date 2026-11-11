@@ -707,8 +707,12 @@ def test_script_last_prints_the_newest_workouts_with_their_board_line(script, co
 def test_script_describe_shows_the_board_slide(script):
     row = {'id': 'abcdef123', 'date': '2026-11-10', 'title': '30 min Ride', 'disc': 'cycling'}
     messages = [('too_few', 'Not enough.', {}),
-                ('resistance_low', 'Turn the resistance up.', {'pct': 28})]
+                ('resistance_low', 'Turn the resistance up.', {'pct': 28}),
+                ('cadence_low', 'Pick the cadence up.', {'pct': 40}),
+                ('pace_low', 'Push.', {'pct': 50})]
     script.insights = lambda target, rows: messages
     assert script.describe(row, []).splitlines() == [
         '2026-11-10 30 min Ride (abcdef12)', '  [too_few] Not enough.',
-        '  [resistance_low] Turn the resistance up.', '  board: RESISTANCE LOW / 28% UNDER']
+        '  [resistance_low] Turn the resistance up.', '  [cadence_low] Pick the cadence up.', '  [pace_low] Push.',
+        '  board: RESISTANCE LOW | RESISTANCE UNDER THE CALLOUT 28% OF THE WORK: TURN IT UP.',
+        '  board: CADENCE LOW | CADENCE UNDER THE CALLOUT 40% OF THE WORK: PICK IT UP.']

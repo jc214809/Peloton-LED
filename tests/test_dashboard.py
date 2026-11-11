@@ -610,20 +610,22 @@ def test_new_workout_fetches_detail_and_ride_once_and_gets_an_insight(tmp_path):
     with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)) as build:
         dashboard.refresh()
         summary = dashboard.snapshot()['summaries'][0]
-        assert summary['insight']['code'] == 'in_line'
-        assert len(summary['insight']['lines']) == 2
+        assert summary['insights'][0]['code'] == 'in_line'
+        assert len(summary['insights']) == 1
+        assert summary['insights'][0]['headline'] == 'ON YOUR USUAL'
+        assert summary['insights'][0]['footer'] == '6 SIMILAR RIDES'
         assert client.get_workout_detail.call_count == 1
         client.get_ride_details.assert_called_once_with('r1')
         assert build.call_args.args[1] == {'duration': 1200}
         dashboard.refresh()
-        assert dashboard.snapshot()['summaries'][0]['insight']['code'] == 'in_line'
+        assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'
     assert client.get_workout_detail.call_count == 1
     assert client.get_ride_details.call_count == 1
     # The row was saved, so a restarted board makes no calls either.
     again = Dashboard(dashboard.token_path, {'workout_insights': True}, client_factory=lambda _: client)
     again.refresh()
     assert client.get_workout_detail.call_count == 1
-    assert again.snapshot()['summaries'][0]['insight']['code'] == 'in_line'
+    assert again.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'
 
 
 def test_a_detail_without_a_class_makes_no_ride_call(tmp_path):
@@ -633,7 +635,7 @@ def test_a_detail_without_a_class_makes_no_ride_call(tmp_path):
             patch('peloton.dashboard.insights', return_value=[('nothing', '', {})]):
         dashboard.refresh()
     client.get_ride_details.assert_not_called()
-    assert 'insight' not in dashboard.snapshot()['summaries'][0]
+    assert 'insights' not in dashboard.snapshot()['summaries'][0]
 
 
 def test_real_row_building_end_to_end_gives_a_resistance_insight(tmp_path):
@@ -653,7 +655,7 @@ def test_settling_or_unfinished_or_other_discipline_workouts_get_none_and_no_cal
         dashboard, client, _ = _insight_setup(folder, **kwargs)
         dashboard.refresh()
         # (an unfinished workout never reaches the summaries at all)
-        assert all('insight' not in summary for summary in dashboard.snapshot()['summaries'])
+        assert all('insights' not in summary for summary in dashboard.snapshot()['summaries'])
         client.get_workout_detail.assert_not_called()
 
 
@@ -662,7 +664,7 @@ def test_a_missing_detail_gives_no_insight_and_is_not_refetched(tmp_path):
     client.get_workout_detail.return_value = None
     dashboard.refresh()
     dashboard.refresh()
-    assert 'insight' not in dashboard.snapshot()['summaries'][0]
+    assert 'insights' not in dashboard.snapshot()['summaries'][0]
     assert client.get_workout_detail.call_count == 1
     # After the retry window it asks again.
     dashboard._insight_failed['w1'] -= 3601
@@ -684,7 +686,7 @@ def test_an_insight_failure_never_fails_the_refresh(tmp_path, caplog):
     dashboard.refresh()
     snapshot = dashboard.snapshot()
     assert snapshot['status'] == 'ready'
-    assert 'insight' not in snapshot['summaries'][0]
+    assert 'insights' not in snapshot['summaries'][0]
     assert 'Workout insight failed (ConnectionError)' in caplog.text
     client.get_workout_detail.side_effect = None
     client.get_workout_detail.return_value = {'id': 'w1', 'status': 'COMPLETE'}  # no start_time: build_row raises
@@ -716,13 +718,13 @@ def test_a_failing_row_save_is_logged_and_the_insight_still_shows(tmp_path, capl
             patch('peloton.workout_rows.RowStore.save', side_effect=OSError('read-only')):
         dashboard.refresh()
     assert 'Could not save the workout rows' in caplog.text
-    assert dashboard.snapshot()['summaries'][0]['insight']['code'] == 'in_line'
+    assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'
 
 
 def test_switch_off_makes_no_extra_calls_and_loads_no_store(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path, config={})
     dashboard.refresh()
-    assert 'insight' not in dashboard.snapshot()['summaries'][0]
+    assert 'insights' not in dashboard.snapshot()['summaries'][0]
     client.get_workout_detail.assert_not_called()
     client.get_ride_details.assert_not_called()
     assert dashboard._rows is None
@@ -734,10 +736,34 @@ def test_the_cache_keeps_the_insight_and_a_switched_off_board_strips_it(tmp_path
     with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)):
         dashboard.refresh()
     on = Dashboard(token, {'workout_insights': True}, client_factory=lambda _: client)
-    assert on.snapshot()['summaries'][0]['insight']['code'] == 'in_line'
+    assert on.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'
     off = Dashboard(token, {}, client_factory=lambda _: client)
-    assert 'insight' not in off.snapshot()['summaries'][0]
+    assert 'insights' not in off.snapshot()['summaries'][0]
     assert off.snapshot()['summaries'][0]['workout_id'] == 'w1'
+
+
+def test_a_cached_version_2_insight_is_dropped_whether_the_switch_is_on_or_off(tmp_path):
+    from peloton.cache import save_snapshot
+    for config in ({'workout_insights': True}, {}):
+        folder = tmp_path / str(bool(config))
+        folder.mkdir()
+        dashboard, client, token = _insight_setup(folder, config=config)
+        old = {'code': 'output_up', 'lines': ['STRONG RIDE', '205 VS 180 W'], 'facts': {}}
+        save_snapshot(dashboard.cache_path, {'summaries': [{'workout_id': 'w1', 'insight': old}, 'junk'],
+                                             'totals': {}, 'last_updated': 1.0})
+        summary = Dashboard(token, config, client_factory=lambda _: client).snapshot()['summaries'][0]
+        assert 'insight' not in summary and summary['workout_id'] == 'w1'
+
+
+def test_the_board_keeps_the_first_two_shown_insights_in_order(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    messages = [('too_few', '', {'n': 1, 'noun': 'ride'}), ('resistance_low', '', {'pct': 30}),
+                ('cadence_low', '', {'pct': 40}), ('effort_high', '', {'n': 5})]  # effort: no rate, skipped
+    with patch('peloton.dashboard.build_row', return_value=_fake_row()), \
+            patch('peloton.dashboard.insights', return_value=messages + [('pace_low', '', {'pct': 50})]):
+        dashboard.refresh()
+    views = dashboard.snapshot()['summaries'][0]['insights']
+    assert [view['code'] for view in views] == ['resistance_low', 'cadence_low']
 
 
 def test_the_board_store_drops_rows_past_the_window_when_it_loads(tmp_path):

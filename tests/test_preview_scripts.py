@@ -255,7 +255,7 @@ def test_preview_bad_config(tmp_path):
 
 def test_insight_slides_show_with_the_flag_or_the_config_switch_and_never_from_a_cache_without_it(tmp_path):
     def insight_ids(options):
-        return {s['workout_id'] for s in load_snapshot_for(options)['summaries'] if 'insight' in s}
+        return {s['workout_id'] for s in load_snapshot_for(options)['summaries'] if 'insights' in s}
     assert insight_ids(SimpleNamespace(demo=True)) == set()
     assert insight_ids(SimpleNamespace(demo=True, insights=True)) == {'demo-cycling', 'demo-strength'}
     on = tmp_path / 'on.json'
@@ -271,3 +271,9 @@ def test_insight_slides_show_with_the_flag_or_the_config_switch_and_never_from_a
     assert insight_ids(SimpleNamespace(demo=False, cache=str(cache))) == set()
     assert insight_ids(SimpleNamespace(demo=False, cache=str(cache), insights=True)) == {'demo-cycling',
                                                                                           'demo-strength'}
+    # A version 2 cache's single insight is never shown, switch or no switch.
+    snapshot['summaries'][0]['insight'] = {'code': 'output_up', 'lines': ['STRONG RIDE', '205 VS 180 W']}
+    save_snapshot(cache, {**snapshot, 'last_updated': 1773496800})
+    for flag in (False, True):
+        summaries = load_snapshot_for(SimpleNamespace(demo=False, cache=str(cache), insights=flag))['summaries']
+        assert not any('insight' in s for s in summaries)

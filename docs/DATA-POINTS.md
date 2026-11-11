@@ -105,14 +105,18 @@ Strength the top three muscle groups. 64x32 has no room for the instructor in th
 gets its own screen. A missing stat, graph, zones bar or muscle list drops its
 screen.
 
-**Insight slide** (workout compare, only with `display.workout_insights` on): one more last
-screen for an in-scope, COMPLETE workout the board could compare, two lines from
-`peloton/insight_lines.py` (headline in grey, detail in the discipline colour). It needs the
-workout detail and class details, fetched once per workout, and the rider's row store; with no
-insight (too few peers, nothing stood out, a failed fetch) the screen is simply missing.
+**Insight frames** (workout compare, only with `display.workout_insights` on): for an in-scope,
+COMPLETE workout the board could compare, up to 2 insights after the chart slides, each a card (the
+sentence) then a bars frame (headline, today against the usual or a share bar or blocks, the reason) on
+64x64, or a bars frame then 1-2 sentence pages on 64x32. The content comes from
+`peloton/insight_lines.board_view` (the insight's facts: the values, the comparison group's size, the
+reason; Strive per minute for the effort codes). It needs the workout detail and class details, fetched
+once per workout, and the rider's row store; with no insight (too few peers, nothing stood out, a failed
+fetch) the frames are simply missing.
 
 **Seconds** use the default 4 seconds a screen (`last_workout_detail_interval`);
-the graph, zones, muscle and insight screens hold 1 second longer. 64x32 adds 4 seconds for the
+the graph, zones, muscle and insight screens hold 1 second longer (an insight is 2 screens, 10 s, on
+64x64 and 2-3 screens, 10-15 s, on 64x32). 64x32 adds 4 seconds for the
 instructor screen.
 
 ## Number formats

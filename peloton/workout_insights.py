@@ -106,22 +106,26 @@ def output_insight(target, group, real):
         down = bool(real_stat) and real_stat['value'] < real_stat['median']
     if filled and up:
         up = bool(real_stat) and real_stat['value'] > real_stat['median']
+    # `n` is the comparison group behind the usual, `real` its real peers (fewer when bike fill-ins were used).
+    facts = {'value': result['value'], 'usual': result['median'], 'unit': unit, 'foot': unit == 'mph', 'noun': noun,
+             'n': result['n'], 'real': real, 'reason': None}
     if down:
         what = 'output' if unit == 'W' else 'pace'
         text = f'Your {what} was down today: {usual} for {kind}.'
         if enough_hr and heart['pct'] <= -EASY_HR_PCT:
             text += ' Your heart rate was lower too, so it looks like an easier effort.'
+            facts['reason'] = 'easier'
         elif enough_hr and eff['pct'] <= -COST_PCT:
             text += ' Your heart rate was not lower, so the same work cost you more.'
-        return ('output_down', text, {'value': result['value'], 'usual': result['median'], 'unit': unit,
-                                      'foot': unit == 'mph', 'noun': noun})
+            facts['reason'] = 'cost_more'
+        return ('output_down', text, facts)
     if up:
         text = f'Strong {noun}: {usual} for {kind}.'
         if enough_hr and eff['pct'] >= COST_PCT:
             text += ' You got more out of every heartbeat than usual.'
-        return ('output_up', text, {'value': result['value'], 'usual': result['median'], 'unit': unit,
-                                    'foot': unit == 'mph', 'noun': noun})
-    facts = {'value': result['value'], 'usual': result['median'], 'unit': unit, 'foot': unit == 'mph', 'noun': noun}
+            facts['reason'] = 'efficient'
+        return ('output_up', text, facts)
+    facts['close'] = abs(result['pct']) < BIG_CHANGE_PCT
     if abs(result['pct']) < BIG_CHANGE_PCT:
         if filled:
             return ('in_line', f"Good {noun}, right in line with {kind}: {_fmt(result['value'], unit)} "
@@ -269,12 +273,15 @@ def effort_insight(target, group):
         return None
     noun = NOUN[target['disc']]
     above = sum(1 for v in values if v > mine)  # strictly: a tie is neither hardest nor easiest
+    # Strive per minute of class, today and the peers' median, for the board's bars.
+    facts = {'n': result['n'], 'value': target['strive'], 'noun': noun, 'rate': mine * 60,
+             'usual_rate': statistics.median(values) * 60}
     if result['below'] == result['n']:
         return ('effort_high', f"Hardest {noun} of this kind by heart rate in your last {result['n']}: "
-                               f"Strive {target['strive']:.1f}.", {'n': result['n'], 'value': target['strive']})
+                               f"Strive {target['strive']:.1f}.", facts)
     if above == result['n']:
         return ('effort_low', f"Easiest {noun} of this kind by heart rate in your last {result['n']}: "
-                              f"Strive {target['strive']:.1f}.", {'n': result['n'], 'value': target['strive']})
+                              f"Strive {target['strive']:.1f}.", facts)
     return None
 
 

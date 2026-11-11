@@ -679,7 +679,8 @@ def facts_of(result, code):
 def test_output_facts_match_the_sentence():
     result = run_bike(124, [188] * 5)
     f = facts_of(result, 'output_down')
-    assert f == {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride'}
+    assert f == {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 5, 'real': 5,
+                 'reason': None}
     assert f'{number(f["value"], f["unit"])} W in the work segments against your usual {number(f["usual"], f["unit"])} W' \
         in text(result, 'output_down')
     result = run_bike(205, [180] * 5)
@@ -753,10 +754,49 @@ def _missed():
 
 def test_effort_facts_match_the_sentence():
     result = effort(20, [10, 11, 12, 13, 14])
-    assert facts_of(result, 'effort_high') == {'n': 5, 'value': 20}
+    # The rows' class is 1200 s, so Strive per minute is Strive / 20.
+    assert facts_of(result, 'effort_high') == {'n': 5, 'value': 20, 'noun': 'ride', 'rate': pytest.approx(1.0),
+                                               'usual_rate': pytest.approx(0.6)}
     assert 'last 5: Strive 20.0.' in text(result, 'effort_high')
     result = effort(5, [10, 11, 12, 13, 14])
-    assert facts_of(result, 'effort_low') == {'n': 5, 'value': 5}
+    assert facts_of(result, 'effort_low') == {'n': 5, 'value': 5, 'noun': 'ride', 'rate': pytest.approx(0.25),
+                                              'usual_rate': pytest.approx(0.6)}
+
+
+def test_effort_usual_rate_is_the_real_peers_median_per_minute():
+    target = ride(0, 100, strive=40, dur=1800)
+    peers = [ride(i + 1, 100, strive=s, dur=1800) for i, s in enumerate([15, 18, 30, 27, 15])]
+    f = facts_of(insights(target, [target] + peers), 'effort_high')
+    assert f['rate'] == pytest.approx(40 / 30)
+    assert f['usual_rate'] == pytest.approx(0.6)  # 0.5, 0.6, 1.0, 0.9, 0.5 a minute
+
+
+def test_output_reason_facts_follow_the_sentence():
+    assert facts_of(easy_down(96, 100), 'output_down')['reason'] == 'easier'
+    assert facts_of(easy_down(100, 92), 'output_down')['reason'] == 'cost_more'
+    assert facts_of(easy_down(96.1, 100), 'output_down')['reason'] is None
+    assert facts_of(easy_down(90, 80, n_hr=4), 'output_down')['reason'] is None
+    peers = peers_of([100, 100, 100, 100, 120], hr=100, eff=100)
+    target = ride(0, 110, hr=100, eff=108)
+    assert facts_of(insights(target, [target] + peers), 'output_up')['reason'] == 'efficient'
+    target = ride(0, 110, hr=100, eff=107.9)
+    assert facts_of(insights(target, [target] + peers), 'output_up')['reason'] is None
+
+
+def test_in_line_close_fact_splits_the_two_wordings():
+    target = ride(0, 91)
+    close = facts_of(insights(target, [target] + peers_of([100] * 5)), 'in_line')
+    assert close['close'] is True and close['reason'] is None and (close['n'], close['real']) == (5, 5)
+    target = ride(0, 85)
+    wide = insights(target, [target] + peers_of([100, 100, 100, 60, 60]))
+    assert 'inside your usual range' in text(wide, 'in_line')
+    assert facts_of(wide, 'in_line')['close'] is False
+
+
+def test_group_size_facts_count_the_fill_ins_apart():
+    target, rows = fill_case(80, [100] * 3, [100] * 2)
+    f = facts_of(insights(target, rows), 'output_down')
+    assert (f['n'], f['real']) == (5, 3)
 
 
 def test_count_facts_and_empty_facts():

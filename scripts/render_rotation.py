@@ -107,9 +107,10 @@ def load_snapshot_for(options):
     if snapshot is None:
         raise SystemExit(f'Could not read a dashboard cache from {options.cache}')
     snapshot.setdefault('status', 'ready')
-    if not insights_enabled(options):
-        for summary in snapshot.get('summaries') or []:
-            summary.pop('insight', None)
+    for summary in snapshot.get('summaries') or []:
+        summary.pop('insight', None)  # version 2's single insight, as the dashboard drops it
+        if not insights_enabled(options):
+            summary.pop('insights', None)
     add_log_figures(snapshot, options)
     return snapshot
 
@@ -253,7 +254,7 @@ def main(argv=None):
     parser.add_argument('--log', help='Workout log JSON (default: beside --cache)')
     parser.add_argument('--config', help="config.json whose journey route to show (default: built-in route)")
     parser.add_argument('--insights', action='store_true',
-                        help='Show the workout-compare insight slide (as display.workout_insights does)')
+                        help='Show the workout-compare insight frames (as display.workout_insights does)')
     parser.add_argument('--height', type=int, choices=(32, 64), default=32)
     parser.add_argument('--username', help='Name to show on the username page')
     parser.add_argument('--rival', help="Second rider's dashboard cache, for the versus page")
