@@ -102,6 +102,12 @@ class Dashboard:
         self._rows = None
         self._rows_lock = threading.Lock()
         self._insight_failed = {}
+        # A settling workout's detail and class details, kept so each refresh in its first hour can rebuild
+        # its row with the new performance graph without fetching them again; dropped after one last rebuild.
+        self._insight_settling = {}
+        # {workout ID: (store generation, views)}: insights are recomputed only when the row store changed.
+        self._insight_views = {}
+        self._rows_generation = 0
         self._profile_checked_at = None
         self._derive_args = None
         # Log figures are computed under the log lock but published later; the
@@ -360,10 +366,14 @@ class Dashboard:
     def _workout_insight(self, client, workout, perf, settling):
         """The board's views (insight_lines.board_view) comparing this workout with similar earlier ones, or None.
 
-        The class and workout detail are fetched once per workout (the row is then stored); the
-        insight itself is recomputed each refresh, since the peers change. Only a 401 escapes."""
+        From the first refresh that sees the workout COMPLETE: the workout and class details are fetched
+        once and the row built. While the workout is still settling (its first hour, when the performance
+        graph is refetched each refresh), each refresh rebuilds the row from the kept details and the new
+        graph, and logs when the row changed; the first refresh after the hour rebuilds it one last time.
+        The views are recomputed only when the row store changed (a new or rebuilt row, or a reload):
+        peers are earlier workouts, so nothing else moves them. Only a 401 escapes."""
         identity = workout.get('id')
-        if (not identity or settling or workout.get('status') != 'COMPLETE'
+        if (not identity or workout.get('status') != 'COMPLETE'
                 or row_discipline(workout.get('fitness_discipline')) not in INSIGHT_DISCIPLINES):
             return None
         try:
@@ -372,24 +382,44 @@ class Dashboard:
                     self._rows = RowStore.load(default_rows_path(self.cache_path))
                     # Rows older than any baseline reads are dropped, so the store stays its seeded size.
                     self._rows.rows = trim_for_board(self._rows.rows, time.time())
+                    self._rows_generation += 1
                 store = self._rows
-                if not store.is_current(identity):
-                    failed_at = self._insight_failed.get(identity)
-                    if failed_at is not None and time.monotonic() - failed_at < INSIGHT_RETRY_SECONDS:
-                        return None
-                    detail = client.get_workout_detail(identity)
-                    if not isinstance(detail, dict) or not detail.get('id') or detail.get('status') != 'COMPLETE':
-                        self._insight_failed[identity] = time.monotonic()
-                        return None
-                    ride_id = (detail.get('ride') or {}).get('id')
-                    ride = client.get_ride_details(ride_id) if ride_id else None
-                    store.upsert(build_row(detail, perf, ride))
+                kept = self._insight_settling.get(identity)
+                if not store.is_current(identity) or kept:
+                    if kept:
+                        detail, ride = kept
+                    else:
+                        failed_at = self._insight_failed.get(identity)
+                        if failed_at is not None and time.monotonic() - failed_at < INSIGHT_RETRY_SECONDS:
+                            return None
+                        detail = client.get_workout_detail(identity)
+                        if not isinstance(detail, dict) or not detail.get('id') or detail.get('status') != 'COMPLETE':
+                            self._insight_failed[identity] = time.monotonic()
+                            return None
+                        ride_id = (detail.get('ride') or {}).get('id')
+                        ride = client.get_ride_details(ride_id) if ride_id else None
+                    row = build_row(detail, perf, ride)
+                    if kept and store.rows.get(identity) != row:
+                        logger.info('Workout %s changed while settling', identity[:8])
+                    store.upsert(row)
+                    self._rows_generation += 1
                     self._insight_failed.pop(identity, None)
+                    if settling:
+                        self._insight_settling[identity] = (detail, ride)
+                    else:
+                        self._insight_settling.pop(identity, None)
                     try:
                         store.save()
                     except OSError as exc:
                         logger.warning('Could not save the workout rows (%s)', type(exc).__name__)
-                return board_insights(insights(store.rows[identity], store.current_rows())) or None
+                cached = self._insight_views.get(identity)
+                if cached and cached[0] == self._rows_generation:
+                    return cached[1]
+                views = board_insights(insights(store.rows[identity], store.current_rows())) or None
+                if cached and cached[1] != views:
+                    logger.info('Workout %s insights changed', identity[:8])
+                self._insight_views[identity] = (self._rows_generation, views)
+                return views
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 401:
                 raise

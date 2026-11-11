@@ -648,8 +648,8 @@ def test_real_row_building_end_to_end_gives_a_resistance_insight(tmp_path):
     assert dashboard._rows.is_current('w1')
 
 
-def test_settling_or_unfinished_or_other_discipline_workouts_get_none_and_no_calls(tmp_path):
-    for kwargs in ({'age_days': 0}, {'status': 'IN_PROGRESS'}, {'discipline': 'yoga'}):
+def test_unfinished_or_other_discipline_workouts_get_none_and_no_calls(tmp_path):
+    for kwargs in ({'status': 'IN_PROGRESS'}, {'discipline': 'yoga'}):
         folder = tmp_path / str(sorted(kwargs.items()))
         folder.mkdir()
         dashboard, client, _ = _insight_setup(folder, **kwargs)
@@ -657,6 +657,55 @@ def test_settling_or_unfinished_or_other_discipline_workouts_get_none_and_no_cal
         # (an unfinished workout never reaches the summaries at all)
         assert all('insights' not in summary for summary in dashboard.snapshot()['summaries'])
         client.get_workout_detail.assert_not_called()
+
+
+def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_then_stops(tmp_path, caplog):
+    import logging
+    from datetime import datetime, timezone
+    caplog.set_level(logging.INFO, logger='peloton-led.dashboard')
+    dashboard, client, _ = _insight_setup(tmp_path, age_days=0)  # just finished: still settling
+    _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
+    rows = iter([_fake_row('w1', 112), _fake_row('w1', 112), _fake_row('w1', 150), _fake_row('w1', 150)])
+    with patch('peloton.dashboard.build_row', side_effect=lambda *_: next(rows)) as build:
+        dashboard.refresh()
+        assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'  # no hour's wait
+        dashboard.refresh()
+        assert build.call_count == 2  # rebuilt from the kept details and the refetched graph
+        assert 'changed while settling' not in caplog.text
+        dashboard.refresh()
+        assert 'Workout w1 changed while settling' in caplog.text
+        assert 'Workout w1 insights changed' in caplog.text
+        assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'output_up'
+        # The hour is over: one last rebuild, then the row and its insights stay as they are.
+        client.history[0]['start_time'] = datetime.now(timezone.utc).timestamp() - 2 * 3600
+        dashboard.refresh()
+        assert build.call_count == 4
+        dashboard.refresh()
+        dashboard.refresh()
+        assert build.call_count == 4
+    # The details were fetched once, however many rebuilds.
+    assert client.get_workout_detail.call_count == 1
+    assert client.get_ride_details.call_count == 1
+    assert dashboard._insight_settling == {}
+
+
+def test_insights_are_recomputed_only_when_the_row_store_changes(tmp_path):
+    from peloton.workout_insights import insights as real_insights
+    dashboard, client, token = _insight_setup(tmp_path)
+    _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
+    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)), \
+            patch('peloton.dashboard.insights', side_effect=real_insights) as computed:
+        for _ in range(3):
+            dashboard.refresh()
+        assert computed.call_count == 1
+        assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'
+        # A restarted board computes once from the stored row, with no API calls.
+        again = Dashboard(token, {'workout_insights': True}, client_factory=lambda _: client)
+        again.refresh()
+        again.refresh()
+        assert computed.call_count == 2
+    assert client.get_workout_detail.call_count == 1
+    assert again.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'
 
 
 def test_a_missing_detail_gives_no_insight_and_is_not_refetched(tmp_path):
