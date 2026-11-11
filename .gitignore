@@ -20,3 +20,11 @@ coverage.xml
 htmlcov/
 .DS_Store
 perf_graphs/
+
+# Workout compare: raw API pulls, per-rider row stores, ratings cache (never committed)
+training-data/
+*.workout-rows.json
+ride-ratings-cache.json
+
+# Real-row fixtures for the workout-compare expectations (scripts/export_compare_fixtures.py); private
+tests/fixtures/workout_compare/real-rows.json
