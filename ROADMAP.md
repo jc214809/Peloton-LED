@@ -12,6 +12,7 @@ Name page facts engine ── steps 1-6 built; retune weights on real logs (firs
 Workout graphs ── research first; builds on `performance_graph` in peloton/summaries.py and the workout pages
 Name page together facts ── after the facts engine; shares figures with item 6 (head to head)
 Name page facts settings and log fields ── maybe; after the facts engine
+Workout compare: Cardio classes ── independent (workout compare is on develop-beta, #81/#82)
 ```
 
 Suggested order: facts-engine step 1, then 6, then the remaining steps. Item 6 adds frames to a screen that shares its page time across frames (`peloton/screen_times.py`), so more stats mean a longer minimum page. Icon touch-ups whenever Joel has time.
@@ -109,6 +110,29 @@ Facts about both riders on a two-rider board (`TOGETHER` / `31 WORKOUTS`, `BOTH 
 ### Name page: facts settings and new log fields (maybe; was facts-engine step 8)
 Settings-page switches for whole kinds of facts (no comparisons, no events), not one per fact; new log fields (live vs on-demand, class type) only if a fact needs them, with one `LOG_VERSION` bump. Ask before starting.
 - Depends on: the facts engine.
+
+### Workout compare: Cardio classes
+Cardio (HIIT, Low Impact, Dance and Family Cardio) is outside workout compare today (`workout_compare.DISCIPLINES`). It has no output, speed, callouts or weights, only heart rate, so the one rule that could apply is the heart-rate effort one (`effort_insight`: Strive per minute against similar classes, "hardest" / "easiest of your last N").
+
+Tried as-is on 2026-11-11 (Cardio added to `DISCIPLINES` in a scratch run over the Mac's row stores, last 12 months):
+
+| | Joel | Jen |
+|---|---|---|
+| Cardio classes | 13 (93 all time) | 11 (41 all time) |
+| With Strive | 12 | 11 |
+| Would get an insight | 1 (`effort_high`) | 0 |
+| `too_few` | 5 | 10 |
+| `nothing` | 4 | 1 |
+| `freestyle` | 3 | 0 |
+
+Too few peers: "similar" needs the same class type and a length within 30%, and these classes spread over five types (Joel) or several lengths (Jen's are nearly all Low Impact Cardio).
+
+The idea: loosen "similar" for Cardio only, comparing every Cardio class with every other by Strive per minute, any type and length, so each gets "hardest / easiest Cardio class of your last N by heart rate" or an "about your usual effort" line.
+- Decide first whether an "about your usual" line is worth showing (today `effort_insight` only speaks at the extremes, and the board shows nothing otherwise).
+- Rules in `peloton/workout_compare.py` (a Cardio peer rule beside `is_peer`) and `peloton/workout_insights.py` (`NOUN`, and whatever the "usual" line needs); board wording in `peloton/insight_lines.board_view` (headline, sentence, `STRIVE PER MIN` bars, footer such as `12 CARDIO CLASSES`). Tests on hand-made rows, plus the real-row fixture if it gains Cardio workouts.
+- Board rows: `build_board_rows.py` / `trim_for_board` keep only `DISCIPLINES`, so the boards need a re-push (`scripts/push_workout_rows.sh`) once Cardio is in. No `ROW_VERSION` bump: the rows already carry Strive and length.
+- Worth it? About one Cardio class a month each, so it's small. Re-run the scratch count before starting.
+- Depends on: nothing.
 
 ## Joel, by hand
 
