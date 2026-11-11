@@ -195,6 +195,16 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   with the name and percent in white over them. Unlike the graph and zones
   slides it keeps the heart-rate/calorie row.
 
+### Insight slide (both boards, `display.workout_insights`, 2026-11-11)
+- Last slide of a workout page when the board has an insight for it (workout compare). Two lines under
+  the discipline: the headline in the label grey, the detail in the discipline colour; holds 1 s longer.
+  A detail line wider than the panel (a movement name such as `WIDE GRIP BENT OVER ROW`) scrolls like the
+  name page's highlights (hold, glide, hold; `UsernameScreen.scroll_offset`), the 2-px margins blanked.
+- 64x64: lines at the normal stat's label row and value row; the detail uses the `info` font when it fits
+  60 px, else `stats`, else scrolls in `stats`. The heart-rate/calorie row stays.
+- 64x32: both lines in the 4x6 `stats` font, headline on baseline 15, detail on 23; the heart-rate/calorie
+  row stays (as on the muscles slide). Every other frame is unchanged on both boards.
+
 ### Journey: miles by type (both boards, requested 2026-11-08)
 Joel found the 64x64 journey page showed less than the 64x32 one: no percent,
 and on the way home it still listed Columbus at the top and Disney World by

@@ -616,3 +616,99 @@ def test_script_import_raw_rebuild_saved_on_real_run(script, config, tmp_path, m
     assert run(script, config, tmp_path) == 0
     assert 'aaaaaaaa1' in RowStore.load(tmp_path / 'joel-cache.workout-rows.json').rows
     assert client.names('detail') == []
+
+
+# --- the board's store: trimming, scripts/build_board_rows.py ---------------------------
+
+def test_trim_for_board_drops_old_and_out_of_scope_without_mutating():
+    rows = {'new': {'id': 'new', 'disc': 'cycling', 'start': NOW - 86400},
+            'edge': {'id': 'edge', 'disc': 'strength', 'start': NOW - 760 * 86400},
+            'old': {'id': 'old', 'disc': 'cycling', 'start': NOW - 761 * 86400},
+            'yoga': {'id': 'yoga', 'disc': 'yoga', 'start': NOW - 86400},
+            'nostart': {'id': 'nostart', 'disc': 'cycling'}}
+    before = json.dumps(rows, sort_keys=True)
+    kept = workout_rows.trim_for_board(rows, NOW)
+    assert sorted(kept) == ['edge', 'new']
+    assert json.dumps(rows, sort_keys=True) == before and kept is not rows
+
+
+def test_current_rows_skips_old_versions():
+    store = RowStore('unused')
+    store.upsert({'id': 'a', 'v': ROW_VERSION})
+    store.upsert({'id': 'b', 'v': ROW_VERSION - 1})
+    store.upsert({'id': 'c'})
+    assert [r['id'] for r in store.current_rows()] == ['a']
+
+
+def test_board_store_trims_rows(tmp_path):
+    store = RowStore(tmp_path / 'mac.json')
+    store.upsert({'id': 'a', 'disc': 'strength', 'start': NOW - 100, 'ride_id': 'r1', 'v': ROW_VERSION})
+    store.upsert({'id': 'c', 'disc': 'strength', 'start': NOW - 900 * 86400, 'ride_id': 'r2'})
+    board = workout_rows.board_store(store, NOW, tmp_path / 'board.json')
+    assert sorted(board.rows) == ['a'] and board.path == tmp_path / 'board.json'
+    assert sorted(store.rows) == ['a', 'c']
+    board.save()
+    assert set(json.loads(board.path.read_text())) == {'version', 'rows'}
+
+
+@pytest.fixture
+def board_script():
+    path = Path(__file__).resolve().parents[1] / 'scripts' / 'build_board_rows.py'
+    spec = importlib.util.spec_from_file_location('build_board_rows_script', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_build_board_rows_script_list_and_out(board_script, config, tmp_path, capsys):
+    # The board's file is named from the board's config, not this computer's (they differ in real use).
+    board_config = tmp_path / 'board-config.json'
+    board_config.write_text(json.dumps({'users': [
+        {'name': 'Joel', 'token_path': '/var/lib/peloton-led/cookies-joel.txt',
+         'cache_path': '/var/lib/peloton-led/dashboard-cache-joel.json'}]}))
+    assert board_script.main(['--config', str(config), '--board-config', str(board_config), '--list']) == 0
+    assert capsys.readouterr().out == 'joel\tdashboard-cache-joel.workout-rows.json\n'
+    with pytest.raises(SystemExit, match='No rider named'):
+        board_config.write_text(json.dumps({'users': [{'name': 'Jen', 'token_path': 't.txt'}]}))
+        board_script.main(['--config', str(config), '--board-config', str(board_config), '--list'])
+    seed_raw(tmp_path, 'aaaaaaaa1')
+    out = tmp_path / 'out' / 'rows.json'
+    now = START + 86400
+    assert board_script.main(['--rider', 'joel', '--config', str(config), '--raw-dir', str(tmp_path / 'raw'),
+                              '--out', str(out), '--now', str(now)]) == 0
+    board = RowStore.load(out)
+    assert list(board.rows) == ['aaaaaaaa1']
+    assert stat.S_IMODE(os.stat(out).st_mode) == 0o600
+    # The Mac store was brought up to date from the saved files too.
+    assert 'aaaaaaaa1' in RowStore.load(tmp_path / 'joel-cache.workout-rows.json').rows
+
+
+def test_build_board_rows_script_argument_errors(board_script, config, tmp_path):
+    with pytest.raises(SystemExit):
+        board_script.main(['--config', str(config), '--rider', 'joel'])
+    with pytest.raises(SystemExit, match='No rider named'):
+        board_script.main(['--config', str(config), '--rider', 'x', '--out', str(tmp_path / 'o')])
+    empty = tmp_path / 'empty.json'
+    empty.write_text('{}')
+    with pytest.raises(SystemExit, match='No riders'):
+        board_script.main(['--config', str(empty), '--board-config', str(config), '--list'])
+
+
+def test_script_last_prints_the_newest_workouts_with_their_board_line(script, config, tmp_path, monkeypatch,
+                                                                     capsys):
+    no_client(script, monkeypatch)
+    seed_raw(tmp_path, 'aaaaaaaa1', 'bbbbbbbb2', 'cccccccc3')
+    assert run(script, config, tmp_path, '--dry-run', '--last', '2') == 0
+    out = capsys.readouterr().out
+    assert out.count('board: (no slide)') == 2      # too few similar workouts: the board says nothing
+    assert sum(wid in out for wid in ('aaaaaaaa', 'bbbbbbbb', 'cccccccc')) == 2
+
+
+def test_script_describe_shows_the_board_slide(script):
+    row = {'id': 'abcdef123', 'date': '2026-11-10', 'title': '30 min Ride', 'disc': 'cycling'}
+    messages = [('too_few', 'Not enough.', {}),
+                ('resistance_low', 'Turn the resistance up.', {'pct': 28})]
+    script.insights = lambda target, rows: messages
+    assert script.describe(row, []).splitlines() == [
+        '2026-11-10 30 min Ride (abcdef12)', '  [too_few] Not enough.',
+        '  [resistance_low] Turn the resistance up.', '  board: RESISTANCE LOW / 28% UNDER']

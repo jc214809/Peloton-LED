@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 import json
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import stat
@@ -569,3 +570,186 @@ def test_the_anniversary_comes_from_the_profile_in_the_derived_figures(tmp_path)
     with patch('peloton.workout_log.WorkoutLog.derived', return_value={}) as derived:
         dashboard.refresh()
     assert derived.call_args.kwargs['member_since'] == 1604844000
+
+
+# --- Workout compare on the board (display.workout_insights) ---
+
+def _insight_setup(tmp_path, config=None, discipline='cycling', status='COMPLETE', age_days=7):
+    from datetime import datetime, timedelta, timezone
+    dashboard, client, token = setup_dashboard(tmp_path, {'workout_insights': True} if config is None else config)
+    start = datetime.now(timezone.utc) - timedelta(days=age_days)
+    client.history = [{'id': 'w1', 'status': status, 'start_time': start.timestamp(),
+                       'fitness_discipline': discipline}]
+    client.get_perf_graph.return_value = {'duration': 1200}
+    client.get_workout_detail.return_value = {'id': 'w1', 'status': 'COMPLETE', 'start_time': 1, 'ride': {'id': 'r1'}}
+    client.get_ride_details.return_value = {'ride': {}}
+    return dashboard, client, token
+
+
+def _fake_row(workout_id='w1', output=112):
+    from peloton.workout_features import ROW_VERSION
+    return {'id': workout_id, 'v': ROW_VERSION, 'start': 1_800_000_000, 'disc': 'cycling', 'wtype': 'class',
+            'ctype': 'Music', 'mode': 'plain', 'outdoor': False, 'dur': 1200, 'complete': True,
+            'work': {'output': output, 'heart_rate': None}, 'eff': None, 'strive': None,
+            'target_under': None, 'pace_fit': None, 'sets': None, 'plan': None, 'arms_sections': 0}
+
+
+def _seed_peers(dashboard, outputs):
+    from peloton.workout_rows import RowStore, default_rows_path
+    store = RowStore(default_rows_path(dashboard.cache_path))
+    for i, output in enumerate(outputs):
+        row = _fake_row(f'p{i}', output)
+        row['start'] -= (i + 1) * 86400
+        store.upsert(row)
+    store.save()
+
+
+def test_new_workout_fetches_detail_and_ride_once_and_gets_an_insight(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
+    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)) as build:
+        dashboard.refresh()
+        summary = dashboard.snapshot()['summaries'][0]
+        assert summary['insight']['code'] == 'in_line'
+        assert len(summary['insight']['lines']) == 2
+        assert client.get_workout_detail.call_count == 1
+        client.get_ride_details.assert_called_once_with('r1')
+        assert build.call_args.args[1] == {'duration': 1200}
+        dashboard.refresh()
+        assert dashboard.snapshot()['summaries'][0]['insight']['code'] == 'in_line'
+    assert client.get_workout_detail.call_count == 1
+    assert client.get_ride_details.call_count == 1
+    # The row was saved, so a restarted board makes no calls either.
+    again = Dashboard(dashboard.token_path, {'workout_insights': True}, client_factory=lambda _: client)
+    again.refresh()
+    assert client.get_workout_detail.call_count == 1
+    assert again.snapshot()['summaries'][0]['insight']['code'] == 'in_line'
+
+
+def test_a_detail_without_a_class_makes_no_ride_call(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    client.get_workout_detail.return_value = {'id': 'w1', 'status': 'COMPLETE', 'start_time': 1}
+    with patch('peloton.dashboard.build_row', return_value=_fake_row()), \
+            patch('peloton.dashboard.insights', return_value=[('nothing', '', {})]):
+        dashboard.refresh()
+    client.get_ride_details.assert_not_called()
+    assert 'insight' not in dashboard.snapshot()['summaries'][0]
+
+
+def test_real_row_building_end_to_end_gives_a_resistance_insight(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    client.get_workout_detail.return_value = {
+        'id': 'w1', 'status': 'COMPLETE', 'start_time': 1_800_000_000, 'end_time': 1_800_001_200,
+        'fitness_discipline': 'cycling', 'timezone': 'UTC', 'ride': {'id': 'r1', 'duration': 1200}}
+    dashboard.refresh()
+    # Whatever the rules say about this bare workout, the refresh survived and stored a row.
+    assert dashboard._rows.is_current('w1')
+
+
+def test_settling_or_unfinished_or_other_discipline_workouts_get_none_and_no_calls(tmp_path):
+    for kwargs in ({'age_days': 0}, {'status': 'IN_PROGRESS'}, {'discipline': 'yoga'}):
+        folder = tmp_path / str(sorted(kwargs.items()))
+        folder.mkdir()
+        dashboard, client, _ = _insight_setup(folder, **kwargs)
+        dashboard.refresh()
+        # (an unfinished workout never reaches the summaries at all)
+        assert all('insight' not in summary for summary in dashboard.snapshot()['summaries'])
+        client.get_workout_detail.assert_not_called()
+
+
+def test_a_missing_detail_gives_no_insight_and_is_not_refetched(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    client.get_workout_detail.return_value = None
+    dashboard.refresh()
+    dashboard.refresh()
+    assert 'insight' not in dashboard.snapshot()['summaries'][0]
+    assert client.get_workout_detail.call_count == 1
+    # After the retry window it asks again.
+    dashboard._insight_failed['w1'] -= 3601
+    dashboard.refresh()
+    assert client.get_workout_detail.call_count == 2
+
+
+def test_an_unfinished_detail_is_retried_later_not_every_refresh(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    client.get_workout_detail.return_value = {'id': 'w1', 'status': 'IN_PROGRESS'}
+    dashboard.refresh()
+    dashboard.refresh()
+    assert client.get_workout_detail.call_count == 1
+
+
+def test_an_insight_failure_never_fails_the_refresh(tmp_path, caplog):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    client.get_workout_detail.side_effect = requests.ConnectionError('boom')
+    dashboard.refresh()
+    snapshot = dashboard.snapshot()
+    assert snapshot['status'] == 'ready'
+    assert 'insight' not in snapshot['summaries'][0]
+    assert 'Workout insight failed (ConnectionError)' in caplog.text
+    client.get_workout_detail.side_effect = None
+    client.get_workout_detail.return_value = {'id': 'w1', 'status': 'COMPLETE'}  # no start_time: build_row raises
+    dashboard._insight_failed.clear()
+    dashboard.refresh()
+    assert dashboard.snapshot()['status'] == 'ready'
+
+
+def test_an_unauthorized_detail_is_a_login_problem(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    response = Mock(status_code=401)
+    client.get_workout_detail.side_effect = requests.HTTPError(response=response)
+    dashboard.refresh()
+    assert dashboard.login_required
+
+
+def test_other_http_errors_in_the_insight_are_swallowed(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    client.get_workout_detail.side_effect = requests.HTTPError(response=Mock(status_code=500))
+    dashboard.refresh()
+    assert dashboard.snapshot()['status'] == 'ready'
+    assert not dashboard.login_required
+
+
+def test_a_failing_row_save_is_logged_and_the_insight_still_shows(tmp_path, caplog):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
+    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)), \
+            patch('peloton.workout_rows.RowStore.save', side_effect=OSError('read-only')):
+        dashboard.refresh()
+    assert 'Could not save the workout rows' in caplog.text
+    assert dashboard.snapshot()['summaries'][0]['insight']['code'] == 'in_line'
+
+
+def test_switch_off_makes_no_extra_calls_and_loads_no_store(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path, config={})
+    dashboard.refresh()
+    assert 'insight' not in dashboard.snapshot()['summaries'][0]
+    client.get_workout_detail.assert_not_called()
+    client.get_ride_details.assert_not_called()
+    assert dashboard._rows is None
+
+
+def test_the_cache_keeps_the_insight_and_a_switched_off_board_strips_it(tmp_path):
+    dashboard, client, token = _insight_setup(tmp_path)
+    _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
+    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)):
+        dashboard.refresh()
+    on = Dashboard(token, {'workout_insights': True}, client_factory=lambda _: client)
+    assert on.snapshot()['summaries'][0]['insight']['code'] == 'in_line'
+    off = Dashboard(token, {}, client_factory=lambda _: client)
+    assert 'insight' not in off.snapshot()['summaries'][0]
+    assert off.snapshot()['summaries'][0]['workout_id'] == 'w1'
+
+
+def test_the_board_store_drops_rows_past_the_window_when_it_loads(tmp_path):
+    dashboard, client, _ = _insight_setup(tmp_path)
+    _seed_peers(dashboard, [110, 111, 112, 113, 114])
+    from peloton.workout_rows import RowStore, default_rows_path
+    store = RowStore.load(default_rows_path(dashboard.cache_path))
+    old = _fake_row('old')
+    old['start'] = time.time() - 800 * 86400
+    store.upsert(old)
+    store.save()
+    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)):
+        dashboard.refresh()
+    saved = RowStore.load(default_rows_path(dashboard.cache_path))
+    assert 'old' not in saved.rows and {'p0', 'w1'} <= set(saved.rows)

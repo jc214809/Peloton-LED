@@ -1,12 +1,14 @@
 """Workout compare: the plain messages for one workout (spec section 5).
 
 No model: every message is a rule over the target's row and its peers' rows. Standard library only.
-`insights(target, rows)` returns at most MAX_MESSAGES (code, text) pairs, never none.
+`insights(target, rows)` returns at most MAX_MESSAGES (code, text, facts) triples, never none. `facts` holds the
+numbers the text was built from (raw, unrounded; `insight_lines.number` rounds them for text and board alike).
 """
 import collections
 import statistics
 
 from . import workout_compare as compare
+from .insight_lines import number
 
 MAX_MESSAGES = 3
 # Output / speed against peers
@@ -41,7 +43,7 @@ def plural(noun):
 
 
 def _fmt(value, unit):
-    return f'{value:.0f} {unit}' if unit == 'W' else f'{value:.1f} {unit}'
+    return f'{number(value, unit)} {unit}'
 
 
 def counted_sets(row):
@@ -111,21 +113,24 @@ def output_insight(target, group, real):
             text += ' Your heart rate was lower too, so it looks like an easier effort.'
         elif enough_hr and eff['pct'] <= -COST_PCT:
             text += ' Your heart rate was not lower, so the same work cost you more.'
-        return ('output_down', text)
+        return ('output_down', text, {'value': result['value'], 'usual': result['median'], 'unit': unit,
+                                      'foot': unit == 'mph', 'noun': noun})
     if up:
         text = f'Strong {noun}: {usual} for {kind}.'
         if enough_hr and eff['pct'] >= COST_PCT:
             text += ' You got more out of every heartbeat than usual.'
-        return ('output_up', text)
+        return ('output_up', text, {'value': result['value'], 'usual': result['median'], 'unit': unit,
+                                    'foot': unit == 'mph', 'noun': noun})
+    facts = {'value': result['value'], 'usual': result['median'], 'unit': unit, 'foot': unit == 'mph', 'noun': noun}
     if abs(result['pct']) < BIG_CHANGE_PCT:
         if filled:
             return ('in_line', f"Good {noun}, right in line with {kind}: {_fmt(result['value'], unit)} "
-                               f"against a usual {_fmt(result['median'], unit)}.")
+                               f"against a usual {_fmt(result['median'], unit)}.", facts)
         return ('in_line', f"Good {noun}, right in line with your other {plural(noun)} like it "
-                           f"({_fmt(result['value'], unit)} against a usual {_fmt(result['median'], unit)}).")
+                           f"({_fmt(result['value'], unit)} against a usual {_fmt(result['median'], unit)}).", facts)
     if filled:
-        return ('in_line', f'A normal {noun} for you: {usual} for {kind}, inside your usual range.')
-    return ('in_line', f'A normal {noun} for you: {usual}, inside your usual range.')
+        return ('in_line', f'A normal {noun} for you: {usual} for {kind}, inside your usual range.', facts)
+    return ('in_line', f'A normal {noun} for you: {usual}, inside your usual range.', facts)
 
 
 # 5.2 Callouts
@@ -137,14 +142,16 @@ def callout_insights(target):
     if target['disc'] in compare.BIKE:
         if under.get('resistance', 0) >= RESISTANCE_UNDER_PCT:
             out.append(('resistance_low', 'Turn the resistance up in the work segments: you were under the '
-                                          f"callout range {under['resistance']}% of the time."))
+                                          f"callout range {under['resistance']}% of the time.",
+                    {'pct': under['resistance']}))
         if under.get('cadence', 0) >= CADENCE_UNDER_PCT:
             out.append(('cadence_low', 'Pick the cadence up in the work segments: you were under the '
-                                       f"callout range {under['cadence']}% of the time."))
+                                       f"callout range {under['cadence']}% of the time.",
+                    {'pct': under['cadence']}))
     fit = target.get('pace_fit')
     if target['disc'] in ('rowing', 'row_bootcamp', 'running') and fit and (fit[0] or 0) >= PACE_UNDER_PCT:
         out.append(('pace_low', f'You were under the pace target {fit[0]}% of the time: push the pace, '
-                                'or drop a pace level if that target is too fast.'))
+                                'or drop a pace level if that target is too fast.', {'pct': fit[0]}))
     return out
 
 
@@ -204,14 +211,15 @@ def strength_insights(target, rows):
     if target['disc'] != 'strength':
         return []
     if not target.get('sets'):
-        return [('no_tracker', 'No rep or weight data for this class, so only heart rate can be compared.')]
+        return [('no_tracker', 'No rep or weight data for this class, so only heart rate can be compared.', {})]
     out = []
     work = counted_sets(target)
     missed = [s for s in work if s['done'] < s['target']]
     if work and len(missed) / len(work) >= MISSED_SHARE and len(missed) >= MIN_MISSED:
         name = collections.Counter(s['name'] for s in missed).most_common(1)[0][0]
         out.append(('missed_targets', f'You came up short on {len(missed)} of {len(work)} sets, mostly '
-                                      f'{name}: drop a weight there next time.'))
+                                      f'{name}: drop a weight there next time.',
+                    {'missed': len(missed), 'sets': len(work), 'movement': name}))
 
     past = [_by_category(r) for r in _history(target, rows, CATEGORY_DAYS)]
     today = _by_category(target)
@@ -229,16 +237,22 @@ def strength_insights(target, rows):
             if mine <= usual - LIGHTER_LB and all_hit and ratio >= GO_UP_RATIO:
                 out.append(('go_up_lighter', f'Go up a weight on {name} next time: {mine:.0f} lb today against '
                                              f'{against}, and you beat the rep targets by '
-                                             f'{round((ratio - 1) * 100)}%.'))
+                                             f'{round((ratio - 1) * 100)}%.',
+                            {'movement': name, 'lb': mine, 'usual': usual, 'unit': 'lb', 'category': cat,
+                             'on_movement': on_movement, 'pct': round((ratio - 1) * 100)}))
                 continue
         if _streak(cat, sets, lb, past):
             out.append(('go_up_streak', f'Go up from {lb:.0f} lb on your {cat} weights next time: '
                                         f'{GO_UP_SESSIONS} classes in a row you beat every rep target '
-                                        f'by {round((GO_UP_RATIO - 1) * 100)}% or more.'))
+                                        f'by {round((GO_UP_RATIO - 1) * 100)}% or more.',
+                        {'lb': lb, 'unit': 'lb', 'category': cat, 'n': GO_UP_SESSIONS,
+                         'pct': round((GO_UP_RATIO - 1) * 100)}))
         elif found and mine >= usual + LIGHTER_LB and all_hit:
             what = f'on {name}' if on_movement else f'on your {cat} weights'
             out.append(('went_heavier', f'You went heavier {what} ({mine:.0f} lb against {against}) '
-                                        'and still hit every target. Keep that weight.'))
+                                        'and still hit every target. Keep that weight.',
+                        {'movement': name, 'lb': mine, 'usual': usual, 'unit': 'lb', 'category': cat,
+                         'on_movement': on_movement}))
     return out
 
 
@@ -257,21 +271,21 @@ def effort_insight(target, group):
     above = sum(1 for v in values if v > mine)  # strictly: a tie is neither hardest nor easiest
     if result['below'] == result['n']:
         return ('effort_high', f"Hardest {noun} of this kind by heart rate in your last {result['n']}: "
-                               f"Strive {target['strive']:.1f}.")
+                               f"Strive {target['strive']:.1f}.", {'n': result['n'], 'value': target['strive']})
     if above == result['n']:
         return ('effort_low', f"Easiest {noun} of this kind by heart rate in your last {result['n']}: "
-                              f"Strive {target['strive']:.1f}.")
+                              f"Strive {target['strive']:.1f}.", {'n': result['n'], 'value': target['strive']})
     return None
 
 
 def insights(target, rows):
-    """[(code, text)] for one workout: at most MAX_MESSAGES, in the order of spec section 5; never empty."""
+    """[(code, text, facts)] for one workout: at most MAX_MESSAGES, in the order of spec section 5; never empty."""
     if target['disc'] not in compare.DISCIPLINES:
-        return [('unsupported', 'No comparison for this kind of workout.')]
+        return [('unsupported', 'No comparison for this kind of workout.', {})]
     if not target['complete']:
-        return [('incomplete', 'This workout was cut short, so it is not compared.')]
+        return [('incomplete', 'This workout was cut short, so it is not compared.', {})]
     if target['wtype'] != 'class':
-        return [('freestyle', 'Freestyle workouts are not compared yet.')]
+        return [('freestyle', 'Freestyle workouts are not compared yet.', {})]
     callouts = callout_insights(target)
     strength = strength_insights(target, rows)
     # A class without a class type has no peers (spec section 4) but still gets the single-workout rules.
@@ -285,7 +299,7 @@ def insights(target, rows):
     noun = NOUN[target['disc']]
     if not out and real < compare.MIN_PEERS:
         return [('too_few', f'Not enough {plural(noun)} like this one to compare yet '
-                            f'({real} in the last two years, {compare.MIN_PEERS} needed).')]
+                            f'({real} in the last two years, {compare.MIN_PEERS} needed).', {'n': real, 'noun': noun})]
     if not out:
-        return [('nothing', f'Nothing stood out against your {real} similar {plural(noun)}.')]
+        return [('nothing', f'Nothing stood out against your {real} similar {plural(noun)}.', {'n': real, 'noun': noun})]
     return out[:MAX_MESSAGES]

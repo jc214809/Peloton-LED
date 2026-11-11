@@ -115,6 +115,14 @@ def test_saving_the_page_unchanged_keeps_a_config_that_loads_the_same(tmp_path, 
     assert same(load_config(after)) == same(load_config(before))
 
 
+def test_the_workout_insights_switch_is_config_only_and_survives_a_save():
+    config = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'workout_insights': True}}
+    new, problems = apply_form(config, posted(config))
+    assert problems == []
+    assert new['display']['workout_insights'] is True
+    assert 'workout_insights' not in page.settings_page(config)
+
+
 def test_keys_the_page_does_not_show_are_kept():
     new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS))
     assert problems == []

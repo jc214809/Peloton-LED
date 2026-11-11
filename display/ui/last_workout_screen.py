@@ -8,6 +8,7 @@ from display.display import get_text_width, loaded_fonts
 from utils import debug
 from .logo_art import ZONE_COLORS
 from .screen import Screen
+from .username import MARGIN as SCROLL_MARGIN, UsernameScreen
 
 _WHITE = graphics.Color(255, 255, 255)
 _GOLD  = graphics.Color(255, 215,   0)
@@ -262,7 +263,19 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
         stats.append({'label': 'hr zones', 'value': '', 'kind': 'zones'})
     if summary.get('muscles') and (summary.get('discipline') or '').strip().lower() in MUSCLE_DISCIPLINES:
         stats.append({'label': 'muscles worked', 'value': '', 'kind': 'muscles'})
+    if insight_lines(summary):
+        stats.append({'label': 'insight', 'value': '', 'kind': 'insight'})
     return stats
+
+
+def insight_lines(summary: dict):
+    """The workout's two insight lines (workout compare), or None: the cache could hold anything."""
+    insight = summary.get('insight')
+    lines = insight.get('lines') if isinstance(insight, dict) else None
+    if (isinstance(lines, list) and len(lines) == 2
+            and all(isinstance(line, str) and line.strip() for line in lines)):
+        return [line.strip().upper() for line in lines]
+    return None
 
 
 # Heart-rate zone colors, zone 1 first; also used to color graph columns.
@@ -400,6 +413,35 @@ _TROPHY_H = 7
 _TROPHY_COLORS = {'C': (255, 215, 0), 'B': (205, 145, 0)}
 
 
+def _draw_insight(matrix, lines: List[str], discipline: str, fonts, label_y: int, value_y: int,
+                  phase: float, hold: float) -> None:
+    """Workout compare: the headline in the label grey, then the detail in the discipline colour.
+
+    `fonts` is the candidates for the second line, widest first. When none fits the room, the
+    smallest scrolls as on the name page (hold, glide, hold), the margins blanked so the text
+    slides under them."""
+    w = matrix.width
+    room = w - 2 * SCROLL_MARGIN
+    first, second = lines
+    label_font = fonts[-1]
+    first = _truncate(label_font, first, room)
+    _draw_text(matrix, label_font, max((w - _text_width(label_font, first)) // 2, SCROLL_MARGIN),
+               label_y, graphics.Color(*_LABEL_GREY), first)
+    font = next((f for f in fonts if get_text_width(f, second) <= room), fonts[-1])
+    overflow = get_text_width(font, second) - room
+    color = _disc_color(discipline)
+    if overflow <= 0:
+        graphics.DrawText(matrix, font, max((w - get_text_width(font, second)) // 2, SCROLL_MARGIN),
+                          value_y, color, second)
+        return
+    offset = UsernameScreen.scroll_offset(overflow, phase, hold)
+    graphics.DrawText(matrix, font, SCROLL_MARGIN - offset, value_y, color, second)
+    height = getattr(font, 'height', 8)
+    for y in range(value_y - height, value_y + 3):
+        for x in list(range(0, SCROLL_MARGIN)) + list(range(w - SCROLL_MARGIN, w)):
+            matrix.SetPixel(x, y, 0, 0, 0)
+
+
 def _draw_trophy(matrix, x: int, y: int) -> None:
     """Draw the PR trophy with its top-left at (x, y)."""
     for dy, row in enumerate(_TROPHY_ROWS):
@@ -476,7 +518,7 @@ GRAPH_FRAME_EXTRA_SECONDS = 1.0
 
 def detail_hold_seconds(detail: dict, interval: float) -> float:
     """Seconds one rotating detail stays up."""
-    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'muscles'):
+    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'muscles', 'insight'):
         return interval + GRAPH_FRAME_EXTRA_SECONDS
     return interval
 
@@ -581,6 +623,11 @@ class LastWorkoutScreen(Screen):
             if detail.get('kind') == 'zones':
                 _draw_zones(matrix, summary['hr_zone_seconds'], stat_font, text_font,
                             14, 17, 22, 30)
+                return True
+            if detail.get('kind') == 'insight':
+                _draw_insight(matrix, insight_lines(summary), discipline, [stat_font], 15, 23,
+                              phase_seconds, detail_hold_seconds(detail, interval))
+                _draw_hr_calories(matrix, summary, stat_font, bottom_y)
                 return True
             if detail.get('kind') == 'muscles':
                 # Three bars fill the space under the discipline; the bar stays.
@@ -729,6 +776,9 @@ class LastWorkoutScreen(Screen):
             elif detail.get('kind') == 'zones':
                 _draw_zones(matrix, summary['hr_zone_seconds'], stat_font, titles_font or text_font,
                             label_y, label_y + 5, label_y + 13, label_y + 24)
+            elif detail.get('kind') == 'insight':
+                _draw_insight(matrix, insight_lines(summary), discipline, [text_font, stat_font],
+                              label_y, label_y + 15, phase_seconds, detail_hold_seconds(detail, interval))
             elif detail.get('kind') == 'muscles':
                 # Starts higher than the other slides: three rows need the room.
                 _draw_muscles(matrix, summary['muscles'], text_font, block_y + 8)
