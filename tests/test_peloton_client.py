@@ -96,6 +96,45 @@ def test_perf_graph_success():
     assert session.get.call_args.kwargs['params'] == {'every_n': 5}
 
 
+def test_ride_details_missing_or_unreadable_is_none():
+    client, _ = _client(_response(404, {}), _response(body=b'not json'), _response(body=[1, 2]))
+    assert client.get_ride_details('a') is None
+    assert client.get_ride_details('b') is None
+    assert client.get_ride_details('c') is None
+
+
+def test_ride_details_server_error_raises():
+    client, _ = _client(_response(500, {}))
+    with pytest.raises(requests.HTTPError):
+        client.get_ride_details('a')
+
+
+def test_ride_details_success():
+    client, session = _client({'ride': {'overall_rating_avg': 0.95}})
+    assert client.get_ride_details('r1') == {'ride': {'overall_rating_avg': 0.95}}
+    assert session.get.call_args.args[0].endswith('/api/ride/r1/details')
+
+
+def test_workout_detail_missing_or_unreadable_is_none():
+    client, _ = _client(_response(404, {}), _response(body=b'not json'), _response(body=[1, 2]))
+    assert client.get_workout_detail('a') is None
+    assert client.get_workout_detail('b') is None
+    assert client.get_workout_detail('c') is None
+
+
+def test_workout_detail_server_error_raises():
+    client, _ = _client(_response(500, {}))
+    with pytest.raises(requests.HTTPError):
+        client.get_workout_detail('a')
+
+
+def test_workout_detail_success():
+    client, session = _client({'movement_tracker_data': {}})
+    assert client.get_workout_detail('w1') == {'movement_tracker_data': {}}
+    assert session.get.call_args.args[0].endswith('/api/workout/w1')
+    assert session.get.call_args.kwargs['params'] == {'joins': 'ride,ride.instructor'}
+
+
 # iter_workout_pages
 
 def _pages(client, **kwargs):

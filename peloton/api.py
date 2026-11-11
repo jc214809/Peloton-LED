@@ -108,6 +108,27 @@ class PelotonClient:
         except Exception:
             return None
 
+    def get_ride_details(self, ride_id: str) -> Optional[Dict[str, Any]]:
+        resp = self._get(f"{BASE}/api/ride/{ride_id}/details", timeout=20)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        try:
+            return self._object(resp)
+        except Exception:
+            return None
+
+    def get_workout_detail(self, workout_id: str) -> Optional[Dict[str, Any]]:
+        resp = self._get(f"{BASE}/api/workout/{workout_id}", params={"joins": "ride,ride.instructor"},
+                          timeout=20)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        try:
+            return self._object(resp)
+        except Exception:
+            return None
+
     def get_overview(self, user_id: str) -> Dict[str, Any]:
         resp = self._get(f"{BASE}/api/user/{user_id}/overview", timeout=20)
         resp.raise_for_status()
