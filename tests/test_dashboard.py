@@ -666,12 +666,18 @@ def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_the
     dashboard, client, _ = _insight_setup(tmp_path, age_days=0)  # just finished: still settling
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
     rows = iter([_fake_row('w1', 112), _fake_row('w1', 112), _fake_row('w1', 150), _fake_row('w1', 150)])
-    with patch('peloton.dashboard.build_row', side_effect=lambda *_: next(rows)) as build:
+    from peloton.workout_rows import RowStore
+    saves = []
+    real_save = RowStore.save
+    with patch('peloton.dashboard.build_row', side_effect=lambda *_: next(rows)) as build, \
+            patch.object(RowStore, 'save', autospec=True, side_effect=lambda store: saves.append(1) or real_save(store)):
         dashboard.refresh()
         assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'  # no hour's wait
+        assert len(saves) == 1
         dashboard.refresh()
         assert build.call_count == 2  # rebuilt from the kept details and the refetched graph
         assert 'changed while settling' not in caplog.text
+        assert len(saves) == 1  # the same row: nothing written, the cached insights kept
         dashboard.refresh()
         assert 'Workout w1 changed while settling' in caplog.text
         assert 'Workout w1 insights changed' in caplog.text
@@ -687,6 +693,7 @@ def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_the
     assert client.get_workout_detail.call_count == 1
     assert client.get_ride_details.call_count == 1
     assert dashboard._insight_settling == {}
+    assert len(saves) == 2  # the first build and the one change; the last rebuild came out the same
 
 
 def test_insights_are_recomputed_only_when_the_row_store_changes(tmp_path):
