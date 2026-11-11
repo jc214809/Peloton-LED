@@ -3,13 +3,15 @@
     python scripts/workout_insights.py --rider joel --config config.local.json --dry-run
     python scripts/workout_insights.py --rider joel --config config.local.json
     python scripts/workout_insights.py --rider jen --config config.local.json --workout 823e0327
+    python scripts/workout_insights.py --rider joel --config config.local.json --dry-run --last 10
 
 Rows live in `<cache stem>.workout-rows.json` beside the rider's workout log. Raw responses are
 saved under --raw-dir (default training-data/) before a row is built, so a ROW_VERSION bump is a
 rebuild from those files with no API calls. A run: rebuild any row missing or stale from saved
 files; list the newest workouts (1 call; the rider's workout log adds the last 730 days for
 catch-up); fetch up to --limit missing ones newest first (2-3 calls each); print the insights of
-each new workout, or of the latest one when nothing is new.
+each new workout, or of the latest one when nothing is new. Under each workout, a `board:` line per
+insight the LED board would show for it (peloton/insight_lines.py: headline | sentence), or that it shows none.
 
 --dry-run makes no API calls and writes nothing. A 401 stops the run (exit 2) and keeps every row
 already saved. Uses the Mac's own token from the config, never a board's.
@@ -24,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from peloton.api import PelotonClient, make_session  # noqa: E402
+from peloton.insight_lines import board_insights  # noqa: E402
 from peloton.config import load_config, user_slug, user_token_path  # noqa: E402
 from peloton.workout_compare import DISCIPLINES  # noqa: E402
 from peloton.workout_insights import insights  # noqa: E402
@@ -44,6 +47,7 @@ def args(argv=None):
     parser.add_argument('--dry-run', action='store_true', help='no API calls, no writes')
     parser.add_argument('--limit', type=int, default=MAX_PER_RUN, help='most workouts fetched per run')
     parser.add_argument('--workout', help='print this workout (ID or ID prefix) instead')
+    parser.add_argument('--last', type=int, help='print the newest N in-scope workouts instead')
     parser.add_argument('--verbose', action='store_true')
     return parser.parse_args(argv)
 
@@ -70,7 +74,10 @@ def rider_paths(config, config_path, rider):
 
 def describe(row, rows):
     lines = [f"{row['date']} {row.get('title') or row['disc']} ({row['id'][:8]})"]
-    lines += [f'  [{code}] {text}' for code, text in insights(row, rows)]
+    messages = insights(row, rows)
+    lines += [f'  [{code}] {text}' for code, text, _ in messages]
+    views = board_insights(messages)
+    lines += [f"  board: {view['headline']} | {view['sentence']}" for view in views] or ['  board: (no slide)']
     return '\n'.join(lines)
 
 
@@ -125,6 +132,9 @@ def main(argv=None):
         chosen = [r for r in rows if r['id'].startswith(options.workout)]
         if not chosen:
             raise SystemExit(f'No stored workout {options.workout!r}')
+    elif options.last:
+        usable = [r for r in rows if r['disc'] in DISCIPLINES]
+        chosen = sorted(usable, key=lambda r: r['start'])[-options.last:]
     elif added:
         chosen = sorted((store.rows[i] for i in added), key=lambda r: r['start'])
     else:

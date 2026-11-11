@@ -58,6 +58,20 @@ def preview_journey(options):
         raise SystemExit(str(exc)) from exc
 
 
+def insights_enabled(options):
+    """Workout compare slides show with --insights, or when --config's display.workout_insights is on."""
+    if getattr(options, 'insights', False):
+        return True
+    config = getattr(options, 'config', None)
+    if not config:
+        return False
+    from peloton.config import load_config
+    try:
+        return bool(load_config(config)['display'].get('workout_insights'))
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def add_log_figures(snapshot, options):
     """Instructor counts and journey miles live in the workout log, not the cache."""
     from peloton.journey import uses_metric
@@ -79,8 +93,10 @@ def load_snapshot_for(options):
         from peloton.summaries import summarize_workout
         from peloton.totals import extract_discipline_totals, parse_streaks
         data = demo_data()
+        from peloton.dashboard import with_demo_insight
+        switch = {'workout_insights': insights_enabled(options)}
         return {'me': data['me'], 'totals': extract_discipline_totals(data['overview']),
-                'summaries': [summarize_workout(w, data['performance'][w['id']])
+                'summaries': [with_demo_insight(summarize_workout(w, data['performance'][w['id']]), data, switch)
                               for w in data['workouts']],
                 'weekly_progress': {'workouts': 3, 'minutes': 95},
                 'instructor_counts': {}, 'status': 'ready',
@@ -91,6 +107,10 @@ def load_snapshot_for(options):
     if snapshot is None:
         raise SystemExit(f'Could not read a dashboard cache from {options.cache}')
     snapshot.setdefault('status', 'ready')
+    for summary in snapshot.get('summaries') or []:
+        summary.pop('insight', None)  # version 2's single insight, as the dashboard drops it
+        if not insights_enabled(options):
+            summary.pop('insights', None)
     add_log_figures(snapshot, options)
     return snapshot
 
@@ -233,6 +253,8 @@ def main(argv=None):
     source.add_argument('--demo', action='store_true', help='Use built-in demo data')
     parser.add_argument('--log', help='Workout log JSON (default: beside --cache)')
     parser.add_argument('--config', help="config.json whose journey route to show (default: built-in route)")
+    parser.add_argument('--insights', action='store_true',
+                        help='Show the workout-compare insight frames (as display.workout_insights does)')
     parser.add_argument('--height', type=int, choices=(32, 64), default=32)
     parser.add_argument('--username', help='Name to show on the username page')
     parser.add_argument('--rival', help="Second rider's dashboard cache, for the versus page")

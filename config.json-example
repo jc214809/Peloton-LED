@@ -13,6 +13,7 @@
     "duration": 4,
     "overview_duration": 4,
     "last_workout_detail_interval": 4,
+    "workout_insights": false,
     "logo_duration": 5,
     "timezone": "America/New_York",
     "refresh_interval": 300,

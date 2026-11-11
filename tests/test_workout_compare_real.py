@@ -36,7 +36,7 @@ def _cases():
 def test_real_workout_expectations(case):
     rows, expected = case
     target = rows[expected['target']]
-    assert [code for code, _ in insights(target, list(rows.values()))] == expected['expected']
+    assert [code for code, *_ in insights(target, list(rows.values()))] == expected['expected']
 
 
 def _detail(workout_id, start, disc='strength'):

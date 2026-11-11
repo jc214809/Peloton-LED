@@ -24,6 +24,11 @@ from .journey import uses_metric
 from .schedule import in_quiet_hours, scheduled_refresh_interval
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
 from .workout_log import WorkoutLog, default_log_path
+from .insight_lines import board_insights
+from .workout_compare import DISCIPLINES as INSIGHT_DISCIPLINES
+from .workout_features import build_row, discipline as row_discipline
+from .workout_insights import insights
+from .workout_rows import RowStore, default_rows_path, trim_for_board
 
 logger = logging.getLogger('peloton-led.dashboard')
 
@@ -48,10 +53,20 @@ MAX_HISTORY_BATCHES = 500
 # runs at most once a day and, with a refresh_schedule, in quiet hours.
 MISMATCH_LIMIT = 3
 REWALK_INTERVAL_SECONDS = 24 * 3600
+# A workout whose detail could not be had (404, not COMPLETE yet) is not asked for again this long.
+INSIGHT_RETRY_SECONDS = 3600
 
 
 def slim_profile(me):
     return {key: me[key] for key in PROFILE_KEYS if key in me}
+
+
+def with_demo_insight(summary, data, config):
+    """The demo's canned insights for this workout, only when display.workout_insights is on."""
+    views = (data.get('insights') or {}).get(summary.get('workout_id'))
+    if views and config.get('workout_insights'):
+        summary = {**summary, 'insights': views}
+    return summary
 
 
 class Dashboard:
@@ -83,6 +98,10 @@ class Dashboard:
         self._log = None
         self._log_lock = threading.Lock()
         self._history_thread = None
+        # Workout compare (display.workout_insights): the row store loads on first use.
+        self._rows = None
+        self._rows_lock = threading.Lock()
+        self._insight_failed = {}
         self._profile_checked_at = None
         self._derive_args = None
         # Log figures are computed under the log lock but published later; the
@@ -111,7 +130,8 @@ class Dashboard:
             self._publish(me=data['me'], totals=extract_discipline_totals(data['overview']),
                 streaks=parse_streaks(data['overview']),
                 distance_totals=data['distance_totals'],
-                summaries=[summarize_workout(w, data['performance'][w['id']]) for w in data['workouts']],
+                summaries=[with_demo_insight(summarize_workout(w, data['performance'][w['id']]), data, config)
+                           for w in data['workouts']],
                 weekly_progress=weekly_progress(data['workouts'], zone),
                 login_required=demo_login_needed, status='ready', last_updated=time.time(),
                 generation=1)
@@ -120,6 +140,13 @@ class Dashboard:
             if cached is not None:
                 if isinstance(cached.get('me'), dict):
                     cached['me'] = slim_profile(cached['me'])
+                for summary in cached.get('summaries') or []:
+                    if isinstance(summary, dict):
+                        # Version 2's single two-line insight is never drawn again.
+                        summary.pop('insight', None)
+                        if not config.get('workout_insights'):
+                            # Switched off: cached insights must not keep showing.
+                            summary.pop('insights', None)
                 self._publish(**cached, status='cached', data_stale=True, cache_loaded=True)
             self._log = WorkoutLog.load(self.log_path)
             # Lifetime figures come from the log, so they show at once after a restart.
@@ -330,6 +357,49 @@ class Dashboard:
         except OSError:
             return None
 
+    def _workout_insight(self, client, workout, perf, settling):
+        """The board's views (insight_lines.board_view) comparing this workout with similar earlier ones, or None.
+
+        The class and workout detail are fetched once per workout (the row is then stored); the
+        insight itself is recomputed each refresh, since the peers change. Only a 401 escapes."""
+        identity = workout.get('id')
+        if (not identity or settling or workout.get('status') != 'COMPLETE'
+                or row_discipline(workout.get('fitness_discipline')) not in INSIGHT_DISCIPLINES):
+            return None
+        try:
+            with self._rows_lock:
+                if self._rows is None:
+                    self._rows = RowStore.load(default_rows_path(self.cache_path))
+                    # Rows older than any baseline reads are dropped, so the store stays its seeded size.
+                    self._rows.rows = trim_for_board(self._rows.rows, time.time())
+                store = self._rows
+                if not store.is_current(identity):
+                    failed_at = self._insight_failed.get(identity)
+                    if failed_at is not None and time.monotonic() - failed_at < INSIGHT_RETRY_SECONDS:
+                        return None
+                    detail = client.get_workout_detail(identity)
+                    if not isinstance(detail, dict) or not detail.get('id') or detail.get('status') != 'COMPLETE':
+                        self._insight_failed[identity] = time.monotonic()
+                        return None
+                    ride_id = (detail.get('ride') or {}).get('id')
+                    ride = client.get_ride_details(ride_id) if ride_id else None
+                    store.upsert(build_row(detail, perf, ride))
+                    self._insight_failed.pop(identity, None)
+                    try:
+                        store.save()
+                    except OSError as exc:
+                        logger.warning('Could not save the workout rows (%s)', type(exc).__name__)
+                return board_insights(insights(store.rows[identity], store.current_rows())) or None
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 401:
+                raise
+            self._insight_failed[identity] = time.monotonic()
+            logger.warning('Workout insight failed (%s)', type(exc).__name__)
+        except Exception as exc:  # never fail the refresh over an insight
+            self._insight_failed[identity] = time.monotonic()
+            logger.warning('Workout insight failed (%s)', type(exc).__name__)
+        return None
+
     def refresh(self):
         """Run one serialized refresh and return the delay until the next attempt."""
         with self._refresh_lock:
@@ -398,6 +468,10 @@ class Dashboard:
                     perf = cached[1] if cached else None
                 summary = summarize_workout(workout, perf)
                 summary['previous_best_kj'] = previous_best_kj(identity, personal_records)
+                if self.config.get('workout_insights'):
+                    views = self._workout_insight(client, workout, perf, settling)
+                    if views:
+                        summary['insights'] = views
                 summaries.append(summary)
             self._derive_args = self._derive(me)
             with self._log_lock:

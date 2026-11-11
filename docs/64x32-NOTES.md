@@ -195,6 +195,44 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   with the name and percent in white over them. Unlike the graph and zones
   slides it keeps the heart-rate/calorie row.
 
+### Insight frames (both boards, `display.workout_insights`, card + bars 2026-11-11)
+- Replace version 2's two-line insight slide. At most 2 insights a workout (`MAX_BOARD_INSIGHTS`), after
+  the graph / zones / muscles slides; every frame holds 1 s longer, like those. 64x64 shows each as a card
+  (the sentence) then bars; 64x32 as bars, then the sentence on 1-2 pages. Content from
+  `peloton/insight_lines.board_view`; mock-up `docs/fitness-analysis/reports/insight-combo-card-bars.png`.
+- No discipline title and no heart-rate/calorie row on any insight frame (both boards). The other slides
+  are unchanged, insights or not (`test_the_other_slides_are_unchanged_by_the_insights`).
+- Colours: the headline, today's bar and lit blocks amber (down, missed, under the callouts), green (up,
+  go up, heavier, easiest), red (hardest by HR) or white (in line); the usual's bar, labels and footers grey
+  (145, 165, 190); an empty share bar or unlit block (70, 80, 95); the header gold (255, 200, 0). Sentence
+  words with a digit take the discipline colour, the rest white.
+- 64x64 header: the 5x7 lightbulb at (3, 2), `INSIGHT` in `titles` at x 11 on baseline 9, `1/2` / `2/2`
+  right-aligned in `stats` grey when there are two, a 1-px discipline-colour rule on row 12 (columns 2-61)
+  in place of the title. Card: the sentence in up to 5 centred lines from baseline 21, 7 apart (vertically
+  centred in 21-49 when shorter); the footer (`9 SIMILAR RIDES`, `VS 12 SIMILAR`, `5 CLOSEST RIDES`,
+  `VS THE CALLOUTS`, `VS PAST CLASSES`) grey on baseline 61. Bars: the headline centred on baseline 22
+  in `titles` (`stats` when wider than 62 px); `TODAY` / `USUAL` labels with the value right-aligned on
+  baselines 32 and 45 and a 4-row bar under each (59 px at full); a share bar (`TIME UNDER` / `THE
+  CALLOUT`) on rows 35-41; or blocks from row 34, 7 px 3 apart, shrinking (5/2, 3/1, 2/1, 1/1) when many
+  sets would not fit 60 px, with `3 IN A ROW` under a streak. The reason (`AN EASIER DAY`, `LESS PER BEAT`,
+  `TURN IT UP`, a movement name ...) white on baseline 61. The hardest / easiest by HR bars are Strive per
+  minute of class with no unit beside the numbers, so their reason line is `STRIVE PER MIN` (Joel,
+  2026-11-11; it was `HARDEST OF 12`, which the headline and sentence already say).
+- 64x32 bars: the bulb at (1, 0), the headline in `stats` on baseline 6 centred in columns 9-63 (a headline
+  wider than that room, `STRONG BOOTCAMP`, keeps its first word); bars on rows 9-13 and 17-21, 40 px from
+  x 1, the numbers right-aligned on baselines 13 and 21 with no labels or units; a share bar on rows 11-18;
+  blocks 5 px 2 apart from x 4 on rows 11-15 (shrinking as on 64 rows); the reason on baseline 30.
+- 64x32 sentence pages: the bulb, `INSIGHT` in gold `stats` on baseline 6, `1/2` right-aligned when there
+  are two pages, a discipline-colour rule on row 8, three lines on baselines 16, 23 and 30.
+- A reason wider than 60 px (only a movement name) scrolls like the name page's highlights (hold, glide,
+  hold; `UsernameScreen.scroll_offset`), the 2-px margins blanked.
+- Spacing (Joel, 2026-11-11): weights are one word, `40LB`, in the sentence, the reason and the 64x64 bars
+  (watts and mph keep their space, `124 W`). The colon's dot sits mid-cell, which left 6 blank columns
+  before the next word against 5 between other words, so the word after a colon is drawn
+  `COLON_GAP_TRIM` (3) px closer: 3 blank columns. Wrapping still counts characters, and a tighter line
+  is only narrower, so nothing that fitted stops fitting. `40LB` makes the worst streak sentence
+  (`100LB ON MEDIUM`) six lines, so it falls back to `3 IN A ROW`.
+
 ### Journey: miles by type (both boards, requested 2026-11-08)
 Joel found the 64x64 journey page showed less than the 64x32 one: no percent,
 and on the way home it still listed Columbus at the top and Disney World by

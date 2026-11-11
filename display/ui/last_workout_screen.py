@@ -8,6 +8,7 @@ from display.display import get_text_width, loaded_fonts
 from utils import debug
 from .logo_art import ZONE_COLORS
 from .screen import Screen
+from .username import MARGIN as SCROLL_MARGIN, UsernameScreen
 
 _WHITE = graphics.Color(255, 255, 255)
 _GOLD  = graphics.Color(255, 215,   0)
@@ -262,7 +263,65 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
         stats.append({'label': 'hr zones', 'value': '', 'kind': 'zones'})
     if summary.get('muscles') and (summary.get('discipline') or '').strip().lower() in MUSCLE_DISCIPLINES:
         stats.append({'label': 'muscles worked', 'value': '', 'kind': 'muscles'})
+    for index, view in enumerate(insight_views(summary)):
+        # Workout compare: 64 rows show the card then the bars; 32 rows the bars then the sentence pages.
+        frames = (['insight_card', 'insight_bars'] if matrix_height >= 64
+                  else ['insight_bars'] + ['insight_words'] * len(view['pages32']))
+        for page, kind in enumerate(frames):
+            detail = {'label': 'insight', 'value': '', 'kind': kind, 'index': index}
+            if kind == 'insight_words':
+                detail['page'] = page - 1
+            stats.append(detail)
     return stats
+
+
+# Workout compare frames (peloton/insight_lines.board_view), after the chart slides.
+INSIGHT_KINDS = ('insight_card', 'insight_bars', 'insight_words')
+MAX_INSIGHT_VIEWS = 2
+_FIGURE_KEYS = {'bars': ('today', 'usual'), 'share': ('pct',), 'blocks': ('total', 'lit')}
+
+
+def _strings(lines, most) -> bool:
+    return (isinstance(lines, list) and 0 < len(lines) <= most
+            and all(isinstance(line, str) and line.strip() for line in lines))
+
+
+def _number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+
+
+def _good_view(view) -> bool:
+    if not isinstance(view, dict):
+        return False
+    figure, colour, pages = view.get('figure'), view.get('colour'), view.get('pages32')
+    if not (isinstance(figure, dict) and figure.get('kind') in _FIGURE_KEYS
+            and all(_number(figure.get(key)) for key in _FIGURE_KEYS[figure['kind']])):
+        return False
+    if figure['kind'] == 'bars' and not all(isinstance(figure.get(k), str) for k in ('today_text', 'usual_text')):
+        return False
+    if not all(isinstance(figure.get(key, ''), str) for key in ('unit', 'label')):
+        return False
+    if figure['kind'] == 'share' and figure['pct'] > 100:
+        return False
+    if figure['kind'] == 'blocks' and not (isinstance(figure['total'], int) and isinstance(figure['lit'], int)
+                                           and 0 < figure['total'] <= 30 and figure['lit'] <= figure['total']):
+        return False
+    reason = view.get('reason')
+    return (isinstance(colour, (list, tuple)) and len(colour) == 3
+            and all(isinstance(c, int) and not isinstance(c, bool) and 0 <= c <= 255 for c in colour)
+            and all(isinstance(view.get(key), str) and view[key].strip() for key in ('headline', 'footer'))
+            and (reason is None or isinstance(reason, str))
+            and _strings(view.get('lines64'), 5)
+            and isinstance(pages, list) and 0 < len(pages) <= 2 and all(_strings(page, 3) for page in pages))
+
+
+def insight_views(summary: dict) -> List[dict]:
+    """The workout's insight views (workout compare), at most two, skipping damaged ones: the cache could
+    hold anything. A version 2 `insight` (one dict) is never drawn."""
+    views = summary.get('insights')
+    if not isinstance(views, list):
+        return []
+    return [view for view in views if _good_view(view)][:MAX_INSIGHT_VIEWS]
 
 
 # Heart-rate zone colors, zone 1 first; also used to color graph columns.
@@ -400,6 +459,224 @@ _TROPHY_H = 7
 _TROPHY_COLORS = {'C': (255, 215, 0), 'B': (205, 145, 0)}
 
 
+_INSIGHT_GOLD = (255, 200, 0)
+_INSIGHT_DIM = (70, 80, 95)
+# The workout-compare lightbulb, 5x7: '#' gold, 'g' the grey base.
+_BULB_ROWS = ('.###.', '#####', '#####', '#####', '.###.', '.ggg.', '..g..')
+
+
+def _rect(matrix, x0: int, y0: int, x1: int, y1: int, rgb) -> None:
+    for y in range(max(y0, 0), min(y1, matrix.height - 1) + 1):
+        for x in range(max(x0, 0), min(x1, matrix.width - 1) + 1):
+            matrix.SetPixel(x, y, *rgb)
+
+
+def _draw_bulb(matrix, x: int, y: int) -> None:
+    for dy, row in enumerate(_BULB_ROWS):
+        for dx, cell in enumerate(row):
+            if cell != '.':
+                matrix.SetPixel(x + dx, y + dy, *(_INSIGHT_GOLD if cell == '#' else _LABEL_GREY))
+
+
+def _write(matrix, font, x: int, y: int, rgb, text: str) -> int:
+    graphics.DrawText(matrix, font, x, y, graphics.Color(*rgb), text)
+    return get_text_width(font, text)
+
+
+# The colon's dot sits mid-cell, which leaves 6 blank columns before the next word against 5 between
+# other words: the word after a colon moves this many px closer (Joel, 2026-11-11).
+COLON_GAP_TRIM = 3
+
+
+def _words_width(font, text: str) -> int:
+    """`text`'s drawn width with the gap after each colon tightened."""
+    return get_text_width(font, text) - COLON_GAP_TRIM * text.count(': ')
+
+
+def _draw_words(matrix, font, x: int, y: int, text: str, colour_of) -> None:
+    """`text` word by word from x, each word in `colour_of(word)`, the gap after a colon tightened."""
+    space = get_text_width(font, ' ')
+    for word in text.split(' '):
+        x += _write(matrix, font, x, y, colour_of(word), word) + space
+        if word.endswith(':'):
+            x -= COLON_GAP_TRIM
+
+
+def _centred(matrix, font, y: int, rgb, text: str, left: int = 0, right: Optional[int] = None) -> None:
+    """`text` centred between columns `left` and `right` (the panel's width by default)."""
+    room = (matrix.width if right is None else right) - left
+    _draw_words(matrix, font, left + max((room - _words_width(font, text)) // 2, 0), y, text, lambda _: rgb)
+
+
+def _rich_line(matrix, font, y: int, line: str, numbers) -> None:
+    """A centred sentence line whose words with a digit take the discipline colour, the rest white."""
+    x = max((matrix.width - _words_width(font, line)) // 2, 0)
+    _draw_words(matrix, font, x, y, line,
+                lambda word: numbers if any(ch.isdigit() for ch in word) else (255, 255, 255))
+
+
+def _reason_line(matrix, font, y: int, text: str, phase: float, hold: float) -> None:
+    """The bars frame's last line, white and centred; a movement name wider than the room scrolls as on the
+    name page (hold, glide, hold), the margins blanked so the text slides under them."""
+    w = matrix.width
+    overflow = get_text_width(font, text) - (w - 2 * SCROLL_MARGIN)
+    if overflow <= 0:
+        _centred(matrix, font, y, (255, 255, 255), text)
+        return
+    _write(matrix, font, SCROLL_MARGIN - UsernameScreen.scroll_offset(overflow, phase, hold), y,
+           (255, 255, 255), text)
+    height = getattr(font, 'height', 8)
+    for row in range(y - height, min(y + 3, matrix.height)):
+        for x in list(range(0, SCROLL_MARGIN)) + list(range(w - SCROLL_MARGIN, w)):
+            matrix.SetPixel(x, row, 0, 0, 0)
+
+
+def _disc_rgb(discipline: str):
+    colour = _disc_color(discipline)
+    return colour.red, colour.green, colour.blue
+
+
+def _insight_header(matrix, discipline: str, index: int, count: int) -> None:
+    """64 rows: the bulb, INSIGHT in gold, 1/2 on the right when there are two, a discipline-colour rule."""
+    stats = loaded_fonts['stats']
+    _draw_bulb(matrix, 3, 2)
+    _write(matrix, loaded_fonts.get('titles') or stats, 11, 9, _INSIGHT_GOLD, 'INSIGHT')
+    if count > 1:
+        label = f'{index + 1}/{count}'
+        _write(matrix, stats, 62 - get_text_width(stats, label), 9, _LABEL_GREY, label)
+    _rect(matrix, 2, 12, 61, 12, _disc_rgb(discipline))
+
+
+def _draw_insight_card(matrix, view: dict, discipline: str, index: int, count: int) -> None:
+    """64x64: the sentence, numbers in the discipline colour, and what it was compared with."""
+    stats = loaded_fonts['stats']
+    _insight_header(matrix, discipline, index, count)
+    lines = view['lines64']
+    top = 21 + 7 * (5 - len(lines)) // 2
+    for k, line in enumerate(lines):
+        _rich_line(matrix, stats, top + 7 * k, line, _disc_rgb(discipline))
+    _centred(matrix, stats, 61, _LABEL_GREY, view['footer'])
+
+
+def _bars_tall(matrix, figure: dict, colour) -> None:
+    """64x64 figure: TODAY / USUAL bars on baselines 32 and 45, a share bar on 32, or blocks from row 34."""
+    stats = loaded_fonts['stats']
+    kind = figure['kind']
+    if kind == 'bars':
+        top = max(figure['today'], figure['usual']) or 1
+        for y, label, value, text, rgb in ((32, 'TODAY', figure['today'], figure['today_text'], colour),
+                                           (45, 'USUAL', figure['usual'], figure['usual_text'], _LABEL_GREY)):
+            unit = figure.get('unit', '')
+            # Weights read as one word, 40LB, as in the sentence; watts and mph keep their space.
+            text = f'{text}{unit}' if unit == 'LB' else f'{text} {unit}'.strip()
+            _write(matrix, stats, 2, y, _LABEL_GREY, label)
+            _write(matrix, stats, 62 - get_text_width(stats, text), y, rgb, text)
+            _rect(matrix, 2, y + 2, 2 + round(59 * min(value, top) / top), y + 5, rgb)
+    elif kind == 'share':
+        pct = figure['pct']
+        text = f'{pct:.0f}%'
+        _write(matrix, stats, 2, 32, _LABEL_GREY, 'TIME UNDER')
+        _write(matrix, stats, 62 - get_text_width(stats, text), 32, colour, text)
+        _rect(matrix, 2, 35, 61, 41, _INSIGHT_DIM)
+        if pct > 0:
+            _rect(matrix, 2, 35, 2 + round(59 * pct / 100), 41, colour)
+        _centred(matrix, stats, 49, _LABEL_GREY, 'THE CALLOUT')
+    else:
+        size, gap = _block_size(figure['total'], 60, ((7, 3), (5, 2), (3, 1), (2, 1), (1, 1)))
+        span = figure['total'] * (size + gap) - gap
+        x0 = (matrix.width - span) // 2
+        for i in range(figure['total']):
+            x = x0 + i * (size + gap)
+            _rect(matrix, x, 34, x + size - 1, 34 + size - 1, colour if i < figure['lit'] else _INSIGHT_DIM)
+        if figure.get('label'):
+            _centred(matrix, stats, 34 + size + 9, _LABEL_GREY, f"{figure['lit']} {figure['label']}")
+
+
+def _block_size(total: int, room: int, sizes):
+    """The largest (block, gap) that fits `total` blocks in `room` px, else the smallest."""
+    return next(((size, gap) for size, gap in sizes if total * (size + gap) - gap <= room), sizes[-1])
+
+
+def _bars_short(matrix, figure: dict, colour) -> None:
+    """64x32 figure: bars on rows 9-13 and 17-21 with the numbers right-aligned, a share bar on rows 11-18,
+    or 5 px blocks from x 4."""
+    stats = loaded_fonts['stats']
+    kind = figure['kind']
+    if kind == 'bars':
+        top = max(figure['today'], figure['usual']) or 1
+        for y, value, text, rgb in ((13, figure['today'], figure['today_text'], colour),
+                                    (21, figure['usual'], figure['usual_text'], _LABEL_GREY)):
+            _rect(matrix, 1, y - 4, 1 + round(40 * min(value, top) / top), y, rgb)
+            _write(matrix, stats, 63 - get_text_width(stats, text), y, rgb, text)
+    elif kind == 'share':
+        pct = figure['pct']
+        text = f'{pct:.0f}%'
+        _rect(matrix, 1, 11, 41, 18, _INSIGHT_DIM)
+        if pct > 0:
+            _rect(matrix, 1, 11, 1 + round(40 * pct / 100), 18, colour)
+        _write(matrix, stats, 63 - get_text_width(stats, text), 17, colour, text)
+    else:
+        size, gap = _block_size(figure['total'], 59, ((5, 2), (3, 1), (2, 1), (1, 1)))
+        for i in range(figure['total']):
+            x = 4 + i * (size + gap)
+            _rect(matrix, x, 11, x + size - 1, 11 + size - 1, colour if i < figure['lit'] else _INSIGHT_DIM)
+
+
+def _draw_insight_bars(matrix, view: dict, discipline: str, index: int, count: int,
+                       phase: float, hold: float) -> None:
+    """The headline in its colour, the figure, and the reason line underneath."""
+    stats = loaded_fonts['stats']
+    colour = tuple(view['colour'])
+    headline = view['headline']
+    if matrix.height >= 64:
+        _insight_header(matrix, discipline, index, count)
+        titles = loaded_fonts.get('titles') or stats
+        _centred(matrix, titles if _words_width(titles, headline) <= 62 else stats, 22, colour, headline)
+        _bars_tall(matrix, view['figure'], colour)
+        reason_y = 61
+    else:
+        _draw_bulb(matrix, 1, 0)
+        # Columns 9-63 hold 14 characters: a longer headline (STRONG BOOTCAMP) keeps its first word.
+        if _words_width(stats, headline) > 56:
+            headline = headline.split()[0]
+        _centred(matrix, stats, 6, colour, headline, left=9)
+        _bars_short(matrix, view['figure'], colour)
+        reason_y = 30
+    if view.get('reason'):
+        _reason_line(matrix, stats, reason_y, view['reason'], phase, hold)
+
+
+def _draw_insight_words(matrix, view: dict, discipline: str, page: int) -> None:
+    """64x32: the sentence, three lines a page, under the bulb and INSIGHT."""
+    stats = loaded_fonts['stats']
+    pages = view['pages32']
+    page = min(max(page, 0), len(pages) - 1)
+    _draw_bulb(matrix, 1, 0)
+    _write(matrix, stats, 9, 6, _INSIGHT_GOLD, 'INSIGHT')
+    if len(pages) > 1:
+        label = f'{page + 1}/{len(pages)}'
+        _write(matrix, stats, 63 - get_text_width(stats, label), 6, _LABEL_GREY, label)
+    _rect(matrix, 0, 8, 63, 8, _disc_rgb(discipline))
+    for k, line in enumerate(pages[page]):
+        _rich_line(matrix, stats, 16 + 7 * k, line, _disc_rgb(discipline))
+
+
+def _draw_insight_frame(matrix, summary: dict, discipline: str, detail: dict, phase: float, hold: float) -> bool:
+    """One workout-compare frame, in place of the discipline title and heart-rate row."""
+    views = insight_views(summary)
+    index = detail.get('index', 0)
+    if not isinstance(index, int) or not 0 <= index < len(views):
+        return False
+    view = views[index]
+    if detail['kind'] == 'insight_card':
+        _draw_insight_card(matrix, view, discipline, index, len(views))
+    elif detail['kind'] == 'insight_bars':
+        _draw_insight_bars(matrix, view, discipline, index, len(views), phase, hold)
+    else:
+        _draw_insight_words(matrix, view, discipline, detail.get('page', 0))
+    return True
+
+
 def _draw_trophy(matrix, x: int, y: int) -> None:
     """Draw the PR trophy with its top-left at (x, y)."""
     for dy, row in enumerate(_TROPHY_ROWS):
@@ -476,7 +753,7 @@ GRAPH_FRAME_EXTRA_SECONDS = 1.0
 
 def detail_hold_seconds(detail: dict, interval: float) -> float:
     """Seconds one rotating detail stays up."""
-    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'muscles'):
+    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'muscles') + INSIGHT_KINDS:
         return interval + GRAPH_FRAME_EXTRA_SECONDS
     return interval
 
@@ -527,6 +804,20 @@ class LastWorkoutScreen(Screen):
     def update(self, dt):
         self.elapsed += max(0, dt)
 
+    def _insight_frame(self, matrix, summary: dict, discipline: str) -> bool:
+        """Draw the stats phase's current detail when it is a workout-compare frame; False otherwise.
+
+        These frames replace the discipline title and the heart-rate row, so they draw before either."""
+        details = rotating_details(summary, matrix.height)
+        if not any(d.get('kind') in INSIGHT_KINDS for d in details):
+            return False
+        interval = self.detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+        index, phase = detail_at(details, interval, self.elapsed - self.detail_interval)
+        detail = details[index]
+        if detail.get('kind') not in INSIGHT_KINDS:
+            return False
+        return _draw_insight_frame(matrix, summary, discipline, detail, phase, detail_hold_seconds(detail, interval))
+
     def _render_short(self, matrix, summary: dict, discipline: str, title_font, text_font, stat_font) -> bool:
         """64x32 version of the two-phase layout.
 
@@ -541,6 +832,9 @@ class LastWorkoutScreen(Screen):
         bottom_y = matrix.height - 1
         value_big = loaded_fonts.get("countdown") or title_font
         grey = graphics.Color(145, 165, 190)
+
+        if self.elapsed >= self.detail_interval and self._insight_frame(matrix, summary, discipline):
+            return True
 
         # ── Discipline: fixed at the top for both phases ────────────────────
         disc_text = discipline.upper()
@@ -644,6 +938,8 @@ class LastWorkoutScreen(Screen):
         stat_details = rotating_details(summary, matrix.height)
         instructor_detail = next((d for d in all_details if d['label'] == 'instructor'), None)
         in_intro = self.elapsed < self.detail_interval
+        if not in_intro and self._insight_frame(matrix, summary, discipline):
+            return True
 
         # ── Line 1: discipline ── stays on screen for both intro and stats ──
         disc_text = discipline.upper()

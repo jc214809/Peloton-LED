@@ -23,6 +23,7 @@ MAX_PER_RUN = 20
 WINDOW_DAYS = 730
 LIST_LIMIT = 20
 DAY = 86400
+BOARD_DAYS = 760  # 730 + slack
 
 
 class LoginRequired(Exception):
@@ -65,6 +66,14 @@ def _write_json(path, payload):
             pass
 
 
+def trim_for_board(rows, now):
+    """{id: row} of the in-scope rows from the last BOARD_DAYS days. Pure: `rows` is not changed."""
+    since = now - BOARD_DAYS * DAY
+    return {k: row for k, row in rows.items()
+            if row.get('disc') in DISCIPLINES and isinstance(row.get('start'), (int, float))
+            and row['start'] >= since}
+
+
 class RowStore:
     """Rows keyed by workout ID. Insights are never stored: they depend on peers that change."""
 
@@ -96,6 +105,10 @@ class RowStore:
     def is_current(self, workout_id):
         row = self.rows.get(workout_id)
         return bool(row) and row.get('v') == ROW_VERSION
+
+    def current_rows(self):
+        """Rows built by this ROW_VERSION (the board has no raw files to rebuild an old one)."""
+        return [row for row in self.rows.values() if row.get('v') == ROW_VERSION]
 
     def stale_ids(self):
         return [k for k, row in self.rows.items() if row.get('v') != ROW_VERSION]
@@ -173,6 +186,18 @@ def import_raw(store, raw):
     if built:
         log.info('Built %d rows from saved files in %s', built, raw.folder)
     return built
+
+
+def board_store(store, now, path):
+    """A new RowStore at `path` holding the board's trimmed rows.
+
+    No class details go with it: the board fetches them for each new workout (one call). Seeding
+    them measured 2.8 MB (Joel) and 7.3 MB (Jen) of movement lists on 2026-11-11, several times the
+    rows themselves, to save a call only when a class is repeated.
+    """
+    board = RowStore(path)
+    board.rows = trim_for_board(store.rows, now)
+    return board
 
 
 def candidate_ids(log_workouts=None, listed=None, now=0):
