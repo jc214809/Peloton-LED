@@ -399,19 +399,22 @@ class Dashboard:
                         ride_id = (detail.get('ride') or {}).get('id')
                         ride = client.get_ride_details(ride_id) if ride_id else None
                     row = build_row(detail, perf, ride)
-                    if kept and store.rows.get(identity) != row:
-                        logger.info('Workout %s changed while settling', identity[:8])
-                    store.upsert(row)
-                    self._rows_generation += 1
                     self._insight_failed.pop(identity, None)
                     if settling:
                         self._insight_settling[identity] = (detail, ride)
                     else:
                         self._insight_settling.pop(identity, None)
-                    try:
-                        store.save()
-                    except OSError as exc:
-                        logger.warning('Could not save the workout rows (%s)', type(exc).__name__)
+                    # A rebuild that comes out the same writes nothing: the store is 1-2 MB, and a Pi Zero
+                    # would otherwise rewrite it every refresh of the settling hour.
+                    if store.rows.get(identity) != row:
+                        if kept:
+                            logger.info('Workout %s changed while settling', identity[:8])
+                        store.upsert(row)
+                        self._rows_generation += 1
+                        try:
+                            store.save()
+                        except OSError as exc:
+                            logger.warning('Could not save the workout rows (%s)', type(exc).__name__)
                 cached = self._insight_views.get(identity)
                 if cached and cached[0] == self._rows_generation:
                     return cached[1]
