@@ -427,3 +427,25 @@ def test_the_checkout_is_the_installers_or_this_codes_own(tmp_path):
     assert server.default_checkout({}, str(checkout)) == str(checkout), 'run from a checkout'
     assert server.default_checkout({}, str(plain)) is None, '/opt/peloton-led: no git, no card'
     assert server.default_checkout({'PELOTON_CHECKOUT': str(plain)}, str(plain)) is None, 'not a checkout'
+
+
+def test_the_page_shows_each_riders_workout_history(board, tmp_path):
+    from peloton.workout_features import ROW_VERSION
+    start = board.settings.clock() - 86400
+    rows = {f'w{i}': {'id': f'w{i}', 'v': ROW_VERSION, 'disc': 'cycling', 'start': start} for i in range(3)}
+    (tmp_path / 'cookies-joel-dashboard-cache.workout-rows.json').write_text(json.dumps({'version': 1, 'rows': rows}))
+    board.sign_in()
+    _, _, body = board.request('/')
+    card = body[body.index('id="insights"'):body.index('id="timing"')]
+    assert 'Joel' in card and '3 workouts' in card
+    assert 'Jen' in card and 'Not copied yet' in card
+
+
+def test_a_config_the_history_cannot_follow_still_shows_the_page(board, caplog):
+    broken = {**TWO_RIDERS, 'users': [{'name': 'Joel', 'cache_path': 5}]}
+    assert board.settings.workout_history(broken) is None
+    assert 'Workout history unavailable (TypeError)' in caplog.text
+    board.config.write_text(json.dumps(broken))
+    board.sign_in()
+    status, _, body = board.request('/')
+    assert status == 200 and 'id="workout_insights"' in body and 'History on this board' not in body

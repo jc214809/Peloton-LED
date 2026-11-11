@@ -30,7 +30,7 @@ from ipaddress import ip_address, ip_network
 from urllib.parse import parse_qs, urlsplit
 
 from peloton import notify
-from settings_page import logins, logo, page
+from settings_page import history, logins, logo, page
 from settings_page.form import apply_form
 from settings_page.pins import PIN_FILE, PIN_SHOWN_S, SESSION_S, PinGate
 from settings_page.updates import STARTS, Updates
@@ -205,6 +205,15 @@ class Settings:
             'pushover': all(auth.get(name) for name in PUSHOVER_KEYS),
             'seed': f'scripts/seed_board.sh {self.checkout_owner()}@{board_name()}.local',
         }
+
+    def workout_history(self, config):
+        """Each rider's workout-compare history on this board, for the Workout insights card, or None
+        when it can't be worked out (a config the page is there to fix): the card then shows only the switch."""
+        try:
+            return history.rider_histories(config, self.token_base, self.default_token, self.clock())
+        except (TypeError, ValueError, AttributeError, KeyError) as exc:
+            logger.warning('Workout history unavailable (%s)', type(exc).__name__)
+            return None
 
     def next_elapse(self, timer):
         """When an active timer next fires, as epoch seconds (or systemd's own text), or None. The
@@ -390,10 +399,11 @@ class Handler(BaseHTTPRequestHandler):
               alert_outcome=None, alert_problems=(), editing_rider=None):
         loaded, problem = self.settings.load()
         updates = self.settings.updates
-        return page.settings_page(config if config is not None else loaded, self._in_setup(), problems, saved,
+        shown = config if config is not None else loaded
+        return page.settings_page(shown, self._in_setup(), problems, saved,
                                   board_name(), problem, self.settings.logins(), self._signed_in(),
                                   login_outcome, login_problems, updates.view() if updates else None, started,
-                                  alert_outcome, alert_problems, editing_rider)
+                                  alert_outcome, alert_problems, editing_rider, self.settings.workout_history(shown))
 
     # --- routes
 

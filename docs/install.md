@@ -501,6 +501,11 @@ the live `config.json` from a phone or laptop:
 
 - **General**: text colour, and compact workout pages (64x32 only)
 - **Rotation**: which screens show, in what order, and each one's seconds
+- **Workout insights**: the switch for the comparisons after your latest
+  workout (off by default), and how many earlier workouts each rider has on
+  the board to compare with. That history is copied from the Mac once with
+  `scripts/push_workout_rows.sh user@board`; until then the card says "Not
+  copied yet" and that rider gets no insights
 - **Timing**: default page time, workout stat time, logo, how often to check Peloton
 - **Goals**: everyone's weekly goals, each rider's name and own goals, and
   the streak reminder day

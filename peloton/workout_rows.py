@@ -74,6 +74,12 @@ def trim_for_board(rows, now):
             and row['start'] >= since}
 
 
+def current_board_rows(rows, now):
+    """The rows the board compares with: in scope, from the last BOARD_DAYS, and of this ROW_VERSION."""
+    rows = {key: row for key, row in rows.items() if isinstance(row, dict)}  # a damaged file can hold anything
+    return [row for row in trim_for_board(rows, now).values() if row.get('v') == ROW_VERSION]
+
+
 class RowStore:
     """Rows keyed by workout ID. Insights are never stored: they depend on peers that change."""
 
