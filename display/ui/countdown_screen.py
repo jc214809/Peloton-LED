@@ -1,4 +1,4 @@
-"""Next milestone: 3 MORE / 600TH / CYCLING, with a progress bar.
+"""Next milestone: 3 TO GO / 600TH / RIDE (32 rows: 3 MORE / TO 600 / CYCLING), with a progress bar.
 
 One page per target within a few workouts, the total's or a discipline's.
 state: {'total': 597, 'target': 600, 'previous': 500, 'title': 'Cycling', 'discipline': 'cycling'};
@@ -8,7 +8,7 @@ previous is where the bar starts. The name is drawn in the discipline's Lifetime
 from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
-from .celebration_screen import ordinal_line
+from .celebration_screen import discipline_noun, ordinal_line
 from .lifetime_overview import discipline_color
 from .screen import Screen
 
@@ -61,8 +61,13 @@ class CountdownScreen(Screen):
         name = str(state.get('title') or '').upper()
         color = discipline_color(state.get('discipline'))
         fraction = (total - previous) / (target - previous) if target > previous else 0
+        # 64 rows: 3 TO GO / 600TH / RIDE, the same noun the celebration uses (the discipline's name only where
+        # it has no word of its own); 32 rows keep 3 MORE / TO 600 / CYCLING.
         more = [(big if matrix.height >= 64 else bold, str(target - total), _WHITE, 3 if matrix.height >= 64 else 2),
-                (bold, 'MORE', _WHITE, 0)]
+                (bold, 'TO GO' if matrix.height >= 64 else 'MORE', _WHITE, 0)]
+        if matrix.height >= 64:
+            name = (discipline_noun(state.get('discipline'), state.get('title')) if state.get('discipline')
+                    else 'WORKOUT')
         # 32 rows: 6x9 ('countdown'), since 5x8's narrow G and T leave gaps (S TRENG TH).
         names = _fonts('title_bold', 'titles', 'info') if matrix.height >= 64 else _fonts('countdown', 'info')
         if matrix.height < 64:

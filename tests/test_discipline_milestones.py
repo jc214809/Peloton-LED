@@ -256,8 +256,8 @@ def test_discipline_countdown_reads_3_more_600th_cycling(monkeypatch):
     red = discipline_color('cycling')
     initialize_fonts(64)
     CountdownScreen().render(ImageMatrix(height=64), state)
-    assert drawn == [('3', (255, 255, 255)), ('MORE', (255, 255, 255)), ('600', (255, 215, 0)),
-                     ('TH', (255, 215, 0)), ('CYCLING', red)]
+    assert drawn == [('3', (255, 255, 255)), ('TO GO', (255, 255, 255)), ('600', (255, 215, 0)),
+                     ('TH', (255, 215, 0)), ('RIDE', red)]
     drawn.clear()
     initialize_fonts(32)
     CountdownScreen().render(ImageMatrix(height=32), {**state, 'total': 1997, 'target': 2000})
@@ -360,3 +360,16 @@ def test_config_pr_max_age_days_defaults_off_and_rejects_bad_values(tmp_path):
         path.write_text(json.dumps({'display': {'pr_max_age_days': value}}))
         with pytest.raises(ValueError, match='pr_max_age_days'):
             load_config(str(path))
+
+
+@pytest.mark.parametrize('discipline, title, noun', [('cycling', 'Cycling', 'RIDE'), ('running', 'Running', 'RUN'),
+                                                     ('walking', 'Walking', 'WALK'), ('rowing', 'Rowing', 'ROW'),
+                                                     ('strength', 'Strength', 'STRENGTH'),
+                                                     ('bike_bootcamp', 'Bike Bootcamp', 'BIKE BOOTCAMP'),
+                                                     (None, 'Workout', 'WORKOUT')])
+def test_64_row_countdown_names_what_is_counted(monkeypatch, discipline, title, noun):
+    drawn = _record_text(monkeypatch)
+    initialize_fonts(64)
+    state = {'total': 47, 'target': 50, 'previous': 25, 'title': title, 'discipline': discipline}
+    assert CountdownScreen().render(ImageMatrix(height=64), state)
+    assert [text for text, _ in drawn][:2] == ['3', 'TO GO'] and drawn[-1][0] == noun
