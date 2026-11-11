@@ -115,12 +115,50 @@ def test_saving_the_page_unchanged_keeps_a_config_that_loads_the_same(tmp_path, 
     assert same(load_config(after)) == same(load_config(before))
 
 
-def test_the_workout_insights_switch_is_config_only_and_survives_a_save():
+def test_the_workout_insights_switch_is_on_the_page_and_saves_both_ways():
     config = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'workout_insights': True}}
     new, problems = apply_form(config, posted(config))
-    assert problems == []
-    assert new['display']['workout_insights'] is True
-    assert 'workout_insights' not in page.settings_page(config)
+    assert problems == [] and new['display']['workout_insights'] is True
+    new, problems = apply_form(config, posted(config, workout_insights=None))  # switched off
+    assert problems == [] and new['display']['workout_insights'] is False
+    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, workout_insights='on'))
+    assert problems == [] and new['display']['workout_insights'] is True
+    # Default off: a config without the key shows the switch off and saves false.
+    new, _ = apply_form(TWO_RIDERS, posted(TWO_RIDERS))
+    assert new['display']['workout_insights'] is False
+    assert 'href="#insights"' in page.settings_page(TWO_RIDERS)
+
+
+HISTORY = [{'name': 'Rider One', 'state': 'ready', 'workouts': 1503, 'updated': 1773496800},
+           {'name': 'Rider Two', 'state': 'missing', 'workouts': 0, 'updated': None}]
+
+
+def _insights_section(html):
+    return html[html.index('id="insights"'):html.index('id="timing"')]
+
+
+def test_the_insights_card_lists_each_riders_history():
+    card = _insights_section(page.settings_page(TWO_RIDERS, history=HISTORY))
+    assert 'History on this board' in card
+    assert 'Rider One' in card and '1,503 workouts' in card and 'to compare with' in card
+    assert 'Rider Two' in card and 'Not copied yet' in card
+    assert 'push_workout_rows.sh' in card
+    assert 'no insights until' not in card                     # switched off: no warning
+    on = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'workout_insights': True}}
+    card = _insights_section(page.settings_page(on, history=HISTORY))
+    assert '<strong>Rider Two</strong>: no insights until its history is copied' in card
+    both = [{**rider, 'state': state} for rider, state in zip(HISTORY, ('old', 'unreadable'))]
+    card = _insights_section(page.settings_page(on, history=both))
+    assert 'Rider One, Rider Two</strong>: no insights until their history' in card
+    assert 'Out of date' in card and "Can&#x27;t be read" in card
+    one = [{**HISTORY[0], 'workouts': 1, 'updated': None}]
+    card = _insights_section(page.settings_page(on, history=one))
+    assert '1 workout<' in card and 'updated' not in card and 'no insights until' not in card
+
+
+def test_without_history_the_card_is_just_the_switch():
+    card = _insights_section(page.settings_page(TWO_RIDERS))
+    assert 'id="workout_insights"' in card and 'History on this board' not in card
 
 
 def test_keys_the_page_does_not_show_are_kept():

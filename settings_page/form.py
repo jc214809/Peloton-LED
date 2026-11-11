@@ -213,6 +213,7 @@ def apply_form(config, form):
     for key, _, _ in TIMING:
         set_or_drop(display, key, key)
     display['show_logo'] = checked('show_logo')
+    display['workout_insights'] = checked('workout_insights')
 
     # Schedules
     set_or_drop(display, 'timezone', 'timezone', str)

@@ -7,7 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from peloton.activity import daily_streak_start
-from peloton.config import load_config, load_dotenv, user_token_path
+from peloton.config import load_config, load_dotenv, user_cache_path, user_token_path
 from peloton.dashboard import Dashboard
 from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
                            week_start)
@@ -348,14 +348,7 @@ def configured_profiles(config, options):
             user_display['milestones'] = user['milestones']
         if 'journey' in user:
             user_display['journey'] = user['journey']
-        if user.get('cache_path'):
-            cache_path = Path(user['cache_path']).expanduser()
-            if not cache_path.is_absolute():
-                cache_path = config_dir / cache_path
-            user_display['cache_path'] = str(cache_path)
-        else:
-            user_display['cache_path'] = str(token_path.with_name(
-                f'{token_path.stem}-dashboard-cache.json'))
+        user_display['cache_path'] = str(user_cache_path(user, config_dir, token_path))
         if user.get('log_path'):
             log_path = Path(user['log_path']).expanduser()
             if not log_path.is_absolute():

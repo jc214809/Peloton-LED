@@ -75,6 +75,17 @@ def user_token_path(user, config_dir):
     return path if path.is_absolute() else Path(config_dir) / path
 
 
+def user_cache_path(user, config_dir, token_path=None):
+    """A rider's dashboard cache: cache_path (relative to the config's folder), else
+    <token stem>-dashboard-cache.json beside their token. The workout log and the workout-compare
+    row store are named after it."""
+    if user.get('cache_path'):
+        path = Path(user['cache_path']).expanduser()
+        return path if path.is_absolute() else Path(config_dir) / path
+    token_path = Path(token_path) if token_path else user_token_path(user, config_dir)
+    return token_path.with_name(f'{token_path.stem}-dashboard-cache.json')
+
+
 def renewal_failed_path(token_path):
     """cookies-joel.txt -> cookies-joel.renewal-failed: written by the token
     renewal job when only a fresh login can help, read by the display."""

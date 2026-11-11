@@ -389,6 +389,8 @@ ICONS = {
     'bell': '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     'edit': '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     'x': '<path d="M18 6 6 18M6 6l12 12"/>',
+    'bulb': '<path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 '
+            '1-2.1A7 7 0 0 0 12 2Z"/>',
     'trophy': '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16"/>'
               '<path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 '
               '.55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
@@ -396,7 +398,8 @@ ICONS = {
 
 SECTIONS = (  # id, nav title, icon
     ('updates', 'Updates', 'refresh'), ('logins', 'Logins', 'key'), ('alerts', 'Pushover alerts', 'bell'),
-    ('general', 'General', 'type'), ('rotation', 'Rotation', 'list'), ('timing', 'Timing', 'clock'), ('goals', 'Goals', 'target'),
+    ('general', 'General', 'type'), ('rotation', 'Rotation', 'list'), ('insights', 'Workout insights', 'bulb'),
+    ('timing', 'Timing', 'clock'), ('goals', 'Goals', 'target'),
     ('milestone-settings', 'Milestones', 'trophy'), ('schedules', 'Schedules', 'sun'), ('panel', 'Panel', 'board'),
     ('advanced', 'Advanced', 'sliders'),
 )
@@ -1346,16 +1349,58 @@ def check_result(view, zone=None):
     return f'<div id="update-check">{found}</div>'
 
 
+# A rider's workout-compare history (settings_page.history), by state: the pill and what to do.
+HISTORY_TEXT = {
+    'missing': ('bad', 'Not copied yet', 'Copy it from the Mac (below).'),
+    'old': ('bad', 'Out of date', 'Copied by an older version, so the board ignores it: copy it again.'),
+    'unreadable': ('bad', "Can't be read", 'Copy it again.'),
+}
+
+
+def _history_row(rider, zone):
+    if rider['state'] == 'ready':
+        workouts = rider['workouts']
+        value = _pill('ok', f'{workouts:,} workout{"" if workouts == 1 else "s"}')
+        if rider.get('updated'):
+            value += f'<span class="hint">to compare with &middot; updated {escape(_at(rider["updated"], zone))}</span>'
+        return rider['name'], value
+    kind, label, advice = HISTORY_TEXT.get(rider['state'], HISTORY_TEXT['unreadable'])
+    return rider['name'], _pill(kind, label) + f'<span class="hint">{escape(advice)}</span>'
+
+
+def insights_card(display, history=None, zone=None):
+    """The workout_insights switch, and each rider's history on this board (settings_page.history:
+    None leaves it off). display: the config's display over DEFAULTS."""
+    on = display.get('workout_insights') is True
+    body = _switch('workout_insights', 'Show workout insights', on,
+                   "After the latest workout's charts, up to two comparisons with your similar earlier "
+                   'workouts, such as "Output down: 124 W vs your usual 188".')
+    if history is not None:
+        waiting = [rider['name'] for rider in history if rider['state'] != 'ready']
+        if on and waiting:
+            body += _notice('warn', f'<strong>{escape(", ".join(waiting))}</strong>: no insights until '
+                                    f'{"its" if len(waiting) == 1 else "their"} history is copied to this board.')
+        items = ''.join(f'<dt>{escape(name)}</dt><dd>{value}</dd>'
+                        for name, value in (_history_row(rider, zone) for rider in history))
+        body += (f'<h3>History on this board</h3><dl class="facts" id="insight-history">{items}</dl>'
+                 '<p class="hint">The workouts each rider is compared with: the last two years of rides, runs, '
+                 'walks, rows, strength and bootcamps. It is copied from the Mac once, with '
+                 '<code>scripts/push_workout_rows.sh</code>; after that the board adds each new workout itself.</p>')
+    return _section('insights', 'Workout insights',
+                    'Comparisons with your similar earlier workouts, after your latest workout.', body, 'bulb')
+
+
 def settings_page(config, hotspot=None, problems=(), saved=None, board=None, note=None, logins=None,
                   signed_in=True, login_outcome=None, login_problems=(), updates=None, started=None,
-                  alert_outcome=None, alert_problems=(), editing_rider=None):
+                  alert_outcome=None, alert_problems=(), editing_rider=None, history=None):
     """The settings form, filled from config. hotspot: the Wi-Fi setup hotspot's name when this
     browser is on it (no PIN needed). note: why config.json couldn't be read, if it couldn't.
     logins: Settings.logins() for the Logins card (None leaves it off); signed_in: a PIN session,
     which changing logins needs. updates: updates.Updates.view() for the Updates card (None leaves
     it off); started: how starting an update or rollback went, one of updates.STARTS. alert_outcome
     and alert_problems: the Pushover alerts card's (ALERT_OUTCOMES). editing_rider: the key of the
-    rider whose login form login_problems came from (their card and form start open)."""
+    rider whose login form login_problems came from (their card and form start open). history:
+    settings_page.history.rider_histories() for the Workout insights card (None leaves the list off)."""
     # An older config's 0 seconds meant "off": show it as the switch it meant, as the board reads it.
     display = copy.deepcopy(section(config, 'display'))
     retire_zero_times(display, ROTATION_SECTIONS, DEFAULTS['rotation'])
@@ -1515,7 +1560,8 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
           f'{logins_card(logins, signed_in, login_outcome, login_problems, _zone(display), editing_rider)}'
           f'{alerts_card(logins, signed_in, alert_outcome, alert_problems)}</div>'
         + f'<form method="post" action="/save" id="settings"><input type="hidden" name="{FORM_FIELD}" value="1">'
-          f'<div class="stack">{general}{rotation}{timing}{goals}{milestones}{schedules}{panel}{advanced}</div>'
+          f'<div class="stack">{general}{rotation}{insights_card(merged, history, _zone(display))}{timing}{goals}'
+          f'{milestones}{schedules}{panel}{advanced}</div>'
         + '<div class="savebar"><div class="savebar-in"><div class="status" id="save-status"><span class="dot"></span>'
           '<span>Everything here is saved to config.json</span></div>'
           f'<button type="submit" class="primary" id="save">{icon("check")}<span>Save and restart</span></button>'
