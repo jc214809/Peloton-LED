@@ -54,6 +54,19 @@ SYSTEMCTL_TIMEOUT_S = 30
 # The checkout to update: the installer's drop-in sets it (this service runs from /opt/peloton-led,
 # which has no git); run from a checkout (development), that checkout.
 CHECKOUT_ENV = 'PELOTON_CHECKOUT'
+# The Power menu's actions: (systemctl arguments, whether they end with the display's unit). --no-block
+# so the request doesn't wait; reboot and poweroff are the Pi's own, no unit.
+POWER_ACTIONS = {
+    'restart-display': (('restart', '--no-block'), True),
+    'stop-display': (('stop', '--no-block'), True),
+    'start-display': (('start', '--no-block'), True),
+    'reboot': (('--no-block', 'reboot'), False),
+    'poweroff': (('--no-block', 'poweroff'), False),
+}
+POWER_MESSAGES = {
+    'reboot': ('Rebooting', 'The board and this page will be back in about a minute.'),
+    'poweroff': ('Shutting down', 'The Pi stays off until you unplug it and plug it back in.'),
+}
 CODE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -160,6 +173,31 @@ class Settings:
             logger.warning("Settings page: can't tell whether %s is running: %s", self.restart_unit, exc)
             return None
         return None if done is None else done.returncode == 0
+
+    def power(self, action, before_run=None):
+        """The Power menu's POWER_ACTIONS. "ok" (done), "unavailable" (no systemd: a dev machine) or
+        "failed" (logged, stderr included). Display actions use the display's unit, with --no-block
+        so the request never waits on it; reboot and poweroff take no unit and --no-block too, and
+        before_run() (the handler sending its page) is called just before them, since the machine
+        starts going down as soon as they're queued. A failure after that is only in the log."""
+        args, unit = POWER_ACTIONS[action]
+        if not shutil.which('systemctl') or (unit and not self.restart_unit):
+            logger.warning('Power menu: %s unavailable (no systemd).', action)
+            return 'unavailable'
+        command = ['systemctl', *args, *([self.restart_unit] if unit else [])]
+        if before_run:
+            before_run()
+        try:
+            done = subprocess.run(command, capture_output=True, text=True, timeout=SYSTEMCTL_TIMEOUT_S)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            logger.error('Power menu: %s failed: %s', action, exc)
+            return 'failed'
+        if done.returncode:
+            logger.error('Power menu: %s failed: %s', action,
+                         done.stderr.strip() or f'systemctl exited {done.returncode}')
+            return 'failed'
+        logger.info('Power menu: %s done.', action)
+        return 'ok'
 
     def restart_app(self):
         """"restarted"; "not_running" (a manual board with the display off: it reads the new config
@@ -396,14 +434,15 @@ class Handler(BaseHTTPRequestHandler):
         return parse_qs(self.rfile.read(length).decode('utf-8', 'replace'), keep_blank_values=True)
 
     def _page(self, problems=(), saved=None, config=None, login_outcome=None, login_problems=(), started=None,
-              alert_outcome=None, alert_problems=(), editing_rider=None):
+              alert_outcome=None, alert_problems=(), editing_rider=None, power_outcome=None):
         loaded, problem = self.settings.load()
         updates = self.settings.updates
         shown = config if config is not None else loaded
         return page.settings_page(shown, self._in_setup(), problems, saved,
                                   board_name(), problem, self.settings.logins(), self._signed_in(),
                                   login_outcome, login_problems, updates.view() if updates else None, started,
-                                  alert_outcome, alert_problems, editing_rider, self.settings.workout_history(shown))
+                                  alert_outcome, alert_problems, editing_rider, self.settings.workout_history(shown),
+                                  power_outcome, self.settings.display_running())
 
     # --- routes
 
@@ -437,7 +476,9 @@ class Handler(BaseHTTPRequestHandler):
         outcome = query.get('logins', [None])[0]
         started = query.get('update', [None])[0]
         alert = query.get('alerts', [None])[0]
+        power = query.get('power', [None])[0]
         self._send(200, self._page(saved=saved if saved in page.SAVED else None,
+                                   power_outcome=power if power in page.POWER_OUTCOMES else None,
                                    login_outcome=outcome if outcome in page.LOGIN_OUTCOMES else None,
                                    started=started if started in STARTS else None,
                                    alert_outcome=alert if alert in page.ALERT_OUTCOMES else None))
@@ -466,10 +507,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._redirect('/signin?signedout', [('Set-Cookie', f'{COOKIE}=; Max-Age=0; Path=/; '
                                                                        f'HttpOnly; SameSite=Strict')])
         updating = ('/update/check', '/update/start', '/update/rollback') if self.settings.updates else ()
-        if path not in ('/save', '/credentials', '/renew', '/alert/test', *updating):
+        if path not in ('/save', '/credentials', '/renew', '/alert/test', '/power', *updating):
             return self._send(404, page.message_page('Not found', "There's nothing at this address."))
         if not self._allowed():
             return self._redirect('/')
+        if path == '/power':
+            return self._power((form.get('action') or [''])[0])
         if path in updating:
             return self._update(path, (form.get('channel') or [''])[0])
         if path == '/renew':
@@ -511,6 +554,31 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(500, self._page([f"Couldn't save: {exc}"], config=new))
         logger.info('Settings page: saved %s (from %s).', self.settings.config_path, self.client_address[0])
         self._redirect(f'/?saved={self.settings.restart_app()}')
+
+    def _power(self, action):
+        """POST /power (action): the top bar's Power menu. A PIN session is needed, hotspot or not, like
+        /credentials, and nothing runs while an update does (it would cut the update short)."""
+        if not self._signed_in():
+            return self._redirect('/signin')
+        if action not in POWER_ACTIONS:
+            logger.warning('Power menu: unknown action %r from %s.', action, self.client_address[0])
+            return self._send(400, page.message_page('Not allowed', "That isn't something the Power menu does."))
+        updates = self.settings.updates
+        if updates and updates.running():
+            logger.info('Power menu: %s refused while an update runs.', action)
+            return self._send(409, page.message_page('Update running', 'Wait for the update to finish '
+                                                                       '(see Updates), then try again.'))
+        logger.info('Power menu: %s requested from %s.', action, self.client_address[0])
+        if action in POWER_MESSAGES:
+            title, text = POWER_MESSAGES[action]
+            outcome = self.settings.power(action, lambda: self._send(200, page.message_page(title, text)))
+        else:
+            outcome = self.settings.power(action)
+        if action in POWER_MESSAGES and outcome != 'unavailable':
+            return  # the message page went out before the command ran (a failure is in the log)
+        if outcome == 'ok':
+            return self._redirect(f'/?power={action}')
+        return self._redirect(f'/?power={"unavailable" if outcome == "unavailable" else "failed-" + action}')
 
     def _update(self, path, channel):
         """POST /update/check, /update/start (channel) and /update/rollback, the Updates card's buttons.

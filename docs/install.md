@@ -577,6 +577,11 @@ PIN to my phone* sends it by Pushover too (at most once a minute). In manual
 mode the display may not be running, so the PIN can't show on the panel; the
 page says so (use Pushover, or `sudo systemctl start peloton-led`).
 
+**Power** (the top bar's menu, next to *Sign out*) restarts, stops or starts the display, or
+reboots or shuts down the Pi, each after a confirmation. It needs a PIN session even on the
+setup hotspot, and waits while an update runs. After *Shut down the Pi* the board stays off
+until it's unplugged and plugged back in, and the page goes with it.
+
 **Saving** checks the whole config with the display's own rules, keeps the old
 file as `config.json.bak` beside it, writes the new one in one step with the
 old owner and mode, and restarts the display if it's running. A manual-mode

@@ -5,6 +5,7 @@ import os
 from html import unescape
 import subprocess
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.cookiejar import CookieJar
@@ -449,3 +450,179 @@ def test_a_config_the_history_cannot_follow_still_shows_the_page(board, caplog):
     board.sign_in()
     status, _, body = board.request('/')
     assert status == 200 and 'id="workout_insights"' in body and 'History on this board' not in body
+
+
+# --- The top bar's Power menu
+
+POWER_COMMANDS = {
+    'restart-display': ['systemctl', 'restart', '--no-block', 'peloton-led.service'],
+    'stop-display': ['systemctl', 'stop', '--no-block', 'peloton-led.service'],
+    'start-display': ['systemctl', 'start', '--no-block', 'peloton-led.service'],
+    'reboot': ['systemctl', '--no-block', 'reboot'],
+    'poweroff': ['systemctl', '--no-block', 'poweroff'],
+}
+
+
+@pytest.fixture
+def systemctl(board, monkeypatch):
+    """Fake systemctl for the Power menu: .calls is every command run, .result its next answer."""
+    fake = SimpleNamespace(calls=[], result=(0, ''), error=None)
+
+    def run(cmd, **kwargs):
+        fake.calls.append(cmd)
+        if fake.error:
+            raise fake.error
+        return SimpleNamespace(returncode=fake.result[0], stderr=fake.result[1])
+    monkeypatch.setattr(server.shutil, 'which', lambda name: '/bin/systemctl')
+    monkeypatch.setattr(server.subprocess, 'run', run)
+    return fake
+
+
+def _menu(body):
+    start = body.index('<details class="power">')
+    return body[start:body.index('</details>', start)]
+
+
+def test_the_power_menu_is_in_the_top_bar_before_sign_out(board):
+    assert 'class="power"' not in board.request('/')[2], 'not on the PIN page'
+    board.sign_in()
+    body = board.request('/')[2]
+    menu = _menu(body)
+    assert body.index('class="power"') < body.index('action="/signout"')
+    for action in ('restart-display', 'stop-display', 'reboot', 'poweroff'):
+        assert f'name="action" value="{action}"' in menu
+    assert menu.count('action="/power"') == 4 and 'value="start-display"' not in menu
+    for text in ('Restart display', 'Stop display', 'Reboot the Pi', 'Shut down the Pi'):
+        assert text in menu
+    assert 'data-confirm="Shut down the Pi? It stays off until you unplug it' in menu
+    assert 'data-confirm="Restart the display? The board goes dark for a few seconds."' in menu
+    assert 'class="danger"' in menu
+    assert "document.querySelector('details.power')" in body  # the script that closes it
+
+
+def test_the_power_menu_offers_start_when_the_display_is_off(board):
+    board.sign_in()
+    board.running = False
+    menu = _menu(board.request('/')[2])
+    assert 'Start display' in menu and 'value="start-display"' in menu
+    assert 'Stop display' not in menu and 'value="stop-display"' not in menu
+
+
+def test_the_power_menu_is_off_the_setup_hotspot_page(board):
+    board.hotspot()
+    assert 'class="power"' not in board.request('/')[2]
+
+
+@pytest.mark.parametrize('action,note', [
+    ('restart-display', 'Display restarted.'), ('stop-display', 'Display stopped.'),
+    ('start-display', 'Display started.')])
+def test_display_power_actions_run_systemctl_and_say_so(board, systemctl, action, note):
+    board.sign_in()
+    status, headers, _ = board.request('/power', {'action': action})
+    assert status == 303 and headers['Location'] == f'/?power={action}'
+    assert systemctl.calls == [POWER_COMMANDS[action]]
+    assert note in board.request(headers['Location'])[2]
+
+
+@pytest.mark.parametrize('action,title,text', [
+    ('reboot', 'Rebooting', 'back in about a minute'),
+    ('poweroff', 'Shutting down', 'unplug it and plug it back in')])
+def test_reboot_and_shutdown_answer_with_a_message_page(board, systemctl, action, title, text):
+    board.sign_in()
+    status, _, body = board.request('/power', {'action': action})
+    assert status == 200 and title in body and text in body
+    assert systemctl.calls == [POWER_COMMANDS[action]]
+
+
+def test_the_message_page_is_sent_before_the_machine_is_told_to_go_down(board, systemctl, monkeypatch):
+    order = []
+    real_send = server.Handler._send
+
+    def send(self, *args, **kwargs):
+        order.append('sent')
+        return real_send(self, *args, **kwargs)
+    monkeypatch.setattr(server.Handler, '_send', send)
+    monkeypatch.setattr(server.subprocess, 'run', lambda cmd, **k: order.append('run') or SimpleNamespace(
+        returncode=0, stderr=''))
+    board.sign_in()
+    board.request('/power', {'action': 'reboot'})
+    assert order[-2:] == ['sent', 'run']
+
+
+def test_power_without_systemd_is_unavailable_never_a_crash(board, monkeypatch):
+    monkeypatch.setattr(server.shutil, 'which', lambda name: None)
+    board.sign_in()
+    for action in POWER_COMMANDS:
+        status, headers, _ = board.request('/power', {'action': action})
+        assert status == 303 and headers['Location'] == '/?power=unavailable'
+    assert 'only works on a board' in board.request('/?power=unavailable')[2]
+
+
+def test_power_with_no_display_unit_is_unavailable_for_the_display_only_actions(board, systemctl):
+    board.settings.restart_unit = ''
+    board.sign_in()
+    assert board.request('/power', {'action': 'stop-display'})[1]['Location'] == '/?power=unavailable'
+    assert board.request('/power', {'action': 'reboot'})[0] == 200
+    assert systemctl.calls == [POWER_COMMANDS['reboot']]
+
+
+@pytest.mark.parametrize('action', list(POWER_COMMANDS))
+def test_a_failing_systemctl_is_reported_and_logged(board, systemctl, caplog, action):
+    board.sign_in()
+    systemctl.result = (1, 'Failed: unit is masked')
+    with caplog.at_level('ERROR', logger='peloton-led.settings'):
+        status, headers, _ = board.request('/power', {'action': action})
+    if action in server.POWER_MESSAGES:
+        assert status == 200, 'the message went out before the command ran'
+    else:
+        assert status == 303 and headers['Location'] == f'/?power=failed-{action}'
+        assert "Couldn't" in board.request(headers['Location'])[2]
+    for _ in range(200):  # reboot and poweroff answer first, so the server logs a moment after the reply
+        if 'unit is masked' in caplog.text:
+            break
+        time.sleep(0.01)
+    assert 'unit is masked' in caplog.text
+
+
+def test_a_systemctl_that_cannot_run_is_a_failure_too(board, systemctl, caplog):
+    board.sign_in()
+    systemctl.error = subprocess.TimeoutExpired('systemctl', 30)
+    with caplog.at_level('ERROR', logger='peloton-led.settings'):
+        _, headers, _ = board.request('/power', {'action': 'restart-display'})
+    assert headers['Location'] == '/?power=failed-restart-display' and 'failed' in caplog.text
+
+
+def test_a_failure_without_an_error_text_names_the_exit_code(board, systemctl, caplog):
+    board.sign_in()
+    systemctl.result = (5, '')
+    with caplog.at_level('ERROR', logger='peloton-led.settings'):
+        board.request('/power', {'action': 'stop-display'})
+    assert 'exited 5' in caplog.text
+
+
+def test_power_needs_a_pin_session_even_on_the_hotspot(board, systemctl):
+    status, headers, _ = board.request('/power', {'action': 'reboot'})
+    assert status == 303 and headers['Location'] == '/'
+    board.hotspot()
+    status, headers, _ = board.request('/power', {'action': 'reboot'})
+    assert status == 303 and headers['Location'] == '/signin'
+    assert systemctl.calls == []
+
+
+def test_power_refuses_other_sites_and_unknown_actions(board, systemctl):
+    board.sign_in()
+    status, _, _ = board.request('/power', {'action': 'reboot'}, {'Origin': 'http://evil.example'})
+    assert status == 403
+    for action in ('', 'format-disk', 'REBOOT'):
+        assert board.request('/power', {'action': action})[0] == 400
+    assert board.request('/power', {})[0] == 400
+    assert systemctl.calls == []
+
+
+def test_power_waits_while_an_update_runs(updating, systemctl):
+    updating.sign_in()
+    updating.settings.updates.is_running = True
+    status, _, body = updating.request('/power', {'action': 'reboot'})
+    assert status == 409 and 'Update running' in body and systemctl.calls == []
+    updating.settings.updates.is_running = False
+    assert updating.request('/power', {'action': 'restart-display'})[0] == 303

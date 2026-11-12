@@ -50,6 +50,18 @@ ALERT_OUTCOMES = {
     'test_failed': ('bad', "Pushover didn't take the test alert: check the keys (the log says why)."),
     'test_off': ('warn', 'Set both Pushover keys below first.'),
 }
+# What the top bar's Power menu says after an action (server.POWER_ACTIONS; failures are "failed-<action>"): (kind, text).
+POWER_OUTCOMES = {
+    'restart-display': ('good', '<strong>Display restarted.</strong>'),
+    'stop-display': ('good', '<strong>Display stopped.</strong> It stays dark until you start it again.'),
+    'start-display': ('good', '<strong>Display started.</strong>'),
+    'failed-restart-display': ('bad', "<strong>Couldn't restart the display.</strong> The settings page's log says why."),
+    'failed-stop-display': ('bad', "<strong>Couldn't stop the display.</strong> The settings page's log says why."),
+    'failed-start-display': ('bad', "<strong>Couldn't start the display.</strong> The settings page's log says why."),
+    'failed-reboot': ('bad', "<strong>Couldn't reboot the Pi.</strong> The settings page's log says why."),
+    'failed-poweroff': ('bad', "<strong>Couldn't shut down the Pi.</strong> The settings page's log says why."),
+    'unavailable': ('warn', 'The Power menu only works on a board (it uses systemd).'),
+}
 SENT = ('sent', 'wait', 'used', 'failed')  # pins.PinGate.send_pin's outcomes
 TOUCH_ICON = '/apple-touch-icon.png'  # server.py serves logo.touch_icon_png() here, without a PIN
 
@@ -101,6 +113,7 @@ a { color: var(--accent); }
 .topbar form { margin: 0; }
 .topbar button { height: 28px; padding: 0 10px; font-size: 13px; }
 @media (max-width: 520px) { .brand-sub, .chip.board { display: none; } }
+@media (max-width: 440px) { .chip.status { display: none; } .top-meta { gap: 6px; } }
 
 /* Layout */
 .shell { max-width: 1080px; margin: 0 auto; padding: 28px 16px 128px; display: grid; gap: 32px; }
@@ -188,6 +201,27 @@ button, .btn { font: inherit; font-weight: 600; display: inline-flex; align-item
 .secondary:hover { background: var(--surface-2); }
 .ghost { background: transparent; color: var(--accent); padding: 0 10px; }
 .ghost:hover { background: var(--accent-soft); }
+/* Power menu (top bar): a details dropdown, so it opens without JavaScript */
+.power { position: relative; }
+.power > summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+  border-radius: 9px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+  font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.power > summary::-webkit-details-marker { display: none; }
+.power > summary:hover, .power[open] > summary { background: var(--surface-2); }
+.power > summary svg { width: 14px; height: 14px; }
+.power > summary svg:last-child { width: 12px; height: 12px; margin-left: -2px; }
+.power-menu { position: absolute; right: 0; top: 34px; width: 220px; max-width: calc(100vw - 32px);
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; padding: 6px; z-index: 30;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.power-menu .power-head { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3);
+  padding: 6px 10px 2px; }
+.power-menu hr { border: 0; border-top: 1px solid var(--border); margin: 6px 4px; }
+.topbar .power-menu button { display: flex; width: 100%; justify-content: flex-start; gap: 10px; height: 36px;
+  padding: 0 10px; font-size: 14px; font-weight: 500; border-radius: 8px; background: transparent;
+  color: var(--text); text-align: left; }
+.topbar .power-menu button:hover { background: var(--surface-2); }
+.topbar .power-menu button svg { width: 15px; height: 15px; }
+.topbar .power-menu button.danger { color: var(--bad); }
 button:focus-visible, summary:focus-visible, a:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent); }
 .block { width: 100%; }
 
@@ -383,6 +417,8 @@ ICONS = {
              'M6 13h.01M10 13h.01M14 13h.01M18 13h.01"/>',
     'phone': '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/>',
     'key': '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
+    'power': '<path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>',
+    'stop': '<rect x="6" y="6" width="12" height="12" rx="2"/>',
     'refresh': '<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8M21 3v5h-5"/>',
     'wifi': '<path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/>',
     'undo': '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
@@ -521,6 +557,14 @@ document.addEventListener('submit', e => {
   button.disabled = true;
   button.querySelector('span').textContent = f.dataset.busy;
 });
+// Power menu: closes on an outside click or Escape (it works without this, as a plain details).
+const power = document.querySelector('details.power');
+if (power) {
+  document.addEventListener('click', e => { if (!power.contains(e.target)) power.open = false; });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && power.open) { power.open = false; power.querySelector('summary').focus(); }
+  });
+}
 const updateRunning = document.getElementById('update-running');
 if (updateRunning) {
   const follow = async () => {
@@ -575,12 +619,40 @@ def document(title, body, script=''):
             f'<body>{body}{f"<script>{script}</script>" if script else ""}</body></html>')
 
 
-def _topbar(board=None, mode=None, sign_out=False):
-    """mode: ("warn" or "good", text) for the badge on the right. sign_out: a Sign out button after it."""
+def power_menu(display_running=None):
+    """The top bar's Power menu: a <details> dropdown (no JavaScript needed) of one-button POST forms to
+    /power, each asking first (the same data-confirm the Updates card's buttons use). display_running:
+    False offers Start display instead of Stop; None (no telling) offers Stop."""
+    def item(action, label, glyph, busy, confirm, kind=''):
+        return _post('/power', label, glyph, busy, kind, f'<input type="hidden" name="action" value="{action}">',
+                     confirm)
+    stop = (item('start-display', 'Start display', 'refresh', 'Starting…', 'Start the display?')
+            if display_running is False else
+            item('stop-display', 'Stop display', 'stop', 'Stopping…',
+                 'Stop the display? The board stays dark until you start it again.'))
+    return ('<details class="power"><summary aria-label="Power menu">' + icon('power') + 'Power '
+            + icon('chevron') + '</summary>'
+            '<div class="power-menu"><div class="power-head">Display</div>'
+            + item('restart-display', 'Restart display', 'refresh', 'Restarting…',
+                   'Restart the display? The board goes dark for a few seconds.')
+            + stop + '<hr><div class="power-head">Raspberry Pi</div>'
+            + item('reboot', 'Reboot the Pi', 'refresh', 'Rebooting…',
+                   'Reboot the Pi? The board and this page come back in about a minute.')
+            + item('poweroff', 'Shut down the Pi', 'power', 'Shutting down…',
+                   'Shut down the Pi? It stays off until you unplug it and plug it back in, and this page '
+                   'goes away too.', 'danger')
+            + '</div></details>')
+
+
+def _topbar(board=None, mode=None, sign_out=False, power=False, display_running=None):
+    """mode: ("warn" or "good", text) for the badge on the right. sign_out: a Sign out button after it.
+    power: a Power menu before Sign out (display_running as power_menu's)."""
     chips = f'<span class="chip board">{icon("board")}{escape(board)}</span>' if board else ''
     if mode:
         kind, text = mode
-        chips += f'<span class="chip {kind}">{icon("wifi" if kind == "warn" else "lock")}{escape(text)}</span>'
+        chips += f'<span class="chip status {kind}">{icon("wifi" if kind == "warn" else "lock")}{escape(text)}</span>'
+    if power:
+        chips += power_menu(display_running)
     if sign_out:
         chips += '<form method="post" action="/signout"><button type="submit" class="ghost">Sign out</button></form>'
     return (f'<header class="topbar"><div class="topbar-in"><div class="brand"><span class="mark">{logo.svg()}</span>'
@@ -1392,7 +1464,8 @@ def insights_card(display, history=None, zone=None):
 
 def settings_page(config, hotspot=None, problems=(), saved=None, board=None, note=None, logins=None,
                   signed_in=True, login_outcome=None, login_problems=(), updates=None, started=None,
-                  alert_outcome=None, alert_problems=(), editing_rider=None, history=None):
+                  alert_outcome=None, alert_problems=(), editing_rider=None, history=None, power_outcome=None,
+                  display_running=None):
     """The settings form, filled from config. hotspot: the Wi-Fi setup hotspot's name when this
     browser is on it (no PIN needed). note: why config.json couldn't be read, if it couldn't.
     logins: Settings.logins() for the Logins card (None leaves it off); signed_in: a PIN session,
@@ -1400,14 +1473,21 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
     it off); started: how starting an update or rollback went, one of updates.STARTS. alert_outcome
     and alert_problems: the Pushover alerts card's (ALERT_OUTCOMES). editing_rider: the key of the
     rider whose login form login_problems came from (their card and form start open). history:
-    settings_page.history.rider_histories() for the Workout insights card (None leaves the list off)."""
+    settings_page.history.rider_histories() for the Workout insights card (None leaves the list off).
+    power_outcome: how the Power menu's last action went, one of POWER_OUTCOMES. display_running: whether
+    the display is running (False: the menu offers Start; None, unknown: Stop). The menu sits with Sign
+    out: not on the setup hotspot, where nobody has a PIN session."""
     # An older config's 0 seconds meant "off": show it as the switch it meant, as the board reads it.
     display = copy.deepcopy(section(config, 'display'))
     retire_zero_times(display, ROTATION_SECTIONS, DEFAULTS['rotation'])
     matrix = section(config, 'matrix')
     merged = {**DEFAULTS, **display}  # what the app uses where config.json says nothing
 
-    top = (notices(problems, saved)
+    power_notice = ''
+    if power_outcome in POWER_OUTCOMES:
+        kind, html = POWER_OUTCOMES[power_outcome]
+        power_notice = _notice(kind, html, 'alert' if kind == 'bad' else 'status')
+    top = (power_notice + notices(problems, saved)
            + (_notice('warn', f'<strong>Setup mode.</strong> Anyone who joins <strong>{escape(hotspot)}</strong> '
                               'can open this page while the board is in Wi-Fi setup.') if hotspot else '')
            + (_notice('warn', escape(note)) if note else ''))
@@ -1551,7 +1631,8 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
                   if (sid != 'updates' or updates) and (sid not in ('logins', 'alerts') or logins))
     mode = ('warn', 'Setup mode') if hotspot else ('good', 'Signed in')
     body = (
-        _topbar(board, mode, sign_out=not hotspot)  # on the hotspot there's no PIN session to end
+        _topbar(board, mode, sign_out=not hotspot, power=not hotspot, display_running=display_running)
+        # (on the hotspot there's no PIN session to end, and /power takes one)
         + f'<div class="shell"><nav class="toc" aria-label="Sections">{toc}</nav><main>'
         + '<div class="page-head"><h1>Settings</h1><p>Changes are checked, saved to the board\'s config.json, '
           'and the display restarts to use them. Logins go to the board\'s auth.env and are never shown.</p></div>'
