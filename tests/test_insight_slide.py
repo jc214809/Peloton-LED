@@ -18,6 +18,7 @@ GREEN = (60, 220, 110)
 RED = (230, 40, 40)
 WHITE = (200, 205, 215)   # the insight text colour
 GREY = (145, 165, 190)
+USUAL_BAR = (70, 85, 110)   # the usual's bar
 DIM = (70, 80, 95)
 HEART = (220, 20, 20)
 CYCLING = (220, 50, 20)
@@ -153,7 +154,7 @@ def test_64_bars_layout():
     matrix = render_detail(ride_with_two(), 64, 'insight_bars')
     assert lit(matrix, AMBER, range(14, 23), range(64))                       # OUTPUT DOWN
     assert len(lit(matrix, AMBER, [35], range(64))) >= 30                     # today's bar, rows 34-37
-    assert len(lit(matrix, GREY, [48], range(64))) == 60                      # the usual's, full width
+    assert len(lit(matrix, USUAL_BAR, [48], range(64))) == 60                      # the usual's, full width
     assert lit(matrix, WHITE, range(54, 62), range(64))                       # AN EASIER DAY
     assert not lit(matrix, CYCLING, range(0, 12), range(64))
     assert_no_heart_row(matrix)
@@ -167,7 +168,7 @@ def test_32_bars_and_words_layout():
     assert lit(bars, GOLD, [0], range(1, 6))                                  # the bulb at (1, 0)
     assert lit(bars, AMBER, range(0, 7), range(9, 64))                        # headline
     assert len(lit(bars, AMBER, [11], range(0, 42))) >= 20                    # today, rows 9-13 from x 1
-    assert len(lit(bars, GREY, [19], range(0, 42))) == 41                     # usual, 40 px from x 1
+    assert len(lit(bars, USUAL_BAR, [19], range(0, 42))) == 41                     # usual, 40 px from x 1
     assert lit(bars, AMBER, range(7, 14), range(50, 64))                      # 124 on the right
     assert lit(bars, WHITE, range(24, 31), range(64))                         # reason on baseline 30
     assert not lit(bars, CYCLING, range(32), range(64))                       # no title, no rule

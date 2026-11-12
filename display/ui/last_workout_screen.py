@@ -463,6 +463,8 @@ _INSIGHT_GOLD = (255, 200, 0)
 # Insight sentences and reasons: full white is glaring on the panel next to the coloured figures.
 _INSIGHT_TEXT = (200, 205, 215)
 _INSIGHT_DIM = (70, 80, 95)
+# The 'usual' bar: slate, so today's bar is the one that stands out (the number and label stay grey).
+_USUAL_BAR = (70, 85, 110)
 # The workout-compare lightbulb, 5x7: '#' gold, 'g' the grey base.
 _BULB_ROWS = ('.###.', '#####', '#####', '#####', '.###.', '.ggg.', '..g..')
 
@@ -566,14 +568,15 @@ def _bars_tall(matrix, figure: dict, colour) -> None:
     kind = figure['kind']
     if kind == 'bars':
         top = max(figure['today'], figure['usual']) or 1
-        for y, label, value, text, rgb in ((32, 'TODAY', figure['today'], figure['today_text'], colour),
-                                           (45, 'USUAL', figure['usual'], figure['usual_text'], _LABEL_GREY)):
+        for y, label, value, text, rgb, bar in ((32, 'TODAY', figure['today'], figure['today_text'], colour, colour),
+                                                (45, 'USUAL', figure['usual'], figure['usual_text'], _LABEL_GREY,
+                                                 _USUAL_BAR)):
             unit = figure.get('unit', '')
             # Weights read as one word, 40LB, as in the sentence; watts and mph keep their space.
             text = f'{text}{unit}' if unit == 'LB' else f'{text} {unit}'.strip()
             _write(matrix, stats, 2, y, _LABEL_GREY, label)
             _write(matrix, stats, 62 - get_text_width(stats, text), y, rgb, text)
-            _rect(matrix, 2, y + 2, 2 + round(59 * min(value, top) / top), y + 5, rgb)
+            _rect(matrix, 2, y + 2, 2 + round(59 * min(value, top) / top), y + 5, bar)
     elif kind == 'share':
         pct = figure['pct']
         text = f'{pct:.0f}%'
@@ -606,9 +609,9 @@ def _bars_short(matrix, figure: dict, colour) -> None:
     kind = figure['kind']
     if kind == 'bars':
         top = max(figure['today'], figure['usual']) or 1
-        for y, value, text, rgb in ((13, figure['today'], figure['today_text'], colour),
-                                    (21, figure['usual'], figure['usual_text'], _LABEL_GREY)):
-            _rect(matrix, 1, y - 4, 1 + round(40 * min(value, top) / top), y, rgb)
+        for y, value, text, rgb, bar in ((13, figure['today'], figure['today_text'], colour, colour),
+                                         (21, figure['usual'], figure['usual_text'], _LABEL_GREY, _USUAL_BAR)):
+            _rect(matrix, 1, y - 4, 1 + round(40 * min(value, top) / top), y, bar)
             _write(matrix, stats, 63 - get_text_width(stats, text), y, rgb, text)
     elif kind == 'share':
         pct = figure['pct']

@@ -87,7 +87,7 @@ Default order:
 | [`streaks`](#streaks--weekly-and-daily-streaks) | Current weekly streak and your best, or your daily streak on alternate passes; or a weekend reminder when this week has no workout yet | Weekly streak above 0 or daily streak of 2+ days | `overview_duration` |
 | [`versus`](#versus--household-head-to-head) | Two riders side by side for this week | 2+ riders configured under `users` | `overview_duration` (64×32: shared by its 3 stats, at least 12 s) |
 | [`total_workouts`](#total_workouts--lifetime-total) | Lifetime total workout count | Profile totals available | Same as `lifetime` (at least 5 s) |
-| [`next_milestone`](#next_milestone--countdown-to-the-next-milestone) | A countdown to your next milestone, all workouts' or a discipline's (`4 TO GO / 500TH / STRENGTH`), closest first | Something is within 5 workouts of its milestone | `overview_duration` per page (up to 3) |
+| [`next_milestone`](#next_milestone--countdown-to-the-next-milestone) | A countdown to your next milestone, all workouts' or a discipline's (`4 TO GO / TILL YOUR / 500TH / STRENGTH`), closest first | Something is within 5 workouts of its milestone | `overview_duration` per page (up to 3) |
 | [`lifetime`](#lifetime--per-discipline-totals) | Every discipline's lifetime count, with icons | Profile totals available | `overview_duration` per page (at least 5 s) |
 | [`journey`](#journey--lifetime-miles-as-a-trip) | Lifetime miles as a trip between two places, split into bike, walk/run and row | Some distance has been tallied | `overview_duration` |
 | [`heatmap`](#heatmap--last-12-weeks) | One cell per day for the last 12 weeks, shaded by minutes | The full history is in the workout log and has a workout in those weeks | `overview_duration` |
@@ -212,7 +212,7 @@ A full-size page with your lifetime workout count: the title in `color`, the num
 
 ![Next milestone countdown](docs/screenshots/rotation/next-milestone.png)
 
-A countdown in big type when you're close to a milestone: how many to go (`3 TO GO`), the milestone in gold with a raised ending (`2,200TH`), and what it counts (`WORKOUT`, or the discipline's noun in its colour from the `lifetime` page: `RIDE`, `RUN`, `WALK`, `ROW`, else its name), over a progress bar from the previous milestone. On 64x32 it reads `3 MORE / TO 2,200 / WORKOUTS` (the discipline's name there), with no bar.
+A countdown in big type when you're close to a milestone: how many to go (`3 TO GO`, then a small `TILL YOUR`; with one left, `NEXT UP YOUR` instead), the milestone in gold with a raised ending (`2,200TH`), and what it counts (`WORKOUT`, or the discipline's noun in its colour from the `lifetime` page: `RIDE`, `RUN`, `WALK`, `ROW`, else its name), over a progress bar from the previous milestone. On 64x32 it reads `3 MORE / TO 2,200 / WORKOUTS` (the discipline's name there), with no bar.
 
 Your total and each discipline follow the same rule: a page appears only when it's 5 or fewer workouts away (`milestone_within`), closest first and at most 3 pages (`milestone_pages`), so most of the time this section shows nothing. Your total's milestone is the next value in `milestones` above it, else the next multiple of `milestone_step` (default `100`). A discipline's are picked automatically: 25, 50, 100, then every 100. Discipline counts are Peloton's own per-discipline totals, the ones on the `lifetime` pages, so Bike, Tread and Row Bootcamp count separately from rides, runs and rows. Options: `screen_durations.next_milestone` / `overview_duration`, per page.
 
