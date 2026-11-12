@@ -116,6 +116,10 @@ Each screen opens with an **intro**: the discipline name in its color, class len
 
 ![Cycling workout screen](docs/screenshots/rotation/workout-cycling.png)
 
+On 64×32 the intro shows heart rate and calories under a title that fits on one line; a title that takes two lines uses that row, so the intro shows none (they appear from the first stat on).
+
+![64x32 intro: one-line title with heart rate and calories, two-line title without](docs/screenshots/rotation/workout-intro-64x32.png)
+
 Which stats appear depends on the discipline. A stat Peloton didn't record is simply skipped.
 
 | Discipline | Stats, in order |
