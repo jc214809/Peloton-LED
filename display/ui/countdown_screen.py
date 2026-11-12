@@ -1,4 +1,4 @@
-"""Next milestone: 3 TO GO / TILL YOUR / 600TH / RIDE, or NEXT UP YOUR / 600TH / RIDE when one is left (32 rows: 3 MORE / TO 600 / CYCLING), with a progress bar.
+"""Next milestone: 3 TO GO / TILL YOUR / 600TH / RIDE, or NEXT ONE / IS YOUR / 600TH / RIDE when one is left (32 rows: 3 MORE / TO 600 / CYCLING), with a progress bar.
 
 One page per target within a few workouts, the total's or a discipline's.
 state: {'total': 597, 'target': 600, 'previous': 500, 'title': 'Cycling', 'discipline': 'cycling'};
@@ -135,17 +135,12 @@ class CountdownScreen(Screen):
                 _draw_runs(matrix, [(font, name, color, 0)], 30)
             return True
         titles = loaded_fonts.get('titles')
-        if target - total == 1:
-            # One left: the next workout is the milestone, so NEXT UP YOUR replaces the count, and the
-            # page keeps its three lines (baselines 16 / 36 / 50, bar 56-59).
-            lead = 'NEXT UP YOUR'
-            _draw_runs(matrix, [(_fit(lead, _fonts('bold', 'titles', 'info'), matrix.width - 2), lead, _WHITE, 0)], 16)
-            number_y, name_y, bar_top, bar_height = 36, 50, 56, 4
-        else:
-            # Four lines and the bar, spaced evenly: 3 TO GO / TILL YOUR / 600TH / RIDE.
-            _draw_runs(matrix, more, 16)
-            _draw_runs(matrix, [(_fonts('stats', 'info')[0], 'TILL YOUR', _GREY, 0)], 25)
-            number_y, name_y, bar_top, bar_height = 42, 54, 58, 3
+        # Four lines and the bar, spaced evenly: 3 TO GO / TILL YOUR / 600TH / RIDE, or with one left
+        # (the next workout is the milestone) NEXT ONE / IS YOUR / 600TH / RIDE in the same places.
+        lead, link = (([(bold, 'NEXT ONE', _WHITE, 0)], 'IS YOUR') if target - total == 1 else (more, 'TILL YOUR'))
+        _draw_runs(matrix, lead, 16)
+        _draw_runs(matrix, [(_fonts('stats', 'info')[0], link, _GREY, 0)], 25)
+        number_y, name_y, bar_top, bar_height = 42, 54, 58, 3
         parts = ordinal_line(target, [big, bold], titles, number_y, graphics.Color(*_GOLD), 0, matrix.width)
         for font, x, y, line_color, text in parts or ():
             graphics.DrawText(matrix, font, x, y, line_color, text)

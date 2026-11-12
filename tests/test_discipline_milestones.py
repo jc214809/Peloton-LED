@@ -382,7 +382,7 @@ def test_64_row_countdown_names_what_is_counted(monkeypatch, discipline, title, 
 
 
 @pytest.mark.parametrize('height', [32, 64])
-def test_one_left_says_next_up_your_on_64_rows_only(monkeypatch, height):
+def test_one_left_says_next_one_is_your_on_64_rows_only(monkeypatch, height):
     drawn = _record_text(monkeypatch)
     initialize_fonts(height)
     state = {'total': 599, 'target': 600, 'previous': 500, 'title': 'Cycling', 'discipline': 'cycling'}
@@ -390,11 +390,24 @@ def test_one_left_says_next_up_your_on_64_rows_only(monkeypatch, height):
     assert CountdownScreen().render(matrix, state)
     texts = [text for text, _ in drawn]
     if height == 64:
-        assert texts == ['NEXT UP YOUR', '600', 'TH', 'RIDE']
+        assert texts == ['NEXT ONE', 'IS YOUR', '600', 'TH', 'RIDE']
     else:
         assert texts[:2] == ['1', 'MORE']
     pixels = matrix.image.load()
     assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))  # the line fits
+
+
+def test_one_left_keeps_the_number_name_and_bar_where_the_count_page_has_them():
+    initialize_fonts(64)
+    pages = []
+    for total in (597, 599):
+        matrix = ImageMatrix(height=64)
+        state = {'total': total, 'target': 600, 'previous': 500, 'title': 'Cycling', 'discipline': 'cycling'}
+        assert CountdownScreen().render(matrix, state)
+        pages.append(matrix.image)
+    # Only the top two lines and the bar's fill differ: 600TH and RIDE are the same pixels.
+    assert pages[0].crop((0, 28, 64, 56)).tobytes() == pages[1].crop((0, 28, 64, 56)).tobytes()
+    assert any(pages[1].getpixel((x, y)) != (0, 0, 0) for x in range(64) for y in range(28, 56))
 
 
 @pytest.mark.parametrize('title, discipline, pieces', [('Row Bootcamp', 'row_bootcamp', ['ROW', 'BOO', 'TCAMP']),
