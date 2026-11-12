@@ -16,15 +16,15 @@ import math
 from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
-from .lifetime_overview import discipline_color
 from .screen import Screen
 
 TRACK_COLOR = (30, 30, 38)
 DONE_COLOR = (255, 140, 0)
 TIP_COLOR = (255, 255, 255)
-# Each group in its Lifetime-page colour: the bike's red, running's green, the rower's blue.
-GROUP_COLORS = {'bike': discipline_color('cycling'), 'walk_run': discipline_color('running'),
-                'row': discipline_color('rowing')}
+# The groups' own colours, chosen to sit beside the orange bar: the Lifetime pages' red bike and
+# green runner read as Christmas next to it. Journey only; the Lifetime and milestone pages keep
+# the discipline colours. Blue, teal and violet: cool colours, far in hue from the orange bar (Joel's pick).
+GROUP_COLORS = {'bike': (0, 150, 255), 'walk_run': (0, 215, 170), 'row': (185, 70, 230)}
 _GREY = graphics.Color(145, 165, 190)
 _GOLD = graphics.Color(255, 215, 0)
 _WHITE = graphics.Color(255, 255, 255)

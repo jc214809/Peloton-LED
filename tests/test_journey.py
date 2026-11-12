@@ -476,3 +476,22 @@ def test_journey_screen_status_never_truncates(height):
     _, status = journey_text(progress, fits=lambda text: get_text_width(small, text) <= room)
     assert get_text_width(small, status) <= room
     assert status.endswith('TO HOME')
+
+
+def test_group_colours_avoid_christmas_and_the_bar():
+    """No red beside green (the orange bar makes it Christmas), all distinct from each other
+    and from the bar, each bright enough to read as small text."""
+    import colorsys
+    colours = list(GROUP_COLORS.values())
+    assert len(set(colours)) == len(colours) and DONE_COLOR not in colours
+    hues = []
+    for r, g, b in colours:
+        hue, _, value = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+        assert value >= 0.8
+        hues.append(hue * 360)
+    red = any(h < 20 or h > 345 for h in hues)
+    green = any(80 < h < 160 for h in hues)
+    assert not (red and green)
+    bar_hue = colorsys.rgb_to_hsv(*(c / 255 for c in DONE_COLOR))[0] * 360
+    assert all(abs(h - bar_hue) > 40 for h in hues)
+    assert all(abs(a - b) > 30 for i, a in enumerate(hues) for b in hues[i + 1:])
