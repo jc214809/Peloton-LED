@@ -209,7 +209,7 @@ A Monday page (and an optional Pushover) summing last week: workouts, minutes, b
 ### Weekly insights: looking back over the whole past week
 Insights today compare one workout with similar earlier ones. This is the same idea for the week just finished: a page (or two) shown for the first day or two of the new week, then gone. Open-ended on purpose: first look through the data and see what's worth saying, then pick. Starting points:
 - Run the checks over each past week of the workout log (`peloton/activity.py` windows; `frame_stats` already has "this week" and "last week") and the saved rows (`RowStore`), and see which weeks have something to say: more or fewer workouts, minutes or active days than the usual week, a PR, the most output in a week, a new discipline or instructor, a goal met or missed, a streak extended, a quiet week after a busy one.
-- The prototype `docs/fitness-analysis/scripts/weekly.py` already walks the log by Monday week (running minutes and the longest steady stretch by pace); see whether any of its week-level measures are worth a board line.
+- The private analysis prototype `weekly.py` (kept outside this repo) already walks the log by Monday week (running minutes and the longest steady stretch by pace); see whether any of its week-level measures are worth a board line.
 - Rules only, like workout compare: a small set of findings, at most two or three, each with the figures it compared and a "nothing worth saying" state that shows nothing.
 Decide before building: how long it shows (Monday and Tuesday? until the first workout of the week?), where it sits in the rotation, whether it's one page or a card plus bars like workout insights, and a settings switch (default off, like `workout_insights`) plus per-rider choice. Needs the week in the rider's timezone, and a memory of what was shown (like `milestone_shown_at`) so a restart doesn't replay it. Goes with Weekly recap above (the plain totals page and Pushover): decide whether this replaces it or adds the "what stood out" to it. Check both heights with `render_rotation.py`.
 
@@ -226,11 +226,10 @@ Research: does the API expose an in-progress workout (current output, heart rate
 Research: Peloton's reservation/schedule endpoints for "ride at 6:30 AM with Jess". A page before the class, from one extra call per refresh (check the rate limit).
 
 ### Fitness trend page
-The analysis in `docs/fitness-analysis/` (effort over time by class type, 90 W hold by quarter) suggests a "stronger / flat / weaker than last quarter" page. Only if a measure survives the checks in the README (interval classes dominated the hold figure, so it isn't a fitness number as it stands). Joel decides whether a board should say this at all.
+The private analysis (kept outside this repo; effort over time by class type, 90 W hold by quarter) suggests a "stronger / flat / weaker than last quarter" page. Only if a measure survives the checks in the README (interval classes dominated the hold figure, so it isn't a fitness number as it stands). Joel decides whether a board should say this at all.
 
 ### Housekeeping
 - Drop the retired keys (`compact_workout_pages`, `last_workout_duration`, `screen_durations.latest_workouts`, `discipline_milestone_celebrate_within`, `font`) from the loader once every board's config has been saved through the settings page; keep `RETIRED_DISPLAY_KEYS` until then.
-- Document `docs/fitness-analysis/` in the repo or keep it local on purpose (it's untracked, the repo is public): decide, then either `.gitignore` it or commit the parts without real data.
 
 ## Joel, by hand
 
