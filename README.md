@@ -4,7 +4,7 @@
 
 ![Tests](https://github.com/jc214809/Peloton-LED/actions/workflows/tests.yml/badge.svg) [![codecov](https://codecov.io/gh/jc214809/Peloton-LED/graph/badge.svg)](https://codecov.io/gh/jc214809/Peloton-LED)
 
-A Python dashboard for a Raspberry Pi RGB LED matrix, with a desktop browser emulator. Shows every completed workout from your latest active day, one-time personal-record celebrations, username, and lifetime workout counts by discipline.
+A Python dashboard for a Raspberry Pi RGB LED matrix (64×64 or 64×32), with a desktop browser emulator. It shows every completed workout from your latest active day (with personal-record celebrations and optional insights against your similar workouts), your name with rotating highlights, streaks, a household head-to-head, lifetime counts by discipline, milestone countdowns and celebrations, your lifetime miles as a trip, a 12-week heatmap and weekly goals. Each board has a settings page and updates itself.
 
 ## Setup
 
@@ -82,8 +82,8 @@ Default order:
 
 | Section | What it shows | Shown when | Time on screen |
 |---|---|---|---|
-| [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats), plus 1 s each for the graph and zone bar, per workout |
-| [`username`](#username--rider-name-and-highlights) | Your name over rotating highlights: total workouts, the two most interesting facts right now, then an instructor top 3 | Always | `duration`, shared by the highlights (at least 4 s each) |
+| [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one; optionally up to two insights comparing it with your similar workouts | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats), plus 1 s each for the graph, zone bar and each insight frame, per workout; then the PR card when there is one |
+| [`username`](#username--rider-name-and-highlights) | Your name over rotating highlights: total workouts, the two most interesting facts right now, then an instructor top 3 | Always | `duration`, shared by the highlights (at least 5 s each) |
 | [`streaks`](#streaks--weekly-and-daily-streaks) | Current weekly streak and your best, or your daily streak on alternate passes; or a weekend reminder when this week has no workout yet | Weekly streak above 0 or daily streak of 2+ days | `overview_duration` |
 | [`versus`](#versus--household-head-to-head) | Two riders side by side for this week | 2+ riders configured under `users` | `overview_duration` (64×32: shared by its 3 stats, at least 12 s) |
 | [`total_workouts`](#total_workouts--lifetime-total) | Lifetime total workout count | Profile totals available | Same as `lifetime` (at least 5 s) |
@@ -169,6 +169,25 @@ Every discipline then adds the graph and zone bar if they're available.
 
 ![PR workout followed by the PR celebration](docs/screenshots/rotation/pr-celebration.png)
 
+**Workout insights** (off by default). After a workout's stats and charts, the board can say how it compared with your similar earlier workouts, in up to two insights. It works for Cycling, Bike Bootcamp, Rowing, Row Bootcamp, Running, Walking, Tread Bootcamp and Strength. Every insight comes from fixed rules over your own numbers (no AI model), and a workout with nothing worth saying shows none.
+
+![Cycling insights: output down, then hardest ride by heart rate](docs/screenshots/rotation/insights-bike.png)
+
+![Strength insights: go up a weight, then three classes in a row over target](docs/screenshots/rotation/insights-strength.png)
+
+"Similar" means the same discipline, class type and mode (plain, arms or floor), indoor or outdoor, completed, and within 30% of the length, from the last year (two years if the last year has too few). Your typical figure is the middle of those workouts. What it can say, in the order it's chosen:
+
+| Insight | Colour | Example |
+|---|---|---|
+| Output (bike, rower) or speed (tread, walk, run) against your typical | Green up, amber down, white when it's in your typical range | `OUTPUT DOWN VS YOUR TYPICAL / 124 W VS 188 W`; `SAME HEART, MORE POWER.` when your heart rate was within 3 bpm of typical, else `MORE WATTS PER HEARTBEAT.` |
+| Instructor callouts you missed (bike resistance or cadence, rower or tread pace) | Amber | the share of the callout time spent under the range |
+| Strength weights, from that movement's history, else the weight category's | Green, or amber for missed targets | `GO UP A WEIGHT ON BENT OVER ROW`, `WENT HEAVIER`, `GO UP FROM 40LB ON HEAVY: 3 CLASSES IN A ROW OVER TARGET`, missed rep targets |
+| Effort by heart rate | Red hardest, green easiest | `HARDEST RIDE OF YOUR LAST 12 BY HEART RATE`, `STRIVE PER MIN` |
+
+On 64×64 each insight is a card (the sentence, and what it was compared with along the bottom: `9 SIMILAR RIDES`) and then bars (today against your typical, a share, or blocks for classes in a row). On 64×32 the bars come first, then the sentence on one or two pages of three lines. Each frame holds like a chart, `last_workout_detail_interval` plus one second, and adds to the workout page's time.
+
+Turn it on with `"workout_insights": true` under `display`, or the settings page's **Workout insights** card. The board needs your workout history to compare with: copy it once from a Mac that has it with `scripts/push_workout_rows.sh user@board`. After that the board adds each new workout itself, with one extra Peloton request per new workout. The card shows how many workouts each rider has on the board, and warns when the switch is on and a rider has none (that rider just gets no insights). With the switch off the board makes no extra requests and doesn't load the history. Preview them with `python scripts/render_rotation.py --height 64 --demo --insights`.
+
 Options:
 
 - `last_workout_detail_interval` (default `4`): seconds per intro/stat frame.
@@ -212,7 +231,7 @@ A full-size page with your lifetime workout count: the title in `color`, the num
 
 ![Next milestone countdown](docs/screenshots/rotation/next-milestone.png)
 
-A countdown in big type when you're close to a milestone: how many to go (`3 TO GO`, then a small `TILL YOUR`; with one left, `NEXT UP YOUR` instead), the milestone in gold with a raised ending (`2,200TH`), and what it counts (`WORKOUT`, or the discipline's noun in its colour from the `lifetime` page: `RIDE`, `RUN`, `WALK`, `ROW`, else its name), over a progress bar from the previous milestone. On 64x32 it reads `3 MORE / TO 2,200 / WORKOUTS` (the discipline's name there), with no bar.
+A countdown in big type when you're close to a milestone: how many to go (`3 TO GO`, then a small `TILL YOUR`; with one left, `NEXT ONE` then `IS YOUR` instead), the milestone in gold with a raised ending (`2,200TH`), and what it counts (`WORKOUT`, or the discipline's noun in its colour from the `lifetime` page: `RIDE`, `RUN`, `WALK`, `ROW`, else its name), over a progress bar from the previous milestone. On 64x32 it reads `3 MORE / TO 2,200 / WORKOUTS` (the discipline's name there), with no bar.
 
 Your total and each discipline follow the same rule: a page appears only when it's 5 or fewer workouts away (`milestone_within`), closest first and at most 3 pages (`milestone_pages`), so most of the time this section shows nothing. Your total's milestone is the next value in `milestones` above it, else the next multiple of `milestone_step` (default `100`). A discipline's are picked automatically: 25, 50, 100, then every 100. Discipline counts are Peloton's own per-discipline totals, the ones on the `lifetime` pages, so Bike, Tread and Row Bootcamp count separately from rides, runs and rows. Options: `screen_durations.next_milestone` / `overview_duration`, per page.
 
@@ -234,7 +253,7 @@ A GitHub-style grid: one column per week (oldest on the left, this week on the r
 
 ![Journey page](docs/screenshots/rotation/journey.png)
 
-Your lifetime miles as a trip: where you're headed, your total miles, how far is left on this leg and the percent done, a progress bar, and the miles split by how you covered them: **BIKE** (Cycling, Bike Bootcamp), **ROW** (Rowing, Row Bootcamp) and **WALK/RUN** (everything else: tread, outdoor, hiking). 64x64 shows it all on one page. 64x32 shows the trip, then *Miles by type*, sharing the screen's time (at least 4 seconds each; with only one type of miles it stays on the trip). Each step opens with about a second of motion, then holds still: the bar fills while the miles count up across this leg, the bar's tip then pulses gently, and the types come in one after another. Reaching the destination turns you around for the trip home (`TO COLUMBUS`), and so on forever. `TRIP 4` means you're on your fourth one-way leg. Miles show to a tenth (`741.6`) below 1,000 and in whole miles from there, where the decimal wouldn't fit. The route's `miles` can be a decimal too, e.g. `26.2`.
+Your lifetime miles as a trip: where you're headed, your total miles, how far is left on this leg and the percent done, a progress bar, and the miles split by how you covered them: **BIKE** (Cycling, Bike Bootcamp), **ROW** (Rowing, Row Bootcamp) and **WALK/RUN** (everything else: tread, outdoor, hiking). 64x64 shows it all on one page. 64x32 shows the trip, then *Miles by type*, sharing the screen's time (at least 4 seconds each; with only one type of miles it stays on the trip). Each step opens with about a second of motion, then holds still: the bar fills while the miles count up across this leg, the bar's tip then pulses gently, and the types come in one after another. Reaching the destination turns you around for the trip home (`TO COLUMBUS`), and so on forever. `TRIP 4` means you're on your fourth one-way leg. The total shows a tenth of a mile (`741.6`) on both boards, dropping it only where it won't fit; each type's miles show two decimals (`612.40`), fewer where they won't fit, and always add up to the total. The route's `miles` can be a decimal too, e.g. `26.2`.
 
 The default route is Columbus → Disney World, 880 miles, counting every workout that has a distance. Set your own:
 
@@ -294,7 +313,7 @@ Peloton rejected the token or it's missing, or renewal found the rider needs a f
 
 ## Phase 6 customization
 
-Weekly goals are optional. Set `weekly_goals.workouts` and/or `weekly_goals.minutes` to a positive number to add progress screens; zero disables that goal. Progress counts completed workouts from Monday at midnight in the configured/profile timezone. Set `milestones` to lifetime Total Workouts thresholds such as `[100, 250, 500, 1000]`. Each reached threshold celebrates once.
+Weekly goals are optional. Set `weekly_goals.workouts` and/or `weekly_goals.minutes` to a positive number to add progress screens; zero disables that goal. Progress counts completed workouts from Monday at midnight in the configured/profile timezone. Set `milestones` to lifetime Total Workouts thresholds such as `[100, 250, 500, 1000]`. Each reached threshold celebrates for the rest of the day it first shows (see [`milestones`](#milestones--milestone-celebration)).
 
 Set `brightness_schedule` to `null` to retain command-line brightness, or use a day/night schedule:
 
@@ -334,7 +353,7 @@ python -m pytest tests/ -q
 python -m pytest tests/ --cov --cov-report=term-missing   # with coverage
 ```
 
-GitHub Actions runs the tests with coverage on Python 3.11 and 3.13 for every pull request and push to `main`, and uploads the report to [Codecov](https://codecov.io/gh/jc214809/Peloton-LED) (the badges at the top).
+GitHub Actions runs the tests with coverage on Python 3.11 and 3.13 for every pull request and every push to `main` and `develop-beta`, and uploads the report to [Codecov](https://codecov.io/gh/jc214809/Peloton-LED) (the badges at the top).
 
 `--cycles 1` stops after one full rotation. Omit it to run continuously. Durations come from configuration; `--display-duration` overrides only the username screen. The PNG preview uses the same emulator text drawing and screen code, without starting a browser server.
 
@@ -370,6 +389,8 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `milestone_within` | `5` | A `next_milestone` page appears when your total or a discipline is this many workouts or fewer from its next milestone (at least 1) |
 | `milestone_pages` | `3` | At most this many `next_milestone` pages, closest first (at least 1) |
 | `journey` | Columbus → Disney World, 880 mi, every workout with a distance | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880}`. Any places and distance; optional `"disciplines"` list narrows which workouts count (see [`journey`](#journey--lifetime-miles-as-a-trip)); also settable per rider under `users[]`. Optional `"start_date": "YYYY-MM-DD"` counts only miles from that day on (display timezone); changing it recounts the full history once on the next refresh |
+| `pr_max_age_days` | `null` | Skip PR celebrations for workouts older than this many days; `null` celebrates any PR not yet shown |
+| `workout_insights` | `false` | After the latest workout, up to two comparisons with your similar earlier workouts. See [Workout insights](#latest_workouts--last-active-days-workouts) |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |
 
@@ -401,24 +422,36 @@ Each refresh saves Peloton's output personal-records table (one record per disci
       "cache_path": "dashboard-cache-joel.json",
       "username": "Joel",
       "weekly_goals": { "workouts": 5, "minutes": 0 },
-      "milestones": [100, 250, 500]
+      "milestones": [100, 250, 500],
+      "journey": { "from": "Columbus", "to": "Disney World", "miles": 880 }
     }
   ],
   "display": {
     "font": "stats",
     "color": "white",
-    "duration": 9,
+    "duration": 30,
     "overview_duration": 4,
     "last_workout_detail_interval": 4,
     "logo_duration": 5,
+    "show_logo": true,
     "logo_path": null,
     "timezone": "America/New_York",
     "refresh_interval": 300,
     "recent_fetch_size": 20,
     "history_batch_size": 100,
     "performance_cache_size": 32,
-    "rotation": ["username", "latest_workouts", "total_workouts", "lifetime", "milestones", "goals"],
-    "screen_durations": { "username": 9, "lifetime": 5, "milestones": 5.8, "goals": 4 },
+    "rotation": ["latest_workouts", "username", "streaks", "versus", "total_workouts",
+                 "next_milestone", "lifetime", "journey", "heatmap", "milestones", "goals"],
+    "screen_durations": { "username": 30, "lifetime": 5, "milestones": 5.8, "goals": 4 },
+    "weekly_goals": { "workouts": 3, "minutes": 300 },
+    "milestones": [250, 500, 1000, 2000],
+    "milestone_step": 100,
+    "milestone_within": 5,
+    "milestone_pages": 3,
+    "streak_reminder_day": 5,
+    "pr_max_age_days": null,
+    "workout_insights": false,
+    "journey": { "from": "Columbus", "to": "Disney World", "miles": 880 },
     "brightness_schedule": null,
     "refresh_schedule": null
   }
@@ -440,6 +473,7 @@ Top-level and per-user fields, and whether each is required:
 | `users[].password_env` | No | Only used for unattended token renewal |
 | `users[].weekly_goals` | No | Falls back to `display.weekly_goals` when omitted |
 | `users[].milestones` | No | Falls back to `display.milestones` when omitted |
+| `users[].journey` | No | Falls back to `display.journey` when omitted |
 | `matrix` | No | LED panel/driver settings, e.g. `{"rows": 32, "gpio_mapping": "adafruit-hat"}`; one key per `--led-*` flag, see the [Installation Guide](docs/install.md#every-peloton_ledpy-command-line-flag). Defaults to a 64×64 panel |
 | `display` | No | Omit entirely to use every default in the table above |
 | every `display.*` key | No | See the configuration table above for each default |
@@ -448,20 +482,158 @@ Top-level and per-user fields, and whether each is required:
 
 Both **64×64** and **64×32** panels are supported; for 64×32 set `"matrix": {"rows": 32}` in `config.json` (or pass `--led-rows 32`). Panels can't report their size, so it has to be set. On 64×32 the workout screen uses the same intro-then-rotating-stats layout as 64×64, adapted to fit: the instructor is the first rotating stat, and the heart-rate/calories bar shows during the stats. See [docs/64x32-NOTES.md](docs/64x32-NOTES.md) for every difference. Preview either size with `python scripts/render_rotation.py --height 32 --demo`.
 
-Live mode cycles through every completed workout on the latest active day. Every discipline uses a safe common layout; cycling/bike bootcamp, running/walking/tread, and rowing/row bootcamp add discipline-specific statistics when Peloton supplies them. Unknown future disciplines still show discipline, title, duration, heart rate, calories, and compatible common metrics. Lifetime totals preserve every discipline and its exact count in separate pixel-icon tiles, four per page on 64×64 and two per page on 64×32. No disciplines are combined. Goals, milestones, scheduled brightness, configurable rotation, and optional two-page 32-row workout details are implemented in Phase 6.
+Live mode cycles through every completed workout on the latest active day. Every discipline uses a safe common layout; cycling/bike bootcamp, running/walking/tread, and rowing/row bootcamp add discipline-specific statistics when Peloton supplies them. Unknown future disciplines still show discipline, title, duration, heart rate, calories, and compatible common metrics. Lifetime totals preserve every discipline and its exact count in separate pixel-icon tiles, four per page on 64×64 and two per page on 64×32. No disciplines are combined. Goals, milestones, scheduled brightness and configurable rotation are implemented in Phase 6.
 
 ## Code map
 
 - `peloton_led.py`: startup and screen rotation
+- `peloton/config.py`: loading and validating `config.json`, per-rider settings
 - `peloton/dashboard.py`, `peloton/cache.py`: background refresh, token reload, snapshots, and recovery
 - `peloton/api.py`: authenticated requests and bounded history pagination
+- `peloton/workout_log.py`: every workout as a slim row, the source of everything derived
+- `peloton/activity.py`, `journey.py`, `goals.py`, `instructors.py`: streaks, heatmap, time frames, journey miles, milestones, instructor counts
+- `peloton/username_facts.py`: the name page's scored highlights
+- `peloton/workout_features.py`, `workout_compare.py`, `workout_insights.py`, `insight_lines.py`, `workout_rows.py`: workout compare and the board's insight pages
 - `peloton/timestamps.py`, `selection.py`, `records.py`, `totals.py`: shared data and lifetime pagination rules
 - `peloton/summaries.py`: metric normalization for screens and reports
+- `peloton/screen_times.py`, `schedule.py`: screen durations, and polling Peloton less often overnight
+- `peloton/notify.py`: Pushover alerts
 - `display/ui/`: screens, the login indicator, the settings PIN overlay and the Wi-Fi setup screen
-- `settings_page/`: the board's settings page (config form, PIN sign-in, its own service)
+- `settings_page/`: the board's settings page (config form, PIN sign-in, logins, updates, power menu; its own service)
+- `self_update/`: `peloton-update` (channels, pre-flight, health check, rollback)
 - `driver/`: hardware/emulator selection
+- `utils/`: matrix settings, health heartbeat, Wi-Fi setup state
 - `scripts/refresh_cookies.py`: browser login, refresh-token renewal, board seeding, and verified token saving
-- `scripts/render_demo.py`: reproducible screen preview
+- `scripts/render_rotation.py`, `render_demo.py`: screen previews (PNG contact sheets)
+- `scripts/list_facts.py`, `workout_insights.py`: checking name-page facts and insights against a real log
+
+## Architecture
+
+### On the board
+
+Four systemd units share one config and the files under `/var/lib/peloton-led`. The display needs no network after start-up; the settings page is its own service, so a config that stops the display can still be fixed.
+
+```mermaid
+flowchart LR
+    subgraph cloud["Internet"]
+        peloton["Peloton API<br/>api.onepeloton.com"]
+        auth0["Peloton login<br/>Auth0 refresh tokens"]
+        github["GitHub<br/>tags and releases"]
+        pushover["Pushover<br/>phone alerts"]
+    end
+
+    subgraph pi["Raspberry Pi"]
+        subgraph units["systemd"]
+            display["peloton-led.service<br/>peloton_led.py<br/>starts as root, drops to peloton-led"]
+            settings["peloton-settings.service<br/>settings_page/server.py<br/>port 8080, root"]
+            timer["peloton-token-refresh.timer<br/>hourly"]
+            renew["peloton-token-refresh.service<br/>scripts/refresh_cookies.py --ensure"]
+            update["peloton-update<br/>self_update/"]
+            comitup["comitup<br/>Wi-Fi or setup hotspot"]
+        end
+
+        subgraph files["Files"]
+            config["config.json<br/>checkout, bound to /etc/peloton-led"]
+            authenv["auth.env<br/>logins, Pushover keys"]
+            tokens["cookies-*.txt + .refresh.json<br/>tokens per rider"]
+            cache["dashboard cache .json<br/>workout log .workouts.json<br/>workout rows .workout-rows.json"]
+            run["/run: health heartbeat,<br/>settings PIN, comitup-state"]
+        end
+
+        panel["RGB LED matrix<br/>64x64 or 64x32"]
+    end
+
+    browser["Phone or laptop browser"]
+
+    timer --> renew
+    renew -- "refresh token" --> auth0
+    renew --> tokens
+    renew -- "failures, recovery" --> pushover
+
+    display -- "token" --> tokens
+    display -- "overview, workouts, graphs" --> peloton
+    display <--> cache
+    display --> config
+    display --> panel
+    display -- "heartbeat" --> run
+    run -- "PIN, hotspot state" --> display
+
+    browser -- "PIN sign-in" --> settings
+    settings -- "validate, .bak, atomic save" --> config
+    settings --> authenv
+    settings -- "restart, stop, reboot, shut down" --> display
+    settings -- "renew now" --> renew
+    settings -- "check, update, roll back" --> update
+    settings -- "PIN" --> run
+
+    update -- "git fetch" --> github
+    update -- "health check, rollback" --> run
+    update -- "failure alert" --> pushover
+
+    comitup -- "state" --> run
+```
+
+### Inside the display
+
+`Dashboard` refreshes on a background thread; the display loop only reads its snapshot, so a slow or failed fetch never stalls the panel.
+
+```mermaid
+flowchart TB
+    subgraph start["Start-up: peloton_led.py main()"]
+        cfg["peloton/config.py<br/>load and validate config"]
+        matrix["driver/<br/>rgbmatrix or emulator"]
+        fonts["display/display.py<br/>fonts and colours"]
+        profiles["configured_profiles<br/>one Dashboard per rider"]
+    end
+
+    subgraph data["Data: peloton/, one background thread per rider"]
+        api["api.py PelotonClient<br/>Bearer token, 401 = login required"]
+        dash["dashboard.py Dashboard<br/>refresh, cache, stale and login flags"]
+        log["workout_log.py WorkoutLog<br/>every workout, backfilled in batches"]
+        derived["Derived from the log<br/>activity.py streaks, heatmap, time frames<br/>journey.py miles<br/>goals.py milestones<br/>instructors, records, totals"]
+        facts["username_facts.py<br/>name-page highlights, scored with cool-down"]
+        insight["workout_features.py<br/>workout_compare.py<br/>workout_insights.py<br/>insight_lines.py"]
+        rows["workout_rows.py RowStore"]
+        snap["Snapshot<br/>summaries, totals, goals, events, insights"]
+    end
+
+    subgraph loop["Display loop: no network calls"]
+        rot["build_rotation_pages<br/>rotation order, screen_times.py"]
+        mgr["display/ui/manager.py ScreenManager<br/>show_and_wait"]
+        screens["display/ui screens<br/>logo, username, latest workout,<br/>streaks, versus, lifetime, heatmap,<br/>journey, goals, countdown, celebrations"]
+        overlays["Overlays<br/>login padlock, stale, settings PIN, Wi-Fi setup"]
+    end
+
+    cfg --> profiles
+    matrix --> mgr
+    fonts --> screens
+    profiles --> dash
+    api --> dash
+    dash --> log --> derived --> snap
+    derived --> facts --> snap
+    dash --> insight
+    insight <--> rows
+    insight --> snap
+    snap --> rot --> mgr --> screens
+    overlays --> mgr
+    mgr -- "acknowledge milestones, PRs, name facts" --> dash
+```
+
+### Releases and updates
+
+```mermaid
+flowchart LR
+    pr["Pull request<br/>needs Release notes"] -- "CI: pytest 3.11 and 3.13, coverage" --> beta["develop-beta<br/>tag vX.Y.N-beta"]
+    beta -- "release PR" --> main["main<br/>tag vX.Y.0 + GitHub release"]
+    beta -- "Beta channel, once CI passes" --> board["Board: peloton-update"]
+    main -- "Releases channel" --> board
+    board --> pre["Pre-flight: space, throttling,<br/>clean checkout, GitHub"]
+    pre --> point["Rollback point:<br/>commit, pip freeze, config"]
+    point --> install["git checkout, pip,<br/>peloton-install.sh"]
+    install --> health{"Healthy within 5 min?<br/>heartbeat, settings on 8080"}
+    health -- "yes" --> done["outcome.json: updated"]
+    health -- "no" --> rollback["Roll back + Pushover alert"]
+```
 
 ## Phase 3 validation
 
@@ -487,6 +659,7 @@ Or change it from a browser: the **[settings page](docs/install.md#settings-page
 - **Updates**: what's installed, a check for a newer release or Beta (with each change's release notes), *Update now* and *Roll back*.
 - **Logins**: token renewal's status (how often it checks, when it next checks, and when each rider's token will actually renew), a card per rider, and *Renew now*. Click a rider's *Email & password* row to change their login.
 - **Pushover alerts**: whether alerts are on, a test alert, and the keys.
+- **Workout insights**: the switch for the comparisons after your latest workout, and how many earlier workouts each rider has on the board to compare with.
 - **General**, **Rotation**, **Timing**, **Goals**, **Schedules**, **Panel** and **Advanced**: everything in `config.json`'s `display` and `matrix` sections a person would change.
 
 ### Updating
