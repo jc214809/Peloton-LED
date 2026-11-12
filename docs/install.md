@@ -595,6 +595,9 @@ Wi-Fi is in range. While it's up, the display shows *Wi-Fi setup / Join
 <board>-setup*, then *Settings / Browse to 10.41.0.1:8080*, until the board is
 back on a network; comitup's own page (http://10.41.0.1) picks the network.
 Anyone on the hotspot gets the settings page with no PIN (they're in the room).
+comitup waits for the Wi-Fi chip at boot before deciding, so a cold start near
+a saved network joins it instead of opening the hotspot (see
+[Troubleshooting](#troubleshooting)).
 
 Which file it edits: the checkout's `config.json` when the installer found one
 (a `project-config.conf` drop-in under
@@ -766,6 +769,26 @@ and create each rider's token with
   can see what the headless browser was actually looking at — a cookie
   banner, a CAPTCHA, a bot-detection challenge, or Peloton having changed
   the login page. Check that file rather than guessing from the log alone.
+- **Setup hotspot after a power cut, though the saved Wi-Fi is in range** — on
+  a cold boot comitup could start before the Wi-Fi chip (`wlan0`) existed,
+  find no network to try and open `<board>-setup` at once (PelotonPi,
+  2026-11-11: `HOTSPOT` one second after start, and `journalctl -u comitup`
+  said `wlan0 does not currently exist`). It isn't a lost password, and the
+  saved network is still in `nmcli connection show`. LightningLane-Live-LED's
+  `board-setup.sh` (v2.0.15-beta on) writes
+  `/etc/systemd/system/comitup.service.d/wait-for-wifi.conf`, which makes
+  comitup wait for `wlan0` and then 10 more seconds; normal updates don't add
+  it, so re-run `board-setup.sh` (or `LLL-install.sh`) on an older board, or
+  write it by hand:
+  ```bash
+  sudo mkdir -p /etc/systemd/system/comitup.service.d
+  printf '[Unit]\nWants=sys-subsystem-net-devices-wlan0.device\nAfter=sys-subsystem-net-devices-wlan0.device\n\n[Service]\nExecStartPre=/bin/sleep 10\n' \
+    | sudo tee /etc/systemd/system/comitup.service.d/wait-for-wifi.conf
+  sudo systemctl daemon-reload
+  ```
+  `systemctl cat comitup` shows it once it's in place. If a board is stuck on
+  the hotspot right now, wait 3-5 minutes without joining it: comitup retries
+  the saved networks, but skips that retry while a phone is on the hotspot.
 - **Diagnostic commands:**
   ```bash
   sudo systemctl status peloton-led.service
