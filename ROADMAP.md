@@ -97,6 +97,54 @@ Peloton records heart rate, output, cadence and more every 5 seconds of a class,
 
 A separate, later idea: charts of trends over time from the workout log (workouts per week as bars, this year against last year, the mix of disciplines by month, which weekdays and hours you work out), reusing `peloton/activity.py` windows the way the heatmap page does. Not part of this item.
 
+### Name page: facts that read as sentences (decided 2026-11-12)
+The event and comparison facts (`peloton/username_facts.py`) were fragments (`VS 90 BEFORE` / `55 VS 25` / `+30 WORKOUTS`, `SINCE` / `52 DAYS SINCE` / `LAST ROWING`). Joel chose this wording from mock-ups on both boards, drawn with `UsernameScreen`:
+
+| Fact | Was | Now |
+|---|---|---|
+| Since | `SINCE` / `52 DAYS SINCE` / `LAST ROWING` | `LAST ROW` / `52 DAYS AGO`; when `LAST <noun>` passes 15 characters (the bootcamps): `LAST` / `TREAD BOOTCAMP` / `52 DAYS AGO` |
+| Comeback | `COMEBACK` / `STRETCHING` / `AFTER 286 DAYS` | always `WELCOME BACK` / `<discipline name>` / `1ST IN 286 DAYS` (`ROW BOOTCAMP`, never just `BOOTCAMP`) |
+| On this day | `ON THIS DAY` / `1 YEAR AGO` / `20 MIN STRENGTH` | `A YEAR AGO` / `YOU HAD 812` / `NOW 1,067` (total workouts then and now; `2 YEARS AGO` etc.) |
+| Last class with | `LAST CLASS WITH` / `MATT WILPERS` / `AUG 29 2026` | `LAST CLASS WITH` / `MATT WILPERS` / `74 DAYS AGO` |
+| 30 days, 90 days, year | `VS 90 BEFORE` / `55 VS 25` / `+30 WORKOUTS` | `LAST 90 DAYS` / `55 WORKOUTS` / `UP FROM 25` (`DOWN FROM` when lower); `THIS YEAR` / `412 WORKOUTS` / `UP FROM 380` |
+
+Rules:
+- Proper tense: name the workout as a noun, not the activity. Nouns: RIDE, RUN, WALK, ROW, HIKE, STRETCH; STRENGTH, YOGA, MEDITATION, CARDIO (with `CLASS` where it fits); bootcamps by their full name (`TREAD BOOTCAMP`). RIDE / RUN / WALK / ROW match the countdown's `discipline_noun`.
+- The 30-day count and its comparison become one fact (`LAST 30 DAYS` / `19 WORKOUTS` / `UP FROM 12`, the plain count when there's no comparison), which also fixes `LAST 30 DAYS` showing in both headline slots (found 2026-11-11 on Jen's log, pass 7 of `list_facts.py`). Same for 90 days and the year. Still guard `username_details` against two headlines with the same label.
+- When a comeback fires is unchanged (`MIN_COMEBACK_DAYS`, per discipline); only its wording changes.
+- Every line within 15 characters of the `stats` font; test every `kind` with **Tread Bootcamp** (the widest name) on both heights.
+- Scoring and cool-down keys (`kind`, `key`) stay the same, so the saved cool-down carries over.
+- Update `docs/NAME-PAGE-FACTS.md`, the README's `username` section and screenshot, and `tests/test_username_facts.py`; check with `scripts/list_facts.py` on both riders' logs.
+- Depends on: nothing.
+
+### Workout insights: a tough class (decided 2026-11-12)
+When the class was much harder than the ones you usually take, the board applauds it instead of saying `OUTPUT DOWN`. The class rating is already in every row (`difficulty`, Peloton's `difficulty_rating_avg`).
+
+Checked on both riders' rows (12 months) first:
+- Folding difficulty into "similar classes" is **not** worth it: similar classes already match difficulty (median gap 0.3 points; 90% under 0.85-0.95), so requiring within 0.75 (with a fallback to today's group under `MIN_PEERS`) changes only 5 (Joel) and 9 (Jen) insights a year, and can't help the big cases (there are never 5 similar classes near a 9.1).
+- A class 1+ point off the median of the similar classes' ratings happened 9 (Joel) and 11 (Jen) times in 12 months.
+
+**Harder class (1+ point above that median): a `TOUGH CLASS` insight, in green, in place of the output insight.** Mock-ups chosen by Joel:
+- 64x64 card: `WAY TO CHALLENGE` (16 characters, edge to edge: allowed for this line) / `YOURSELF!` / `YOU TOOK ON A` / `9.1 CLASS, YOUR` / `TYPICAL IS 7.0.`, the class figures in the insight's colour, footer as usual (`9 SIMILAR RIDES`).
+- Bars frame (both boards): headline `TOUGH CLASS`; the watts (or speed) as today, `TODAY 124 W` / `TYPICAL 188 W`; bottom line `9.1 → USUALLY 7.0` with the arrow **drawn in pixels** (5x5: `..#..`, `...#.`, `#####`, `...#.`, `..#..`, the font has none), 1 px gap each side of the arrow, `9.1` starting at column 1, so the line fills columns 1-63.
+- 64x32 words page: `WAY TO` / `CHALLENGE` / `YOURSELF!` (one page; the numbers are on the bars).
+
+**Easier class (1+ point below): say nothing about the class.** Joel, 2026-11-12: don't punish people for an easier class, so no `EASIER CLASS` line; the output insight stays exactly as it is today.
+
+Notes: rules only, in `peloton/workout_insights.py` (a code such as `tough_class`, beside `output_insight`, with `difficulty` / `usual_difficulty` in its facts) and `peloton/insight_lines.board_view` (the arrow is a drawing instruction in the view, e.g. `reason_parts: ['9.1', 'arrow', 'USUALLY 7.0']`, drawn by `last_workout_screen`); update the Mac text and `WORKOUT-COMPARE-SPEC.md` (outside the repo). Needs 3+ similar classes with a rating. Tests: the threshold both ways, a class with no rating, the line widths (Tread Bootcamp), and the arrow's pixels. Depends on: nothing.
+
+### Workout insights: instructor milestones (decided 2026-11-12)
+After a workout, a gold insight when it was a round number or a first with that instructor. Counts come from the workout log (`instructor_counts`, every discipline, a class with two instructors counts for each), so no extra API calls.
+
+Measured on both riders' logs (12 months): round numbers (5th, 10th, 25th, 50th, 100th, then every 100th) 13 for Joel (`200 x Jess Sims`, `150 x Denis Morton`) and 23 for Jen (`400 x Cody Rigsby`); first classes 3 and 5. Dropped: output against your usual with that instructor (fired on 60-75% of rides, because one instructor teaches every length and type; the like-for-like output insight already does this properly).
+
+Chosen from mock-ups:
+- 64x64: **the words card only, no second (picture) frame**: `YOUR 200TH` / `CLASS WITH` / `JESS SIMS!`, footer `SINCE MAR 2019` (the first class with them); a long name wraps (`CHELSEA JACKSON` / `ROBERTS!`); a first class reads `YOUR FIRST` / `CLASS WITH` / `ZACHARIAS` / `NIEDZWIECKI!`, footer `WELCOME!`.
+- 64x32: one words page, no bars: `YOUR 200TH CLASS` / `WITH JESS SIMS!` (16-character lines run edge to edge, as on the name page).
+- Gold (`insight_lines.GOLD`), the ordinal in gold within the soft white text.
+
+Notes: the insight framework assumes a picture frame, so it needs a "no figure" view (`figure: None`) that `build_rotation_pages` and `rotating_details` count as one frame on each board. It counts toward `MAX_BOARD_INSIGHTS` (2); decide its place in the order (after output insights, before effort?). Test with the longest names in the logs (CHELSEA JACKSON ROBERTS, ZACHARIAS NIEDZWIECKI, LEANNE HAINSBY-ALLDIS). Rules in `peloton/workout_insights.py` (needs the workout's instructor and the log's count before it), wording in `insight_lines.board_view`. Depends on: nothing.
+
 ### Name page: together facts (was facts-engine step 7)
 Facts about both riders on a two-rider board (`TOGETHER` / `31 WORKOUTS`, `BOTH TOOK` an instructor, `SAME CLASS`), from each rider's `period_stats`, shown once a cycle on the rider whose rotation gets `rivals`. Details: `docs/NAME-PAGE-FACTS.md` ("Step 7").
 - Depends on: nothing (the facts engine is built). Shares figures with item 6 (Head to head).
@@ -126,6 +174,7 @@ The idea: loosen "similar" for Cardio only, comparing every Cardio class with ev
 - Rules in `peloton/workout_compare.py` (a Cardio peer rule beside `is_peer`) and `peloton/workout_insights.py` (`NOUN`, and whatever the "usual" line needs); board wording in `peloton/insight_lines.board_view` (headline, sentence, `STRIVE PER MIN` bars, footer such as `12 CARDIO CLASSES`). Tests on hand-made rows, plus the real-row fixture if it gains Cardio workouts.
 - Board rows: `build_board_rows.py` / `trim_for_board` keep only `DISCIPLINES`, so the boards need a re-push (`scripts/push_workout_rows.sh`) once Cardio is in. No `ROW_VERSION` bump: the rows already carry Strive and length.
 - Worth it? About one Cardio class a month each, so it's small. Re-run the scratch count before starting.
+- 2026-11-12: Joel wants to dig into this one in its own session before deciding (start by re-running the count above).
 - Depends on: nothing.
 ## Ideas (not yet sized)
 
@@ -133,45 +182,33 @@ Brainstormed 2026-11-11, after workout insights ran on PelotonPi. Pick one, size
 
 ### Workout insights, next steps
 - **Seed and switch on every board.** Jen's board (`scripts/push_workout_rows.sh`, then the Workout insights switch); re-push after any `ROW_VERSION` bump.
-- **Class difficulty as an insight.** The raw `rides/<ride_id>.json` already carries `difficulty_rating_avg`; a `HARDER THAN USUAL` / `EASIER THAN USUAL` line that explains a low output ("a 8.9 class, you usually do 7.6"). Rules only, add to `workout_insights.py` and `WORKOUT-COMPARE-SPEC.md`.
 - **Disciplines version 1 leaves out** (freestyle, stretching, yoga, meditation, cardio): decide which, if any, deserve peers. Measure first, as the bike fill-in did.
-- **Instructor insights.** `4TH CLASS WITH JESS`, `FIRST TIME WITH THIS INSTRUCTOR`, output against your average with them. The log has the counts already (`instructor_counts`).
 - **Learn from the boards.** The `changed while settling` and `insights changed` log lines were added to find out whether Peloton revises a finished workout; after a couple of weeks of PelotonPi logs, decide whether the settling hour is needed.
 
 ### Whose data is this? (multi-rider boards)
-The username page names the rider, but once it's gone nothing says whose workout, goal, journey or milestone is on screen, which matters most on the pages that show what they did that day. Options to mock up with `render_rotation.py` and pick from:
-- a small rider tag (initial or short name in the rider's colour) in a corner of every page, where there's room on 64x64 and 64x32;
-- a thin rider-coloured line or border on each page, a colour per rider (a setting beside each rider's name);
-- repeat the name briefly at the start of each page, or every few pages, instead of only the first;
-- only on pages that are personal (workouts, goals, journey, milestones), not shared ones (Head to head, logo).
-Single-rider boards show nothing extra. Constraints: no change to the 64x64 layout beyond the chosen mark, pages' minimum times unchanged, byte-identical other pages for a single rider.
+The username page names the rider, but once it's gone nothing says whose workout, goal, journey or milestone is on screen, which matters most on the pages that show what they did that day. Single-rider boards show nothing extra. Mocked up 2026-11-12 on Jen's real pages (a Tread Bootcamp workout, a goal, the journey) on both boards; Joel kept all five as options, undecided:
+- **A. Initial in a corner** (`J` in the rider's colour, top-left): touches TREAD BOOTCAMP and TO COLUMBUS on both boards; hard to read.
+- **B. Coloured dot in a corner** (3x3): same collisions as A, and means nothing until the colours are learned.
+- **C. Coloured line along the top** (row 0): sits on the journey's and the 64x32 titles' top row; panel edges can look dim or sit under a bezel.
+- **D. Coloured line down the left** (column 0). Measured on every page and frame: column 0 is empty everywhere except the 64x64 celebration confetti, so it covers nothing, but it touches Head to head (both boards) and the 64x64 PR star burst (content in column 1), and leaves one dark column beside the workout pages (heart, TREAD BOOTCAMP, stats), the name page, the journey's group squares and the heatmap (content in column 2); goals, countdown, streaks, lifetime and discipline pages have 2+ columns. It also makes centred pages look shifted right, runs into the stale-data clock (bottom-left), and moving content in a column breaks the 64x64 byte-identical rule on about six pages.
+- **E. The rider's name over the top for the page's first second** (`JEN` in their colour above a coloured rule, then the page as usual): touches no layout, says the name rather than a colour to learn; hides the page title for about a second.
+Open questions whichever is picked: which pages (personal ones: workouts, streaks, goals, journey, lifetime, heatmap, milestones, countdowns; not the name page, Head to head or the logo), every page or the first of each section, and a colour per rider (a setting beside each rider's name, with defaults). Draw it once on top of every page (like the padlock, in `ScreenManager`) so no screen changes. Mock-up script: ask Claude to regenerate (real screens over `cookies-jen-dashboard-cache.json`).
 
-### 64x64: less padding at the top and bottom
-Check whether the 64x64 pages would have more room if they left less empty space above the first line and below the last (the bottom row and the margins above the week strip, bars and footers). Survey first: for each page, measure the blank rows at the top and bottom from `render_rotation.py --height 64` output and list what could use them (a bigger font, another stat line, a taller graph, the "weekly goal is small" text below). The 64x64 layout is the reference, so every page that changes needs a before and after preview, and pages that don't change must stay byte-identical. Watch the hardware: the panel's outer rows can look dimmer or be hidden by a bezel, so check on a real board before trusting a design that uses row 0 or 63. Relates to the page-time minimums in `peloton/screen_times.py` if a page gains frames.
+### 64x64: a taller workout graph (was "less padding at the top and bottom")
+Surveyed 2026-11-12 on every 64x64 page and frame (Jen's real data plus a Tread Bootcamp workout), blank rows at the top / bottom / biggest gap inside: celebration 3/0/4, workout pages 7/2/5, PR card 1/1/7, name page 8/5/6, streaks 3/4/7, Head to head 2/2/5, Total Workouts 9/8/10, countdown 3/3/6, lifetime 3/0/4, journey 1/3/9, heatmap 3/3/5, weekly goal 4/5/13. Findings:
+- Most pages have 1-4 rows, normal margins (and the panel's outer rows can be dim or under a bezel): nothing to gain.
+- The name page and Total Workouts have rows to spare, but their text is limited by the width (the name and `2,212` already use the biggest font that fits), so the rows can't make them bigger.
+- The workout intro's 7 top rows only appear with one-line titles: they're the room a two-line title (BIKE / BOOTCAMP) uses, and they keep every workout page lined up. Leave them.
+- The weekly goal's 13-row gap is around the big number by design (#91).
+- **The graph frame has room to grow.** The graph is rows 32-53 (22 rows tall); between the discipline title and the `OUTPUT` / `210W` label there's a blank band of 11 rows with a one-line title (rows 12-22) and 9 with a two-line one (rows 16-24). Moving the label up under the title (and the graph's top with it) gives a graph about 30 rows tall, about a third taller, on both title lengths.
+
+The work: in `display/ui/last_workout_screen.py` the 64-row stats phase places the graph from `mid_y` (`label_y = mid_y - 8`, graph `label_y + 4` to `last_row_y - 2`); give the graph frame its own `label_y` a fixed gap under the title (`block_y`), keeping the heart-rate row at the bottom. Mock up first with a one-line and a two-line title (Tread Bootcamp and Bike Bootcamp) and the heart-rate graph (no output), then Joel picks. The zones and muscles slides can stay where they are, or follow the graph so the slides line up; decide from the mock-ups. Only the 64x64 graph frames change: other pages and frames stay byte-identical; update the README's workout screenshots. 64x32 is unchanged (no spare rows). Depends on: nothing; goes with "Workout graphs" (more metrics) if both are done.
 
 ### Trend charts from the workout log
 Already named under Workout graphs as a later idea; make it its own item. Pages from `peloton/activity.py` windows, like the heatmap: workouts per week as 12 bars, this year against last year by month, discipline mix by month, weekday and hour-of-day pattern. 64x64 first; 64x32 needs one chart per page.
 
 ### Yearly goal and pace
 `ON PACE FOR 312` / `12 AHEAD OF LAST YEAR`: a yearly workouts (or minutes) target next to the weekly goals, from the log and `comparison_window`. Settings: a field on the Goals card per rider. Fits as a Goals-screen frame or a countdown page.
-
-### Name page: make "ON THIS DAY" worth reading
-`ON THIS DAY` / `1 YEAR AGO` / `20 MIN ROW` (`username_facts.event_facts`, from `events.on_this_day` in `activity.event_stats`) only repeats what was done, which says little. It picks the nearest earlier year's longest workout for today's date. Ideas, all from the workout log (no new calls; a new field needs a `LOG_VERSION` bump, one re-download per board, so prefer what's already there):
-- **Compare it to today's state:** `20 MIN ROW` then `YOU'VE DONE 40 SINCE` / `NOW 60 MIN`, or this year's count in that discipline against the same date last year (`412 VS 380 WORKOUTS`, the way comparisons already read).
-- **What made it notable:** a PR or record that day, the class's instructor (`WITH JESS`), the output or distance (`8.1 MI`, `182 W`) instead of just minutes, or "your first" of a discipline.
-- **Pick the best memory, not the longest workout:** score the day's workouts (a PR, the year's longest, a first, a milestone number such as the 500th) and show the highest; skip the fact when nothing is above ordinary, so a plain 20-minute row doesn't qualify.
-- **Pile up the years:** several earlier years on the same date in one line (`1, 2 AND 3 YEARS AGO`) or the same class taken again.
-- **Streak or total context:** `YOUR 1,200TH WORKOUT`, or `DAY 4 OF A STREAK`.
-Decide the rule with `scripts/list_facts.py` on both riders' real logs: how often it appears today, how often each idea would fire, and its score against the other events (`KINDS`, threshold constants beside `MIN_EVENT_WORKOUTS`). The label must fit 15 characters of the `stats` font. Update `docs/NAME-PAGE-FACTS.md` (the events table) and the tests for `event_facts`. Depends on: nothing (the facts engine is built).
-
-### Name page: the same label twice in one showing
-Found 2026-11-11 checking the facts engine: in `scripts/list_facts.py`'s pass preview on Jen's log, pass 7 shows `LAST 30 DAYS` in both headline slots. `username_details` takes the best fact, then the best of another `KINDS` group, so two facts from the same frame (e.g. a 30-day count and a 30-day comparison) can still share a label and read as a repeat. Find which two facts they are (`list_facts.py --log <log> --cache <cache> --tz <zone>`, both riders), then decide: skip a second headline whose label matches the first, or give one of them a different label. Tests in `tests/test_username_facts.py`; scoring and cool-down keys stay the same. Goes with the two-line facts item below.
-
-### Name page: two-line facts that say what they mean
-The facts (`peloton/username_facts.py`) are a label and one or two short lines (`MOST IN 30 DAYS` / `CYCLING`, `ON THIS DAY` / `1 YEAR AGO` / `20 MIN ROW`), each limited to 15 characters of the `stats` font (60 px), so many are clipped into fragments (`VS 30 BEFORE`, `+32 WORKOUTS`) that need the rider to guess the sentence. Look at splitting each fact into a clear two-line statement, e.g. a headline line (what it is) and a detail line (the figure and what it's against), so each reads as a sentence. Survey first: run `scripts/list_facts.py` on both riders' real logs, list every `kind` with its current lines, and mark the ones that read ambiguously on the board. Then redo them one `kind` group at a time (ranks, bests, comparisons, events, instructors), not all at once. Check what the screen already supports (`UsernameScreen.wrap_two_lines`, the scrolling value line, the `short_label` fallback, 32 rows with no spare rows) so the wording is made to fit the layout, not the reverse; decide whether 64x32 gets a shorter version. Tests: each `kind`'s lines fit, and the scoring and cool-down keys (`kind`, `key`) don't change. Update `docs/NAME-PAGE-FACTS.md`. Goes with "make ON THIS DAY worth reading" above, which is the first example.
-
-### Name page: what does COMEBACK mean?
-`COMEBACK` / `CYCLING` / `AFTER 45 DAYS` is hard to read on the board: after what, and a comeback to what? Today (`username_facts.event_facts`) it fires for a discipline with at least `MIN_EVENT_WORKOUTS` workouts whose last workout came at least `MIN_COMEBACK_DAYS` after the one before it, shown for `EVENT_WINDOW_DAYS` after that return; the gap reads `AFTER n DAYS`, or `AFTER n YEARS` past `MAX_SINCE_DAYS`. Work out what a comeback should mean to the rider and say so on the page. Questions: is it per discipline or any workout (a week off everything versus a break from rowing); what gap counts (the same 14 days for a daily rider and an occasional one, or relative to their usual rhythm); should it show the first workout back, or celebrate the return once the rider is back to usual (a second or third workout); does a rider who was ill or travelling count; and how does it differ from `SINCE` / `LAST CLASS WITH` (the other "it's been a while" facts), which may say the same thing. Wording: two lines that say what it is (`FIRST ROW IN 45 DAYS`, `BACK AFTER 6 WEEKS`) rather than the label alone. Use `scripts/list_facts.py` on both riders' real logs to see when it fires today and which of the options would fire instead. Update `docs/NAME-PAGE-FACTS.md` and the `event_facts` tests; scoring and cool-down keys stay the same. Goes with the two-line facts item above.
 
 ### Strength: show the reps, weights and form we now know Peloton sends
 Strength pages have the fewest stats of any discipline (Strive, heart rate, calories, the top three muscle groups). The saved raw data has much more: `GET /api/workout/<id>?joins=ride,ride.instructor` returns `movement_tracker_data.completed_movements_summary_data` with `total_repetitions`, `num_movements`, `total_volume` (weight x reps, already summed), `completion_percentage`, `longest_streak`, `weight_unit`, `form_feedback_data` and `top_form_tip`, plus one `repetition_summary_data[]` entry per movement (`movement_name`, `completed_reps`, `target_reps`, `weight` by category, `total_volume`, `is_hold`); `movement_tracker_tier` (gold / bronze / inprogress) is a top-level workout field. Details, coverage (25 of 30 of Joel's workouts) and gaps (60% of movements lack `target_reps`; `Compound` is unreliable; timed holds have no reps) are in `docs/fitness-analysis/README.md`, section 13. Candidates for the workout page:
