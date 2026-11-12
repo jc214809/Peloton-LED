@@ -18,7 +18,7 @@ GREEN = (60, 220, 110)
 RED = (230, 40, 40)
 WHITE = (200, 205, 215)   # the insight text colour
 GREY = (145, 165, 190)
-USUAL_BAR = (70, 85, 110)   # the usual's bar
+USUAL_BAR = (20, 50, 140)   # the usual's bar (navy)
 DIM = (70, 80, 95)
 HEART = (220, 20, 20)
 CYCLING = (220, 50, 20)
@@ -143,7 +143,8 @@ def test_64_card_layout():
     assert len(lit(matrix, CYCLING, [12], range(64))) == 60                   # the discipline rule, 2-61
     assert not lit(matrix, CYCLING, range(0, 12), range(64))                  # no discipline title
     assert lit(matrix, WHITE, range(14, 50), range(64))                       # the sentence ...
-    assert lit(matrix, CYCLING, range(14, 50), range(64))                     # ... numbers in the discipline colour
+    assert lit(matrix, AMBER, range(14, 50), range(64))                       # ... numbers in the insight's colour
+    assert not lit(matrix, CYCLING, range(14, 50), range(64))                 # (not the discipline's)
     assert lit(matrix, GREY, range(54, 62), range(64))                        # 9 SIMILAR RIDES
     assert_no_heart_row(matrix)
     single = render_detail(with_views(demo_ride(), view('pace_low')), 64, 'insight_card')
@@ -181,7 +182,8 @@ def test_32_bars_and_words_layout():
         assert len(lit(words, CYCLING, [8], range(64))) == 64                 # the rule on row 8
         assert lit(words, WHITE, range(10, 31), range(64))
         assert_no_heart_row(words)
-    assert lit(first, CYCLING, range(10, 31), range(64))                      # 124 and 188
+    assert lit(first, AMBER, range(10, 31), range(64))                        # 124 and 188, the insight's colour
+    assert not lit(first, CYCLING, range(10, 31), range(64))
     assert first.image.tobytes() != second.image.tobytes()
     one_page = render_detail(ride_with_two(), 32, 'insight_words', index=1)
     assert not lit(one_page, GREY, range(0, 7), range(50, 64))

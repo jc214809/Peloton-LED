@@ -138,9 +138,6 @@ Brainstormed 2026-11-11, after workout insights ran on PelotonPi. Pick one, size
 - **Instructor insights.** `4TH CLASS WITH JESS`, `FIRST TIME WITH THIS INSTRUCTOR`, output against your average with them. The log has the counts already (`instructor_counts`).
 - **Learn from the boards.** The `changed while settling` and `insights changed` log lines were added to find out whether Peloton revises a finished workout; after a couple of weeks of PelotonPi logs, decide whether the settling hour is needed.
 
-### Insight wording
-Replace "usual" on the insight pages. Leaning: `CONSISTENT` for the in-line headline and reason (not "on target": there's no target, and it reads like the callout insights), `TYPICAL` for the bar label and "VS TYPICAL 140" (the figure is a median). Touches `peloton/insight_lines.py`, `peloton/workout_insights.py` text, `WORKOUT-COMPARE-SPEC.md` and their tests. (The softer white and the slate "usual" bar are done.)
-
 ### Whose data is this? (multi-rider boards)
 The username page names the rider, but once it's gone nothing says whose workout, goal, journey or milestone is on screen, which matters most on the pages that show what they did that day. Options to mock up with `render_rotation.py` and pick from:
 - a small rider tag (initial or short name in the rider's colour) in a corner of every page, where there's room on 64x64 and 64x32;

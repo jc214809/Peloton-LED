@@ -68,22 +68,22 @@ def test_output_down_at_minus_10_with_wording():
     result = run_bike(90, [100] * 5)
     assert codes(result) == ['output_down']
     assert text(result, 'output_down') == ('Your output was down today: 90 W in the work segments against '
-                                            'your usual 100 W for rides like this.')
+                                            'your typical 100 W for rides like this.')
 
 
 def test_output_just_inside_minus_10_is_in_line():
     result = run_bike(90.1, [100] * 5)
     assert codes(result) == ['in_line']
     assert text(result, 'in_line').startswith('Good ride, right in line with your other rides like it')
-    assert '(90 W against a usual 100 W)' in text(result, 'in_line')
+    assert '(90 W against a typical 100 W)' in text(result, 'in_line')
 
 
 def test_big_drop_without_rank_is_a_normal_ride():
     # -12% but the target beats 2 of 5 peers (40%)
     result = run_bike(88, [80, 85, 100, 100, 100])
     assert codes(result) == ['in_line']
-    assert text(result, 'in_line') == ('A normal ride for you: 88 W in the work segments against your '
-                                        'usual 100 W, inside your usual range.')
+    assert text(result, 'in_line') == ('A consistent ride for you: 88 W in the work segments against your '
+                                        'typical 100 W, inside your typical range.')
 
 
 def test_output_down_when_target_beats_exactly_20_percent():
@@ -93,14 +93,14 @@ def test_output_down_when_target_beats_exactly_20_percent():
 def test_output_up_needs_80_percent_beaten():
     result = run_bike(110, [100, 100, 100, 100, 120])  # beats 4 of 5 = 80%, +10%
     assert codes(result) == ['output_up']
-    assert text(result, 'output_up') == ('Strong ride: 110 W in the work segments against your usual '
+    assert text(result, 'output_up') == ('Strong ride: 110 W in the work segments against your typical '
                                          '100 W for rides like this.')
 
 
 def test_big_rise_without_rank_is_a_normal_ride():
     result = run_bike(112, [100, 100, 100, 120, 120])  # beats 3 of 5
     assert codes(result) == ['in_line']
-    assert text(result, 'in_line').startswith('A normal ride for you')
+    assert text(result, 'in_line').startswith('A consistent ride for you')
 
 
 def test_output_just_under_plus_10_is_in_line():
@@ -177,7 +177,7 @@ def test_no_clause_when_target_has_no_heart_rate():
 def test_efficient_clause_at_eff_plus_8():
     peers = peers_of([100, 100, 100, 100, 120], hr=100, eff=100)
     target = ride(0, 110, hr=100, eff=108)
-    assert text(insights(target, [target] + peers), 'output_up').endswith(' You got more out of every heartbeat than usual.')
+    assert text(insights(target, [target] + peers), 'output_up').endswith(' You got more out of every heartbeat than typical.')
 
 
 def test_efficient_clause_not_at_eff_plus_7_9():
@@ -190,7 +190,7 @@ def test_foot_discipline_uses_pace_wording_and_mph():
     target = foot(0, 3.6)
     result = insights(target, [target] + [foot(i, 4.0) for i in range(1, 6)])
     assert text(result, 'output_down') == ('Your pace was down today: 3.6 mph in the work segments against '
-                                           'your usual 4.0 mph for runs like this.')
+                                           'your typical 4.0 mph for runs like this.')
 
 
 def test_walking_and_bootcamp_nouns():
@@ -314,7 +314,7 @@ def lighter(today_lb=35, done=120, target=100, earlier=(40, 40, 40), days=(10, 2
 
 
 def test_go_up_lighter_fires_at_ratio_1_2():
-    assert pairs(lighter()) == [('go_up_lighter', 'Go up a weight on Row next time: 35 lb today against your usual 40 lb '
+    assert pairs(lighter()) == [('go_up_lighter', 'Go up a weight on Row next time: 35 lb today against your typical 40 lb '
                                            'for heavy weights, and you beat the rep targets by 20%.')]
 
 
@@ -362,7 +362,7 @@ def test_movement_first_uses_its_own_usual():
     rows = [strength(d, [st('Row', 'heavy', 40, 10, 10), st('Press', 'heavy', 60, 10, 10)]) for d in (10, 20, 30)]
     t = strength(0, [st('Row', 'heavy', 35, 120, 100)])
     result = strength_insights(t, rows + [t])
-    assert pairs(result) == [('go_up_lighter', 'Go up a weight on Row next time: 35 lb today against your usual 40 lb '
+    assert pairs(result) == [('go_up_lighter', 'Go up a weight on Row next time: 35 lb today against your typical 40 lb '
                                         'on that movement, and you beat the rep targets by 20%.')]
 
 
@@ -386,7 +386,7 @@ def test_movement_chosen_is_most_reps_among_those_with_history():
     # Curl has the most reps but no history of its own; Press beats Row on reps
     result = strength_insights(t, rows + [t])
     assert codes(result) == ['go_up_lighter']
-    assert result[0][1].startswith('Go up a weight on Press next time: 40 lb today against your usual 45 lb on that movement')
+    assert result[0][1].startswith('Go up a weight on Press next time: 40 lb today against your typical 45 lb on that movement')
 
 
 def streak_rows(lbs=(40, 35), done=12, days=(10, 20)):
@@ -440,7 +440,7 @@ def heavier(today_lb=45, sets=None):
 
 
 def test_went_heavier_at_plus_5():
-    assert pairs(heavier()) == [('went_heavier', 'You went heavier on Row (45 lb against your usual 40 lb on '
+    assert pairs(heavier()) == [('went_heavier', 'You went heavier on Row (45 lb against your typical 40 lb on '
                                           'that movement) and still hit every target. Keep that weight.')]
 
 
@@ -448,7 +448,7 @@ def test_went_heavier_category_wording():
     rows = [strength(d, [st(n, 'heavy', 40, 10, 10)]) for d, n in ((10, 'A'), (20, 'B'), (30, 'C'))]
     t = strength(0, [st('Row', 'heavy', 45, 10, 10)])
     assert strength_insights(t, rows + [t])[0][1].startswith('You went heavier on your heavy weights (45 lb against '
-                                                              'your usual 40 lb for heavy weights)')
+                                                              'your typical 40 lb for heavy weights)')
 
 
 def test_went_heavier_not_at_plus_4():
@@ -539,13 +539,13 @@ def test_fill_in_wording_with_three_real_peers():
     result = insights(target, rows)
     assert codes(result) == ['output_down']
     assert text(result, 'output_down') == ('Your output was down today: 80 W in the work segments against your '
-                                           'usual 100 W for the closest rides you have (only 3 of this exact kind).')
+                                           'typical 100 W for the closest rides you have (only 3 of this exact kind).')
 
 
 def test_fill_in_in_line_wording():
     target, rows = fill_case(100, [100] * 3, [100] * 2)
     assert text(insights(target, rows), 'in_line') == (
-        'Good ride, right in line with the closest rides you have (only 3 of this exact kind): 100 W against a usual 100 W.')
+        'Good ride, right in line with the closest rides you have (only 3 of this exact kind): 100 W against a typical 100 W.')
 
 
 def test_fill_in_output_up_needs_real_peers_to_agree():
@@ -559,9 +559,9 @@ def test_fill_in_down_withheld_when_real_peers_alone_do_not_agree():
     target, rows = fill_case(60, [60, 60], [100] * 3)
     result = insights(target, rows)
     assert codes(result) == ['in_line']
-    assert text(result, 'in_line') == ('A normal ride for you: 60 W in the work segments against your usual 100 W '
+    assert text(result, 'in_line') == ('A consistent ride for you: 60 W in the work segments against your typical 100 W '
                                        'for the closest rides you have (only 2 of this exact kind), inside your '
-                                       'usual range.')
+                                       'typical range.')
     target, rows = fill_case(50, [60, 60], [100] * 3)
     assert codes(insights(target, rows)) == ['output_down']
 
@@ -681,7 +681,7 @@ def test_output_facts_match_the_sentence():
     f = facts_of(result, 'output_down')
     assert f == {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 5, 'real': 5,
                  'reason': None}
-    assert f'{number(f["value"], f["unit"])} W in the work segments against your usual {number(f["usual"], f["unit"])} W' \
+    assert f'{number(f["value"], f["unit"])} W in the work segments against your typical {number(f["usual"], f["unit"])} W' \
         in text(result, 'output_down')
     result = run_bike(205, [180] * 5)
     f = facts_of(result, 'output_up')
@@ -690,7 +690,7 @@ def test_output_facts_match_the_sentence():
     result = run_bike(112, [111] * 5)
     f = facts_of(result, 'in_line')
     assert (f['value'], f['usual'], f['unit']) == (112, 111, 'W')
-    assert '112 W against a usual 111 W' in text(result, 'in_line')
+    assert '112 W against a typical 111 W' in text(result, 'in_line')
 
 
 def test_foot_facts_are_mph_with_one_decimal_in_the_text():
@@ -708,7 +708,7 @@ def test_in_line_facts_in_every_wording_variant():
     # 15% under but not at the bottom of the peers: "a normal ride" wording, still the same facts.
     target = ride(0, 85)
     result = insights(target, [target] + peers_of([100, 100, 100, 60, 60]))
-    assert 'A normal ride' in text(result, 'in_line')
+    assert 'A consistent ride' in text(result, 'in_line')
     assert (facts_of(result, 'in_line')['value'], facts_of(result, 'in_line')['usual']) == (85, 100)
 
 
@@ -728,7 +728,7 @@ def test_strength_facts_match_the_sentences():
     assert result[0][0] == 'go_up_lighter'
     assert f == {'movement': 'Row', 'lb': 35, 'usual': 40, 'unit': 'lb', 'category': 'heavy',
                  'on_movement': False, 'pct': 20}
-    assert 'on Row next time: 35 lb today against your usual 40 lb' in result[0][1] and 'by 20%' in result[0][1]
+    assert 'on Row next time: 35 lb today against your typical 40 lb' in result[0][1] and 'by 20%' in result[0][1]
 
     rows = streak_rows()
     t = strength(0, [st('Row', 'heavy', 40, 12, 10)])
@@ -739,7 +739,7 @@ def test_strength_facts_match_the_sentences():
     code, sentence, f = heavier()[0]
     assert code == 'went_heavier'
     assert f == {'movement': 'Row', 'lb': 45, 'usual': 40, 'unit': 'lb', 'category': 'heavy', 'on_movement': True}
-    assert '(45 lb against your usual 40 lb on that movement)' in sentence
+    assert '(45 lb against your typical 40 lb on that movement)' in sentence
 
     code, sentence, f = strength_insights(*_missed())[0]
     assert (code, f) == ('missed_targets', {'missed': 3, 'sets': 8, 'movement': 'Row'})
@@ -781,6 +781,15 @@ def test_output_reason_facts_follow_the_sentence():
     assert facts_of(insights(target, [target] + peers), 'output_up')['reason'] == 'efficient'
     target = ride(0, 110, hr=100, eff=107.9)
     assert facts_of(insights(target, [target] + peers), 'output_up')['reason'] is None
+    assert 'same_hr' not in facts_of(insights(target, [target] + peers), 'output_up')
+
+
+def test_efficient_says_same_heart_only_within_a_few_beats():
+    peers = peers_of([100, 100, 100, 100, 120], hr=100, eff=100)
+    for hr, same in ((100, True), (103, True), (97, True), (104, False), (95, False)):
+        target = ride(0, 110, hr=hr, eff=108)
+        facts = facts_of(insights(target, [target] + peers), 'output_up')
+        assert facts['reason'] == 'efficient' and facts['same_hr'] is same, hr
 
 
 def test_in_line_close_fact_splits_the_two_wordings():
@@ -789,7 +798,7 @@ def test_in_line_close_fact_splits_the_two_wordings():
     assert close['close'] is True and close['reason'] is None and (close['n'], close['real']) == (5, 5)
     target = ride(0, 85)
     wide = insights(target, [target] + peers_of([100, 100, 100, 60, 60]))
-    assert 'inside your usual range' in text(wide, 'in_line')
+    assert 'inside your typical range' in text(wide, 'in_line')
     assert facts_of(wide, 'in_line')['close'] is False
 
 
