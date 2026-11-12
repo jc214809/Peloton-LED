@@ -50,15 +50,33 @@ def _fit(font, text, width):
     return text.rstrip()
 
 
-def _miles(value):
-    """8.8 under 1,000 miles; whole miles above, where the decimal would push
-    the number out of the big font."""
-    return f'{value:,.1f}' if value < 999.95 else f'{round(value):,}'
+DECIMAL_STEPS = (2, 1, 0)  # the groups' miles: most decimals first; a figure takes the first its room allows
+TOTAL_DECIMAL_STEPS = (1, 0)  # the big total: one decimal on both boards (Joel, 2026-11-11), none if it won't fit
 
 
-def group_miles(value):
-    """A group's miles: 6.4 under 10, whole miles from there."""
-    return f'{value:.1f}' if value < 9.95 else f'{round(value):,}'
+def _miles(value, decimals=2):
+    """The miles as 1,234.56, with `decimals` places."""
+    return f'{value:,.{decimals}f}'
+
+
+def group_cents(groups, total):
+    """Each group's miles in hundredths, rounded so they add up to the total's hundredths (largest
+    remainder): rounding each alone can leave the rows a cent off the big figure."""
+    values = [max(0.0, g.get('miles') or 0) * 100 for g in groups]
+    cents = [int(v) for v in values]
+    short = round(total * 100) - sum(cents)
+    if not 0 <= short <= len(cents):  # rows that don't belong to this total: plain rounding
+        return [round(v) for v in values]
+    order = sorted(range(len(values)), key=lambda i: values[i] - cents[i], reverse=True)
+    for i in order[:short]:
+        cents[i] += 1
+    return cents
+
+
+def group_figure(cents, fits=lambda text: True):
+    """A group's miles from its hundredths: two decimals, else one, else none, the first that fits."""
+    texts = [_miles(cents / 100, d) for d in DECIMAL_STEPS]
+    return next((t for t in texts if fits(t)), texts[-1])
 
 
 def percent(progress):
@@ -66,15 +84,17 @@ def percent(progress):
     return f"{min(99, int(progress['fraction'] * 100))}%"
 
 
-def journey_text(progress, fits=lambda text: True):
-    """(miles, status) strings shared by both layouts. The status keeps its
-    decimal only when fits(status) says the line has room for it."""
+def journey_text(progress, fits=lambda text: True, miles_fit=lambda text: True):
+    """(miles, status) strings shared by both layouts. The miles keep one decimal if
+    miles_fit(text) allows, else none; the status keeps its one decimal only
+    when fits(status) says the line has room for it."""
     remaining = progress['route_miles'] - progress['leg_miles']
     suffix = 'TO HOME' if progress['returning'] else 'TO GO'
-    status = f'{_miles(remaining)} {suffix}'
+    status = f'{remaining:,.1f} {suffix}'
     if not fits(status):
         status = f'{round(remaining):,} {suffix}'
-    return _miles(progress['miles']), status
+    texts = [_miles(progress['miles'], d) for d in TOTAL_DECIMAL_STEPS]
+    return next((t for t in texts if miles_fit(t)), texts[-1]), status
 
 
 def groups_of(progress):
@@ -105,18 +125,20 @@ def at_moment(progress, t):
             'fraction': progress['fraction'] * grown}
 
 
-def counted_miles(progress, t):
-    """The big figure t seconds into a step."""
-    return _miles(at_moment(progress, t)['miles'])
+def counted_miles(progress, t, miles_fit=lambda text: True):
+    """The big figure t seconds into a step; its decimals are decided once, from the final figure."""
+    final = journey_text(progress, miles_fit=miles_fit)[0]
+    return _miles(at_moment(progress, t)['miles'], len(final.partition('.')[2]))
 
 
-def trip_text(progress, t, fits=lambda text: True):
-    """(miles, status, percent) t seconds into a step. Whether the status keeps its decimal is
-    decided once, from the final figure, so the line doesn't change format while it counts."""
+def trip_text(progress, t, fits=lambda text: True, miles_fit=lambda text: True):
+    """(miles, status, percent) t seconds into a step. Whether the status keeps its decimal, and how
+    many the miles keep, is decided once, from the final figures, so neither changes format while
+    it counts."""
     keeps_decimal = journey_text(progress, fits)[1] == journey_text(progress)[1]
     moment = at_moment(progress, t)
-    miles, status = journey_text(moment, fits=lambda text: keeps_decimal)
-    return miles, status, percent(moment)
+    status = journey_text(moment, fits=lambda text: keeps_decimal)[1]
+    return counted_miles(progress, t, miles_fit), status, percent(moment)
 
 
 def tip_brightness(t):
@@ -189,10 +211,15 @@ class JourneyScreen(Screen):
         graphics.DrawText(matrix, small, 2, 6, _GOLD, _fit(small, f'TO {place.upper()}', w - 4))
         # Room, font and MI's place come from the final figures, so nothing moves while they count.
         room = w - 4 - get_text_width(small, percent(progress)) - 3
-        miles = journey_text(progress)[0]
         unit_w = get_text_width(small, 'MI')
-        font = next((f for f in big_fonts if 2 + get_text_width(f, miles) + 2 + unit_w <= w - 2), small)
-        shown, status, pct = trip_text(progress, t, fits=lambda text: get_text_width(small, text) <= room)
+
+        def big_font(text):
+            return next((f for f in big_fonts if 2 + get_text_width(f, text) + 2 + unit_w <= w - 2), None)
+        # One decimal if a big font has room for it beside MI, else none.
+        miles = journey_text(progress, miles_fit=lambda text: big_font(text) is not None)[0]
+        font = big_font(miles) or small
+        shown, status, pct = trip_text(progress, t, fits=lambda text: get_text_width(small, text) <= room,
+                                       miles_fit=lambda text: big_font(text) is not None)
         graphics.DrawText(matrix, font, 2, miles_y, _WHITE, shown)
         graphics.DrawText(matrix, small, 2 + get_text_width(font, miles) + 2, miles_y, _WHITE, 'MI')
         graphics.DrawText(matrix, small, 2, status_y, _ORANGE, _fit(small, status, room))
@@ -217,7 +244,9 @@ class JourneyScreen(Screen):
         """64 rows: one row a group under the bar, a colour square, the name, the miles; each slides
         in from the left in turn."""
         w = matrix.width
-        for row, group in enumerate(groups_of(progress)):
+        groups = groups_of(progress)
+        cents = group_cents(groups, progress['miles'])
+        for row, group in enumerate(groups):
             arrived = ease_out((t - ROW_START_SECONDS - row * ROW_GAP_SECONDS) / ROW_SLIDE_SECONDS)
             if arrived <= 0:
                 continue
@@ -225,8 +254,11 @@ class JourneyScreen(Screen):
             y = 47 + row * 7
             color = GROUP_COLORS.get(group.get('key'), (200, 200, 235))
             _rect(matrix, 2 + dx, 4 + dx, y - 4, 3, color)
-            value = group_miles(group.get('miles') or 0)
-            label = _fit(small, str(group.get('label', '')), w - 2 - get_text_width(small, value) - 3 - 7)
+            name = str(group.get('label', ''))
+            # Two decimals unless the whole label then wouldn't fit beside them (WALK/RUN at 100+ miles).
+            value = group_figure(cents[row], lambda text: 7 + get_text_width(small, name) + 3
+                                 <= w - 2 - get_text_width(small, text))
+            label = _fit(small, name, w - 2 - get_text_width(small, value) - 3 - 7)
             graphics.DrawText(matrix, small, 7 + dx, y, graphics.Color(*color), label)
             _right(matrix, small, w - 2 + dx, y, _WHITE, value)
 
@@ -237,6 +269,7 @@ class JourneyScreen(Screen):
         graphics.DrawText(matrix, small, 2, 6, _GOLD, SPLIT_TITLE)
         groups = groups_of(progress)
         total = sum(g.get('miles') or 0 for g in groups) or 1
+        cents = group_cents(groups, progress['miles'])
         span = w - 4
         reach = 2 + round(span * ease_out(t / SPLIT_GROW_SECONDS))  # the grown bar ends before this
         x = 2
@@ -249,7 +282,9 @@ class JourneyScreen(Screen):
             if reach < x:
                 continue  # this colour hasn't landed: its row waits
             y = 17 + row * 7
-            value = group_miles(group.get('miles') or 0)
-            label = _fit(small, str(group.get('label', '')), w - 4 - get_text_width(small, value) - 3)
+            name = str(group.get('label', ''))
+            value = group_figure(cents[row], lambda text: 2 + get_text_width(small, name) + 3
+                                 <= w - 2 - get_text_width(small, text))
+            label = _fit(small, name, w - 4 - get_text_width(small, value) - 3)
             graphics.DrawText(matrix, small, 2, y, graphics.Color(*color), label)
             _right(matrix, small, w - 2, y, _WHITE, value)

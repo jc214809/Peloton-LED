@@ -266,6 +266,20 @@ the castle while saying `414 TO HOME`. Both boards now use one design
   grows the split bar a colour at a time with each row appearing as its
   colour lands. The arrival, turning-for-home and step hand-off effects are
   ROADMAP item 7. `render_rotation.py` captures settled frames.
+- Decimals (2026-11-11, Joel's call): each group's miles read `123.45`; the
+  big total keeps one decimal on both boards (`1,234.6`), and the `TO GO` line
+  its one decimal. A figure drops to fewer decimals only where it won't fit,
+  decided once from the final figure so the count-up never changes format.
+  The total must fit a big font beside `MI` (2 px left, 2 px gap, 2 px margin
+  right; `big`, then `bold` on 64 rows, `countdown` on 32): 32 rows keep `big`
+  up to `4,444.4`; 64 rows take `bold` from `1,234.6` and drop the decimal at
+  `13,333`. A group figure must leave its whole label and a 3 px gap (so
+  `WALK/RUN` drops to one decimal from 100 miles on 64 rows; `123.45` still
+  fits on 32). The groups are rounded together (`group_cents`, largest
+  remainder in hundredths) so the rows add up to the total, e.g. 22.64 + 3.54
+  = 26.18 where 22.636 and 3.539 rounded alone would read 26.17. Lit columns
+  stay within 2..61 at both heights for 4- and 5-digit worst cases (tests
+  check a 1 px margin).
 
 ## Open questions for Joel
 
