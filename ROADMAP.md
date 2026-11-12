@@ -6,17 +6,16 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 
 ```
 Icon touch-ups (by hand) ── independent
-6 More head-to-head stats ── after facts-engine step 1 (period_stats) merges
+6 More head-to-head stats ── independent (facts-engine step 1's `period_stats` is built)
 7 Journey moments ── after the journey redesign (journey-mile-groups) merges
-Name page facts engine ── steps 1-6 built; retune weights on real logs (first pass: PR #72)
 Workout graphs ── research first; builds on `performance_graph` in peloton/summaries.py and the workout pages
-Name page together facts ── after the facts engine; shares figures with item 6 (head to head)
-Name page facts settings and log fields ── maybe; after the facts engine
+Name page together facts ── shares figures with item 6 (head to head)
+Name page facts settings and log fields ── maybe
 Workout compare: Cardio classes ── independent (workout compare is on develop-beta, #81/#82)
 Ideas (not yet sized) ── trend charts share windows with item 6; yearly goal and weekly recap use `frame_stats`
 ```
 
-Suggested order: facts-engine step 1, then 6, then the remaining steps. Item 6 adds frames to a screen that shares its page time across frames (`peloton/screen_times.py`), so more stats mean a longer minimum page. Icon touch-ups whenever Joel has time.
+Suggested order: 6, then the remaining items. Item 6 adds frames to a screen that shares its page time across frames (`peloton/screen_times.py`), so more stats mean a longer minimum page. Icon touch-ups whenever Joel has time.
 
 ## Up next
 
@@ -53,7 +52,7 @@ Notes:
 - This changes today's 64x64 page, so its byte-identical check doesn't apply to `versus`; check the other pages are unchanged and preview with `scripts/render_rotation.py --height 64 --rival <cache>`.
 - 32 rows keeps one stat at a time (labels and big numbers already rotate there); the page's minimum duration grows with the number of stats shown, so pick a per-pass set there too.
 - Optional: a settings-page choice of which stats compete (the Rotation card's Head to head row, or a small section).
-- Depends on: nothing. Per-week and per-month figures come from a helper over the workout log in `peloton/activity.py`, fed via `WorkoutLog.derived` like `streak_week_workouts`; every candidate field is already in the log, so no `LOG_VERSION` bump. Facts-engine step 1 added `period_stats` / `frame_stats` in `peloton/activity.py` (per-window counts from the log, rolling windows, in `WorkoutLog.derived` as `time_frames`; Joel prefers a rolling 30 days to the calendar month); extend them rather than adding a new pass over the log.
+- Depends on: nothing. Per-week and per-month figures come from a helper over the workout log in `peloton/activity.py`, fed via `WorkoutLog.derived` like `streak_week_workouts`; every candidate field is already in the log, so no `LOG_VERSION` bump. The facts engine's step 1 added `period_stats` / `frame_stats` in `peloton/activity.py` (per-window counts from the log, rolling windows, in `WorkoutLog.derived` as `time_frames`; Joel prefers a rolling 30 days to the calendar month); extend them rather than adding a new pass over the log.
 
 ### 7. Journey moments: arrival, turning for home, and the 32-row hand-off
 The redesigned journey page (`display/ui/journey_screen.py`, 2026-11-08) opens each step with a fill, a count-up, a pulsing tip and the groups coming in. Joel chose these three for later:
@@ -67,12 +66,6 @@ Notes:
 - The arrival confetti must stay off the text, like the milestone celebration's.
 - Check both boards with `scripts/render_rotation.py` and frame strips (the journey's `frame_times` captures settled frames only); the other pages must stay byte-identical.
 - Depends on: the journey redesign (branch `journey-mile-groups`).
-
-### Name page: facts engine
-The plan is in `docs/NAME-PAGE-FACTS.md` ("Plan"): one PR per step. Steps 0 (PR #65), 1 (time frames and `period_stats`, PR #66), 2 (filters, PR #67), 3 (measures and bests, PR #68), 4 (comparisons, PR #69), 5 (events, PR #70) and 6 (scoring and a cool-down, PR #71) are built; PR #72 is the first tuning. Steps 7 and 8 of the plan are their own items below. Left from step 6: tune `KINDS` weights from `list_facts.py` on Joel's real logs on the boards.
-- Build brief for a Sonnet 5.5 session, one step each: `docs/NAME-PAGE-FACTS-HANDOFF.md`.
-- After the update, on each board: `python scripts/list_facts.py --log <log> --cache <cache> --tz <zone>` should show no `<-- differs` in "overview vs log" (the log rebuilds once, LOG_VERSION 2). Checked on Joel's full history from the Mac on 2026-11-08: all 13 rows matched. Remove this item once the boards agree.
-- Depends on: step 4 merged. Item 6 (Head to head) should build on step 1's `period_stats`.
 
 ### Workout graphs: more of what Peloton records during a class
 Peloton records heart rate, output, cadence and more every 5 seconds of a class, and the board draws only one of them. This item is to decide which of the others deserve a graph slide on the workout pages, then build those. Research first: a mock-up of each candidate at 64x64 and 64x32 from the saved real workouts in `perf_graphs/` (91 of them), and Joel picks.
@@ -106,11 +99,11 @@ A separate, later idea: charts of trends over time from the workout log (workout
 
 ### Name page: together facts (was facts-engine step 7)
 Facts about both riders on a two-rider board (`TOGETHER` / `31 WORKOUTS`, `BOTH TOOK` an instructor, `SAME CLASS`), from each rider's `period_stats`, shown once a cycle on the rider whose rotation gets `rivals`. Details: `docs/NAME-PAGE-FACTS.md` ("Step 7").
-- Depends on: the facts engine (through step 6). Shares figures with item 6 (Head to head).
+- Depends on: nothing (the facts engine is built). Shares figures with item 6 (Head to head).
 
 ### Name page: facts settings and new log fields (maybe; was facts-engine step 8)
 Settings-page switches for whole kinds of facts (no comparisons, no events), not one per fact; new log fields (live vs on-demand, class type) only if a fact needs them, with one `LOG_VERSION` bump. Ask before starting.
-- Depends on: the facts engine.
+- Depends on: nothing (the facts engine is built).
 
 ### Workout compare: Cardio classes
 Cardio (HIIT, Low Impact, Dance and Family Cardio) is outside workout compare today (`workout_compare.DISCIPLINES`). It has no output, speed, callouts or weights, only heart rate, so the one rule that could apply is the heart-rate effort one (`effort_insight`: Strive per minute against similar classes, "hardest" / "easiest of your last N").
@@ -181,7 +174,10 @@ Already named under Workout graphs as a later idea; make it its own item. Pages 
 - **Pick the best memory, not the longest workout:** score the day's workouts (a PR, the year's longest, a first, a milestone number such as the 500th) and show the highest; skip the fact when nothing is above ordinary, so a plain 20-minute row doesn't qualify.
 - **Pile up the years:** several earlier years on the same date in one line (`1, 2 AND 3 YEARS AGO`) or the same class taken again.
 - **Streak or total context:** `YOUR 1,200TH WORKOUT`, or `DAY 4 OF A STREAK`.
-Decide the rule with `scripts/list_facts.py` on both riders' real logs: how often it appears today, how often each idea would fire, and its score against the other events (`KINDS`, threshold constants beside `MIN_EVENT_WORKOUTS`). The label must fit 15 characters of the `stats` font. Update `docs/NAME-PAGE-FACTS.md` (the events table) and the tests for `event_facts`. Depends on: the facts engine (built).
+Decide the rule with `scripts/list_facts.py` on both riders' real logs: how often it appears today, how often each idea would fire, and its score against the other events (`KINDS`, threshold constants beside `MIN_EVENT_WORKOUTS`). The label must fit 15 characters of the `stats` font. Update `docs/NAME-PAGE-FACTS.md` (the events table) and the tests for `event_facts`. Depends on: nothing (the facts engine is built).
+
+### Name page: the same label twice in one showing
+Found 2026-11-11 checking the facts engine: in `scripts/list_facts.py`'s pass preview on Jen's log, pass 7 shows `LAST 30 DAYS` in both headline slots. `username_details` takes the best fact, then the best of another `KINDS` group, so two facts from the same frame (e.g. a 30-day count and a 30-day comparison) can still share a label and read as a repeat. Find which two facts they are (`list_facts.py --log <log> --cache <cache> --tz <zone>`, both riders), then decide: skip a second headline whose label matches the first, or give one of them a different label. Tests in `tests/test_username_facts.py`; scoring and cool-down keys stay the same. Goes with the two-line facts item below.
 
 ### Name page: two-line facts that say what they mean
 The facts (`peloton/username_facts.py`) are a label and one or two short lines (`MOST IN 30 DAYS` / `CYCLING`, `ON THIS DAY` / `1 YEAR AGO` / `20 MIN ROW`), each limited to 15 characters of the `stats` font (60 px), so many are clipped into fragments (`VS 30 BEFORE`, `+32 WORKOUTS`) that need the rider to guess the sentence. Look at splitting each fact into a clear two-line statement, e.g. a headline line (what it is) and a detail line (the figure and what it's against), so each reads as a sentence. Survey first: run `scripts/list_facts.py` on both riders' real logs, list every `kind` with its current lines, and mark the ones that read ambiguously on the board. Then redo them one `kind` group at a time (ranks, bests, comparisons, events, instructors), not all at once. Check what the screen already supports (`UsernameScreen.wrap_two_lines`, the scrolling value line, the `short_label` fallback, 32 rows with no spare rows) so the wording is made to fit the layout, not the reverse; decide whether 64x32 gets a shorter version. Tests: each `kind`'s lines fit, and the scoring and cool-down keys (`kind`, `key`) don't change. Update `docs/NAME-PAGE-FACTS.md`. Goes with "make ON THIS DAY worth reading" above, which is the first example.
