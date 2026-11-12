@@ -199,7 +199,7 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
 - Replace version 2's two-line insight slide. At most 2 insights a workout (`MAX_BOARD_INSIGHTS`), after
   the graph / zones / muscles slides; every frame holds 1 s longer, like those. 64x64 shows each as a card
   (the sentence) then bars; 64x32 as bars, then the sentence on 1-2 pages. Content from
-  `peloton/insight_lines.board_view`; mock-up `docs/fitness-analysis/reports/insight-combo-card-bars.png`.
+  `peloton/insight_lines.board_view`.
 - No discipline title and no heart-rate/calorie row on any insight frame (both boards). The other slides
   are unchanged, insights or not (`test_the_other_slides_are_unchanged_by_the_insights`).
 - Colours: the headline, today's bar and lit blocks amber (down, missed, under the callouts), green (up,

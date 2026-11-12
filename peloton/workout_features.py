@@ -1,6 +1,6 @@
 """Workout compare: one slim row per workout from three raw Peloton responses.
 
-Spec: docs/fitness-analysis/WORKOUT-COMPARE-SPEC.md, section 3. `build_row` is a pure function of
+Spec: WORKOUT-COMPARE-SPEC.md (kept outside this repo), section 3. `build_row` is a pure function of
   detail = GET /api/workout/<id>?joins=ride,ride.instructor
   graph  = GET /api/workout/<id>/performance_graph?every_n=5   (may be None)
   ride   = GET /api/ride/<ride_id>/details                      (may be None)
