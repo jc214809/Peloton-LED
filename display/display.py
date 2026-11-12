@@ -27,7 +27,8 @@ def fonts():
             "countdown": "assets/fonts/patched/7x13.bdf",
             "big": "assets/fonts/patched/10x20.bdf",
             "bold": "assets/fonts/patched/7x13B.bdf",
-            "title_bold": "assets/fonts/patched/6x13B.bdf"
+            "title_bold": "assets/fonts/patched/6x13B.bdf",
+            "goal_value": "assets/fonts/patched/8x13B.bdf"
         }
     }
 
