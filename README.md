@@ -483,6 +483,7 @@ On the Pi, edit `config.json` in the checkout and restart the service; the servi
 
 Or change it from a browser: the **[settings page](docs/install.md#settings-page)** at `http://<board>.local:8080`. Sign in with the PIN the board shows; saved passwords and keys are never shown. It has:
 
+- **Power** (top bar, before *Sign out*): *Restart display*, *Stop display* (*Start display* when it's off), *Reboot the Pi* and *Shut down the Pi*, each asking first.
 - **Updates**: what's installed, a check for a newer release or Beta (with each change's release notes), *Update now* and *Roll back*.
 - **Logins**: token renewal's status (how often it checks, when it next checks, and when each rider's token will actually renew), a card per rider, and *Renew now*. Click a rider's *Email & password* row to change their login.
 - **Pushover alerts**: whether alerts are on, a test alert, and the keys.
