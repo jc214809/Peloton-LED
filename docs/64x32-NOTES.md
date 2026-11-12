@@ -211,7 +211,7 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   in place of the title. Card: the sentence in up to 5 centred lines from baseline 21, 7 apart (vertically
   centred in 21-49 when shorter); the footer (`9 SIMILAR RIDES`, `VS 12 SIMILAR`, `5 CLOSEST RIDES`,
   `VS THE CALLOUTS`, `VS PAST CLASSES`) grey on baseline 61. Bars: the headline centred on baseline 22
-  in `titles` (`stats` when wider than 62 px); `TODAY` / `USUAL` labels with the value right-aligned on
+  in `titles` (`stats` when wider than 62 px); `TODAY` / `TYPICAL` labels with the value right-aligned on
   baselines 32 and 45 and a 4-row bar under each (59 px at full); a share bar (`TIME UNDER` / `THE
   CALLOUT`) on rows 35-41; or blocks from row 34, 7 px 3 apart, shrinking (5/2, 3/1, 2/1, 1/1) when many
   sets would not fit 60 px, with `3 IN A ROW` under a streak. The reason (`AN EASIER DAY`, `LESS PER BEAT`,

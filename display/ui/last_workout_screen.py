@@ -463,8 +463,9 @@ _INSIGHT_GOLD = (255, 200, 0)
 # Insight sentences and reasons: full white is glaring on the panel next to the coloured figures.
 _INSIGHT_TEXT = (200, 205, 215)
 _INSIGHT_DIM = (70, 80, 95)
-# The 'usual' bar: slate, so today's bar is the one that stands out (the number and label stay grey).
-_USUAL_BAR = (70, 85, 110)
+# The 'usual' bar: navy, so today's bar is the one that stands out (the number and label stay grey).
+_USUAL_BAR = (20, 50, 140)
+TYPICAL_LABEL = 'TYPICAL'  # the 64x64 bars frame's label for the usual figure (the median of similar workouts)
 # The workout-compare lightbulb, 5x7: '#' gold, 'g' the grey base.
 _BULB_ROWS = ('.###.', '#####', '#####', '#####', '.###.', '.ggg.', '..g..')
 
@@ -513,7 +514,7 @@ def _centred(matrix, font, y: int, rgb, text: str, left: int = 0, right: Optiona
 
 
 def _rich_line(matrix, font, y: int, line: str, numbers) -> None:
-    """A centred sentence line whose words with a digit take the discipline colour, the rest white."""
+    """A centred sentence line whose words with a digit take `numbers` (the insight's colour), the rest white."""
     x = max((matrix.width - _words_width(font, line)) // 2, 0)
     _draw_words(matrix, font, x, y, line,
                 lambda word: numbers if any(ch.isdigit() for ch in word) else _INSIGHT_TEXT)
@@ -552,24 +553,24 @@ def _insight_header(matrix, discipline: str, index: int, count: int) -> None:
 
 
 def _draw_insight_card(matrix, view: dict, discipline: str, index: int, count: int) -> None:
-    """64x64: the sentence, numbers in the discipline colour, and what it was compared with."""
+    """64x64: the sentence, numbers in the insight's colour (its headline's), and what it was compared with."""
     stats = loaded_fonts['stats']
     _insight_header(matrix, discipline, index, count)
     lines = view['lines64']
     top = 21 + 7 * (5 - len(lines)) // 2
     for k, line in enumerate(lines):
-        _rich_line(matrix, stats, top + 7 * k, line, _disc_rgb(discipline))
+        _rich_line(matrix, stats, top + 7 * k, line, tuple(view['colour']))
     _centred(matrix, stats, 61, _LABEL_GREY, view['footer'])
 
 
 def _bars_tall(matrix, figure: dict, colour) -> None:
-    """64x64 figure: TODAY / USUAL bars on baselines 32 and 45, a share bar on 32, or blocks from row 34."""
+    """64x64 figure: TODAY / TYPICAL bars on baselines 32 and 45, a share bar on 32, or blocks from row 34."""
     stats = loaded_fonts['stats']
     kind = figure['kind']
     if kind == 'bars':
         top = max(figure['today'], figure['usual']) or 1
         for y, label, value, text, rgb, bar in ((32, 'TODAY', figure['today'], figure['today_text'], colour, colour),
-                                                (45, 'USUAL', figure['usual'], figure['usual_text'], _LABEL_GREY,
+                                                (45, TYPICAL_LABEL, figure['usual'], figure['usual_text'], _LABEL_GREY,
                                                  _USUAL_BAR)):
             unit = figure.get('unit', '')
             # Weights read as one word, 40LB, as in the sentence; watts and mph keep their space.
@@ -663,7 +664,7 @@ def _draw_insight_words(matrix, view: dict, discipline: str, page: int) -> None:
         _write(matrix, stats, 63 - get_text_width(stats, label), 6, _LABEL_GREY, label)
     _rect(matrix, 0, 8, 63, 8, _disc_rgb(discipline))
     for k, line in enumerate(pages[page]):
-        _rich_line(matrix, stats, 16 + 7 * k, line, _disc_rgb(discipline))
+        _rich_line(matrix, stats, 16 + 7 * k, line, tuple(view['colour']))
 
 
 def _draw_insight_frame(matrix, summary: dict, discipline: str, detail: dict, phase: float, hold: float) -> bool:
