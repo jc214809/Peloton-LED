@@ -44,3 +44,16 @@ def test_value_font_steps_down_only_when_too_wide():
     assert value_font('1200/1000') is loaded_fonts['title_bold']  # 9 characters: 7x13B is 63 wide
     assert value_font('100/150') is loaded_fonts['goal_value']
     assert get_text_width(loaded_fonts['goal_value'], '135/300') <= MAX_VALUE_WIDTH
+
+
+def test_value_font_falls_back_to_the_smallest_when_nothing_fits():
+    initialize_fonts(64)
+    assert value_font('12345/67890') is loaded_fonts['title_bold']
+
+
+@pytest.mark.parametrize('height', [64, 32])
+def test_no_fonts_draws_nothing(height, monkeypatch):
+    import display.ui.goal_screen as goal_screen
+    monkeypatch.setattr(goal_screen, 'loaded_fonts', {})
+    assert value_font('1/5') is None
+    assert GoalScreen().render(ImageMatrix(height=height), {'current': 1, 'target': 5, 'unit': 'workouts'}) is False
