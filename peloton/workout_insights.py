@@ -11,11 +11,14 @@ from . import workout_compare as compare
 from .insight_lines import number
 
 MAX_MESSAGES = 3
+TYPICAL = 'typical'        # the word for the usual figure (the peers' median) in the Mac text
+CONSISTENT = 'consistent'  # the word for an in-line workout
 # Output / speed against peers
 BIG_CHANGE_PCT = 10        # at least this far from the peer median ...
 RANK_SHARE = 0.8           # ... and beyond this share of the peers
 COST_PCT = 8               # output per heartbeat this far under the peer median = "cost you more"
 EASY_HR_PCT = 4            # work heart rate this far under the peer median = "easier effort"
+SAME_HR_BPM = 3            # work heart rate within this many bpm of the peer median = "the same heart"
 # Callouts
 RESISTANCE_UNDER_PCT = 25  # share of callout time under the resistance range
 CADENCE_UNDER_PCT = 35
@@ -95,7 +98,7 @@ def output_insight(target, group, real):
     else:
         kind = f'{plural(noun)} like this'
         real_stat = None
-    usual = f"{_fmt(result['value'], unit)} in the work segments against your usual {_fmt(result['median'], unit)}"
+    usual = f"{_fmt(result['value'], unit)} in the work segments against your {TYPICAL} {_fmt(result['median'], unit)}"
     eff = compare.stat(target.get('eff'), [p.get('eff') for p in group])
     heart = compare.stat(target['work'].get('heart_rate'), [p['work'].get('heart_rate') for p in group])
     enough_hr = eff and heart and eff['n'] >= compare.MIN_PEERS and heart['n'] >= compare.MIN_PEERS
@@ -122,19 +125,22 @@ def output_insight(target, group, real):
     if up:
         text = f'Strong {noun}: {usual} for {kind}.'
         if enough_hr and eff['pct'] >= COST_PCT:
-            text += ' You got more out of every heartbeat than usual.'
+            text += f' You got more out of every heartbeat than {TYPICAL}.'
             facts['reason'] = 'efficient'
+            # The board says "same heart" only when it was: more per beat can come with a higher heart rate too.
+            facts['same_hr'] = abs(heart['value'] - heart['median']) <= SAME_HR_BPM
         return ('output_up', text, facts)
     facts['close'] = abs(result['pct']) < BIG_CHANGE_PCT
     if abs(result['pct']) < BIG_CHANGE_PCT:
         if filled:
             return ('in_line', f"Good {noun}, right in line with {kind}: {_fmt(result['value'], unit)} "
-                               f"against a usual {_fmt(result['median'], unit)}.", facts)
+                               f"against a {TYPICAL} {_fmt(result['median'], unit)}.", facts)
         return ('in_line', f"Good {noun}, right in line with your other {plural(noun)} like it "
-                           f"({_fmt(result['value'], unit)} against a usual {_fmt(result['median'], unit)}).", facts)
+                           f"({_fmt(result['value'], unit)} against a {TYPICAL} "
+                           f"{_fmt(result['median'], unit)}).", facts)
     if filled:
-        return ('in_line', f'A normal {noun} for you: {usual} for {kind}, inside your usual range.', facts)
-    return ('in_line', f'A normal {noun} for you: {usual}, inside your usual range.', facts)
+        return ('in_line', f'A {CONSISTENT} {noun} for you: {usual} for {kind}, inside your {TYPICAL} range.', facts)
+    return ('in_line', f'A {CONSISTENT} {noun} for you: {usual}, inside your {TYPICAL} range.', facts)
 
 
 # 5.2 Callouts
@@ -236,8 +242,8 @@ def strength_insights(target, rows):
         found = _usual(cat, sets, target, rows)
         if found:
             usual, mine, name, on_movement = found
-            against = (f'your usual {usual:.0f} lb on that movement' if on_movement
-                       else f'your usual {usual:.0f} lb for {cat} weights')
+            against = (f'your {TYPICAL} {usual:.0f} lb on that movement' if on_movement
+                       else f'your {TYPICAL} {usual:.0f} lb for {cat} weights')
             if mine <= usual - LIGHTER_LB and all_hit and ratio >= GO_UP_RATIO:
                 out.append(('go_up_lighter', f'Go up a weight on {name} next time: {mine:.0f} lb today against '
                                              f'{against}, and you beat the rep targets by '

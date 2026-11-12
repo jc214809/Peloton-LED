@@ -7,7 +7,8 @@ import pytest
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui import journey_screen
 from display.ui.journey_screen import (DONE_COLOR, GROUP_COLORS, TIP_COLOR, JourneyScreen, counted_miles,
-                                       journey_steps, journey_text, percent, tip_brightness, trip_text)
+                                       group_cents, group_figure, journey_steps, journey_text,
+                                       percent, tip_brightness, trip_text)
 from peloton.config import load_config
 from peloton.journey import (DEFAULT_JOURNEY, DISTANCE_DISCIPLINES, journey_progress,
                              merge_distance_totals, mile_group, uses_metric, workout_miles)
@@ -313,8 +314,8 @@ def test_the_bar_fills_from_empty(height):
 def test_the_miles_count_up_across_this_leg():
     progress = progress_for(1190)  # trip 2: the leg began at 880
     assert counted_miles(progress, 0) == '880.0'
-    assert counted_miles(progress, 0.5) not in ('880.0', '1,190')
-    assert counted_miles(progress, journey_screen.FILL_SECONDS) == '1,190'
+    assert counted_miles(progress, 0.5) not in ('880.0', '1,190.0')
+    assert counted_miles(progress, journey_screen.FILL_SECONDS) == '1,190.0'
     assert counted_miles(progress_for(48.3), 0) == '0.0'
     # The heading holds still while the figures count.
     first, last = render(64, progress, 0.5), render(64, progress)
@@ -326,7 +327,7 @@ def test_the_miles_to_go_and_the_percent_count_with_the_bar():
     assert trip_text(progress, 0) == ('880.0', '880.0 TO HOME', '0%')
     middle = trip_text(progress, 0.5)
     assert 570 < float(middle[1].split()[0]) < 880 and 0 < int(middle[2][:-1]) < 35
-    assert trip_text(progress, journey_screen.FILL_SECONDS) == ('1,190', '570.0 TO HOME', '35%')
+    assert trip_text(progress, journey_screen.FILL_SECONDS) == ('1,190.0', '570.0 TO HOME', '35%')
     # A status that drops its decimal at the end drops it from the start, so the line never changes format.
     whole = lambda text: '.' not in text
     assert trip_text(progress, 0, whole)[1] == '880 TO HOME'
@@ -389,16 +390,74 @@ def test_journey_screen_renders_nothing_without_progress():
     assert not JourneyScreen().render(ImageMatrix(height=64), None)
 
 
-def test_journey_text_shows_tenths_of_a_mile():
-    progress = journey_progress({'cycling': 8.84}, {**DEFAULT_JOURNEY, 'miles': 26.2})
+def test_the_big_total_shows_one_decimal():
+    # Only the groups' rows show hundredths; the big figure keeps one decimal on both boards.
+    progress = journey_progress({'cycling': 8.846}, {**DEFAULT_JOURNEY, 'miles': 26.2})
     assert journey_text(progress) == ('8.8', '17.4 TO GO')
+    assert journey_text(journey_progress({'cycling': 1300.466}, {**DEFAULT_JOURNEY, 'miles': 2000}))[0] == '1,300.5'
 
 
-def test_journey_text_keeps_whole_miles_from_1000_up():
-    # "1,300.5" would push the number out of the big font.
-    progress = journey_progress({'cycling': 1300.46}, {**DEFAULT_JOURNEY, 'miles': 2000})
-    assert journey_text(progress) == ('1,300', '699.5 TO GO')
-    assert journey_text(journey_progress({'cycling': 999.96}, DEFAULT_JOURNEY))[0] == '1,000'
+def test_journey_text_drops_decimals_only_as_far_as_the_room_needs():
+    progress = journey_progress({'cycling': 1300.466}, {**DEFAULT_JOURNEY, 'miles': 2000})
+    assert journey_text(progress, miles_fit=lambda text: len(text) <= 7)[0] == '1,300.5'
+    assert journey_text(progress, miles_fit=lambda text: len(text) <= 5)[0] == '1,300'
+    assert journey_text(journey_progress({'cycling': 999.996}, DEFAULT_JOURNEY))[0] == '1,000.0'
+    # The count-up keeps the final figure's decimals from the first frame.
+    assert counted_miles(progress, 0, miles_fit=lambda text: len(text) <= 5) == '0'
+    assert counted_miles(progress, journey_screen.FILL_SECONDS, miles_fit=lambda text: len(text) <= 5) == '1,300'
+
+
+def test_group_figures_add_up_to_the_total():
+    # Rounded alone 22.636 + 3.539 is 22.64 + 3.54 = 26.18, but 0.333 x 3 is 0.33 x 3 against a total
+    # of 1.00: the rows take the missing hundredths (largest remainder) so they sum to the big figure.
+    progress = journey_progress({'cycling': 22.636, 'running': 3.539}, DEFAULT_JOURNEY)
+    cents = group_cents(progress['groups'], progress['miles'])
+    assert sum(cents) == round(progress['miles'] * 100) == 2618 and cents == [2264, 354]
+    for a, b, c in ((0.333, 0.333, 0.333), (1.005, 2.005, 3.005), (5.5, 0.004, 0.004)):
+        groups = [{'miles': v} for v in (a, b, c)]
+        assert sum(group_cents(groups, a + b + c)) == round((a + b + c) * 100)
+    assert group_cents([{'miles': 1.236}], 5) == [124], 'rows that are not part of that total: plain rounding'
+    assert group_figure(2264) == '22.64' and group_figure(123456) == '1,234.56'
+    assert group_figure(123456, lambda text: '.' not in text) == '1,235'
+    assert group_figure(123456, lambda text: len(text) <= 7) == '1,234.6'
+
+
+@pytest.mark.parametrize('height', [32, 64])
+@pytest.mark.parametrize('totals', [
+    {'cycling': 12.346}, {'cycling': 123.456, 'running': 99.99, 'rowing': 9.994},
+    {'cycling': 1234.5678, 'running': 987.654, 'rowing': 111.111},
+    {'cycling': 4444.4444, 'running': 4444.4444, 'rowing': 4444.4444},
+    {'cycling': 9999.995, 'running': 1.005, 'rowing': 12345.678}])
+def test_decimals_fit_inside_a_one_pixel_margin_and_never_touch_their_labels(height, totals):
+    progress = journey_progress(totals, {**DEFAULT_JOURNEY, 'miles': 20000})
+    progress['step_seconds'] = STEP
+    for at in (SETTLED, STEP + SETTLED):
+        if at != SETTLED and journey_steps(progress, height) != 2:
+            continue
+        image = render(height, progress, at)
+        lit = [x for x in range(64) for y in range(height) if image.getpixel((x, y)) != (0, 0, 0)]
+        assert min(lit) >= 1 and max(lit) <= 62, 'a 1 px margin at each edge'
+        # Each legend row keeps a blank column between its label and its figure.
+        if height == 64 and at == SETTLED or height == 32 and at != SETTLED:
+            top = 43 if height == 64 else 12
+            for row in range(len(progress['groups'])):
+                rows = range(top + row * 7, top + row * 7 + 6)
+                busy = [x for x in range(8, 62) if any(image.getpixel((x, y)) != (0, 0, 0) for y in rows)]
+                assert any(b - a > 1 for a, b in zip(busy, busy[1:])), 'label and figure are apart'
+
+
+def test_the_big_figure_shows_one_decimal_where_it_fits():
+    for height, totals, text in ((64, {'cycling': 26.175, 'running': 0.0004}, '26.2'),
+                                 (64, {'cycling': 999.994}, '1,000.0'),
+                                 (64, {'cycling': 1234.5678}, '1,234.6'),
+                                 (64, {'cycling': 12345.678}, '12,346'),
+                                 (32, {'cycling': 1234.5678}, '1,234.6')):
+        initialize_fonts(height)
+        small = loaded_fonts.get('stats')
+        fonts = [loaded_fonts.get('big'), loaded_fonts.get('bold' if height == 64 else 'countdown')]
+        unit = get_text_width(small, 'MI')
+        fits = lambda t: any(2 + get_text_width(f, t) + 2 + unit <= 62 for f in fonts if f)
+        assert journey_text(journey_progress(totals, DEFAULT_JOURNEY), miles_fit=fits)[0] == text
 
 
 def test_journey_status_drops_the_decimal_when_the_line_is_full():

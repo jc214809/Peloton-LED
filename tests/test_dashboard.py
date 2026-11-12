@@ -612,7 +612,7 @@ def test_new_workout_fetches_detail_and_ride_once_and_gets_an_insight(tmp_path):
         summary = dashboard.snapshot()['summaries'][0]
         assert summary['insights'][0]['code'] == 'in_line'
         assert len(summary['insights']) == 1
-        assert summary['insights'][0]['headline'] == 'ON YOUR USUAL'
+        assert summary['insights'][0]['headline'] == 'CONSISTENT'
         assert summary['insights'][0]['footer'] == '6 SIMILAR RIDES'
         assert client.get_workout_detail.call_count == 1
         client.get_ride_details.assert_called_once_with('r1')

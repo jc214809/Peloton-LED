@@ -28,22 +28,22 @@ SHOWN = {
 }
 # (headline, sentence, reason line, footer) from the plan's wording table.
 EXPECTED = {
-    'output_down': ('OUTPUT DOWN', 'OUTPUT DOWN: 124 W VS YOUR USUAL 188. HR LOWER TOO: AN EASIER DAY.',
+    'output_down': ('OUTPUT DOWN', 'OUTPUT DOWN VS YOUR TYPICAL: 124 W VS 188 W. HR LOWER TOO: AN EASIER DAY.',
                     'AN EASIER DAY', '9 SIMILAR RIDES'),
-    'output_up': ('STRONG RIDE', 'STRONG RIDE: 205 W VS YOUR USUAL 180. MORE PER HEARTBEAT THAN USUAL.',
-                  'MORE PER BEAT', '9 SIMILAR RIDES'),
-    'in_line': ('ON YOUR USUAL', 'ON YOUR USUAL: 112 W VS 108.', 'RIGHT IN LINE', '9 SIMILAR RIDES'),
+    'output_up': ('STRONG RIDE', 'STRONG RIDE VS YOUR TYPICAL: 205 W VS 180 W. MORE WATTS PER HEARTBEAT.',
+                  'WATTS PER BEAT', '9 SIMILAR RIDES'),
+    'in_line': ('CONSISTENT', 'CONSISTENT: 112 W VS 108 W.', 'RIGHT IN LINE', '9 SIMILAR RIDES'),
     'resistance_low': ('RESISTANCE LOW', 'RESISTANCE UNDER THE CALLOUT 28% OF THE WORK: TURN IT UP.', 'TURN IT UP',
                        'VS THE CALLOUTS'),
     'cadence_low': ('CADENCE LOW', 'CADENCE UNDER THE CALLOUT 37% OF THE WORK: PICK IT UP.', 'PICK IT UP',
                     'VS THE CALLOUTS'),
     'pace_low': ('UNDER PACE', 'UNDER THE PACE TARGET 42% OF THE TIME: PUSH, OR DROP A LEVEL.', 'PUSH THE PACE',
                  'VS THE CALLOUTS'),
-    'go_up_lighter': ('GO UP A WEIGHT', 'GO UP A WEIGHT ON BENT OVER ROW: 20LB VS USUAL 30, REPS +35%.',
+    'go_up_lighter': ('GO UP A WEIGHT', 'GO UP A WEIGHT ON BENT OVER ROW: 20LB VS 30LB. REPS +35%.',
                       'BENT OVER ROW', 'VS PAST CLASSES'),
     'go_up_streak': ('GO UP: HEAVY', 'GO UP FROM 40LB ON HEAVY: 3 CLASSES IN A ROW OVER TARGET.', 'FROM 40LB',
                      'VS PAST CLASSES'),
-    'went_heavier': ('HEAVIER: KEEP', 'HEAVIER ON BENT OVER ROW: 50LB VS USUAL 40, EVERY TARGET HIT.',
+    'went_heavier': ('HEAVIER: KEEP', 'HEAVIER ON BENT OVER ROW: 50LB VS 40LB. EVERY TARGET HIT.',
                      'BENT OVER ROW', 'VS PAST CLASSES'),
     'missed_targets': ('DROP A WEIGHT', 'SHORT ON 3 OF 9 SETS, MOSTLY BENT OVER ROW: DROP A WEIGHT.',
                        '3 OF 9 SHORT', 'VS PAST CLASSES'),
@@ -60,7 +60,13 @@ def test_every_code_gives_a_view_with_the_planned_wording(code):
     view = board_view(code, SHOWN[code])
     assert (view['headline'], view['sentence'], view['reason'], view['footer']) == EXPECTED[code]
     assert view['code'] == code
-    assert view['lines64'] == wrap(view['sentence'])
+    # The comparing insights put their figures on a line of their own, each with its unit.
+    figures = {'output_down': '124 W VS 188 W', 'output_up': '205 W VS 180 W', 'in_line': '112 W VS 108 W',
+               'go_up_lighter': '20LB VS 30LB', 'went_heavier': '50LB VS 40LB'}
+    if code in figures:
+        assert figures[code] in view['lines64']
+    else:
+        assert view['lines64'] == wrap(view['sentence'])
     assert sum(view['pages32'], []) == view['lines64']
 
 
@@ -94,21 +100,33 @@ def test_wording_variants():
                   'reason': 'cost_more'}
     view = board_view('output_down', foot_facts)
     assert view['headline'] == 'PACE DOWN' and view['reason'] == 'LESS PER BEAT'
-    assert view['sentence'] == 'PACE DOWN: 3.6 MPH VS YOUR USUAL 4.1. HR NOT LOWER: LESS PER HEARTBEAT.'
+    # Too long for VS YOUR TYPICAL and both units: the lead alone, and MPH once.
+    assert view['sentence'] == 'PACE DOWN: 3.6 VS 4.1 MPH. HR NOT LOWER: LESS PER HEARTBEAT.'
+    assert view['lines64'] == ['PACE DOWN', '3.6 VS 4.1 MPH', 'HR NOT LOWER:', 'LESS PER', 'HEARTBEAT.']
     assert view['figure']['unit'] == 'MPH' and view['figure']['usual_text'] == '4.1'
     assert view['footer'] == '9 SIMILAR RUNS'
     plain = board_view('output_down', BIKE)
-    assert plain['reason'] is None and plain['sentence'] == 'OUTPUT DOWN: 124 W VS YOUR USUAL 188.'
+    assert plain['reason'] is None and plain['sentence'] == 'OUTPUT DOWN VS YOUR TYPICAL: 124 W VS 188 W.'
     assert board_view('output_up', {**BIKE, 'reason': None})['reason'] is None
     wide = board_view('in_line', {**BIKE, 'value': 150, 'usual': 170, 'close': False})
     assert (wide['headline'], wide['sentence'], wide['reason']) == (
-        'IN YOUR RANGE', 'IN YOUR USUAL RANGE: 150 W VS 170.', 'IN YOUR RANGE')
+        'IN YOUR RANGE', 'IN YOUR TYPICAL RANGE: 150 W VS 170 W.', '20 W UNDER')
+    # The figures get a line of their own, each with its unit; the reason says by how much, not the headline again.
+    assert wide['lines64'] == ['IN YOUR TYPICAL', 'RANGE', '150 W VS 170 W'] and wide['pages32'] == [wide['lines64']]
+    assert board_view('in_line', SHOWN['in_line'])['lines64'] == ['CONSISTENT', '112 W VS 108 W']
+    assert board_view('in_line', {**BIKE, 'value': 185, 'usual': 170, 'close': False})['reason'] == '15 W OVER'
+    big = board_view('in_line', {**BIKE, 'value': 1234, 'usual': 1100, 'close': False})
+    assert big['lines64'][-1] == '1234 VS 1100 W'  # both units would pass 15 characters
+    run = board_view('in_line', {**BIKE, 'value': 4.5, 'usual': 4.1, 'unit': 'mph', 'foot': True, 'close': False})
+    assert run['lines64'][-1] == '4.5 VS 4.1 MPH' and run['reason'] == '0.4 MPH OVER'
+    level = board_view('in_line', {**BIKE, 'value': 12.5, 'usual': 12.5, 'unit': 'mph', 'close': False})
+    assert level['reason'] == 'RIGHT IN LINE'
     # Bike fill-ins: the closest rides, not similar ones.
     assert board_view('output_down', {**BIKE, 'n': 5, 'real': 3})['footer'] == '5 CLOSEST RIDES'
     assert board_view('output_down', {**BIKE, 'noun': 'class'})['footer'] == 'VS 9 SIMILAR'
     assert board_view('output_down', {**BIKE, 'noun': 'bootcamp'})['footer'] == 'VS 9 SIMILAR'
     category = board_view('went_heavier', {**SHOWN['went_heavier'], 'on_movement': False})
-    assert category['sentence'].startswith('HEAVIER ON HEAVY WEIGHTS: 50LB')
+    assert category['sentence'].startswith('HEAVIER ON HEAVY WEIGHTS: 50LB VS 40LB')
     assert category['reason'] == 'HEAVY WEIGHTS'
     lighter_category = board_view('go_up_lighter', {**SHOWN['go_up_lighter'], 'on_movement': False})
     assert lighter_category['reason'] == 'BENT OVER ROW'
@@ -118,20 +136,33 @@ def test_a_long_movement_drops_the_clause_then_the_vs_then_itself():
     def sentence(code, name):
         return board_view(code, {**SHOWN[code], 'movement': name})['sentence']
     for name in ('Wide Grip Bent Over Row', 'Seated Overhead Press'):
-        assert sentence('go_up_lighter', name).endswith('20LB VS USUAL 30, REPS +35%.')
-    assert sentence('go_up_lighter', LONG).endswith('PULSE: 20LB VS USUAL 30.')
-    # (USUAL 30) saves one character, which in practice never saves a line: such names leave the sentence.
-    assert sentence('go_up_lighter', 'Single Arm Dumbbell Overhead Press') == 'GO UP A WEIGHT: 20LB VS USUAL 30.'
-    assert sentence('go_up_lighter', LONG + ' Hold Squat') == 'GO UP A WEIGHT: 20LB VS USUAL 30.'
-    assert sentence('went_heavier', LONG).endswith('PULSE: 50LB VS USUAL 40.')
-    assert sentence('went_heavier', 'Single Arm Dumbbell Overhead Press') == 'HEAVIER: 50LB VS USUAL 40. KEEP IT.'
-    assert sentence('went_heavier', LONG + ' Hold Squat') == 'HEAVIER: 50LB VS USUAL 40. KEEP IT.'
+        assert sentence('go_up_lighter', name).endswith(': 20LB VS 30LB. REPS +35%.')
+    assert sentence('go_up_lighter', LONG).endswith('PULSE: 20LB VS 30LB.')
+    assert sentence('go_up_lighter', 'Single Arm Dumbbell Overhead Press').endswith('PRESS: 20LB VS 30LB.')
+    assert sentence('go_up_lighter', LONG + ' Hold Squat') == 'GO UP A WEIGHT: 20LB VS 30LB.'
+    assert sentence('went_heavier', LONG).endswith('PULSE: 50LB VS 40LB.')
+    assert sentence('went_heavier', 'Single Arm Dumbbell Overhead Press').endswith('PRESS: 50LB VS 40LB.')
+    assert sentence('went_heavier', LONG + ' Hold Squat') == 'WENT HEAVIER: 50LB VS 40LB. KEEP IT.'
     streak = board_view('go_up_streak', {'lb': 100, 'category': 'medium', 'n': 3})
     assert streak['sentence'] == 'GO UP FROM 100LB ON MEDIUM: 3 IN A ROW OVER TARGET.'
     assert board_view('go_up_streak', {'lb': 40, 'category': 'medium', 'n': 3})['sentence'] == (
         'GO UP FROM 40LB ON MEDIUM: 3 CLASSES IN A ROW OVER TARGET.')
     missed = board_view('missed_targets', {'missed': 12, 'sets': 30, 'movement': LONG})
     assert missed['sentence'] == 'SHORT ON 12 OF 30 SETS: DROP A WEIGHT.'
+
+
+def test_a_strong_workout_says_same_heart_only_when_it_was():
+    def last(facts):
+        view = board_view('output_up', {**SHOWN['output_up'], **facts})
+        return view['lines64'][3:], view['reason']
+    assert last({}) == (['MORE WATTS PER', 'HEARTBEAT.'], 'WATTS PER BEAT')
+    assert last({'same_hr': False}) == (['MORE WATTS PER', 'HEARTBEAT.'], 'WATTS PER BEAT')
+    assert last({'same_hr': True}) == (['SAME HEART,', 'MORE POWER.'], 'SAME HEART')
+    run = {'unit': 'mph', 'value': 4.5, 'usual': 4.1, 'foot': True, 'noun': 'run'}
+    assert last(run)[0] == ['MORE SPEED PER', 'HEARTBEAT.'] and last(run)[1] == 'SPEED PER BEAT'
+    assert last({**run, 'same_hr': True}) == (['SAME HEART,', 'MORE SPEED.'], 'SAME HEART')
+    # Only an efficient workout gets either line.
+    assert board_view('output_up', {**SHOWN['output_up'], 'reason': None, 'same_hr': True})['reason'] is None
 
 
 def test_wrap_cuts_a_word_longer_than_a_line():
@@ -174,7 +205,10 @@ def test_every_line_fits_the_stats_font(height):
     for code, facts in list(SHOWN.items()) + WORST:
         view = board_view(code, facts)
         assert view, code
-        assert len(wrap(view['sentence'])) <= LINES_64, view['sentence']
+        # Nothing is cut: the board's lines carry every word of the sentence (laid out in lines, or wrapped).
+        def words(text):
+            return text.replace(':', ' ').replace('.', ' ').split()
+        assert words(' '.join(view['lines64'])) == words(view['sentence']), view['sentence']
         assert len(view['lines64']) <= LINES_64
         assert 1 <= len(view['pages32']) <= 2 and all(1 <= len(page) <= LINES_32 for page in view['pages32'])
         shown = view['lines64'] + [view['headline'], view['footer']]
@@ -209,14 +243,14 @@ def test_board_insights_keeps_order_and_stops_at_two():
 
 def test_real_insights_make_views_from_their_own_facts():
     view = board_insights(run_bike(124, [188] * 5))[0]
-    assert view['sentence'] == 'OUTPUT DOWN: 124 W VS YOUR USUAL 188.' and view['footer'] == '5 SIMILAR RIDES'
+    assert view['sentence'] == 'OUTPUT DOWN VS YOUR TYPICAL: 124 W VS 188 W.' and view['footer'] == '5 SIMILAR RIDES'
     target = foot(0, 3.6)
     view = board_insights(insights(target, [target] + [foot(i, 4.1) for i in range(1, 6)]))[0]
     assert view['headline'] == 'PACE DOWN' and view['figure']['today_text'] == '3.6'
     assert board_insights(lighter())[0]['headline'] == 'GO UP A WEIGHT'
     assert board_insights(heavier())[0]['figure']['today_text'] == '45'
     in_line, hardest = board_insights(effort(20, [10, 11, 12, 13, 14]))
-    assert in_line['headline'] == 'ON YOUR USUAL' and in_line['sentence'] == 'ON YOUR USUAL: 100 W VS 100.'
+    assert in_line['headline'] == 'CONSISTENT' and in_line['sentence'] == 'CONSISTENT: 100 W VS 100 W.'
     assert hardest['sentence'] == 'HARDEST RIDE OF YOUR LAST 5 BY HEART RATE.'
     assert (hardest['figure']['today_text'], hardest['figure']['usual_text']) == ('1.00', '0.60')
     t = ride(0, 100, target_under={'resistance': 28})

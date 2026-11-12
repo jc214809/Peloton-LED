@@ -13,6 +13,11 @@ LINES_32 = 3               # sentence lines on one 64x32 page
 PAGES_32 = 2
 MAX_BOARD_INSIGHTS = 2
 MAX_BLOCKS = 30            # more counted sets than this are drawn as this many blocks, scaled
+# The words standing in for "usual" (swap them here). IN_LINE_WORD heads and leads an insight within the
+# usual range; TYPICAL_WORD names the usual figure (the median of the similar workouts) in sentences. The bars frame's
+# label is display/ui/last_workout_screen.py's TYPICAL_LABEL.
+IN_LINE_WORD = 'CONSISTENT'
+TYPICAL_WORD = 'TYPICAL'
 HIDDEN_CODES = ('too_few', 'nothing', 'freestyle', 'incomplete', 'unsupported', 'no_tracker')
 
 GOLD = (255, 200, 0)
@@ -76,10 +81,31 @@ def _bars(today, usual, unit):
             'usual_text': number(usual, unit), 'unit': 'MPH' if unit == 'mph' else unit.upper()}
 
 
+# The strong workout's line when it got more out of each heartbeat than typical (reason 'efficient'): "same
+# heart" only when the heart rate was within workout_insights.SAME_HR_BPM of typical, else what went up per beat.
+SAME_HEART_LINE = 'SAME HEART, MORE {gain}.'
+PER_BEAT_LINE = 'MORE {measure} PER HEARTBEAT.'
+
+
+def _figures(a, b, unit, space=' '):
+    """Today against the typical on a line of their own, each with its unit, else the unit once."""
+    both = f'{a}{space}{unit} VS {b}{space}{unit}'
+    return both if len(both) <= LINE_MAX else f'{a} VS {b}{space}{unit}'
+
+
+def _parts(*choices):
+    """The first tuple of parts (each starts a line) that wraps to LINES_64 lines, else the last."""
+    def lines(parts):
+        return sum(len(wrap(part)) for part in parts if part)
+    chosen = next((c for c in choices[:-1] if lines(c) <= LINES_64), choices[-1])
+    return tuple(part for part in chosen if part)
+
+
 def _output(code, facts):
     unit = facts['unit'].lower()
     a, b = number(facts['value'], unit), number(facts['usual'], unit)
     u = 'MPH' if unit == 'mph' else 'W'
+    figures = _figures(a, b, u)
     reason = facts.get('reason')
     extra, why = '', None
     if code == 'output_down':
@@ -90,19 +116,28 @@ def _output(code, facts):
     elif code == 'output_up':
         headline = lead = f"STRONG {facts['noun'].upper()}"
         if reason == 'efficient':
-            extra, why = 'MORE PER HEARTBEAT THAN USUAL.', 'MORE PER BEAT'
+            foot = unit == 'mph'
+            if facts.get('same_hr'):
+                extra, why = SAME_HEART_LINE.format(gain='SPEED' if foot else 'POWER'), 'SAME HEART'
+            else:
+                measure = 'SPEED' if foot else 'WATTS'
+                extra, why = PER_BEAT_LINE.format(measure=measure), f'{measure} PER BEAT'
     elif facts.get('close'):
-        headline = lead = 'ON YOUR USUAL'
+        headline = lead = IN_LINE_WORD
         why = 'RIGHT IN LINE'
     else:
-        headline, why = 'IN YOUR RANGE', 'IN YOUR RANGE'
-        lead = 'IN YOUR USUAL RANGE'
+        # The headline already says "in your range", so the bars frame's line says by how much.
+        headline, lead = 'IN YOUR RANGE', f'IN YOUR {TYPICAL_WORD} RANGE'
+        gap = facts['value'] - facts['usual']
+        why = f"{number(abs(gap), unit)} {u} {'UNDER' if gap < 0 else 'OVER'}" if number(gap, unit).strip('-0.') \
+            else 'RIGHT IN LINE'
     if code == 'in_line':
-        sentence = f'{lead}: {a} {u} VS {b}.'
+        sentence = (lead, figures)
     else:
-        sentence = _fitting(f'{lead}: {a} {u} VS YOUR USUAL {b}. {extra}'.strip(),
-                            f'{lead}: {a} {u} VS USUAL {b}. {extra}'.strip(),
-                            f'{lead}: {a} {u} VS USUAL {b}.')
+        # The figures on a line of their own, as the in-line insight has them.
+        sentence = _parts((f'{lead} VS YOUR {TYPICAL_WORD}', figures, extra),
+                          (f'{lead} VS {TYPICAL_WORD}', figures, extra),
+                          (lead, figures, extra), (lead, figures))
     figure = _bars(facts['value'], facts['usual'], unit if unit == 'mph' else 'W')
     return headline, sentence, figure, why, _similar(facts)
 
@@ -146,19 +181,19 @@ def _strength(code, facts):
         return ('DROP A WEIGHT', sentence, {'kind': 'blocks', 'total': total, 'lit': lit, 'label': ''},
                 f'{missed} OF {sets} SHORT', 'VS PAST CLASSES')
     lb, usual = number(facts['lb'], 'lb'), number(facts['usual'], 'lb')
+    figures = _figures(lb, usual, 'LB', space='')
     on = facts['movement'].upper()
     if code == 'went_heavier' and not facts.get('on_movement', True):
         on = f"{facts['category'].upper()} WEIGHTS"
+    # The weights on a line of their own; a name too long to fit leaves the sentence (the bars frame's
+    # reason line shows it).
     if code == 'go_up_lighter':
-        head = f'GO UP A WEIGHT ON {on}: {lb}LB'
-        # A name too long even then leaves the sentence: the bars frame's reason line shows it.
-        sentence = _fitting(f"{head} VS USUAL {usual}, REPS +{facts['pct']}%.", f'{head} VS USUAL {usual}.',
-                            f'{head} (USUAL {usual}).', f'GO UP A WEIGHT: {lb}LB VS USUAL {usual}.')
+        sentence = _parts((f'GO UP A WEIGHT ON {on}', figures, f"REPS +{facts['pct']}%."),
+                          (f'GO UP A WEIGHT ON {on}', figures), ('GO UP A WEIGHT', figures))
         headline = 'GO UP A WEIGHT'
     else:
-        head = f'HEAVIER ON {on}: {lb}LB'
-        sentence = _fitting(f'{head} VS USUAL {usual}, EVERY TARGET HIT.', f'{head} VS USUAL {usual}.',
-                            f'{head} (USUAL {usual}).', f'HEAVIER: {lb}LB VS USUAL {usual}. KEEP IT.')
+        sentence = _parts((f'HEAVIER ON {on}', figures, 'EVERY TARGET HIT.'), (f'HEAVIER ON {on}', figures),
+                          ('WENT HEAVIER', figures, 'KEEP IT.'))
         headline = 'HEAVIER: KEEP'
     return headline, sentence, _bars(facts['lb'], facts['usual'], 'lb'), on, 'VS PAST CLASSES'
 
@@ -189,7 +224,11 @@ def board_view(code, facts):
         headline, sentence, figure, reason, footer = rule(code, facts or {})
     except (KeyError, TypeError, ValueError, AttributeError):
         return None
-    lines = wrap(sentence)
+    if isinstance(sentence, tuple):  # parts that each start a new line
+        lines = [line for part in sentence for line in wrap(part)]
+        sentence = f"{sentence[0]}: {'. '.join(part.rstrip('.') for part in sentence[1:])}."  # for logs
+    else:
+        lines = wrap(sentence)
     lines64 = lines[:LINES_64]
     pages32 = [lines[i:i + LINES_32] for i in range(0, min(len(lines), LINES_32 * PAGES_32), LINES_32)]
     return {'code': code, 'colour': list(COLOURS[code]), 'headline': headline, 'sentence': sentence,

@@ -54,9 +54,15 @@ Uses the same two phases as 64x64, with the room shared out differently:
 What's different from 64x64, and why:
 1. **The instructor is the first rotating stat**, not part of the intro. Under
    a two-line class title there are no rows left for it.
-2. **The HR/calories bar only shows during stats**, not during the intro.
-   With a two-line title the title's last line uses rows 24-28 and the bar
-   needs 26-31.
+2. **The HR/calories bar shows during stats, and in the intro only under a
+   one-line title.** With a two-line title the title's last line uses rows
+   24-29 and the bar needs 26-31. (Until 2026-11-11 the intro also skipped
+   the bar for a one-line title whenever the workout had stats, so a
+   one-line title like `Outdoor Walking` or `Pop Ride` had none either;
+   only stat-less workouts such as meditation showed it. Closing the rows
+   up by one each under a two-line title was tried and overlaps the
+   descenders, so those titles wait for the stat frames: Joel's call,
+   2026-11-11.) Either figure alone is drawn when the other is missing.
 3. **Long instructor names** (for example "JERMAINE JOHNSON", which is wider
    than 64px even in the 4x6 font) wrap to two lines under the INSTRUCTOR
    caption, and the bar is hidden for that one slide.
@@ -123,7 +129,8 @@ word, `BOOTCAMP`. 64x64 fits the whole name.
 ### Workouts with HR but no stats (done)
 Meditation-style workouts with HR/calories but no rotating stats never
 reached the stats phase, so the bar never showed. When there are no stats and
-the title fits on one line, the bar now shows in the intro.
+the title fits on one line, the bar now shows in the intro (since 2026-11-11
+a one-line title shows it whether or not there are stats).
 
 ### PR celebration (checked, no change)
 The burst, the "OUTPUT PR / 512 KJ / 45 MIN CLASS" card, splits PRs and
@@ -211,7 +218,7 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   in place of the title. Card: the sentence in up to 5 centred lines from baseline 21, 7 apart (vertically
   centred in 21-49 when shorter); the footer (`9 SIMILAR RIDES`, `VS 12 SIMILAR`, `5 CLOSEST RIDES`,
   `VS THE CALLOUTS`, `VS PAST CLASSES`) grey on baseline 61. Bars: the headline centred on baseline 22
-  in `titles` (`stats` when wider than 62 px); `TODAY` / `USUAL` labels with the value right-aligned on
+  in `titles` (`stats` when wider than 62 px); `TODAY` / `TYPICAL` labels with the value right-aligned on
   baselines 32 and 45 and a 4-row bar under each (59 px at full); a share bar (`TIME UNDER` / `THE
   CALLOUT`) on rows 35-41; or blocks from row 34, 7 px 3 apart, shrinking (5/2, 3/1, 2/1, 1/1) when many
   sets would not fit 60 px, with `3 IN A ROW` under a streak. The reason (`AN EASIER DAY`, `LESS PER BEAT`,
@@ -259,6 +266,20 @@ the castle while saying `414 TO HOME`. Both boards now use one design
   grows the split bar a colour at a time with each row appearing as its
   colour lands. The arrival, turning-for-home and step hand-off effects are
   ROADMAP item 7. `render_rotation.py` captures settled frames.
+- Decimals (2026-11-11, Joel's call): each group's miles read `123.45`; the
+  big total keeps one decimal on both boards (`1,234.6`), and the `TO GO` line
+  its one decimal. A figure drops to fewer decimals only where it won't fit,
+  decided once from the final figure so the count-up never changes format.
+  The total must fit a big font beside `MI` (2 px left, 2 px gap, 2 px margin
+  right; `big`, then `bold` on 64 rows, `countdown` on 32): 32 rows keep `big`
+  up to `4,444.4`; 64 rows take `bold` from `1,234.6` and drop the decimal at
+  `13,333`. A group figure must leave its whole label and a 3 px gap (so
+  `WALK/RUN` drops to one decimal from 100 miles on 64 rows; `123.45` still
+  fits on 32). The groups are rounded together (`group_cents`, largest
+  remainder in hundredths) so the rows add up to the total, e.g. 22.64 + 3.54
+  = 26.18 where 22.636 and 3.539 rounded alone would read 26.17. Lit columns
+  stay within 2..61 at both heights for 4- and 5-digit worst cases (tests
+  check a 1 px margin).
 
 ## Open questions for Joel
 
