@@ -68,7 +68,7 @@ Never say "verified" or "working" for anything you didn't run.
 1. Update the docs in the same branch:
    - `docs/NAME-PAGE-FACTS.md`: move what you built into "Built", and mark the step done in "Plan".
    - README's `username` section: what the board shows now.
-   - `CLAUDE.md`: the `username_facts.py` / `activity.py` lines.
+   - `docs/dev/DATA.md`: the `username_facts.py` / `activity.py` lines (moved there from `CLAUDE.md`).
    - `ROADMAP.md`: the facts-engine item lists the remaining steps.
 2. Commit with a message that ends with the attribution line the session gives you. Push and open
    a PR into `develop-beta` using `.github/pull_request_template.md`. **Release notes** is one
