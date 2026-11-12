@@ -830,9 +830,9 @@ class LastWorkoutScreen(Screen):
         Same order as 64x64 with the room redistributed:
           intro: discipline / duration (+ gold PR) / title on up to two lines
           stats: discipline / label / one large value / ♥ HR + calories bar
-        The instructor leads the stat rotation instead of sitting in the intro,
-        and the HR/calories bar only shows during stats; there is no room for
-        either under a two-line title.
+        The instructor leads the stat rotation instead of sitting in the intro.
+        The HR/calories bar shows in the stats phase and in the intro under a one-line
+        title; a two-line title leaves no rows for it.
         """
         w = matrix.width
         bottom_y = matrix.height - 1
@@ -863,9 +863,10 @@ class LastWorkoutScreen(Screen):
             title = title_without_length(summary.get("title"))
             title_lines = _wrap_two_lines(text_font, title, w - 4)
             _draw_short_lines(matrix, text_font, title_lines, 22, summary)
-            if len(title_lines) < 2 and not rotating_details(summary, matrix.height):
-                # No stats phase to carry the bar (e.g. meditation), and a
-                # one-line title leaves its rows free.
+            if len(title_lines) < 2:
+                # A one-line title leaves rows 24-31 free for the bar. A two-line one ends on
+                # row 29, so the bar waits for the stat frames that follow (an attempt to close
+                # the rows up by one each still overlapped the title's descenders).
                 _draw_hr_calories(matrix, summary, stat_font, bottom_y)
             return True
 

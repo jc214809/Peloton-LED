@@ -54,9 +54,15 @@ Uses the same two phases as 64x64, with the room shared out differently:
 What's different from 64x64, and why:
 1. **The instructor is the first rotating stat**, not part of the intro. Under
    a two-line class title there are no rows left for it.
-2. **The HR/calories bar only shows during stats**, not during the intro.
-   With a two-line title the title's last line uses rows 24-28 and the bar
-   needs 26-31.
+2. **The HR/calories bar shows during stats, and in the intro only under a
+   one-line title.** With a two-line title the title's last line uses rows
+   24-29 and the bar needs 26-31. (Until 2026-11-11 the intro also skipped
+   the bar for a one-line title whenever the workout had stats, so a
+   one-line title like `Outdoor Walking` or `Pop Ride` had none either;
+   only stat-less workouts such as meditation showed it. Closing the rows
+   up by one each under a two-line title was tried and overlaps the
+   descenders, so those titles wait for the stat frames: Joel's call,
+   2026-11-11.) Either figure alone is drawn when the other is missing.
 3. **Long instructor names** (for example "JERMAINE JOHNSON", which is wider
    than 64px even in the 4x6 font) wrap to two lines under the INSTRUCTOR
    caption, and the bar is hidden for that one slide.
@@ -123,7 +129,8 @@ word, `BOOTCAMP`. 64x64 fits the whole name.
 ### Workouts with HR but no stats (done)
 Meditation-style workouts with HR/calories but no rotating stats never
 reached the stats phase, so the bar never showed. When there are no stats and
-the title fits on one line, the bar now shows in the intro.
+the title fits on one line, the bar now shows in the intro (since 2026-11-11
+a one-line title shows it whether or not there are stats).
 
 ### PR celebration (checked, no change)
 The burst, the "OUTPUT PR / 512 KJ / 45 MIN CLASS" card, splits PRs and

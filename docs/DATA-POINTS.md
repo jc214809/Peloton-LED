@@ -63,6 +63,16 @@ Why some workouts lack a stat:
 - **Calories** are missing on 4 of the 54 no-equipment workouts; the saved
   data doesn't say why.
 
+Where the heart-rate / calories row appears (it draws whichever of the two
+the summary has; neither present: no row):
+
+- 64x64: every frame, intro included.
+- 64x32: every stat frame, and the intro when the class title fits on one
+  line. A two-line title leaves no rows for it in the intro
+  (`docs/64x32-NOTES.md`). Cardio takes the same path as Strength; there is no
+  discipline-specific skip. (The 134 saved Cardio workouts have no performance
+  graph, so `hr_avg` for them is unconfirmed; calories is in the workout.)
+
 ## The gaps
 
 Stats Peloton sends that the board doesn't show, and why:

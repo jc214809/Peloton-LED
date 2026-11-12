@@ -66,6 +66,41 @@ def test_32_row_intro_shows_title_without_the_bar():
     assert len({y // 7 for y in white}) >= 2
 
 
+ONE_LINE = {**STRENGTH, 'title': '30 min Pop Ride', 'instructor': 'Ben Alldis'}
+
+
+def test_32_row_intro_with_a_one_line_title_shows_the_bar_even_with_stats():
+    # Regression: the bar was left off the intro whenever the workout had stats to rotate through.
+    assert rotating_details(ONE_LINE, 32)
+    matrix = frame(ONE_LINE, 0.5)
+    heart = rows_of(matrix, HEART)
+    assert heart and heart[0] >= BAR_TOP and heart[-1] <= 31
+    # Title (baseline 22) and bar are separated by a blank row.
+    title = [y for y in rows_of(matrix, WHITE) if y < BAR_TOP]
+    assert title and title[-1] < BAR_TOP - 1
+    assert rows_of(matrix, WHITE, range(32, 64))[-1] >= 30  # calories on the bottom rows
+
+
+@pytest.mark.parametrize('missing, shown', [('calories', 'hr_avg'), ('hr_avg', 'calories')])
+@pytest.mark.parametrize('elapsed', [0.5, 4.5])
+def test_32_row_bar_shows_whichever_of_hr_and_calories_exists(missing, shown, elapsed):
+    summary = {**ONE_LINE, missing: None}
+    matrix = frame(summary, elapsed)
+    heart = rows_of(matrix, HEART)
+    left = [y for y in rows_of(matrix, WHITE, range(0, 20)) if y >= BAR_TOP]
+    right = [y for y in rows_of(matrix, WHITE, range(32, 64)) if y >= BAR_TOP]
+    assert bool(heart) == (shown == 'hr_avg')
+    assert bool(left) == (shown == 'hr_avg')
+    assert bool(right) == (shown == 'calories')
+
+
+@pytest.mark.parametrize('elapsed', [0.5, 4.5])
+def test_32_row_bar_is_absent_without_hr_or_calories(elapsed):
+    matrix = frame({**ONE_LINE, 'hr_avg': None, 'calories': None}, elapsed)
+    assert rows_of(matrix, HEART) == []
+    assert [y for y in rows_of(matrix, WHITE) if y >= BAR_TOP] == []
+
+
 def test_32_row_stats_show_label_value_and_bar_without_overlap():
     for summary in demo_summaries() + [STRENGTH]:
         for turn, detail in enumerate(rotating_details(summary, 32)):
