@@ -239,8 +239,10 @@ def test_discipline_countdown_fits_and_fills_the_bar(height, title, discipline):
     state = {'total': 196, 'target': 200, 'previous': 100, 'title': title, 'discipline': discipline}
     assert CountdownScreen().render(matrix, state)
     pixels = matrix.image.load()
-    # Nothing touches the side columns: the longest discipline names still fit.
-    assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))
+    # Nothing touches the side columns: the longest discipline names still fit. (A 64-row bootcamp name runs
+    # edge to edge on purpose: TREAD BOOTCAMP is 64 columns.)
+    rows = range(44) if height == 64 and 'bootcamp' in discipline else range(height)
+    assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in rows)
     bars = [y for y in range(height) if pixels[3, y] == BAR_FILL]
     if height < 64:
         assert bars == []  # no room for the bar on 32 rows
@@ -256,8 +258,9 @@ def test_discipline_countdown_reads_3_more_600th_cycling(monkeypatch):
     red = discipline_color('cycling')
     initialize_fonts(64)
     CountdownScreen().render(ImageMatrix(height=64), state)
-    assert drawn == [('3', (255, 255, 255)), ('MORE', (255, 255, 255)), ('600', (255, 215, 0)),
-                     ('TH', (255, 215, 0)), ('CYCLING', red)]
+    assert drawn == [('3', (255, 255, 255)), ('TO GO', (255, 255, 255)),
+                     ('TILL YOUR', (145, 165, 190)), ('600', (255, 215, 0)),
+                     ('TH', (255, 215, 0)), ('RIDE', red)]
     drawn.clear()
     initialize_fonts(32)
     CountdownScreen().render(ImageMatrix(height=32), {**state, 'total': 1997, 'target': 2000})
@@ -360,3 +363,85 @@ def test_config_pr_max_age_days_defaults_off_and_rejects_bad_values(tmp_path):
         path.write_text(json.dumps({'display': {'pr_max_age_days': value}}))
         with pytest.raises(ValueError, match='pr_max_age_days'):
             load_config(str(path))
+
+
+@pytest.mark.parametrize('discipline, title, noun', [('cycling', 'Cycling', 'RIDE'), ('running', 'Running', 'RUN'),
+                                                     ('walking', 'Walking', 'WALK'), ('rowing', 'Rowing', 'ROW'),
+                                                     ('strength', 'Strength', 'STRENGTH'),
+                                                     ('bike_bootcamp', 'Bike Bootcamp', 'BIKE BOOTCAMP'),
+                                                     (None, 'Workout', 'WORKOUT')])
+def test_64_row_countdown_names_what_is_counted(monkeypatch, discipline, title, noun):
+    drawn = _record_text(monkeypatch)
+    initialize_fonts(64)
+    state = {'total': 47, 'target': 50, 'previous': 25, 'title': title, 'discipline': discipline}
+    assert CountdownScreen().render(ImageMatrix(height=64), state)
+    texts = [text for text, _ in drawn]
+    assert texts[:3] == ['3', 'TO GO', 'TILL YOUR']
+    # A two-word name is drawn in pieces (BIKE, BOO, TCAMP: BOO sits 2 px right, closing the hole before the T).
+    assert ''.join(texts[texts.index('TH') + 1:]) == noun.replace(' ', '')
+
+
+@pytest.mark.parametrize('height', [32, 64])
+def test_one_left_says_next_up_your_on_64_rows_only(monkeypatch, height):
+    drawn = _record_text(monkeypatch)
+    initialize_fonts(height)
+    state = {'total': 599, 'target': 600, 'previous': 500, 'title': 'Cycling', 'discipline': 'cycling'}
+    matrix = ImageMatrix(height=height)
+    assert CountdownScreen().render(matrix, state)
+    texts = [text for text, _ in drawn]
+    if height == 64:
+        assert texts == ['NEXT UP YOUR', '600', 'TH', 'RIDE']
+    else:
+        assert texts[:2] == ['1', 'MORE']
+    pixels = matrix.image.load()
+    assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))  # the line fits
+
+
+@pytest.mark.parametrize('title, discipline, pieces', [('Row Bootcamp', 'row_bootcamp', ['ROW', 'BOO', 'TCAMP']),
+                                                       ('Tread Bootcamp', 'tread_bootcamp', ['TREAD', 'BOO', 'TCAMP'])])
+def test_bootcamp_names_run_in_one_tight_line_with_boo_moved_right(monkeypatch, title, discipline, pieces):
+    drawn = _record_text(monkeypatch)
+    initialize_fonts(64)
+    matrix = ImageMatrix(height=64)
+    state = {'total': 47, 'target': 50, 'previous': 25, 'title': title, 'discipline': discipline}
+    assert CountdownScreen().render(matrix, state)
+    assert [text for text, _ in drawn][-3:] == pieces
+    pixels = matrix.image.load()
+    name_rows = range(46, 55)
+    assert any(pixels[x, y] != (0, 0, 0) for x in range(64) for y in name_rows)
+    assert not any(pixels[x, 44] != (0, 0, 0) and pixels[x, 45] != (0, 0, 0) for x in (0, 63))  # only the name touches the edges
+
+
+def _name_lit(title, discipline):
+    initialize_fonts(64)
+    matrix = ImageMatrix(height=64)
+    state = {'total': 47, 'target': 50, 'previous': 25, 'title': title, 'discipline': discipline}
+    assert CountdownScreen().render(matrix, state)
+    pixels = matrix.image.load()
+    return ''.join('#' if any(pixels[x, y] != (0, 0, 0) for y in range(46, 56)) else '.' for x in range(64))
+
+
+@pytest.mark.parametrize('title, discipline, lit', [
+    ('Row Bootcamp', 'row_bootcamp', '....####.####.####.....####.####.#######.####.####.####.####....'),
+    ('Bike Bootcamp', 'bike_bootcamp', '...####.###.####.####....####.####.#######.####.####.####.####..'),
+    ('Tread Bootcamp', 'tread_bootcamp', '.###.####.####.####.####...####.####.#######.####.####.####.####')])
+def test_bootcamp_names_are_centred_by_their_lit_pixels(title, discipline, lit):
+    """ROW 4/4, BIKE 3/2 (BIKE a pixel right of BOOTCAMP's gap closing), TREAD 1/0: the spare column goes left."""
+    got = _name_lit(title, discipline)
+    assert got == lit
+    left, right = len(got) - len(got.lstrip('.')), len(got) - len(got.rstrip('.'))
+    assert 0 <= left - right <= 1
+
+
+def test_countdown_ink_table_matches_the_fonts():
+    """NAME_INK is a measurement, so re-measure it: the first lit column and lit width when drawn from x = 0."""
+    from display.display import loaded_fonts, get_text_width
+    import display.ui.countdown_screen as screen
+    initialize_fonts(64)
+    for name, expected in screen.NAME_INK.items():
+        runs = screen.tight_name_runs(name, loaded_fonts['titles'], (255, 255, 255), 64)
+        matrix = ImageMatrix(height=64)
+        screen._draw_runs_at(matrix, runs, 52, 0)
+        pixels = matrix.image.load()
+        cols = [x for x in range(64) if any(pixels[x, y] != (0, 0, 0) for y in range(44, 56))]
+        assert (min(cols), max(cols) - min(cols) + 1) == expected, name

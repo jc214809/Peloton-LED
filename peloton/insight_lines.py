@@ -19,10 +19,10 @@ GOLD = (255, 200, 0)
 AMBER = (255, 140, 0)
 GREEN = (60, 220, 110)
 RED = (230, 40, 40)
-WHITE = (255, 255, 255)
+SOFT_WHITE = (200, 205, 215)   # not 255: full white is glaring on the panel
 COLOURS = {'output_down': AMBER, 'missed_targets': AMBER, 'resistance_low': AMBER, 'cadence_low': AMBER,
            'pace_low': AMBER, 'output_up': GREEN, 'go_up_lighter': GREEN, 'go_up_streak': GREEN,
-           'went_heavier': GREEN, 'effort_low': GREEN, 'effort_high': RED, 'in_line': WHITE}
+           'went_heavier': GREEN, 'effort_low': GREEN, 'effort_high': RED, 'in_line': SOFT_WHITE}
 OUTPUT_CODES = ('output_down', 'output_up', 'in_line')
 CALLOUT_CODES = ('resistance_low', 'cadence_low', 'pace_low')
 STRENGTH_CODES = ('go_up_lighter', 'went_heavier', 'go_up_streak', 'missed_targets')

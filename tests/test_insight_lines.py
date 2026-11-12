@@ -71,7 +71,7 @@ def test_colours_follow_the_direction():
         'output_down', 'missed_targets', 'resistance_low', 'cadence_low', 'pace_low'}
     assert {c for c, rgb in colour.items() if rgb == green} == {
         'output_up', 'go_up_lighter', 'go_up_streak', 'went_heavier', 'effort_low'}
-    assert colour['effort_high'] == red and colour['in_line'] == (255, 255, 255)
+    assert colour['effort_high'] == red and colour['in_line'] == (200, 205, 215)
 
 
 def test_figures():

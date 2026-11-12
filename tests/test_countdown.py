@@ -113,7 +113,7 @@ def test_total_countdown_reads_3_more_2200th_workout(height, monkeypatch):
     title = 'Workout' if height == 64 else 'Workouts'
     assert CountdownScreen().render(matrix, {'total': 2197, 'previous': 2100, 'target': 2200,
                                              'title': title, 'discipline': None})
-    expected = (['3', 'MORE', '2', ',', '200', 'TH', 'WORKOUT'] if height == 64
+    expected = (['3', 'TO GO', 'TILL YOUR', '2', ',', '200', 'TH', 'WORKOUT'] if height == 64
                 else ['3', 'MORE', 'TO', '2,200', 'WORKOUTS'])
     assert drawn == expected
     pixels = matrix.image.load()
