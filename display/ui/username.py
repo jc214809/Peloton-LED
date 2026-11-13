@@ -1,7 +1,7 @@
 # python file: display/ui/username.py
 
 from .screen import Screen
-from display.display import loaded_fonts, color_dict, get_text_width
+from display.display import loaded_fonts, color_dict, get_text_width, plain_letters
 from utils import debug
 from driver import graphics
 
@@ -133,11 +133,12 @@ class UsernameScreen(Screen):
             # 32-row panels rise 2px so the second line never drops off the bottom.
             rise = 2 if compact else 3
             offset = max(0, round(rise * (1 - min(1, phase_seconds / 0.3))))
-            label = str(detail.get('label', '')).upper()
+            # The small fonts' accented capitals don't read (Ó looks like 6): highlights draw them plain.
+            label = plain_letters(str(detail.get('label', '')).upper())
             if get_text_width(small_font, label) > matrix.width - 4 and detail.get('short_label'):
-                label = str(detail['short_label']).upper()
+                label = plain_letters(str(detail['short_label']).upper())
             label = self._fit(small_font, label, matrix.width - 4)
-            lines = detail.get('lines') or [detail.get('value', '')]
+            lines = [plain_letters(str(line)) for line in detail.get('lines') or [detail.get('value', '')]]
             room = matrix.width - 2 * MARGIN
             wrapped = None
             if not compact and len(lines) == 2:

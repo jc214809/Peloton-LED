@@ -22,7 +22,7 @@ All screens implement the `Screen` ABC (`display/ui/screen.py`):
 
 ## Fonts and colours (`display/display.py`)
 
-`initialize_fonts(matrix_height)` loads `.bdf` fonts from `assets/fonts/patched/` into a global `loaded_fonts` dict, keyed by font name. Font selection is board-height-aware (32 vs 64 rows). Colors are defined as `graphics.Color` instances in `colors()`.
+`initialize_fonts(matrix_height)` loads `.bdf` fonts from `assets/fonts/patched/` into a global `loaded_fonts` dict, keyed by font name. Font selection is board-height-aware (32 vs 64 rows). Colors are defined as `graphics.Color` instances in `colors()`. The 5-row small fonts (`tom-thumb`, `4x6-legacy`) have accented capitals, but an accent on a flattened letter doesn't read (their `Ó` looks like `6`: `ROBIN ARZ6N`), so `plain_letters` takes accents off before drawing; the name page's highlights use it (Joel, 2026-11-12). The workout page's insight frames don't yet.
 
 ## Logo (`display/ui/logo_art.py`)
 

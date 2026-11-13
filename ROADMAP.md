@@ -97,27 +97,6 @@ Peloton records heart rate, output, cadence and more every 5 seconds of a class,
 
 A separate, later idea: charts of trends over time from the workout log (workouts per week as bars, this year against last year, the mix of disciplines by month, which weekdays and hours you work out), reusing `peloton/activity.py` windows the way the heatmap page does. Not part of this item.
 
-### Name page: facts that read as sentences (decided 2026-11-12)
-The event and comparison facts (`peloton/username_facts.py`) were fragments (`VS 90 BEFORE` / `55 VS 25` / `+30 WORKOUTS`, `SINCE` / `52 DAYS SINCE` / `LAST ROWING`). Joel chose this wording from mock-ups on both boards, drawn with `UsernameScreen`:
-
-| Fact | Was | Now |
-|---|---|---|
-| Since | `SINCE` / `52 DAYS SINCE` / `LAST ROWING` | `LAST ROW` / `52 DAYS AGO`; when `LAST <noun>` passes 15 characters (the bootcamps): `LAST` / `TREAD BOOTCAMP` / `52 DAYS AGO` |
-| Comeback | `COMEBACK` / `STRETCHING` / `AFTER 286 DAYS` | always `WELCOME BACK` / `<discipline name>` / `1ST IN 286 DAYS` (`ROW BOOTCAMP`, never just `BOOTCAMP`) |
-| On this day | `ON THIS DAY` / `1 YEAR AGO` / `20 MIN STRENGTH` | `A YEAR AGO` / `YOU HAD 812` / `NOW 1,067` (total workouts then and now; `2 YEARS AGO` etc.) |
-| Last class with | `LAST CLASS WITH` / `MATT WILPERS` / `AUG 29 2026` | `LAST CLASS WITH` / `MATT WILPERS` / `74 DAYS AGO` |
-| 30 days, 90 days, year | `VS 90 BEFORE` / `55 VS 25` / `+30 WORKOUTS` | `LAST 90 DAYS` / `55 WORKOUTS` / `UP FROM 25` (`DOWN FROM` when lower); `THIS YEAR` / `412 WORKOUTS` / `UP FROM 380` |
-
-Rules:
-- Proper tense: name the workout as a noun, not the activity. Nouns: RIDE, RUN, WALK, ROW, HIKE, STRETCH; STRENGTH, YOGA, MEDITATION, CARDIO (with `CLASS` where it fits); bootcamps by their full name (`TREAD BOOTCAMP`). RIDE / RUN / WALK / ROW match the countdown's `discipline_noun`.
-- The 30-day count and its comparison become one fact (`LAST 30 DAYS` / `19 WORKOUTS` / `UP FROM 12`, the plain count when there's no comparison), which also fixes `LAST 30 DAYS` showing in both headline slots (found 2026-11-11 on Jen's log, pass 7 of `list_facts.py`). Same for 90 days and the year. Still guard `username_details` against two headlines with the same label.
-- When a comeback fires is unchanged (`MIN_COMEBACK_DAYS`, per discipline); only its wording changes.
-- Every line within 15 characters of the `stats` font; test every `kind` with **Tread Bootcamp** (the widest name) on both heights.
-- Scoring and cool-down keys (`kind`, `key`) stay the same, so the saved cool-down carries over.
-- Update `docs/NAME-PAGE-FACTS.md`, the README's `username` section and screenshot, and `tests/test_username_facts.py`; check with `scripts/list_facts.py` on both riders' logs.
-- Depends on: nothing.
-
-
 ### Name page: together facts (was facts-engine step 7)
 Facts about both riders on a two-rider board (`TOGETHER` / `31 WORKOUTS`, `BOTH TOOK` an instructor, `SAME CLASS`), from each rider's `period_stats`, shown once a cycle on the rider whose rotation gets `rivals`. Details: `docs/NAME-PAGE-FACTS.md` ("Step 7").
 - Depends on: nothing (the facts engine is built). Shares figures with item 6 (Head to head).
