@@ -70,8 +70,9 @@ the summary has; neither present: no row):
 - 64x32: every stat frame, and the intro when the class title fits on one
   line. A two-line title leaves no rows for it in the intro
   (`docs/64x32-NOTES.md`). Cardio takes the same path as Strength; there is no
-  discipline-specific skip. (The 134 saved Cardio workouts have no performance
-  graph, so `hr_avg` for them is unconfirmed; calories is in the workout.)
+  discipline-specific skip. (All 134 saved Cardio workouts' performance graphs,
+  fetched 2026-11-12, carry a `heart_rate` metric with average and max, so
+  `hr_avg` is confirmed for Cardio; calories is in the workout.)
 
 ## The gaps
 

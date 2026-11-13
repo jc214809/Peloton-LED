@@ -11,7 +11,7 @@ Icon touch-ups (by hand) ── independent
 Workout graphs ── research first; builds on `performance_graph` in peloton/summaries.py and the workout pages
 Name page together facts ── shares figures with item 6 (head to head)
 Name page facts settings and log fields ── maybe
-Workout compare: Cardio classes ── independent (workout compare is on develop-beta, #81/#82)
+Workout compare: Cardio classes ── unlikely (measured 2026-11-12: too rare to say much); independent
 Ideas (not yet sized) ── trend charts share windows with item 6; yearly goal and weekly recap use `frame_stats`
 ```
 
@@ -153,10 +153,12 @@ Facts about both riders on a two-rider board (`TOGETHER` / `31 WORKOUTS`, `BOTH 
 Settings-page switches for whole kinds of facts (no comparisons, no events), not one per fact; new log fields (live vs on-demand, class type) only if a fact needs them, with one `LOG_VERSION` bump. Ask before starting.
 - Depends on: nothing (the facts engine is built).
 
-### Workout compare: Cardio classes
+### Workout compare: Cardio classes (unlikely, kept; measured 2026-11-12)
 Cardio (HIIT, Low Impact, Dance and Family Cardio) is outside workout compare today (`workout_compare.DISCIPLINES`). It has no output, speed, callouts or weights, only heart rate, so the one rule that could apply is the heart-rate effort one (`effort_insight`: Strive per minute against similar classes, "hardest" / "easiest of your last N").
 
-Tried as-is on 2026-11-11 (Cardio added to `DISCIPLINES` in a scratch run over the Mac's row stores, last 12 months):
+**Status: unlikely, not dropped.** Every Cardio data point Peloton sends was measured on 2026-11-12 and none adds anything over Strive per minute; the limit is how few Cardio classes the riders take (about 10 a year each; none since 2026-09-27 for Joel, 2026-07-20 for Jen), so even the loosened rule would speak about 3 times a year for Joel and once for Jen. Revisit if Cardio becomes a regular part of either rider's week: re-run the counts below first.
+
+Tried as-is on 2026-11-11, re-run 2026-11-12 with the same result (Cardio added to `DISCIPLINES` in a scratch run over the Mac's row stores, last 12 months):
 
 | | Joel | Jen |
 |---|---|---|
@@ -170,19 +172,35 @@ Tried as-is on 2026-11-11 (Cardio added to `DISCIPLINES` in a scratch run over t
 Too few peers: "similar" needs the same class type and a length within 30%, and these classes spread over five types (Joel) or several lengths (Jen's are nearly all Low Impact Cardio).
 
 The idea: loosen "similar" for Cardio only, comparing every Cardio class with every other by Strive per minute, any type and length, so each gets "hardest / easiest Cardio class of your last N by heart rate" or an "about your usual effort" line.
-- Decide first whether an "about your usual" line is worth showing (today `effort_insight` only speaks at the extremes, and the board shows nothing otherwise).
+
+The loosened rule, measured 2026-11-12 (each class against the rider's last 12 Cardio classes of any type and length, 365 days, 5 needed): Joel 2 hardest, 1 easiest, 7 about usual (of 10 with Strive); Jen 0 hardest, 1 easiest, 10 about usual. Leaving out warm-ups and classes under 8 minutes, or a two-year window, moves at most one class. Joel's one "easiest" was a 5-minute Family Cardio class: warm-ups and family classes run about 0.4 Strive per minute against 1.1-1.2 for HIIT, so mixed types add noise.
+
+Every other Cardio data point, measured 2026-11-12 over all 134 Cardio workouts (93 Joel, 41 Jen; their performance graphs were fetched into `training-data/` that day, since the sync never asked for them). Correlations are with Strive per minute, Joel / Jen:
+
+| Data point | Present | Verdict |
+|---|---|---|
+| Heart-rate series (every 5 s), average and peak heart rate | 134/134 | Same signal: average 0.89 / 0.93, peak 0.83 / 0.74. A peak-heart-rate rule gives the same extremes (Joel 2 highest, 1 lowest; Jen none). |
+| Time in heart-rate zones 1-4 (zone 5 never appears) | 75 graphs | Same signal: zones 3-4 share 0.87 / 0.94. |
+| Calories | 134/134 | No more insights (Joel 1 most, 1 fewest per minute; Jen none). Jen's track heart rate (0.91) and barely the class plan (0.12); Joel's are half heart rate (0.56), half class plan (0.51), and calories per minute per bpm jump by year (0.119 in 2021, 0.092 in 2023, 0.138 in 2024), which looks like changes to his profile weight, not effort. Totals mostly track class length. Calories belong in item 6 (Head to head), where a week of classes smooths the noise. |
+| Planned intensity per segment (`intensity_in_mets`) | 127/134 | Weak: 0.43 / 0.19. |
+| Class difficulty estimate | 127/134 | Partial (about 0.5): could make a cross-type comparison fairer, but doesn't make insights more frequent. |
+| Heart-rate recovery | none | Not measurable: no Cardio class has a cool-down segment (69 are `Warm Up` + `Cardio`, the rest rounds or one block). |
+| Class-average zone times (class details' `averages`) | 49 | Unusable: only 16 distinct values across all 3,203 class files, so not per class. |
+| Muscle groups | 62/134 | Not a comparison; could feed the muscle-groups page (`MUSCLE_DISCIPLINES`), just as rarely. |
+
+If it's built (the shape that measured best: loosened rule, extremes only):
+- Decide first whether an "about your usual" line is worth showing (today `effort_insight` only speaks at the extremes, and the board shows nothing otherwise). It would be the only discipline that speaks when nothing stands out.
 - Rules in `peloton/workout_compare.py` (a Cardio peer rule beside `is_peer`) and `peloton/workout_insights.py` (`NOUN`, and whatever the "usual" line needs); board wording in `peloton/insight_lines.board_view` (headline, sentence, `STRIVE PER MIN` bars, footer such as `12 CARDIO CLASSES`). Tests on hand-made rows, plus the real-row fixture if it gains Cardio workouts.
 - Board rows: `build_board_rows.py` / `trim_for_board` keep only `DISCIPLINES`, so the boards need a re-push (`scripts/push_workout_rows.sh`) once Cardio is in. No `ROW_VERSION` bump: the rows already carry Strive and length.
-- Worth it? About one Cardio class a month each, so it's small. Re-run the scratch count before starting.
-- 2026-11-12: Joel wants to dig into this one in its own session before deciding (start by re-running the count above).
 - Depends on: nothing.
+
 ## Ideas (not yet sized)
 
 Brainstormed 2026-11-11, after workout insights ran on PelotonPi. Pick one, size it (a short plan in its own `docs/` file if it's big), then move it up to "Up next".
 
 ### Workout insights, next steps
 - **Seed and switch on every board.** Jen's board (`scripts/push_workout_rows.sh`, then the Workout insights switch); re-push after any `ROW_VERSION` bump.
-- **Disciplines version 1 leaves out** (freestyle, stretching, yoga, meditation, cardio): decide which, if any, deserve peers. Measure first, as the bike fill-in did.
+- **Disciplines version 1 leaves out** (freestyle, stretching, yoga, meditation, cardio): decide which, if any, deserve peers. Measure first, as the bike fill-in did. Cardio was measured on 2026-11-12: unlikely (see "Workout compare: Cardio classes").
 - **Learn from the boards.** The `changed while settling` and `insights changed` log lines were added to find out whether Peloton revises a finished workout; after a couple of weeks of PelotonPi logs, decide whether the settling hour is needed.
 
 ### Whose data is this? (multi-rider boards)
