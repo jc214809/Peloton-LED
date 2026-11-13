@@ -2,7 +2,7 @@
 import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from peloton.insight_lines import (HIDDEN_CODES, LINE_MAX, LINES_32, LINES_64, MAX_BLOCKS, MAX_BOARD_INSIGHTS,
+from peloton.insight_lines import (EDGE_MAX, HIDDEN_CODES, LINE_MAX, LINES_32, LINES_64, MAX_BLOCKS, MAX_BOARD_INSIGHTS,
                                    board_insights, board_view, wrap)
 from peloton.workout_insights import insights
 from tests.test_workout_insights import effort, foot, heavier, lighter, ride, run_bike
@@ -257,3 +257,90 @@ def test_real_insights_make_views_from_their_own_facts():
     assert board_insights(insights(t, [t]))[0]['figure'] == {'kind': 'share', 'pct': 28}
     t = ride(0, 100)
     assert board_insights(insights(t, [t])) == []
+
+
+# --- Instructor milestones: words only, gold ---
+
+@pytest.mark.parametrize('n, text', [(1, '1ST'), (2, '2ND'), (3, '3RD'), (4, '4TH'), (10, '10TH'), (11, '11TH'),
+                                     (12, '12TH'), (13, '13TH'), (21, '21ST'), (22, '22ND'), (23, '23RD'),
+                                     (100, '100TH'), (101, '101ST'), (102, '102ND'), (103, '103RD'),
+                                     (111, '111TH'), (112, '112TH'), (113, '113TH'), (200, '200TH'),
+                                     (1000, '1000TH')])
+def test_ordinals(n, text):
+    from peloton.insight_lines import ordinal
+    assert ordinal(n) == text
+
+
+def milestone(n, name, since='2019-03-02'):
+    return board_view('instructor_milestone', {'n': n, 'name': name, 'since': since})
+
+
+def test_a_round_number_card_and_page():
+    view = milestone(200, 'Jess Sims')
+    assert view['lines64'] == ['YOUR 200TH', 'CLASS WITH', 'JESS SIMS!']
+    assert view['pages32'] == [['YOUR 200TH CLASS', 'WITH JESS SIMS!']]
+    assert view['footer'] == 'SINCE MAR 2019' and view['figure'] is None and view['reason'] is None
+    assert view['colour'] == [255, 200, 0] and view['highlight'] == ['200TH']
+    assert view['sentence'] == 'YOUR 200TH CLASS WITH JESS SIMS!'
+
+
+def test_a_first_class_card_and_page():
+    view = milestone(1, 'Zacharias Niedzwiecki', since=None)
+    assert view['lines64'] == ['YOUR FIRST', 'CLASS WITH', 'ZACHARIAS', 'NIEDZWIECKI!']
+    assert view['pages32'] == [['YOUR FIRST CLASS', 'WITH ZACHARIAS', 'NIEDZWIECKI!']]
+    assert view['footer'] == 'WELCOME!' and view['highlight'] == ['FIRST']
+    assert milestone(1, 'Jess Sims')['footer'] == 'WELCOME!'  # a first never says "since"
+
+
+def test_a_long_name_wraps():
+    assert milestone(100, 'Chelsea Jackson Roberts')['lines64'] == ['YOUR 100TH', 'CLASS WITH', 'CHELSEA JACKSON',
+                                                                     'ROBERTS!']
+    assert milestone(100, 'Chelsea Jackson Roberts')['pages32'] == [['YOUR 100TH CLASS', 'WITH CHELSEA',
+                                                                      'JACKSON ROBERTS!']]
+    assert milestone(25, 'Leanne Hainsby-Alldis')['lines64'] == ['YOUR 25TH', 'CLASS WITH', 'LEANNE',
+                                                                  'HAINSBY-ALLDIS!']
+
+
+def test_no_date_falls_back_to_a_plain_footer():
+    assert milestone(50, 'Jess Sims', since=None)['footer'] == 'KEEP IT UP!'
+
+
+@pytest.mark.parametrize('facts', [{}, {'n': 0, 'name': 'A'}, {'n': True, 'name': 'A'}, {'n': 5.0, 'name': 'A'},
+                                   {'n': 5, 'name': ''}, {'n': 5, 'name': '  '}, {'n': 5, 'name': None},
+                                   {'n': 5, 'name': 'A', 'since': 'sometime'},
+                                   {'n': 5, 'name': 'A', 'since': '2019-13-01'}])
+def test_bad_milestone_facts_give_no_view(facts):
+    assert board_view('instructor_milestone', facts) is None
+
+
+NAMES = ('Chelsea Jackson Roberts', 'Zacharias Niedzwiecki', 'Leanne Hainsby-Alldis', 'Jess Sims', 'Cody Rigsby')
+COUNTS = (1, 2, 3, 5, 10, 11, 12, 13, 21, 25, 50, 100, 101, 111, 200, 400, 1000, 1111)
+
+
+@pytest.mark.parametrize('height', (64, 32))
+def test_every_milestone_line_fits_the_stats_font(height):
+    initialize_fonts(height)
+    font = loaded_fonts['stats']
+    for name in NAMES:
+        for n in COUNTS:
+            view = milestone(n, name)
+            assert len(view['pages32']) == 1 or n >= 1000, (name, n)
+            if height == 64:
+                lines = view['lines64']
+                assert len(lines) <= LINES_64
+                # the 64x64 card keeps to the usual 15 characters (60 px)
+                assert all(len(line) <= LINE_MAX and get_text_width(font, line) <= 60
+                           for line in lines + [view['footer']]), (name, n)
+            else:
+                lines = sum(view['pages32'], [])
+                assert all(len(page) <= LINES_32 for page in view['pages32'])
+                # the 64x32 page's lines run edge to edge: 16 characters, 64 px
+                assert all(len(line) <= EDGE_MAX and get_text_width(font, line) <= 64 for line in lines), (name, n)
+            text = ' '.join(lines).replace('CLASS WITH', ' ').replace('YOUR', ' ').replace('CLASS', ' ')
+            text = text.replace('WITH', ' ').replace(view['highlight'][0], ' ')
+            assert text.split() == (name.upper() + '!').split(), (name, n, lines)
+
+
+def test_a_name_longer_than_a_line_is_cut_across_lines():
+    view = milestone(10, 'Supercalifragilisticexpialidocious Smith')
+    assert view['lines64'][2] == 'SUPERCALIFRAGIL' and len(view['lines64']) == 5

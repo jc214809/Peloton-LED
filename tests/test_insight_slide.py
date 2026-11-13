@@ -81,7 +81,8 @@ def _damaged():
     good = view('pace_low')
     return [
         None, 'text', {}, [None], ['text'], [{}],
-        [{**good, 'figure': None}], [{**good, 'figure': {'kind': 'pie', 'pct': 3}}],
+        [{**good, 'figure': 'bars'}], [{**good, 'figure': {'kind': 'pie', 'pct': 3}}],
+        [{**good, 'highlight': 'FIRST'}], [{**good, 'highlight': [3]}], [{**good, 'highlight': []}],
         [{**good, 'figure': {'kind': 'share', 'pct': 101}}], [{**good, 'figure': {'kind': 'share', 'pct': -1}}],
         [{**good, 'figure': {'kind': 'share', 'pct': True}}], [{**good, 'figure': {'kind': 'share', 'pct': 5,
                                                                                     'unit': 7}}],
@@ -295,6 +296,7 @@ def test_the_demo_shows_the_frames_only_with_the_switch_on():
     assert not any('insights' in s for s in off)
     shown = {s['workout_id']: [v['code'] for v in insight_views(s)] for s in on if 'insights' in s}
     assert shown == {'demo-cycling': ['tough_class', 'effort_high'],
+                     'demo-rowing': ['instructor_milestone'],
                      'demo-strength': ['go_up_lighter', 'go_up_streak']}
 
 
@@ -329,3 +331,74 @@ def test_64_bars_write_weights_as_one_word():
     assert min(x for x, _ in lit(matrix, GREEN, range(26, 33), range(40, 64))) == start
     ride = render_detail(ride_with_two(), 64, 'insight_bars')
     assert min(x for x, _ in lit(ride, AMBER, range(26, 33), range(30, 64))) == 62 - get_text_width(font, '124 W')
+
+
+# --- Instructor milestones: words only, no figure frame ---
+
+def milestone_view(n=200, name='Jess Sims', since='2019-03-02'):
+    return board_view('instructor_milestone', {'n': n, 'name': name, 'since': since})
+
+
+def test_a_milestone_is_one_frame_on_each_board():
+    summary = with_views(demo_ride(), milestone_view())
+    plain = rotating_details(demo_ride(), 64)
+    assert [d['kind'] for d in rotating_details(summary, 64)[len(plain):]] == ['insight_card']
+    short = rotating_details(summary, 32)[len(rotating_details(demo_ride(), 32)):]
+    assert [(d['kind'], d['page']) for d in short] == [('insight_words', 0)]
+    two = with_views(demo_ride(), milestone_view(), view('pace_low'))
+    assert [d['kind'] for d in rotating_details(two, 64)[-3:]] == ['insight_card', 'insight_card', 'insight_bars']
+    both = [(d['kind'], d['index']) for d in rotating_details(
+        with_views(demo_ride(), view('pace_low'), milestone_view()), 32) if d.get('kind') in INSIGHT_KINDS]
+    assert both[0] == ('insight_bars', 0) and both[-1] == ('insight_words', 1)
+    assert ('insight_bars', 1) not in both
+
+
+def test_a_two_page_milestone_on_32_rows_numbers_its_pages_from_zero():
+    summary = with_views(demo_ride(), milestone_view(1000, 'Chelsea Jackson Roberts'))
+    pages = [d['page'] for d in rotating_details(summary, 32) if d.get('kind') == 'insight_words']
+    assert pages == [0, 1]
+
+
+def test_the_milestone_page_adds_one_frame_of_hold_time():
+    data = demo_data()
+
+    class Dash:
+        pending_milestones = pending_discipline_milestones = lambda self, *_: []
+        should_celebrate_pr = lambda self, *_: False
+
+    display = {'rotation': ['latest_workouts'], 'last_workout_detail_interval': 4.0, 'screen_durations': {}}
+    for height in (64, 32):
+        snapshot = {'me': data['me'], 'summaries': [with_views(demo_ride(), milestone_view())], 'totals': {},
+                    'weekly_progress': {}}
+        plain = build_rotation_pages({**snapshot, 'summaries': [demo_ride()]}, Dash(), display, 'R', height)
+        shown = build_rotation_pages(snapshot, Dash(), display, 'R', height)
+        assert shown[0][2] == pytest.approx(plain[0][2] + 4 + GRAPH_FRAME_EXTRA_SECONDS)
+
+
+NAMES = ('Jess Sims', 'Chelsea Jackson Roberts', 'Zacharias Niedzwiecki', 'Leanne Hainsby-Alldis')
+
+
+@pytest.mark.parametrize('name', NAMES)
+@pytest.mark.parametrize('n', (1, 11, 101, 200))
+def test_64_milestone_card_draws_inside_the_panel_with_the_ordinal_in_gold(name, n):
+    matrix = render_detail(with_views(demo_ride(), milestone_view(n, name)), 64, 'insight_card')
+    gold_text = lit(matrix, GOLD, range(18, 56), range(64))
+    assert gold_text and {y for _, y in gold_text} <= set(range(18, 28))  # the ordinal, on the first line only
+    assert lit(matrix, WHITE, range(18, 56), range(64))                   # the rest of the words, soft white
+    assert lit(matrix, GREY, range(56, 64), range(64))                    # the footer
+    assert not lit(matrix, GOLD, range(56, 64), range(64))
+
+
+@pytest.mark.parametrize('name', NAMES)
+@pytest.mark.parametrize('n', (1, 100, 200))
+def test_32_milestone_page_draws_the_ordinal_in_gold(name, n):
+    matrix = render_detail(with_views(demo_ride(), milestone_view(n, name)), 32, 'insight_words')
+    assert lit(matrix, GOLD, range(10, 20), range(64))
+    assert not lit(matrix, GOLD, range(20, 32), range(64))
+    assert lit(matrix, WHITE, range(10, 32), range(64))
+
+
+def test_a_view_with_no_figure_is_kept_and_other_checks_still_apply():
+    assert insight_views(with_views(demo_ride(), milestone_view())) != []
+    assert insight_views(with_views(demo_ride(), {**milestone_view(), 'highlight': 'FIRST'})) == []
+    assert insight_views(with_views(demo_ride(), {**milestone_view(), 'footer': ''})) == []

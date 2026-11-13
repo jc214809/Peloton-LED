@@ -835,3 +835,98 @@ def test_the_board_store_drops_rows_past_the_window_when_it_loads(tmp_path):
         dashboard.refresh()
     saved = RowStore.load(default_rows_path(dashboard.cache_path))
     assert 'old' not in saved.rows and {'p0', 'w1'} <= set(saved.rows)
+
+
+# --- Instructor milestones (counted from the workout log) ---
+
+def _milestone_setup(tmp_path, before, discipline='cycling', complete=True, instructor=None):
+    """A refresh whose workout w1 is the (before + 1)th class with Jess Sims in a log of `before` earlier ones."""
+    dashboard, client, token = _insight_setup(tmp_path, discipline=discipline)
+    client.history[0]['ride'] = {'id': 'r1', 'instructor': instructor or {'id': 'jess', 'name': 'Jess Sims'}}
+    log = dashboard._log
+    log.claim('demo')
+    for i in range(before):
+        log.workouts[f'old{i}'] = {'start': 1_000_000 + i, 'status': 'COMPLETE', 'instructor_id': 'jess',
+                                   'group_ids': None, 'tz': 'America/New_York'}
+    log.backfill['complete'] = complete
+    return dashboard, client, token
+
+
+def _codes(dashboard):
+    return [view['code'] for view in dashboard.snapshot()['summaries'][0].get('insights', [])]
+
+
+def test_a_round_number_class_gets_the_milestone_insight(tmp_path):
+    dashboard, client, _ = _milestone_setup(tmp_path, 99)
+    dashboard.refresh()
+    views = dashboard.snapshot()['summaries'][0]['insights']
+    milestone = views[0]
+    assert milestone['code'] == 'instructor_milestone'
+    assert milestone['lines64'] == ['YOUR 100TH', 'CLASS WITH', 'JESS SIMS!'] and milestone['figure'] is None
+    assert milestone['footer'] == 'SINCE JAN 1970'
+
+
+def test_a_first_class_with_an_instructor_gets_the_milestone_insight(tmp_path):
+    dashboard, client, _ = _milestone_setup(tmp_path, 0)
+    dashboard.refresh()
+    assert _codes(dashboard)[0] == 'instructor_milestone'
+    assert dashboard.snapshot()['summaries'][0]['insights'][0]['lines64'][0] == 'YOUR FIRST'
+
+
+def test_other_counts_get_no_milestone(tmp_path):
+    for before in (1, 2, 98, 100, 120):
+        folder = tmp_path / str(before)
+        folder.mkdir()
+        dashboard, client, _ = _milestone_setup(folder, before)
+        dashboard.refresh()
+        assert 'instructor_milestone' not in _codes(dashboard), before
+
+
+def test_no_milestone_from_a_log_that_is_still_filling(tmp_path):
+    dashboard, client, _ = _milestone_setup(tmp_path, 99, complete=False)
+    dashboard.refresh()
+    assert 'instructor_milestone' not in _codes(dashboard)
+
+
+def test_no_milestone_for_a_class_without_an_instructor(tmp_path):
+    dashboard, client, _ = _milestone_setup(tmp_path, 0, instructor={'name': 'Just Ride'})
+    dashboard.refresh()
+    assert 'instructor_milestone' not in _codes(dashboard)
+
+
+def test_a_discipline_without_insights_still_gets_the_milestone_and_no_calls(tmp_path):
+    dashboard, client, _ = _milestone_setup(tmp_path, 49, discipline='yoga')
+    dashboard.refresh()
+    assert _codes(dashboard) == ['instructor_milestone']
+    client.get_workout_detail.assert_not_called()
+
+
+def test_the_milestone_survives_a_failed_row_build(tmp_path):
+    dashboard, client, _ = _milestone_setup(tmp_path, 24)
+    client.get_workout_detail.return_value = {}
+    dashboard.refresh()
+    assert _codes(dashboard) == ['instructor_milestone']
+
+
+def test_the_milestone_appears_when_the_log_finishes_after_the_first_refresh(tmp_path):
+    dashboard, client, _ = _milestone_setup(tmp_path, 49, complete=False)
+    dashboard.refresh()
+    assert 'instructor_milestone' not in _codes(dashboard)
+    dashboard._log.backfill['complete'] = True
+    dashboard.refresh()
+    assert _codes(dashboard)[0] == 'instructor_milestone'
+
+
+def test_the_milestone_is_off_with_the_switch(tmp_path):
+    dashboard, client, _ = _milestone_setup(tmp_path, 49)
+    dashboard.config['workout_insights'] = False
+    dashboard.refresh()
+    assert 'insights' not in dashboard.snapshot()['summaries'][0]
+
+
+def test_a_failing_milestone_never_fails_the_refresh(tmp_path, caplog):
+    dashboard, client, _ = _milestone_setup(tmp_path, 49)
+    with patch('peloton.dashboard.class_numbers', side_effect=ValueError('boom')):
+        dashboard.refresh()
+    assert dashboard.snapshot()['status'] == 'ready' and 'instructor_milestone' not in _codes(dashboard)
+    assert 'Instructor milestone failed (ValueError)' in caplog.text

@@ -23,11 +23,12 @@ from .goals import (local_date, parse_milestone_key, reached_discipline_mileston
 from .journey import uses_metric
 from .schedule import in_quiet_hours, scheduled_refresh_interval
 from .records import merge_personal_records, parse_personal_records, previous_best_kj
-from .workout_log import WorkoutLog, default_log_path
+from .instructors import class_numbers
+from .workout_log import WorkoutLog, default_log_path, trim
 from .insight_lines import board_insights
 from .workout_compare import DISCIPLINES as INSIGHT_DISCIPLINES
 from .workout_features import build_row, discipline as row_discipline
-from .workout_insights import insights
+from .workout_insights import insights, milestone_insight, with_milestone
 from .workout_rows import RowStore, default_rows_path, trim_for_board
 
 logger = logging.getLogger('peloton-led.dashboard')
@@ -363,6 +364,20 @@ class Dashboard:
         except OSError:
             return None
 
+    def _milestone(self, workout):
+        """The instructor-milestone message for this workout, or None: counted from the workout log, so only
+        once the log has the whole history (a partial log would call the 3rd class the 1st)."""
+        try:
+            identity, row, names = trim(workout)
+            with self._log_lock:
+                if identity is None or not self._log.complete:
+                    return None
+                return milestone_insight(class_numbers(self._log.workouts, identity, row,
+                                                       {**self._log.instructors, **names}))
+        except Exception as exc:  # never fail the refresh over an insight
+            logger.warning('Instructor milestone failed (%s)', type(exc).__name__)
+            return None
+
     def _workout_insight(self, client, workout, perf, settling):
         """The board's views (insight_lines.board_view) comparing this workout with similar earlier ones, or None.
 
@@ -373,9 +388,14 @@ class Dashboard:
         The views are recomputed only when the row store changed (a new or rebuilt row, or a reload):
         peers are earlier workouts, so nothing else moves them. Only a 401 escapes."""
         identity = workout.get('id')
-        if (not identity or workout.get('status') != 'COMPLETE'
-                or row_discipline(workout.get('fitness_discipline')) not in INSIGHT_DISCIPLINES):
+        if not identity or workout.get('status') != 'COMPLETE':
             return None
+        # The milestone needs the workout log, not the row store, so every discipline can have one and a
+        # failed row build still shows it.
+        milestone = self._milestone(workout)
+        alone = board_insights(with_milestone([], milestone)) or None
+        if row_discipline(workout.get('fitness_discipline')) not in INSIGHT_DISCIPLINES:
+            return alone
         try:
             with self._rows_lock:
                 if self._rows is None:
@@ -391,11 +411,11 @@ class Dashboard:
                     else:
                         failed_at = self._insight_failed.get(identity)
                         if failed_at is not None and time.monotonic() - failed_at < INSIGHT_RETRY_SECONDS:
-                            return None
+                            return alone
                         detail = client.get_workout_detail(identity)
                         if not isinstance(detail, dict) or not detail.get('id') or detail.get('status') != 'COMPLETE':
                             self._insight_failed[identity] = time.monotonic()
-                            return None
+                            return alone
                         ride_id = (detail.get('ride') or {}).get('id')
                         ride = client.get_ride_details(ride_id) if ride_id else None
                     row = build_row(detail, perf, ride)
@@ -415,13 +435,16 @@ class Dashboard:
                             store.save()
                         except OSError as exc:
                             logger.warning('Could not save the workout rows (%s)', type(exc).__name__)
+                # The views also move with the milestone (the log may finish its history after the first refresh).
+                key = (self._rows_generation, milestone)
                 cached = self._insight_views.get(identity)
-                if cached and cached[0] == self._rows_generation:
+                if cached and cached[0] == key:
                     return cached[1]
-                views = board_insights(insights(store.rows[identity], store.current_rows())) or None
+                views = board_insights(with_milestone(insights(store.rows[identity], store.current_rows()),
+                                                      milestone)) or None
                 if cached and cached[1] != views:
                     logger.info('Workout %s insights changed', identity[:8])
-                self._insight_views[identity] = (self._rows_generation, views)
+                self._insight_views[identity] = (key, views)
                 return views
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 401:
@@ -431,7 +454,7 @@ class Dashboard:
         except Exception as exc:  # never fail the refresh over an insight
             self._insight_failed[identity] = time.monotonic()
             logger.warning('Workout insight failed (%s)', type(exc).__name__)
-        return None
+        return alone
 
     def refresh(self):
         """Run one serialized refresh and return the delay until the next attempt."""

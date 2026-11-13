@@ -265,12 +265,14 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
         stats.append({'label': 'muscles worked', 'value': '', 'kind': 'muscles'})
     for index, view in enumerate(insight_views(summary)):
         # Workout compare: 64 rows show the card then the bars; 32 rows the bars then the sentence pages.
-        frames = (['insight_card', 'insight_bars'] if matrix_height >= 64
-                  else ['insight_bars'] + ['insight_words'] * len(view['pages32']))
+        # An insight with no figure (an instructor milestone) is words only: one card, or its 64x32 pages.
+        bars = view['figure'] is not None
+        frames = (['insight_card'] + ['insight_bars'] * bars if matrix_height >= 64
+                  else ['insight_bars'] * bars + ['insight_words'] * len(view['pages32']))
         for page, kind in enumerate(frames):
             detail = {'label': 'insight', 'value': '', 'kind': kind, 'index': index}
             if kind == 'insight_words':
-                detail['page'] = page - 1
+                detail['page'] = page - bars
             stats.append(detail)
     return stats
 
@@ -328,10 +330,7 @@ def _parts_layout(parts, width_of):
     return places, x - 1 - (_trailing_blank(before) if before != ARROW_PART else ARROW_GAP)
 
 
-def _good_view(view) -> bool:
-    if not isinstance(view, dict):
-        return False
-    figure, colour, pages = view.get('figure'), view.get('colour'), view.get('pages32')
+def _good_figure(figure) -> bool:
     if not (isinstance(figure, dict) and figure.get('kind') in _FIGURE_KEYS
             and all(_number(figure.get(key)) for key in _FIGURE_KEYS[figure['kind']])):
         return False
@@ -341,8 +340,18 @@ def _good_view(view) -> bool:
         return False
     if figure['kind'] == 'share' and figure['pct'] > 100:
         return False
-    if figure['kind'] == 'blocks' and not (isinstance(figure['total'], int) and isinstance(figure['lit'], int)
-                                           and 0 < figure['total'] <= 30 and figure['lit'] <= figure['total']):
+    return not (figure['kind'] == 'blocks' and not (
+        isinstance(figure['total'], int) and isinstance(figure['lit'], int)
+        and 0 < figure['total'] <= 30 and figure['lit'] <= figure['total']))
+
+
+def _good_view(view) -> bool:
+    if not isinstance(view, dict):
+        return False
+    figure, colour, pages = view.get('figure'), view.get('colour'), view.get('pages32')
+    if figure is not None and not _good_figure(figure):  # None: words only (an instructor milestone)
+        return False
+    if not _strings(view.get('highlight', ['-']), 2):
         return False
     reason = view.get('reason')
     if not _good_parts(view.get('reason_parts')):
@@ -553,11 +562,12 @@ def _centred(matrix, font, y: int, rgb, text: str, left: int = 0, right: Optiona
     _draw_words(matrix, font, left + max((room - _words_width(font, text)) // 2, 0), y, text, lambda _: rgb)
 
 
-def _rich_line(matrix, font, y: int, line: str, numbers) -> None:
-    """A centred sentence line whose words with a digit take `numbers` (the insight's colour), the rest white."""
+def _rich_line(matrix, font, y: int, line: str, numbers, highlight=()) -> None:
+    """A centred sentence line whose words with a digit (or in `highlight`: FIRST) take `numbers` (the
+    insight's colour), the rest white."""
     x = max((matrix.width - _words_width(font, line)) // 2, 0)
     _draw_words(matrix, font, x, y, line,
-                lambda word: numbers if any(ch.isdigit() for ch in word) else _INSIGHT_TEXT)
+                lambda word: numbers if word in highlight or any(ch.isdigit() for ch in word) else _INSIGHT_TEXT)
 
 
 def _reason_line(matrix, font, y: int, text: str, phase: float, hold: float) -> None:
@@ -616,7 +626,7 @@ def _draw_insight_card(matrix, view: dict, discipline: str, index: int, count: i
     lines = view['lines64']
     top = 21 + 7 * (5 - len(lines)) // 2
     for k, line in enumerate(lines):
-        _rich_line(matrix, stats, top + 7 * k, line, tuple(view['colour']))
+        _rich_line(matrix, stats, top + 7 * k, line, tuple(view['colour']), view.get('highlight', ()))
     _centred(matrix, stats, 61, _LABEL_GREY, view['footer'])
 
 
@@ -723,7 +733,7 @@ def _draw_insight_words(matrix, view: dict, discipline: str, page: int) -> None:
         _write(matrix, stats, 63 - get_text_width(stats, label), 6, _LABEL_GREY, label)
     _rect(matrix, 0, 8, 63, 8, _disc_rgb(discipline))
     for k, line in enumerate(pages[page]):
-        _rich_line(matrix, stats, 16 + 7 * k, line, tuple(view['colour']))
+        _rich_line(matrix, stats, 16 + 7 * k, line, tuple(view['colour']), view.get('highlight', ()))
 
 
 def _draw_insight_frame(matrix, summary: dict, discipline: str, detail: dict, phase: float, hold: float) -> bool:

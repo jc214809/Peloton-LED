@@ -117,17 +117,6 @@ Rules:
 - Update `docs/NAME-PAGE-FACTS.md`, the README's `username` section and screenshot, and `tests/test_username_facts.py`; check with `scripts/list_facts.py` on both riders' logs.
 - Depends on: nothing.
 
-### Workout insights: instructor milestones (decided 2026-11-12)
-After a workout, a gold insight when it was a round number or a first with that instructor. Counts come from the workout log (`instructor_counts`, every discipline, a class with two instructors counts for each), so no extra API calls.
-
-Measured on both riders' logs (12 months): round numbers (5th, 10th, 25th, 50th, 100th, then every 100th) 13 for Joel (`200 x Jess Sims`, `150 x Denis Morton`) and 23 for Jen (`400 x Cody Rigsby`); first classes 3 and 5. Dropped: output against your usual with that instructor (fired on 60-75% of rides, because one instructor teaches every length and type; the like-for-like output insight already does this properly).
-
-Chosen from mock-ups:
-- 64x64: **the words card only, no second (picture) frame**: `YOUR 200TH` / `CLASS WITH` / `JESS SIMS!`, footer `SINCE MAR 2019` (the first class with them); a long name wraps (`CHELSEA JACKSON` / `ROBERTS!`); a first class reads `YOUR FIRST` / `CLASS WITH` / `ZACHARIAS` / `NIEDZWIECKI!`, footer `WELCOME!`.
-- 64x32: one words page, no bars: `YOUR 200TH CLASS` / `WITH JESS SIMS!` (16-character lines run edge to edge, as on the name page).
-- Gold (`insight_lines.GOLD`), the ordinal in gold within the soft white text.
-
-Notes: the insight framework assumes a picture frame, so it needs a "no figure" view (`figure: None`) that `build_rotation_pages` and `rotating_details` count as one frame on each board. It counts toward `MAX_BOARD_INSIGHTS` (2); decide its place in the order (after output insights, before effort?). Test with the longest names in the logs (CHELSEA JACKSON ROBERTS, ZACHARIAS NIEDZWIECKI, LEANNE HAINSBY-ALLDIS). Rules in `peloton/workout_insights.py` (needs the workout's instructor and the log's count before it), wording in `insight_lines.board_view`. Depends on: nothing.
 
 ### Name page: together facts (was facts-engine step 7)
 Facts about both riders on a two-rider board (`TOGETHER` / `31 WORKOUTS`, `BOTH TOOK` an instructor, `SAME CLASS`), from each rider's `period_stats`, shown once a cycle on the rider whose rotation gets `rivals`. Details: `docs/NAME-PAGE-FACTS.md` ("Step 7").

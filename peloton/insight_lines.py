@@ -236,6 +236,43 @@ def _rule(code):
     return None
 
 
+# Instructor milestones (peloton/workout_insights.milestone_insight): words only, no figure, gold.
+EDGE_MAX = 16              # the 64x32 page's lines run edge to edge (as on the name page)
+MONTHS = ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
+WELCOME_FOOTER = 'WELCOME!'
+NO_DATE_FOOTER = 'KEEP IT UP!'  # a round number whose first class has no date (Joel, 2026-11-12)
+
+
+def ordinal(n):
+    """1ST, 2ND, 3RD, 4TH ... 11TH, 12TH, 13TH, 21ST, 101ST, 111TH."""
+    suffix = 'TH' if n % 100 in (11, 12, 13) else {1: 'ST', 2: 'ND', 3: 'RD'}.get(n % 10, 'TH')
+    return f'{n}{suffix}'
+
+
+def _since(first):
+    """'2019-03-02' -> 'SINCE MAR 2019'."""
+    year, month = int(first[:4]), int(first[5:7])
+    return f'SINCE {MONTHS[month - 1]} {year}'
+
+
+def _milestone_view(facts):
+    """The words-only view of an instructor milestone: a 3-5 line card on 64x64, one page on 64x32."""
+    n, name = facts['n'], ' '.join(facts['name'].upper().split())
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1 or not name:
+        raise ValueError('bad milestone')
+    first = n == 1
+    word = 'FIRST' if first else ordinal(n)
+    footer = WELCOME_FOOTER if first else _since(facts['since']) if facts.get('since') else NO_DATE_FOOTER
+    lines = [f'YOUR {word}', 'CLASS WITH'] + wrap(f'{name}!')
+    lines32 = [f'YOUR {word} CLASS'] + wrap(f'WITH {name}!', EDGE_MAX)
+    if len(lines32[0]) > EDGE_MAX:  # a 1000th class: the 64x64 wording
+        lines32 = lines
+    pages = [lines32[i:i + LINES_32] for i in range(0, min(len(lines32), LINES_32 * PAGES_32), LINES_32)]
+    return {'code': 'instructor_milestone', 'colour': list(GOLD), 'headline': f'YOUR {word} CLASS',
+            'sentence': f'YOUR {word} CLASS WITH {name}!', 'lines64': lines[:LINES_64], 'pages32': pages,
+            'footer': footer, 'figure': None, 'reason': None, 'highlight': [word]}
+
+
 def board_view(code, facts):
     """What the insight frames show, or None for a hidden or unknown code or facts that lack a number.
 
@@ -243,6 +280,11 @@ def board_view(code, facts):
     sentence in at most LINES_64 lines, `pages32` in one or two pages of at most LINES_32, `reason` None when the
     bars frame has no line under the figure. `figure` is bars (today against the usual), a share bar or blocks.
     """
+    if code == 'instructor_milestone':
+        try:
+            return _milestone_view(facts or {})
+        except (KeyError, TypeError, ValueError, AttributeError, IndexError):
+            return None
     rule = _rule(code)
     if code in HIDDEN_CODES or rule is None:
         return None

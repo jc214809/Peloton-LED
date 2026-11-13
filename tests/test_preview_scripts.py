@@ -257,10 +257,10 @@ def test_insight_slides_show_with_the_flag_or_the_config_switch_and_never_from_a
     def insight_ids(options):
         return {s['workout_id'] for s in load_snapshot_for(options)['summaries'] if 'insights' in s}
     assert insight_ids(SimpleNamespace(demo=True)) == set()
-    assert insight_ids(SimpleNamespace(demo=True, insights=True)) == {'demo-cycling', 'demo-strength'}
+    assert insight_ids(SimpleNamespace(demo=True, insights=True)) == {'demo-cycling', 'demo-rowing', 'demo-strength'}
     on = tmp_path / 'on.json'
     on.write_text(json.dumps({'display': {'workout_insights': True}}))
-    assert insight_ids(SimpleNamespace(demo=True, config=str(on))) == {'demo-cycling', 'demo-strength'}
+    assert insight_ids(SimpleNamespace(demo=True, config=str(on))) == {'demo-cycling', 'demo-rowing', 'demo-strength'}
     (tmp_path / 'bad.json').write_text(json.dumps({'display': {'workout_insights': 'yes'}}))
     with pytest.raises(SystemExit):
         render_rotation.insights_enabled(SimpleNamespace(config=str(tmp_path / 'bad.json')))
@@ -269,7 +269,7 @@ def test_insight_slides_show_with_the_flag_or_the_config_switch_and_never_from_a
     cache = tmp_path / 'cache.json'
     save_snapshot(cache, {**snapshot, 'last_updated': 1773496800})
     assert insight_ids(SimpleNamespace(demo=False, cache=str(cache))) == set()
-    assert insight_ids(SimpleNamespace(demo=False, cache=str(cache), insights=True)) == {'demo-cycling',
+    assert insight_ids(SimpleNamespace(demo=False, cache=str(cache), insights=True)) == {'demo-cycling', 'demo-rowing',
                                                                                           'demo-strength'}
     # A version 2 cache's single insight is never shown, switch or no switch.
     snapshot['summaries'][0]['insight'] = {'code': 'output_up', 'lines': ['STRONG RIDE', '205 VS 180 W']}
