@@ -308,7 +308,8 @@ def anniversary(member_since, timezone_name=None, now=None):
 def event_stats(workouts, timezone_name=None, now=None, member_since=None):
     """Dates the name page measures from, all from the log (dates are ISO, in the display timezone):
     `today`; `anniversary` (years, only on the day); `on_this_day` (the workouts of earlier years on
-    today's month and day, nearest year first: {years_ago, minutes, discipline}); `first_ever` (the
+    today's month and day, nearest year first: {years_ago, minutes, discipline, workouts_then, workouts_now},
+    the log's workout count at the end of that day and now); `first_ever` (the
     first workout's date); `disciplines` ({slug: {workouts, first, last, before_last}}, before_last the
     day of the workout before the latest, None with one) and `instructors` ({id: {workouts, last}} for
     the EVENT_INSTRUCTORS most-seen). Which of these is worth saying is for the facts module."""
@@ -339,8 +340,9 @@ def event_stats(workouts, timezone_name=None, now=None, member_since=None):
     on_this_day = []
     for year in sorted({year for year, _, _ in same_day}, reverse=True):
         longest = max((row for row in same_day if row[0] == year), key=lambda row: row[1])
+        then = sum(1 for day in ever if day <= date(year, today.month, today.day))
         on_this_day.append({'years_ago': today.year - year, 'minutes': int(round(longest[1] / 60)),
-                            'discipline': longest[2]})
+                            'discipline': longest[2], 'workouts_then': then, 'workouts_now': len(ever)})
     return {'today': today.isoformat(), 'anniversary': anniversary(member_since, timezone_name, now),
             'on_this_day': on_this_day, 'first_ever': min(ever).isoformat() if ever else None,
             'disciplines': disciplines, 'instructors': instructors}

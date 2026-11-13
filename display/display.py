@@ -1,4 +1,5 @@
 import os
+import unicodedata
 from pathlib import Path
 
 from driver import graphics
@@ -78,6 +79,13 @@ color_dict = colors()
 def get_text_width(font, text):
     """Helper to calculate total width of text in pixels."""
     return sum(font.CharacterWidth(ord(ch)) for ch in text)
+
+
+def plain_letters(text):
+    """`text` with accents taken off its letters (ROBIN ARZÓN -> ROBIN ARZON). The 5-row small fonts
+    (tom-thumb, 4x6-legacy) draw an accented capital as the accent on a flattened letter, so their Ó
+    reads as a 6. Letters with no plain form (Ø, ß) are kept."""
+    return ''.join(ch for ch in unicodedata.normalize('NFKD', text) if not unicodedata.combining(ch))
 
 
 def wrap_text(font, text, max_width, padding):

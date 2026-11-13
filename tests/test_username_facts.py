@@ -12,6 +12,7 @@ from peloton.activity import (MIN_RANK_BLOCKS, SUBJECT_DISCIPLINES, SUBJECT_INST
                               frame_stats, period_stats)
 from peloton.username_facts import (COOLDOWN_PASSES, FRAME_ORDER, KINDS, MAX_COMPARE_BONUS, MIN_RANKED_CLASSES,
                                     MIN_STREAK_WEEKS, RANK_FIRST_BONUS, RECENT_RECORD_BONUS, _comparison_fact,
+                                    _since_fact,
                                     fact_score, frame_facts, frame_rankings, frame_subjects, frame_words,
                                     record_name_facts, scored_facts, shown_keys, username_details)
 from peloton.workout_log import WorkoutLog
@@ -262,20 +263,54 @@ def test_a_comparison_window_starts_and_ends_on_local_midnight():
     assert stats['before']['workouts'] == 2 and stats['workouts'] == 1
 
 
+# This day a year ago: 812 workouts then, 1,067 now.
+DAY_ONE_YEAR = {'years_ago': 1, 'minutes': 20, 'discipline': 'yoga', 'workouts_then': 812, 'workouts_now': 1067}
+
+
 def _compared(now, before, key='30d', **extra):
     stats = dict(THIRTY, workouts=now, before={'workouts': before, 'minutes': 0}, **extra)
     if key == 'year':
         stats['year'] = 2026
-    return [f for f in frame_facts(_snapshot(time_frames={key: stats}), key) if 'VS' in f['label']]
+    return [f for f in frame_facts(_snapshot(time_frames={key: stats}), key) if f['kind'] == 'comparison']
 
 
 def test_a_comparison_names_the_frame_and_the_change():
-    assert [(f['label'], f['lines']) for f in _compared(15, 9)] == [('VS 30 BEFORE', ['15 VS 9', '+6 WORKOUTS'])]
-    assert _compared(8, 12)[0]['lines'] == ['8 VS 12', '-4 WORKOUTS']
+    assert [(f['label'], f['lines']) for f in _compared(15, 9)] == [('LAST 30 DAYS', ['15 WORKOUTS', 'UP FROM 9'])]
+    assert _compared(8, 12)[0]['lines'] == ['8 WORKOUTS', 'DOWN FROM 12']
     assert _compared(412, 380, 'year') == []                     # +8%: not a big change
-    assert [(f['label'], f['lines']) for f in _compared(500, 380, 'year')] == [
-        ('2026 VS 2025', ['500 VS 380', '+120 WORKOUTS'])]
-    assert _compared(10, 5, '90d')[0]['label'] == 'VS 90 BEFORE'
+    assert [(f['label'], f['lines']) for f in _compared(1700, 1380, 'year')] == [
+        ('THIS YEAR', ['1,700 WORKOUTS', 'UP FROM 1,380'])]
+    assert _compared(500, 380, 'year')[0]['lines'] == ['500 WORKOUTS', 'UP FROM 380']
+    assert [(f['label'], f['lines']) for f in _compared(55, 25, '90d')] == [('LAST 90 DAYS', ['55 WORKOUTS', 'UP FROM 25'])]
+
+
+def test_the_count_and_its_comparison_are_one_fact_so_a_frame_never_says_its_count_twice():
+    # With a real change the comparison carries the count and there is no separate total...
+    stats = dict(THIRTY, workouts=19, before={'workouts': 12, 'minutes': 0})
+    facts = frame_facts(_snapshot(time_frames={'30d': stats}), '30d')
+    assert [f['kind'] for f in facts if f['kind'] in ('total', 'comparison')] == ['comparison']
+    assert facts[0]['lines'] == ['19 WORKOUTS', 'UP FROM 12']
+    # ...and with none it is the plain count with the time, as before.
+    plain = dict(THIRTY, before={'workouts': 12, 'minutes': 0})
+    facts = frame_facts(_snapshot(time_frames={'30d': plain}), '30d')
+    assert [f['kind'] for f in facts if f['kind'] in ('total', 'comparison')] == ['total']
+    assert facts[0]['lines'] == ['12 WORKOUTS', '340 MINUTES']
+
+
+def test_two_headlines_never_share_a_label(monkeypatch):
+    # Regression: LAST 30 DAYS showed in both slots (the count and a unique-instructors fact, or the
+    # count and its comparison) on a rider whose log had both.
+    stats = dict(THIRTY, workouts=19, before={'workouts': 12, 'minutes': 0})
+    snapshot = _snapshot(time_frames={'30d': stats})
+    for index in range(8):
+        labels = [d['label'] for d in username_details(snapshot, index)[1:3]]
+        assert len(set(labels)) == len(labels), labels
+    # The guard itself: a second fact with the first's label is passed over for the next best.
+    clash = [(90, {'kind': 'total', 'label': 'LAST 30 DAYS', 'key': 'a', 'lines': ['1']}, None),
+             (80, {'kind': 'instructors', 'label': 'LAST 30 DAYS', 'key': 'b', 'lines': ['2']}, None),
+             (70, {'kind': 'since:yoga', 'label': 'LAST YOGA', 'key': 'c', 'lines': ['3']}, None)]
+    monkeypatch.setattr('peloton.username_facts.scored_facts', lambda snap: clash)
+    assert [d['key'] for d in username_details({})] == ['a', 'c']
 
 
 def test_a_comparison_needs_enough_on_both_sides_and_a_real_change():
@@ -285,7 +320,7 @@ def test_a_comparison_needs_enough_on_both_sides_and_a_real_change():
     assert _compared(9, 4) == [] and _compared(4, 9) == []       # a side under 5 workouts
     assert _compared(20, 9, 'last_year') == []                   # only 30 days, 90 days and the year compare
     stats = dict(THIRTY)
-    assert all('VS' not in f['label'] for f in frame_facts(_snapshot(time_frames={'30d': stats}), '30d'))
+    assert all(f['kind'] != 'comparison' for f in frame_facts(_snapshot(time_frames={'30d': stats}), '30d'))
 
 
 def _measured(**extra):
@@ -583,7 +618,7 @@ def test_a_page_is_six_highlights_and_a_thin_rider_gets_a_shorter_one():
 
 def test_every_kind_has_a_group_and_a_score_and_every_fact_a_known_kind():
     snapshot = _full(streaks={'best_weekly': 74}, events={'today': '2026-11-08', 'anniversary': 6,
-                     'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
+                     'on_this_day': [DAY_ONE_YEAR]})
     for _, fact, _ in scored_facts(snapshot):
         assert fact['kind'].split(':')[0] in KINDS, fact['kind']
     assert all(group and score > 0 for group, score in KINDS.values())
@@ -603,7 +638,7 @@ def test_the_page_is_the_total_two_headlines_of_different_groups_and_a_top_three
 
 
 def test_the_best_scoring_facts_show_first():
-    snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
+    snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [DAY_ONE_YEAR]})
     scores = scored_facts(snapshot)
     assert [score for score, _, _ in scores] == sorted((score for score, _, _ in scores), reverse=True)
     details = username_details(snapshot, 0)
@@ -654,7 +689,7 @@ def test_a_lifetime_discipline_count_is_not_a_headline_but_its_instructors_still
 
 
 def test_the_pages_rotate_through_facts_as_the_cooldown_works():
-    snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
+    snapshot = _full(events={'today': '2026-11-08', 'on_this_day': [DAY_ONE_YEAR]})
     snapshot['name_facts_passes'], snapshot['name_facts_shown'] = 0, {}
     shown = []
     for _ in range(6):
@@ -840,7 +875,9 @@ def test_event_stats_are_dates_in_the_display_timezone():
     events = event_stats(_event_log(), ZONE, NOW, MEMBER_SINCE)
     assert events['today'] == '2026-11-08' and events['anniversary'] == 6
     # The longest workout of the nearest earlier year with one: 45 minutes of yoga, not the cycling.
-    assert events['on_this_day'] == [{'years_ago': 1, 'minutes': 45, 'discipline': 'yoga'}]
+    # The log's workout count at the end of that day (the 7 workouts up to 8 Nov 2025: 5 + the 2 that day) and now.
+    assert events['on_this_day'] == [{'years_ago': 1, 'minutes': 45, 'discipline': 'yoga',
+                                      'workouts_then': 7, 'workouts_now': 20}]
     assert events['first_ever'] == '2025-01-01'
     assert events['disciplines']['strength'] == {'workouts': 7, 'first': '2025-01-01', 'last': '2026-11-05',
                                                  'before_last': '2026-08-01'}
@@ -885,13 +922,13 @@ def _events_snapshot(**extra):
 def test_event_facts_in_order():
     facts = frame_facts(_events_snapshot(), 'events')
     assert [(f['label'], f['lines']) for f in facts] == [
-        ('ON THIS DAY', ['1 YEAR AGO', '45 MIN YOGA']),
-        ('COMEBACK', ['STRENGTH', 'AFTER 96 DAYS']),
+        ('A YEAR AGO', ['YOU HAD 7', 'NOW 20']),
+        ('WELCOME BACK', ['STRENGTH', '1ST IN 96 DAYS']),
         ('NEW DISCIPLINE', ['WALKING', 'FIRST TIME']),
-        ('SINCE', ['50 DAYS SINCE', 'LAST CYCLING']),
-        ('SINCE', ['49 DAYS SINCE', 'LAST YOGA']),
-        ('LAST CLASS WITH', ['ANDY SPEER', 'SEP 20 2026']),
-        ('LAST CLASS WITH', ['CODY RIGSBY', 'SEP 19 2026'])]
+        ('LAST RIDE', ['50 DAYS AGO']),
+        ('LAST YOGA', ['49 DAYS AGO']),
+        ('LAST CLASS WITH', ['ANDY SPEER', '49 DAYS AGO']),
+        ('LAST CLASS WITH', ['CODY RIGSBY', '50 DAYS AGO'])]
 
 
 def test_event_facts_leave_out_what_is_thin_or_recent():
@@ -912,29 +949,94 @@ def test_event_facts_leave_out_what_is_thin_or_recent():
     facts = frame_facts(snapshot, 'events')
     # Only cycling (since 19 days) qualifies: rowing has under 5 workouts, jess too, cody is recent, and
     # 'nobody' has no name.
-    assert [(f['label'], f['lines']) for f in facts] == [('SINCE', ['19 DAYS SINCE', 'LAST CYCLING'])]
+    assert [(f['label'], f['lines']) for f in facts] == [('LAST RIDE', ['19 DAYS AGO'])]
 
 
-def test_event_facts_are_capped_and_long_names_shortened():
+def test_event_facts_are_capped_and_long_names_get_three_lines():
     snapshot = _events_snapshot()
     many = {slug: {'workouts': 9 - index, 'first': '2025-01-01', 'last': '2026-06-01', 'before_last': '2026-05-30'}
             for index, slug in enumerate(('bike_bootcamp', 'tread_bootcamp', 'stretching', 'yoga'))}
     snapshot['events'].update(disciplines=many, on_this_day=[
-        {'years_ago': 2, 'minutes': 120, 'discipline': 'walking_outdoor'}])
+        dict(DAY_ONE_YEAR, years_ago=2, workouts_then=95, workouts_now=1234)])
     snapshot['events']['instructors'] = {who: {'workouts': 9, 'last': '2026-01-01'} for who in NAMES}
     facts = frame_facts(snapshot, 'events')
-    assert facts[0]['lines'] == ['2 YEARS AGO', '120 MIN OUTDOOR']
-    since = [f for f in facts if f['label'] == 'SINCE']
-    assert [f['lines'] for f in since] == [['160 DAYS SINCE', 'LAST BOOTCAMP'], ['160 DAYS SINCE', 'LAST BOOTCAMP']]
+    assert (facts[0]['label'], facts[0]['lines']) == ('2 YEARS AGO', ['YOU HAD 95', 'NOW 1,234'])
+    since = [f for f in facts if f['kind'].startswith('since:')]
+    # At most two, and a bootcamp's `LAST <noun>` is too wide: LAST over the full name over the days.
+    assert [(f['label'], f['lines']) for f in since] == [
+        ('LAST', ['BIKE BOOTCAMP', '160 DAYS AGO']), ('LAST', ['TREAD BOOTCAMP', '160 DAYS AGO'])]
     assert len([f for f in facts if f['label'] == 'LAST CLASS WITH']) == 2
 
 
-def test_on_this_day_without_a_discipline_or_minutes():
+@pytest.mark.parametrize('slug, label, lines', [
+    ('cycling', 'LAST RIDE', ['52 DAYS AGO']), ('running', 'LAST RUN', ['52 DAYS AGO']),
+    ('walking', 'LAST WALK', ['52 DAYS AGO']), ('rowing', 'LAST ROW', ['52 DAYS AGO']),
+    ('hiking', 'LAST HIKE', ['52 DAYS AGO']), ('stretching', 'LAST STRETCH', ['52 DAYS AGO']),
+    ('strength', 'LAST STRENGTH', ['52 DAYS AGO']),
+    ('yoga', 'LAST YOGA', ['52 DAYS AGO']),                   # never LAST YOGA CLASS
+    ('meditation', 'LAST MEDITATION', ['52 DAYS AGO']), ('cardio', 'LAST CARDIO', ['52 DAYS AGO']),
+    ('tread_bootcamp', 'LAST', ['TREAD BOOTCAMP', '52 DAYS AGO']),
+    ('bike_bootcamp', 'LAST', ['BIKE BOOTCAMP', '52 DAYS AGO']),
+    ('row_bootcamp', 'LAST', ['ROW BOOTCAMP', '52 DAYS AGO']),
+    ('running_outdoor', 'LAST', ['OUTDOOR RUN', '52 DAYS AGO']),
+    ('walking_outdoor', 'LAST', ['OUTDOOR WALK', '52 DAYS AGO']),
+    ('pilates', 'LAST PILATES', ['52 DAYS AGO'])])          # a discipline it has no noun for keeps its name
+def test_since_names_the_workout_as_a_noun_and_falls_back_to_three_lines(slug, label, lines):
+    fact = _since_fact(slug, 52)
+    assert (fact['label'], fact['lines'], fact['kind']) == (label, lines, f'since:{slug}')
+
+
+def test_since_counts_days_singular_and_with_thousands():
+    assert _since_fact('cycling', 1)['lines'] == ['1 DAY AGO']
+    assert _since_fact('cycling', 999)['lines'] == ['999 DAYS AGO']
+    assert _since_fact('cycling', 1200)['lines'] == ['1,200 DAYS AGO']
+
+
+def test_a_comeback_always_names_the_whole_discipline():
+    def comeback(slug, last, before_last, workouts=9):
+        snapshot = _events_snapshot()
+        snapshot['events'].update(disciplines={slug: {'workouts': workouts, 'first': '2020-01-01', 'last': last,
+                                                      'before_last': before_last}}, first_ever='2020-01-01')
+        return [(f['label'], f['lines']) for f in frame_facts(snapshot, 'events') if f['kind'].startswith('comeback')]
+    assert comeback('stretching', '2026-11-06', '2026-01-23') == [('WELCOME BACK', ['STRETCHING', '1ST IN 287 DAYS'])]
+    for slug, name in (('row_bootcamp', 'ROW BOOTCAMP'), ('tread_bootcamp', 'TREAD BOOTCAMP'),
+                       ('bike_bootcamp', 'BIKE BOOTCAMP'), ('walking_outdoor', 'WALKING OUTDOOR')):
+        assert comeback(slug, '2026-11-06', '2026-01-23')[0][1][0] == name
+    # Over 999 days it is told in years; at exactly MIN_COMEBACK_DAYS it still fires, a day less doesn't.
+    assert comeback('yoga', '2026-11-06', '2022-11-06')[0][1] == ['YOGA', '1ST IN 4 YEARS']
+    assert comeback('yoga', '2026-11-06', '2026-09-07')[0][1] == ['YOGA', '1ST IN 60 DAYS']
+    assert comeback('yoga', '2026-11-06', '2026-09-08') == []
+    assert comeback('yoga', '2026-11-06', '2026-01-23', workouts=4) == []
+
+
+def test_last_class_with_counts_days_since():
+    snapshot = _events_snapshot()
+    snapshot['events']['instructors'] = {'jess': {'workouts': 9, 'last': '2026-10-08'},        # 31 days
+                                         'andy': {'workouts': 8, 'last': '2022-11-08'},        # 4 years
+                                         'cody': {'workouts': 7, 'last': '2026-10-10'}}        # 29: too recent
+    facts = [f for f in frame_facts(snapshot, 'events') if f['label'] == 'LAST CLASS WITH']
+    assert [f['lines'] for f in facts] == [['JESS SIMS', '31 DAYS AGO'], ['ANDY SPEER', '1,461 DAYS AGO']]
+
+
+def test_on_this_day_is_the_workout_totals_then_and_now():
+    def day(**found):
+        snapshot = _snapshot(events={'today': '2026-11-08', 'on_this_day': [dict(DAY_ONE_YEAR, **found)]})
+        return [(f['label'], f['lines']) for f in frame_facts(snapshot, 'events')]
+    assert day() == [('A YEAR AGO', ['YOU HAD 812', 'NOW 1,067'])]
+    assert day(years_ago=2) == [('2 YEARS AGO', ['YOU HAD 812', 'NOW 1,067'])]
+    assert day(years_ago=12, workouts_then=1, workouts_now=99999) == [('12 YEARS AGO', ['YOU HAD 1', 'NOW 99,999'])]
+    # Totals missing (an older cache) or nonsense: no fact, never half a sentence.
+    for bad in ({'workouts_then': None}, {'workouts_now': None}, {'workouts_then': '812'}, {'workouts_now': True},
+                {'workouts_then': 0}, {'workouts_then': 900, 'workouts_now': 899}, {'years_ago': 0}, {'years_ago': None}):
+        assert day(**bad) == [], bad
+    old = {'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}
+    assert frame_facts(_snapshot(events={'today': '2026-11-08', 'on_this_day': [old]}), 'events') == []
+
+
+def test_on_this_day_skips_an_entry_it_cannot_say_for_the_next():
     snapshot = _snapshot(events={'today': '2026-11-08', 'on_this_day': [
-        {'years_ago': 1, 'minutes': 0, 'discipline': 'yoga'}, {'years_ago': 2, 'minutes': 30, 'discipline': None}]})
-    assert [f['lines'] for f in frame_facts(snapshot, 'events')] == [['1 YEAR AGO', 'YOGA']]
-    snapshot['events']['on_this_day'] = [{'years_ago': 2, 'minutes': 30, 'discipline': None}]
-    assert [f['lines'] for f in frame_facts(snapshot, 'events')] == [['2 YEARS AGO', '30 MIN WORKOUT']]
+        {'years_ago': 1, 'workouts_then': None, 'workouts_now': 9}, dict(DAY_ONE_YEAR, years_ago=2)]})
+    assert [f['label'] for f in frame_facts(snapshot, 'events')] == ['2 YEARS AGO']
 
 
 def test_the_anniversary_is_the_first_headline_of_every_page_all_day():
@@ -960,11 +1062,11 @@ def test_events_without_a_date_for_today_have_no_facts():
 
 def test_events_are_candidates_only_when_there_is_something_to_say():
     assert not any(fact['key'].startswith('events:') for _, fact, _ in scored_facts(_full()))
-    snapshot = _flat(events={'today': '2026-11-08', 'on_this_day': [{'years_ago': 1, 'minutes': 20, 'discipline': 'yoga'}]})
+    snapshot = _flat(events={'today': '2026-11-08', 'on_this_day': [DAY_ONE_YEAR]})
     assert 'events:on_this_day' in [fact['key'] for _, fact, _ in scored_facts(snapshot)]
     # The event has no top three of its own, so the page takes a general one.
     details = username_details(snapshot, 0)
-    assert details[1]['label'] == 'ON THIS DAY' and details[3]['label'] == 'TOP INSTRUCTOR'
+    assert details[1]['label'] == 'A YEAR AGO' and details[3]['label'] == 'TOP INSTRUCTOR'
     assert frame_subjects(snapshot, 'events') == []
 
 
@@ -985,17 +1087,51 @@ def test_event_figures_reach_the_snapshot_through_the_log(tmp_path):
     assert log.derived(tzname=ZONE, now=NOW + timedelta(days=1), member_since=MEMBER_SINCE)['events'] == {}
 
 
-def test_event_labels_and_lines_fit():
-    initialize_fonts(64)
+@pytest.mark.parametrize('height', (64, 32))
+def test_event_labels_and_lines_fit(height):
+    initialize_fonts(height)
     small, value = loaded_fonts['stats'], loaded_fonts['info']
     snapshot = _events_snapshot()
-    names = dict(NAMES, long='Adrian Williams')
-    snapshot['events']['on_this_day'] = [{'years_ago': 10, 'minutes': 120, 'discipline': 'bike_bootcamp'}]
-    snapshot['events']['anniversary'] = 10
-    snapshot['events']['disciplines']['stretching'] = {'workouts': 50, 'first': '2020-01-01', 'last': '2020-01-02',
-                                                       'before_last': '2020-01-01'}
-    snapshot['instructor_names'] = names
-    for fact in frame_facts(snapshot, 'events'):
+    slugs = ('tread_bootcamp', 'bike_bootcamp', 'row_bootcamp', 'running_outdoor', 'walking_outdoor', 'stretching',
+             'meditation', 'strength', 'cardio', 'yoga', 'cycling', 'rowing', 'hiking')
+    # Every discipline both "since" (999 days is the widest count) and back after 3 years (the widest comeback).
+    snapshot['events'].update(
+        on_this_day=[dict(DAY_ONE_YEAR, years_ago=10, workouts_then=99999, workouts_now=123456)], anniversary=10,
+        disciplines={slug: {'workouts': 99, 'first': '2020-01-01', 'last': '2024-02-12', 'before_last': '2020-01-01'}
+                     for slug in slugs},
+        instructors={'long': {'workouts': 9, 'last': '2000-01-01'}})
+    snapshot['instructor_names'] = dict(NAMES, long='Adrian Williams')
+    facts = frame_facts(snapshot, 'events')
+    assert {'on_this_day', 'last_class_with'} <= {f['kind'].split(':')[0] for f in facts}
+    # The comebacks and "since" facts are capped, so check every discipline through its own builders too.
+    facts += [_since_fact(slug, days) for slug in slugs for days in (1, 52, 999)]
+    for slug in slugs:
+        later = dict(snapshot['events']['disciplines'][slug], last='2026-11-06', before_last='2023-11-06')
+        one = dict(snapshot, events=dict(snapshot['events'], disciplines={slug: later}))
+        facts += [f for f in frame_facts(one, 'events') if f['kind'].startswith('comeback')]
+    assert len(facts) > 40
+    for fact in facts:
+        # A label and every line holds 15 characters of the 4 px stats font (60 px).
+        assert len(fact['label']) <= 15 and all(len(line) <= 15 for line in fact['lines']), fact
         assert get_text_width(small, fact['label']) <= 60, fact['label']
         for line in fact['lines']:
             assert get_text_width(value, line) <= 60, line
+        assert len(fact['lines']) <= 2
+
+
+def test_the_widest_name_page_facts_draw_on_both_heights():
+    # Tread Bootcamp is the widest name; draw each of its facts and check nothing runs off the panel.
+    for height in (64, 32):
+        initialize_fonts(height)
+        for fact in (_since_fact('tread_bootcamp', 999),
+                     {'label': 'WELCOME BACK', 'lines': ['TREAD BOOTCAMP', '1ST IN 999 DAYS']}):
+            matrix, screen = ImageMatrix(height=height), UsernameScreen()
+            state = {'username': 'Rider', 'details': [fact]}
+            screen.on_enter(matrix, state)
+            screen.update(1.0)
+            screen.render(matrix, state)
+            image = matrix.image
+            assert image.getbbox() is not None
+            # Nothing in the outermost columns: the text sits inside the panel margins.
+            edge = image.crop((0, 12, 2, height)).getbbox(), image.crop((image.width - 2, 12, image.width, height)).getbbox()
+            assert edge == (None, None), (height, fact['label'])

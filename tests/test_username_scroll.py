@@ -137,3 +137,24 @@ def test_every_name_in_a_top_three_can_be_read_in_full_within_the_highlight():
         overflow = max(0, get_text_width(loaded_fonts['info'], name) - (64 - 2 * MARGIN))
         offsets = _offsets(overflow, 4.0, 0.05) if overflow else [0]
         assert max(offsets) == overflow
+
+
+@pytest.mark.parametrize('height', (64, 32))
+def test_accented_letters_draw_plain_since_the_small_fonts_o_acute_reads_as_a_6(height):
+    """Regression (2026-11-12): ROBIN ARZÓN drew as ROBIN ARZ6N; label and lines both come out plain."""
+    def draw(label, line):
+        initialize_fonts(height)
+        matrix, screen = ImageMatrix(height=height), UsernameScreen()
+        state = {'username': 'Jen', 'details': [{'label': label, 'lines': [line, '33 DAYS AGO']}]}
+        screen.on_enter(matrix, state)
+        screen.update(1.0)
+        screen.render(matrix, state)
+        return matrix.image.tobytes()
+    assert draw('LAST CLASS WITH', 'Robin Arzón') == draw('LAST CLASS WITH', 'ROBIN ARZON')
+    assert draw('ÉLAN', 'x') == draw('ELAN', 'x')
+
+
+def test_plain_letters_keeps_what_has_no_plain_form():
+    from display.display import plain_letters
+    assert plain_letters('ROBIN ARZÓN, Zoë, Ñ') == 'ROBIN ARZON, Zoe, N'
+    assert plain_letters('Ø ß 1,067') == 'Ø ß 1,067'

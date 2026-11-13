@@ -91,13 +91,13 @@ timezone; the thresholds are named constants in `username_facts.py`):
 | Event | Label | Lines | Shown when |
 |---|---|---|---|
 | Anniversary (pinned) | `ANNIVERSARY` | `6 YEARS` / `ON PELOTON` | today is the day of the profile's `created_at` (a partial log too), 1+ years. It replaces the headline of **every pass all day** (the frame's top three stays), so it's never missed; it isn't in the `events` turn |
-| On this day | `ON THIS DAY` | `2 YEARS AGO` / `45 MIN CYCLING` | a workout on today's date in an earlier year (the nearest year, its longest workout) |
-| Comeback | `COMEBACK` | `YOGA` / `AFTER 185 DAYS` | a discipline with 5+ workouts done in the last 14 days after 60+ days without (years past 999 days) |
+| On this day | `A YEAR AGO` (`2 YEARS AGO`) | `YOU HAD 812` / `NOW 1,067` | a workout on today's date in an earlier year (the nearest year): the log's workout count at the end of that day and now. An older cache without the two counts has no such fact |
+| Comeback | `WELCOME BACK` | `YOGA` / `1ST IN 185 DAYS` | a discipline with 5+ workouts done in the last 14 days after 60+ days without (`1ST IN 4 YEARS` past 999 days). The whole discipline name, always (`ROW BOOTCAMP`, never `BOOTCAMP`) |
 | New discipline | `NEW DISCIPLINE` | `WALKING` / `FIRST TIME` | first workout in the last 14 days, by a rider with 30+ days of earlier history |
-| Since | `SINCE` | `49 DAYS SINCE` / `LAST STRETCHING` | 5+ workouts, last one 14 to 999 days ago (two at most, most-done first) |
-| Last class with | `LAST CLASS WITH` | `ADRIAN WILLIAMS` / `MAR 3 2026` | one of the 5 most-seen instructors, 5+ classes, 30+ days ago, named (two at most) |
+| Since | `LAST STRETCH` | `49 DAYS AGO` | 5+ workouts, last one 14 to 999 days ago (two at most, most-done first). The workout as a noun (`SINCE_NOUNS`: RIDE, RUN, WALK, ROW, HIKE, STRETCH, STRENGTH, YOGA, MEDITATION, CARDIO, `OUTDOOR RUN`, `OUTDOOR WALK`; never `CLASS`: only `LAST YOGA CLASS` would fit, so none gets it (Joel, 2026-11-12)). When `LAST <noun>` is over 15 characters (the bootcamps, the outdoor ones) it is three lines: `LAST` / `TREAD BOOTCAMP` / `49 DAYS AGO` |
+| Last class with | `LAST CLASS WITH` | `ADRIAN WILLIAMS` / `74 DAYS AGO` | one of the 5 most-seen instructors, 5+ classes, 30+ days ago, named (two at most) |
 
-Long discipline names use their last word (`LAST BOOTCAMP`). Except the anniversary, which is pinned all day (Joel, 2026-11-08: too rare to leave to a turn), an event
+Event wording was changed to sentences on 2026-11-12 (Joel chose it from mock-ups): it was `ON THIS DAY` / `1 YEAR AGO` / `20 MIN STRENGTH`, `COMEBACK` / `STRETCHING` / `AFTER 286 DAYS`, `SINCE` / `52 DAYS SINCE` / `LAST ROWING`, and a date for the last class. The `kind` and `key` of every event are unchanged, so a saved cool-down carries over. Except the anniversary, which is pinned all day (Joel, 2026-11-08: too rare to leave to a turn), an event
 shows once every few passes in the `events` turn, even on the day it's about; step 6's "today is the
 day" score should pull "on this day" forward. Pass 0 differs from the old page only on the anniversary.
 
@@ -186,7 +186,7 @@ The kind decides what the highlight looks like.
 | Best weekly streak | cache `streaks.best_weekly` | All time only (real: 74 weeks) |
 
 **Comparisons**: any total against the frame before, up to the same point so it's fair
-(the last 30 days against the 30 before). Lines: `412 VS 380` or `+3 WORKOUTS`.
+(the last 30 days against the 30 before). One fact with the count: `LAST 30 DAYS` / `19 WORKOUTS` / `UP FROM 12` (`DOWN FROM` when lower; `THIS YEAR` for the year). With no real change the frame's plain total (`19 WORKOUTS` / `465 MINUTES`) stays. Two headlines never share a label.
 
 ### Which pairs are worth showing
 
@@ -250,7 +250,7 @@ Put the frame in the label and the stat in the lines, so a label never has to sa
 | Top | `TOP OF 2026` | `JESS SIMS` / `61 CLASSES` |
 | Top three | `TOP` / `2ND` / `3RD IN 2026` | `JESS SIMS` / `61 CLASSES` |
 | Best | `BEST WEEK 2026` | `14 WORKOUTS` / `OCT 2024` |
-| Comparison | `VS 30 BEFORE` | `+3 WORKOUTS` |
+| Comparison | `LAST 30 DAYS` | `19 WORKOUTS` / `UP FROM 12` |
 
 Check each label against the 15-character limit: `TOP OF LIFETIME` is exactly 15, and
 `TOP OF LAST WEEK` (16) is too long, though that pair is – in the grid anyway.
@@ -423,7 +423,7 @@ Planned (as written):
 
 ### Step 4: comparisons: done (branch `facts-step-4-comparisons`)
 
-Built: `frame_stats` adds `before` (`{workouts, minutes}`) to the 30-day, 90-day and year frames (`comparison_window`): the same number of days just before for 30 and 90 days, and last year from 1 January up to today's date and time for the year (29 February compares with the 28th), so a part-year is never set against a whole one. One fact, `_comparison_fact`, after a frame's measures: `VS 30 BEFORE` / `1,234 VS 999` / `+235 WORKOUTS` (`VS 90 BEFORE`, `2026 VS 2025`). Shown only when both sides have `MIN_COMPARE_WORKOUTS` (5) and the change is at least `MIN_COMPARE_CHANGE` (20%) and `MIN_COMPARE_DIFF` (3 workouts). Departures from the plan, which listed more: "best ever" is already step 3's rank; the 12-week average is for this week, which isn't a frame that takes turns (THIS WEEK is on every page), so it's left out; last week, last year and all time have no fair comparison. A comparison of minutes wasn't added (workouts say it, and the headline already shows minutes). The demo log is steady, so it rarely clears the 20% threshold.
+Reworded 2026-11-12: one fact with the count, `LAST 30 DAYS` / `19 WORKOUTS` / `UP FROM 12` (`DOWN FROM`, `LAST 90 DAYS`, `THIS YEAR`), which replaces the frame's `total` while it shows (so the count is never said twice), and `username_details` never takes two headlines with the same label. Originally: `frame_stats` adds `before` (`{workouts, minutes}`) to the 30-day, 90-day and year frames (`comparison_window`): the same number of days just before for 30 and 90 days, and last year from 1 January up to today's date and time for the year (29 February compares with the 28th), so a part-year is never set against a whole one. One fact, `_comparison_fact`, after a frame's measures: `VS 30 BEFORE` / `1,234 VS 999` / `+235 WORKOUTS` (`VS 90 BEFORE`, `2026 VS 2025`). Shown only when both sides have `MIN_COMPARE_WORKOUTS` (5) and the change is at least `MIN_COMPARE_CHANGE` (20%) and `MIN_COMPARE_DIFF` (3 workouts). Departures from the plan, which listed more: "best ever" is already step 3's rank; the 12-week average is for this week, which isn't a frame that takes turns (THIS WEEK is on every page), so it's left out; last week, last year and all time have no fair comparison. A comparison of minutes wasn't added (workouts say it, and the headline already shows minutes). The demo log is steady, so it rarely clears the 20% threshold.
 
 ### Step 5: events: done (branch `facts-step-5-events`)
 

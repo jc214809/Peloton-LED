@@ -48,7 +48,7 @@ MIN_STREAK_WEEKS = 4
 MIN_COMPARE_WORKOUTS = 5
 MIN_COMPARE_CHANGE = 0.2
 MIN_COMPARE_DIFF = 3
-# Events. A discipline is "since" or a "comeback" only with this many workouts behind it; "since" shows
+# Events (worded as sentences: LAST ROW / 52 DAYS AGO). A discipline is "since" or a "comeback" only with this many workouts behind it; "since" shows
 # after MIN_SINCE_DAYS without one (at most MAX_SINCE_FACTS of them); an instructor's last class
 # after MIN_LAST_WITH_DAYS (their 5+ workouts, at most MAX_LAST_WITH_FACTS); a comeback is a workout in
 # the last EVENT_WINDOW_DAYS that follows a gap of MIN_COMEBACK_DAYS; a first is a discipline begun in
@@ -266,7 +266,8 @@ def _measure_facts(stats, title):
 
 def _comparison_fact(key, stats):
     """This frame's workouts against the same stretch before it (frame_stats' `before`: the 30 or 90
-    days just before, or last year up to today's date): '2026 VS 2025' / '412 VS 380' / '+32 WORKOUTS'.
+    days just before, or last year up to today's date), as one fact that also carries the count:
+    'LAST 30 DAYS' / '19 WORKOUTS' / 'UP FROM 12' ('DOWN FROM' when lower; 'THIS YEAR' for the year).
     Left out unless both sides have MIN_COMPARE_WORKOUTS and the change passes the thresholds."""
     before = stats.get('before') if key in ('30d', '90d', 'year') else None
     now = stats.get('workouts') or 0
@@ -275,25 +276,37 @@ def _comparison_fact(key, stats):
     change = now - before['workouts']
     if abs(change) < MIN_COMPARE_DIFF or abs(change) < MIN_COMPARE_CHANGE * before['workouts']:
         return None
-    label = f'{stats["year"]} VS {stats["year"] - 1}' if key == 'year' else f'VS {key[:-1]} BEFORE'
+    label = 'THIS YEAR' if key == 'year' else frame_words(key, stats)[0]
     return {'kind': 'comparison', 'label': label, 'value': f'{now} VS {before["workouts"]}',
             'bonus': min(MAX_COMPARE_BONUS, int(abs(change) / before['workouts'] * COMPARE_BONUS_PER_CHANGE)),
-            'lines': [f'{now:,} VS {before["workouts"]:,}', f'{change:+,} WORKOUTS']}
+            'lines': [_plural(now, 'WORKOUT'), f'{"UP" if change > 0 else "DOWN"} FROM {before["workouts"]:,}']}
 
 
 def _days_between(iso, today):
     return (today - date.fromisoformat(iso)).days
 
 
-def _fit_line(*options):
-    """The first of the candidate lines that fits a label's width (the last, shortest, if none do)."""
-    return next((line for line in options if len(line) <= MAX_LABEL_CHARS), options[-1])
-
-
 def _short_noun(slug):
     """'STRENGTH', or the last word of a long discipline name ('BOOTCAMP' for TREAD BOOTCAMP)."""
     noun = discipline_name(slug)
     return noun if len(noun) <= MAX_LABEL_CHARS - 5 else noun.split()[-1]
+
+
+# What a workout is called in "LAST ROW"; a discipline not here (the bootcamps) keeps its own name.
+SINCE_NOUNS = {'cycling': 'RIDE', 'running': 'RUN', 'walking': 'WALK', 'rowing': 'ROW', 'hiking': 'HIKE',
+               'stretching': 'STRETCH', 'strength': 'STRENGTH', 'yoga': 'YOGA', 'meditation': 'MEDITATION',
+               'cardio': 'CARDIO', 'running_outdoor': 'OUTDOOR RUN', 'walking_outdoor': 'OUTDOOR WALK'}
+
+
+def _since_fact(slug, days):
+    """'LAST ROW' / '52 DAYS AGO'; when `LAST <noun>` is wider than a label (the bootcamps), the noun
+    moves down: 'LAST' / 'TREAD BOOTCAMP' / '52 DAYS AGO'. Never 'LAST YOGA CLASS': only yoga would fit
+    the word, so no noun gets it (Joel, 2026-11-12)."""
+    noun = SINCE_NOUNS.get(slug) or discipline_name(slug)
+    ago = f'{_plural(days, "DAY")} AGO'
+    label = f'LAST {noun}' if len(f'LAST {noun}') <= MAX_LABEL_CHARS else None
+    return {'kind': f'since:{slug}', 'label': label or 'LAST', 'value': f'{days} DAYS SINCE {slug}',
+            'lines': [ago] if label else [noun, ago]}
 
 
 def anniversary_fact(snapshot):
@@ -316,11 +329,14 @@ def event_facts(snapshot):
     if today is None:
         return facts
     for found in events.get('on_this_day') or []:
-        noun = discipline_name(found['discipline']) if found.get('discipline') else 'WORKOUT'
-        facts.append({'kind': 'on_this_day', 'label': 'ON THIS DAY', 'value': f'{found["years_ago"]} YEARS AGO / {noun}',
-                      'lines': [f'{_plural(found["years_ago"], "YEAR")} AGO',
-                                _fit_line(f'{found["minutes"]} MIN {noun}', f'{found["minutes"]} MIN {noun.split()[-1]}',
-                                          noun.split()[-1]) if found['minutes'] else noun.split()[-1]]})
+        years, then, now = found.get('years_ago'), found.get('workouts_then'), found.get('workouts_now')
+        if not all(isinstance(n, int) and not isinstance(n, bool) for n in (years, then, now)):
+            continue    # an older cache has no totals: nothing to say rather than half a sentence
+        if years < 1 or not 0 < then <= now:
+            continue
+        label = 'A YEAR AGO' if years == 1 else f'{years} YEARS AGO'
+        facts.append({'kind': 'on_this_day', 'label': label, 'value': f'{years} YEARS AGO / {then} TO {now}',
+                      'lines': [f'YOU HAD {then:,}', f'NOW {now:,}']})
         break
     disciplines = events.get('disciplines') or {}
     ranked = sorted(disciplines, key=lambda slug: (-disciplines[slug]['workouts'], slug))
@@ -331,8 +347,9 @@ def event_facts(snapshot):
             continue
         gap = (date.fromisoformat(found['last']) - date.fromisoformat(found['before_last'])).days
         if _days_between(found['last'], today) <= EVENT_WINDOW_DAYS and gap >= MIN_COMEBACK_DAYS:
-            after = f'AFTER {gap} DAYS' if gap <= MAX_SINCE_DAYS else f'AFTER {round(gap / 365)} YEARS'
-            facts.append({'kind': f'comeback:{slug}', 'label': 'COMEBACK', 'value': f'{slug} {after}', 'lines': [_short_noun(slug), after]})
+            after = f'1ST IN {gap} DAYS' if gap <= MAX_SINCE_DAYS else f'1ST IN {round(gap / 365)} YEARS'
+            facts.append({'kind': f'comeback:{slug}', 'label': 'WELCOME BACK', 'value': f'{slug} {after}',
+                          'lines': [discipline_name(slug), after]})
     for slug in sorted(disciplines, key=lambda name: (disciplines[name]['first'], name)):
         found = disciplines[slug]
         if (began and _days_between(found['first'], today) <= EVENT_WINDOW_DAYS
@@ -345,9 +362,7 @@ def event_facts(snapshot):
         days = _days_between(found['last'], today)
         if found['workouts'] >= MIN_EVENT_WORKOUTS and MIN_SINCE_DAYS <= days <= MAX_SINCE_DAYS and since < MAX_SINCE_FACTS:
             since += 1
-            facts.append({'kind': f'since:{slug}', 'label': 'SINCE', 'value': f'{days} DAYS SINCE {slug}',
-                          'lines': [f'{days:,} DAYS SINCE', _fit_line(f'LAST {discipline_name(slug)}',
-                                                                      f'LAST {discipline_name(slug).split()[-1]}')]})
+            facts.append(_since_fact(slug, days))
     names = snapshot.get('instructor_names') or {}
     instructors = events.get('instructors') or {}
     last_with = 0
@@ -357,7 +372,8 @@ def event_facts(snapshot):
                 and _days_between(found['last'], today) >= MIN_LAST_WITH_DAYS and last_with < MAX_LAST_WITH_FACTS):
             last_with += 1
             facts.append({'kind': f'last_class_with:{identity}', 'label': 'LAST CLASS WITH', 'value': f'{names[identity]} / {found["last"]}',
-                          'lines': [names[identity].upper(), _date_words(found['last'])]})
+                          'lines': [names[identity].upper(),
+                                    f'{_plural(_days_between(found["last"], today), "DAY")} AGO']})
     return facts
 
 
@@ -378,8 +394,11 @@ def frame_facts(snapshot, key):
                           'lines': [favorite[0].upper(), _plural(favorite[1], 'WORKOUT')]})
     elif stats and stats.get('workouts'):
         workouts, minutes = stats['workouts'], stats.get('minutes') or 0
-        facts.append({'kind': 'total', 'label': title, 'value': f'{workouts} WORKOUTS / {minutes} MIN',
-                      'lines': [_plural(workouts, 'WORKOUT'), _time_line(minutes)]})
+        # The count and its comparison with the stretch before are one fact (LAST 30 DAYS / 19 WORKOUTS /
+        # UP FROM 12), so a frame never shows its count twice; with no real change it's the plain total.
+        comparison = _comparison_fact(key, stats)
+        facts.append(comparison or {'kind': 'total', 'label': title, 'value': f'{workouts} WORKOUTS / {minutes} MIN',
+                                    'lines': [_plural(workouts, 'WORKOUT'), _time_line(minutes)]})
         done = sorted((stats.get('disciplines') or {}).items(), key=lambda item: (-item[1], item[0]))
         if (done and done[0][1] >= MIN_COUNT
                 and (not favorite or done[0][0] != normalize_discipline(favorite[0]))):
@@ -396,9 +415,6 @@ def frame_facts(snapshot, key):
             facts.append({'kind': 'instructors', 'label': title, 'value': f'{stats["instructors"]:,} UNIQUE INSTRUCTORS',
                           'lines': [f'{stats["instructors"]:,} UNIQUE', 'INSTRUCTORS']})
         facts.extend(_measure_facts(stats, title))
-        comparison = _comparison_fact(key, stats)
-        if comparison:
-            facts.append(comparison)
         facts.extend(_instructor_facts(snapshot, stats, title))
     best_weekly = (snapshot.get('streaks') or {}).get('best_weekly')
     if key == 'all' and isinstance(best_weekly, int) and best_weekly >= MIN_STREAK_WEEKS:
@@ -519,7 +535,8 @@ def username_details(snapshot, pass_index=0):
     for _, fact, ranking in scored_facts(snapshot):
         if len(chosen) == HEADLINES:
             break
-        if KINDS[kind_of(fact)][0] not in groups:
+        # Two headlines never share a label (LAST 30 DAYS twice reads as a repeat), nor a group.
+        if KINDS[kind_of(fact)][0] not in groups and fact['label'] not in {own['label'] for own in chosen}:
             chosen.append(fact)
             groups.add(KINDS[kind_of(fact)][0])
             rankings.append(ranking)
