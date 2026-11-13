@@ -177,12 +177,15 @@ Every discipline then adds the graph and zone bar if they're available.
 
 ![Cycling insights: output down, then hardest ride by heart rate](docs/screenshots/rotation/insights-bike.png)
 
+![A tough class: the cheer, then the bars with the rating against your usual](docs/screenshots/rotation/insights-tough-class.png)
+
 ![Strength insights: go up a weight, then three classes in a row over target](docs/screenshots/rotation/insights-strength.png)
 
 "Similar" means the same discipline, class type and mode (plain, arms or floor), indoor or outdoor, completed, and within 30% of the length, from the last year (two years if the last year has too few). Your typical figure is the middle of those workouts. What it can say, in the order it's chosen:
 
 | Insight | Colour | Example |
 |---|---|---|
+| A tough class: rated 1+ point above the middle of your similar classes' ratings (needs 3 rated), in place of the output insight; an easier class says nothing | Green | `WAY TO CHALLENGE YOURSELF!`, `YOU TOOK ON A 9.1 CLASS, YOUR TYPICAL IS 7.0.`; bars `TOUGH CLASS`, `9.1 → USUALLY 7.0` |
 | Output (bike, rower) or speed (tread, walk, run) against your typical | Green up, amber down, white when it's in your typical range | `OUTPUT DOWN VS YOUR TYPICAL / 124 W VS 188 W`; `SAME HEART, MORE POWER.` when your heart rate was within 3 bpm of typical, else `MORE WATTS PER HEARTBEAT.` |
 | Instructor callouts you missed (bike resistance or cadence, rower or tread pace) | Amber | the share of the callout time spent under the range |
 | Strength weights, from that movement's history, else the weight category's | Green, or amber for missed targets | `GO UP A WEIGHT ON BENT OVER ROW`, `WENT HEAVIER`, `GO UP FROM 40LB ON HEAVY: 3 CLASSES IN A ROW OVER TARGET`, missed rep targets |

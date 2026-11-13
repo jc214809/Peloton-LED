@@ -117,22 +117,6 @@ Rules:
 - Update `docs/NAME-PAGE-FACTS.md`, the README's `username` section and screenshot, and `tests/test_username_facts.py`; check with `scripts/list_facts.py` on both riders' logs.
 - Depends on: nothing.
 
-### Workout insights: a tough class (decided 2026-11-12)
-When the class was much harder than the ones you usually take, the board applauds it instead of saying `OUTPUT DOWN`. The class rating is already in every row (`difficulty`, Peloton's `difficulty_rating_avg`).
-
-Checked on both riders' rows (12 months) first:
-- Folding difficulty into "similar classes" is **not** worth it: similar classes already match difficulty (median gap 0.3 points; 90% under 0.85-0.95), so requiring within 0.75 (with a fallback to today's group under `MIN_PEERS`) changes only 5 (Joel) and 9 (Jen) insights a year, and can't help the big cases (there are never 5 similar classes near a 9.1).
-- A class 1+ point off the median of the similar classes' ratings happened 9 (Joel) and 11 (Jen) times in 12 months.
-
-**Harder class (1+ point above that median): a `TOUGH CLASS` insight, in green, in place of the output insight.** Mock-ups chosen by Joel:
-- 64x64 card: `WAY TO CHALLENGE` (16 characters, edge to edge: allowed for this line) / `YOURSELF!` / `YOU TOOK ON A` / `9.1 CLASS, YOUR` / `TYPICAL IS 7.0.`, the class figures in the insight's colour, footer as usual (`9 SIMILAR RIDES`).
-- Bars frame (both boards): headline `TOUGH CLASS`; the watts (or speed) as today, `TODAY 124 W` / `TYPICAL 188 W`; bottom line `9.1 → USUALLY 7.0` with the arrow **drawn in pixels** (5x5: `..#..`, `...#.`, `#####`, `...#.`, `..#..`, the font has none), 1 px gap each side of the arrow, `9.1` starting at column 1, so the line fills columns 1-63.
-- 64x32 words page: `WAY TO` / `CHALLENGE` / `YOURSELF!` (one page; the numbers are on the bars).
-
-**Easier class (1+ point below): say nothing about the class.** Joel, 2026-11-12: don't punish people for an easier class, so no `EASIER CLASS` line; the output insight stays exactly as it is today.
-
-Notes: rules only, in `peloton/workout_insights.py` (a code such as `tough_class`, beside `output_insight`, with `difficulty` / `usual_difficulty` in its facts) and `peloton/insight_lines.board_view` (the arrow is a drawing instruction in the view, e.g. `reason_parts: ['9.1', 'arrow', 'USUALLY 7.0']`, drawn by `last_workout_screen`); update the Mac text and `WORKOUT-COMPARE-SPEC.md` (outside the repo). Needs 3+ similar classes with a rating. Tests: the threshold both ways, a class with no rating, the line widths (Tread Bootcamp), and the arrow's pixels. Depends on: nothing.
-
 ### Workout insights: instructor milestones (decided 2026-11-12)
 After a workout, a gold insight when it was a round number or a first with that instructor. Counts come from the workout log (`instructor_counts`, every discipline, a class with two instructors counts for each), so no extra API calls.
 

@@ -73,8 +73,8 @@ def demo_data():
     # Workout compare (display.workout_insights): what the board would say about two of the workouts.
     insights = {
         'demo-cycling': demo_insights(
-            ('output_down', {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 9,
-                             'real': 9, 'reason': 'easier'}),
+            ('tough_class', {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 9,
+                             'real': 9, 'reason': None, 'difficulty': 9.1, 'usual_difficulty': 7.0}),
             ('effort_high', {'n': 12, 'value': 29.4, 'noun': 'ride', 'rate': 0.98, 'usual_rate': 0.76})),
         'demo-strength': demo_insights(
             ('go_up_lighter', {'movement': 'Bent Over Row', 'lb': 20, 'usual': 30, 'unit': 'lb',

@@ -27,7 +27,7 @@ RED = (230, 40, 40)
 SOFT_WHITE = (200, 205, 215)   # not 255: full white is glaring on the panel
 COLOURS = {'output_down': AMBER, 'missed_targets': AMBER, 'resistance_low': AMBER, 'cadence_low': AMBER,
            'pace_low': AMBER, 'output_up': GREEN, 'go_up_lighter': GREEN, 'go_up_streak': GREEN,
-           'went_heavier': GREEN, 'effort_low': GREEN, 'effort_high': RED, 'in_line': SOFT_WHITE}
+           'went_heavier': GREEN, 'tough_class': GREEN, 'effort_low': GREEN, 'effort_high': RED, 'in_line': SOFT_WHITE}
 OUTPUT_CODES = ('output_down', 'output_up', 'in_line')
 CALLOUT_CODES = ('resistance_low', 'cadence_low', 'pace_low')
 STRENGTH_CODES = ('go_up_lighter', 'went_heavier', 'go_up_streak', 'missed_targets')
@@ -142,6 +142,30 @@ def _output(code, facts):
     return headline, sentence, figure, why, _similar(facts)
 
 
+# The tough-class cheer (Joel's mock-up): its first 64x64 line runs the full 16 characters, edge to edge. The 64x32
+# words page is the same cheer without the numbers (they are on the bars). ARROW in `reason_parts` is drawn in
+# pixels by the screen, since the font has none.
+CHEER_64 = ['WAY TO CHALLENGE', 'YOURSELF!', 'YOU TOOK ON A']
+CHEER_32 = ['WAY TO', 'CHALLENGE', 'YOURSELF!']
+ARROW = 'arrow'
+
+
+def _tough(code, facts):
+    unit = facts['unit'].lower()
+    mine, usual = f"{facts['difficulty']:.1f}", f"{facts['usual_difficulty']:.1f}"
+    ratings = wrap(f'{mine} CLASS, YOUR TYPICAL IS {usual}.')
+    if len(ratings) > 2:  # a 10.0 class: '10.0 CLASS, YOUR' would run past the line
+        ratings = wrap(f'{mine} CLASS. TYPICAL {usual}.')
+    lines = CHEER_64 + ratings
+    figure = _bars(facts['value'], facts['usual'], unit if unit == 'mph' else 'W')
+    # `text` is the bottom line as words (for logs); `parts` is how the screen draws it, the arrow between.
+    # A 10.0 class draws `10` on the bottom line: `10.0 → USUALLY 9.0` would be 67 px of the 63 it has.
+    short = mine if len(mine) <= 3 else f"{facts['difficulty']:.0f}"
+    reason = {'text': f'{mine} TO USUALLY {usual}', 'parts': [short, ARROW, f'USUALLY {usual}']}
+    return 'TOUGH CLASS', {'lines64': lines, 'pages32': [list(CHEER_32)], 'text': ' '.join(lines)}, figure, reason, \
+        _similar(facts)
+
+
 def _effort(code, facts):
     word = 'HARDEST' if code == 'effort_high' else 'EASIEST'
     n = facts['n']
@@ -199,6 +223,8 @@ def _strength(code, facts):
 
 
 def _rule(code):
+    if code == 'tough_class':
+        return _tough
     if code in OUTPUT_CODES:
         return _output
     if code in ('effort_high', 'effort_low'):
@@ -224,15 +250,24 @@ def board_view(code, facts):
         headline, sentence, figure, reason, footer = rule(code, facts or {})
     except (KeyError, TypeError, ValueError, AttributeError):
         return None
-    if isinstance(sentence, tuple):  # parts that each start a new line
-        lines = [line for part in sentence for line in wrap(part)]
-        sentence = f"{sentence[0]}: {'. '.join(part.rstrip('.') for part in sentence[1:])}."  # for logs
+    reason_parts = None
+    if isinstance(reason, dict):  # a bottom line with a drawing in it
+        reason, reason_parts = reason['text'], reason['parts']
+    if isinstance(sentence, dict):  # lines laid out by the rule itself (the tough-class cheer)
+        lines64, pages32, sentence = sentence['lines64'], sentence['pages32'], sentence['text']
     else:
-        lines = wrap(sentence)
-    lines64 = lines[:LINES_64]
-    pages32 = [lines[i:i + LINES_32] for i in range(0, min(len(lines), LINES_32 * PAGES_32), LINES_32)]
-    return {'code': code, 'colour': list(COLOURS[code]), 'headline': headline, 'sentence': sentence,
+        if isinstance(sentence, tuple):  # parts that each start a new line
+            lines = [line for part in sentence for line in wrap(part)]
+            sentence = f"{sentence[0]}: {'. '.join(part.rstrip('.') for part in sentence[1:])}."  # for logs
+        else:
+            lines = wrap(sentence)
+        lines64 = lines[:LINES_64]
+        pages32 = [lines[i:i + LINES_32] for i in range(0, min(len(lines), LINES_32 * PAGES_32), LINES_32)]
+    view = {'code': code, 'colour': list(COLOURS[code]), 'headline': headline, 'sentence': sentence,
             'lines64': lines64, 'pages32': pages32, 'footer': footer, 'figure': figure, 'reason': reason}
+    if reason_parts:
+        view['reason_parts'] = reason_parts
+    return view
 
 
 def board_insights(messages, limit=MAX_BOARD_INSIGHTS):
