@@ -173,13 +173,15 @@ Every discipline then adds the graph and zone bar if they're available.
 
 ![PR workout followed by the PR celebration](docs/screenshots/rotation/pr-celebration.png)
 
-**Workout insights** (off by default). After a workout's stats and charts, the board can say how it compared with your similar earlier workouts, in up to two insights. It works for Cycling, Bike Bootcamp, Rowing, Row Bootcamp, Running, Walking, Tread Bootcamp and Strength. Every insight comes from fixed rules over your own numbers (no AI model), and a workout with nothing worth saying shows none.
+**Workout insights** (off by default). After a workout's stats and charts, the board can say how it compared with your similar earlier workouts, in up to two insights. The comparisons work for Cycling, Bike Bootcamp, Rowing, Row Bootcamp, Running, Walking, Tread Bootcamp and Strength; instructor milestones work for every discipline. Every insight comes from fixed rules over your own numbers (no AI model), and a workout with nothing worth saying shows none.
 
 ![Cycling insights: output down, then hardest ride by heart rate](docs/screenshots/rotation/insights-bike.png)
 
 ![A tough class: the cheer, then the bars with the rating against your usual](docs/screenshots/rotation/insights-tough-class.png)
 
 ![Strength insights: go up a weight, then three classes in a row over target](docs/screenshots/rotation/insights-strength.png)
+
+![Instructor milestones: your 200th class with Jess Sims, your first class with Zacharias Niedzwiecki, on both boards](docs/screenshots/rotation/insights-instructor.png)
 
 "Similar" means the same discipline, class type and mode (plain, arms or floor), indoor or outdoor, completed, and within 30% of the length, from the last year (two years if the last year has too few). Your typical figure is the middle of those workouts. What it can say, in the order it's chosen:
 
@@ -190,8 +192,9 @@ Every discipline then adds the graph and zone bar if they're available.
 | Instructor callouts you missed (bike resistance or cadence, rower or tread pace) | Amber | the share of the callout time spent under the range |
 | Strength weights, from that movement's history, else the weight category's | Green, or amber for missed targets | `GO UP A WEIGHT ON BENT OVER ROW`, `WENT HEAVIER`, `GO UP FROM 40LB ON HEAVY: 3 CLASSES IN A ROW OVER TARGET`, missed rep targets |
 | Effort by heart rate | Red hardest, green easiest | `HARDEST RIDE OF YOUR LAST 12 BY HEART RATE`, `STRIVE PER MIN` |
+| Instructor milestone: a first class with an instructor, or your 5th, 10th, 25th, 50th, 100th, then every 100th (any discipline, from your workout log) | Gold | `YOUR 200TH` / `CLASS WITH` / `JESS SIMS!` and `SINCE MAR 2019`; `YOUR FIRST` / `CLASS WITH` / `ZACHARIAS` / `NIEDZWIECKI!` and `WELCOME!` |
 
-On 64×64 each insight is a card (the sentence, and what it was compared with along the bottom: `9 SIMILAR RIDES`) and then bars (today against your typical, a share, or blocks for classes in a row). On 64×32 the bars come first, then the sentence on one or two pages of three lines. Each frame holds like a chart, `last_workout_detail_interval` plus one second, and adds to the workout page's time.
+An instructor milestone is words only: one card on 64×64 and one page on 64×32 (`YOUR 200TH CLASS` / `WITH JESS SIMS!`), no bars. It comes after the output insight (or a tough class) and counts toward the two, and it needs your complete workout log (a class taught by two instructors counts for each). On 64×64 each other insight is a card (the sentence, and what it was compared with along the bottom: `9 SIMILAR RIDES`) and then bars (today against your typical, a share, or blocks for classes in a row). On 64×32 the bars come first, then the sentence on one or two pages of three lines. Each frame holds like a chart, `last_workout_detail_interval` plus one second, and adds to the workout page's time.
 
 Turn it on with `"workout_insights": true` under `display`, or the settings page's **Workout insights** card. The board needs your workout history to compare with: copy it once from a Mac that has it with `scripts/push_workout_rows.sh user@board`. After that the board adds each new workout itself, with one extra Peloton request per new workout. The card shows how many workouts each rider has on the board, and warns when the switch is on and a rider has none (that rider just gets no insights). With the switch off the board makes no extra requests and doesn't load the history. Preview them with `python scripts/render_rotation.py --height 64 --demo --insights`.
 

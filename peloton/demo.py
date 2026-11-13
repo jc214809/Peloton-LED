@@ -76,6 +76,9 @@ def demo_data():
             ('tough_class', {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 9,
                              'real': 9, 'reason': None, 'difficulty': 9.1, 'usual_difficulty': 7.0}),
             ('effort_high', {'n': 12, 'value': 29.4, 'noun': 'ride', 'rate': 0.98, 'usual_rate': 0.76})),
+        # An instructor milestone (words only, gold): no figure, so one card / one page.
+        'demo-rowing': demo_insights(
+            ('instructor_milestone', {'n': 200, 'name': 'Jess Sims', 'since': '2019-03-02'})),
         'demo-strength': demo_insights(
             ('go_up_lighter', {'movement': 'Bent Over Row', 'lb': 20, 'usual': 30, 'unit': 'lb',
                                'category': 'medium', 'on_movement': True, 'pct': 35}),

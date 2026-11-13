@@ -8,7 +8,7 @@ import collections
 import statistics
 
 from . import workout_compare as compare
-from .insight_lines import number
+from .insight_lines import OUTPUT_CODES, number, ordinal
 
 MAX_MESSAGES = 3
 TYPICAL = 'typical'        # the word for the usual figure (the peers' median) in the Mac text
@@ -316,6 +316,44 @@ def effort_insight(target, group):
         return ('effort_low', f"Easiest {noun} of this kind by heart rate in your last {result['n']}: "
                               f"Strive {target['strive']:.1f}.", facts)
     return None
+
+
+# 5.5 Instructor milestones (from the workout log's counts, not the rows)
+
+MILESTONE_COUNTS = (5, 10, 25, 50, 100)   # then every 100th
+MILESTONE_EVERY = 100
+
+
+def is_milestone(n):
+    """A first class, or the 5th, 10th, 25th, 50th, 100th, then every 100th."""
+    return n == 1 or n in MILESTONE_COUNTS or (n > MILESTONE_COUNTS[-1] and n % MILESTONE_EVERY == 0)
+
+
+def milestone_insight(numbers):
+    """(code, text, facts) for the instructor this class is a milestone with, or None.
+
+    `numbers` is instructors.class_numbers: [{'name', 'n', 'since'}], one per instructor of the class (a
+    class with two instructors counts for each). Nameless ones are skipped; when several qualify the
+    biggest count wins.
+    """
+    hits = [c for c in numbers or [] if c.get('name') and isinstance(c.get('n'), int) and is_milestone(c['n'])]
+    if not hits:
+        return None
+    best = max(hits, key=lambda c: c['n'])
+    name, n = best['name'], best['n']
+    text = f'Your first class with {name}: welcome!' if n == 1 else f'Your {ordinal(n).lower()} class with {name}.'
+    return ('instructor_milestone', text, {'n': n, 'name': name, 'since': best.get('since')})
+
+
+def with_milestone(messages, milestone):
+    """`messages` with the milestone after the output insight (the leading output codes, or the tough class
+    that takes its place), before the rest."""
+    if not milestone:
+        return list(messages)
+    spot = 0
+    while spot < len(messages) and messages[spot][0] in OUTPUT_CODES + ('tough_class',):
+        spot += 1
+    return [*messages[:spot], milestone, *messages[spot:]]
 
 
 def insights(target, rows):

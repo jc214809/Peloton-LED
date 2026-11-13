@@ -819,3 +819,75 @@ def test_count_facts_and_empty_facts():
     assert insights(ride(0, 100, complete=False), [])[0][2] == {}
     assert insights(ride(0, 100, wtype='freestyle'), [])[0][2] == {}
     assert insights(ride(0, 100, disc='yoga'), [])[0][2] == {}
+
+
+# --- Instructor milestones ---
+
+@pytest.mark.parametrize('n, expected', [(1, True), (2, False), (4, False), (5, True), (6, False), (10, True),
+                                         (11, False), (25, True), (50, True), (75, False), (99, False),
+                                         (100, True), (101, False), (150, False), (200, True), (400, True),
+                                         (1000, True), (0, False)])
+def test_which_counts_are_milestones(n, expected):
+    from peloton.workout_insights import is_milestone
+    assert is_milestone(n) is expected
+
+
+def _numbers(*pairs):
+    return [{'name': name, 'n': n, 'since': '2019-03-02'} for name, n in pairs]
+
+
+def test_a_round_number_is_a_milestone_insight():
+    from peloton.workout_insights import milestone_insight
+    code, text, facts = milestone_insight(_numbers(('Jess Sims', 200)))
+    assert code == 'instructor_milestone' and text == 'Your 200th class with Jess Sims.'
+    assert facts == {'n': 200, 'name': 'Jess Sims', 'since': '2019-03-02'}
+
+
+def test_a_first_class_is_a_milestone_insight():
+    from peloton.workout_insights import milestone_insight
+    assert milestone_insight(_numbers(('Zacharias Niedzwiecki', 1)))[1] == \
+        'Your first class with Zacharias Niedzwiecki: welcome!'
+
+
+def test_no_milestone_for_other_counts_or_unknown_instructors():
+    from peloton.workout_insights import milestone_insight
+    assert milestone_insight(_numbers(('Jess Sims', 199))) is None
+    assert milestone_insight(_numbers((None, 100), ('', 1))) is None
+    assert milestone_insight([]) is None and milestone_insight(None) is None
+    assert milestone_insight([{'name': 'Jess', 'n': '100'}, {'name': 'Jess', 'n': None}]) is None
+
+
+def test_with_two_instructors_the_bigger_count_wins():
+    from peloton.workout_insights import milestone_insight
+    assert milestone_insight(_numbers(('Selena', 1), ('Jess', 50)))[2]['name'] == 'Jess'
+
+
+def test_the_milestone_goes_after_the_output_insight_and_before_the_rest():
+    from peloton.workout_insights import with_milestone
+    milestone = ('instructor_milestone', '', {})
+    out, call, eff = ('output_down', '', {}), ('resistance_low', '', {}), ('effort_high', '', {})
+    assert with_milestone([out, call, eff], milestone) == [out, milestone, call, eff]
+    assert with_milestone([call, eff], milestone) == [milestone, call, eff]
+    assert with_milestone([('in_line', '', {}), eff], milestone)[1] == milestone
+    assert with_milestone([('too_few', '', {})], milestone)[0] == milestone
+    assert with_milestone([], milestone) == [milestone]
+    assert with_milestone([out], None) == [out]
+
+
+def test_the_milestone_follows_a_tough_class_too():
+    """A tough class takes the output insight's place, so it keeps the first slot: tough class, then milestone."""
+    from peloton.insight_lines import board_insights
+    from peloton.workout_insights import with_milestone
+    milestone = ('instructor_milestone', '', {'n': 200, 'name': 'Jess Sims', 'since': '2019-03-02'})
+    t = ride(0, 124, difficulty=9.1)
+    tough = insights(t, [t] + [ride(1 + i, 188, difficulty=7.0) for i in range(5)])
+    assert codes(tough) == ['tough_class']
+    assert [v['code'] for v in board_insights(with_milestone(tough, milestone))] == ['tough_class', 'instructor_milestone']
+
+
+def test_the_milestone_counts_toward_the_two_the_board_shows():
+    from peloton.insight_lines import board_insights
+    from peloton.workout_insights import with_milestone
+    milestone = ('instructor_milestone', '', {'n': 100, 'name': 'Jess Sims', 'since': '2019-03-02'})
+    messages = with_milestone([('resistance_low', '', {'pct': 30}), ('cadence_low', '', {'pct': 40})], milestone)
+    assert [v['code'] for v in board_insights(messages)] == ['instructor_milestone', 'resistance_low']

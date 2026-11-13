@@ -246,6 +246,16 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   is only narrower, so nothing that fitted stops fitting. `40LB` makes the worst streak sentence
   (`100LB ON MEDIUM`) six lines, so it falls back to `3 IN A ROW`.
 
+- Instructor milestone (`instructor_milestone`, gold, words only; Joel, 2026-11-12): no bars frame on either
+  board (`figure` is None), so `rotating_details` makes one `insight_card` (64x64) or one `insight_words` page
+  (64x32, page 0). 64x64 card: `YOUR 200TH` / `CLASS WITH` / `JESS SIMS!` (a long name wraps by words at
+  15 characters: `CHELSEA JACKSON` / `ROBERTS!`; first class `YOUR FIRST`) with the footer `SINCE MAR 2019`
+  (the first class with them) or `WELCOME!` for a first. 64x32 page: `YOUR 200TH CLASS` / `WITH JESS SIMS!`;
+  these lines run edge to edge, 16 characters = 64 px (`insight_lines.EDGE_MAX`, like the name page), the
+  name wrapping at 16 (`WITH CHELSEA` / `JACKSON ROBERTS!`, 3 lines). The ordinal (or `FIRST`, via the
+  view's `highlight`) is gold, the rest soft white. A 1000th class (17 characters) falls back to the 64x64
+  wording on 64x32.
+
 ### Journey: miles by type (both boards, requested 2026-11-08)
 Joel found the 64x64 journey page showed less than the 64x32 one: no percent,
 and on the way home it still listed Columbus at the top and Disney World by
