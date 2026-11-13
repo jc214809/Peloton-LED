@@ -278,6 +278,10 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
 # Workout compare frames (peloton/insight_lines.board_view), after the chart slides.
 INSIGHT_KINDS = ('insight_card', 'insight_bars', 'insight_words')
 MAX_INSIGHT_VIEWS = 2
+# In a view's `reason_parts`: the part drawn as a 5x5 arrow (the font has none), in pixels ('#' lit).
+ARROW_PART = 'arrow'
+_ARROW_ROWS = ('..#..', '...#.', '#####', '...#.', '..#..')
+ARROW_GAP = 2   # dark columns between the arrow and the ink either side of it
 _FIGURE_KEYS = {'bars': ('today', 'usual'), 'share': ('pct',), 'blocks': ('total', 'lit')}
 
 
@@ -288,6 +292,40 @@ def _strings(lines, most) -> bool:
 
 def _number(value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+
+
+def _good_parts(parts) -> bool:
+    """A bottom line drawn in parts (`reason_parts`: text, with ARROW_PART standing for the pixel arrow), absent
+    or a short list of strings that fits the 63 px a line has once the arrow and its two gaps are counted."""
+    if parts is None:
+        return True
+    if not (isinstance(parts, list) and 0 < len(parts) <= 3 and all(isinstance(p, str) and p for p in parts)
+            and parts.count(ARROW_PART) <= 1):
+        return False
+    return _parts_layout(parts, lambda text: 4 * len(text))[1] <= 63   # the `stats` font is a fixed 4 px
+
+
+def _trailing_blank(text: str) -> int:
+    """Blank columns after `text`'s ink in the `stats` font: its 4 px cells hold 3 px of ink, the 1 only 2
+    (BBX in both tom-thumb.bdf and 4x6-legacy.bdf)."""
+    return 2 if text.endswith('1') else 1
+
+
+def _parts_layout(parts, width_of):
+    """([(part, x)], the last ink column) for a bottom line drawn in parts from column 1: an ARROW_PART goes
+    ARROW_GAP dark columns after the ink before it, and the next word's ink (it starts at its cell's first
+    column) ARROW_GAP after the arrow, so the arrow sits centred whatever digit the rating ends in."""
+    x, before, places = 1, '', []
+    for part in parts:
+        if part == ARROW_PART:
+            x += ARROW_GAP - _trailing_blank(before)   # x was the column after the word's cell
+            places.append((part, x))
+            x += len(_ARROW_ROWS[0]) + ARROW_GAP
+        else:
+            places.append((part, x))
+            x += width_of(part)
+        before = part
+    return places, x - 1 - (_trailing_blank(before) if before != ARROW_PART else ARROW_GAP)
 
 
 def _good_view(view) -> bool:
@@ -307,6 +345,8 @@ def _good_view(view) -> bool:
                                            and 0 < figure['total'] <= 30 and figure['lit'] <= figure['total']):
         return False
     reason = view.get('reason')
+    if not _good_parts(view.get('reason_parts')):
+        return False
     return (isinstance(colour, (list, tuple)) and len(colour) == 3
             and all(isinstance(c, int) and not isinstance(c, bool) and 0 <= c <= 255 for c in colour)
             and all(isinstance(view.get(key), str) and view[key].strip() for key in ('headline', 'footer'))
@@ -536,6 +576,23 @@ def _reason_line(matrix, font, y: int, text: str, phase: float, hold: float) -> 
             matrix.SetPixel(x, row, 0, 0, 0)
 
 
+def _parts_line(matrix, font, y: int, parts: List[str], colour) -> None:
+    """The bars frame's bottom line drawn in parts from column 1, with an ARROW_PART between: the text before
+    the arrow (the class rating) and the arrow in the insight's colour, the text after it soft white. The arrow
+    sits on the text's rows (y-5 to y-1), centred between the inks (`_parts_layout`; Joel, 2026-11-12)."""
+    places, _ = _parts_layout(parts, lambda text: get_text_width(font, text))
+    seen_arrow = False
+    for part, x in places:
+        if part == ARROW_PART:
+            for dy, row in enumerate(_ARROW_ROWS):
+                for dx, cell in enumerate(row):
+                    if cell == '#':
+                        matrix.SetPixel(x + dx, y - 5 + dy, *colour)
+            seen_arrow = True
+        else:
+            _write(matrix, font, x, y, _INSIGHT_TEXT if seen_arrow else colour, part)
+
+
 def _disc_rgb(discipline: str):
     colour = _disc_color(discipline)
     return colour.red, colour.green, colour.blue
@@ -648,7 +705,9 @@ def _draw_insight_bars(matrix, view: dict, discipline: str, index: int, count: i
         _centred(matrix, stats, 6, colour, headline, left=9)
         _bars_short(matrix, view['figure'], colour)
         reason_y = 30
-    if view.get('reason'):
+    if view.get('reason_parts'):
+        _parts_line(matrix, stats, reason_y, view['reason_parts'], colour)
+    elif view.get('reason'):
         _reason_line(matrix, stats, reason_y, view['reason'], phase, hold)
 
 

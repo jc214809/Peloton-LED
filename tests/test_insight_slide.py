@@ -294,7 +294,7 @@ def test_the_demo_shows_the_frames_only_with_the_switch_on():
     on = Dashboard('unused', {'workout_insights': True}, demo=True).snapshot()['summaries']
     assert not any('insights' in s for s in off)
     shown = {s['workout_id']: [v['code'] for v in insight_views(s)] for s in on if 'insights' in s}
-    assert shown == {'demo-cycling': ['output_down', 'effort_high'],
+    assert shown == {'demo-cycling': ['tough_class', 'effort_high'],
                      'demo-strength': ['go_up_lighter', 'go_up_streak']}
 
 

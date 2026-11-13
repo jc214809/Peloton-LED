@@ -231,6 +231,12 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   blocks 5 px 2 apart from x 4 on rows 11-15 (shrinking as on 64 rows); the reason on baseline 30.
 - 64x32 sentence pages: the bulb, `INSIGHT` in gold `stats` on baseline 6, `1/2` right-aligned when there
   are two pages, a discipline-colour rule on row 8, three lines on baselines 16, 23 and 30.
+- Tough class (green): one sentence page, `WAY TO` / `CHALLENGE` / `YOURSELF!` (the numbers are on the bars);
+  the bars frame's reason line is `9.1 → USUALLY 7.0` on baseline 30 with the arrow drawn in pixels (5x5,
+  rows 25-29, the text's own rows, centred with 2 dark columns either side of the inks (columns 13-17 after
+  `9.1`, 14-18 after `9.0`: the 1 has 2 px of ink, other digits 3; `_parts_layout`; Joel, 2026-11-12: it sat
+  a row low and off-centre); `9.1` from column 1, ending at column 63). 64x64 draws the same line on
+  baseline 61 and a 5-line card whose first line, `WAY TO CHALLENGE`, is the one 16-character (64 px) line.
 - A reason wider than 60 px (only a movement name) scrolls like the name page's highlights (hold, glide,
   hold; `UsernameScreen.scroll_offset`), the 2-px margins blanked.
 - Spacing (Joel, 2026-11-11): weights are one word, `40LB`, in the sentence, the reason and the 64x64 bars
