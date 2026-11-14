@@ -87,6 +87,9 @@ class Dashboard:
         self._token_stamp = None
         self._performance = OrderedDict()
         self._performance_cache_size = config.get('performance_cache_size', 32)
+        # {workout ID: (signature, detail or None, monotonic fetch time)}: a strength class's workout detail
+        # (movement tracker), fetched once per finished class; a failed fetch retries after INSIGHT_RETRY_SECONDS.
+        self._details = OrderedDict()
         configured_cache = config.get('cache_path')
         self.cache_path = (Path(configured_cache).expanduser() if configured_cache else
                            self.token_path.with_name('dashboard-cache.json'))
@@ -357,6 +360,38 @@ class Dashboard:
             self._performance.move_to_end(workout_id)
         return cached
 
+    def _strength_detail(self, client, workout, signature):
+        """A finished strength class's workout detail (for the movement tracker's reps and weights), or None.
+
+        Fetched once per class and kept while its signature holds; the workout insights reuse it rather
+        than fetching it again. A failed or bad fetch retries after INSIGHT_RETRY_SECONDS. Only a 401 escapes."""
+        identity = workout.get('id')
+        if (not identity or workout.get('status') != 'COMPLETE'
+                or str(workout.get('fitness_discipline') or '').lower() != 'strength'):
+            return None
+        cached = self._details.get(identity)
+        if cached and cached[0] == signature and (
+                cached[1] is not None or time.monotonic() - cached[2] < INSIGHT_RETRY_SECONDS):
+            self._details.move_to_end(identity)
+            return cached[1]
+        try:
+            detail = client.get_workout_detail(identity)
+            if not isinstance(detail, dict) or detail.get('id') != identity or detail.get('status') != 'COMPLETE':
+                detail = None
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 401:
+                raise
+            logger.warning('Workout detail failed (%s)', type(exc).__name__)
+            detail = None
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning('Workout detail failed (%s)', type(exc).__name__)
+            detail = None
+        self._details[identity] = (signature, detail, time.monotonic())
+        self._details.move_to_end(identity)
+        while len(self._details) > self._performance_cache_size:
+            self._details.popitem(last=False)
+        return detail
+
     def _stamp(self):
         try:
             stat = self.token_path.stat()
@@ -378,11 +413,12 @@ class Dashboard:
             logger.warning('Instructor milestone failed (%s)', type(exc).__name__)
             return None
 
-    def _workout_insight(self, client, workout, perf, settling):
+    def _workout_insight(self, client, workout, perf, settling, detail=None):
         """The board's views (insight_lines.board_view) comparing this workout with similar earlier ones, or None.
 
         From the first refresh that sees the workout COMPLETE: the workout and class details are fetched
-        once and the row built. While the workout is still settling (its first hour, when the performance
+        once and the row built (a strength class's workout detail comes in as `detail`, already fetched
+        for the page's tracker stats). While the workout is still settling (its first hour, when the performance
         graph is refetched each refresh), each refresh rebuilds the row from the kept details and the new
         graph, and logs when the row changed; the first refresh after the hour rebuilds it one last time.
         The views are recomputed only when the row store changed (a new or rebuilt row, or a reload):
@@ -412,7 +448,7 @@ class Dashboard:
                         failed_at = self._insight_failed.get(identity)
                         if failed_at is not None and time.monotonic() - failed_at < INSIGHT_RETRY_SECONDS:
                             return alone
-                        detail = client.get_workout_detail(identity)
+                        detail = detail if detail is not None else client.get_workout_detail(identity)
                         if not isinstance(detail, dict) or not detail.get('id') or detail.get('status') != 'COMPLETE':
                             self._insight_failed[identity] = time.monotonic()
                             return alone
@@ -522,10 +558,11 @@ class Dashboard:
                     self._cache_performance(identity, signature, perf)
                 else:
                     perf = cached[1] if cached else None
-                summary = summarize_workout(workout, perf)
+                detail = self._strength_detail(client, workout, signature)
+                summary = summarize_workout(workout, perf, detail)
                 summary['previous_best_kj'] = previous_best_kj(identity, personal_records)
                 if self.config.get('workout_insights'):
-                    views = self._workout_insight(client, workout, perf, settling)
+                    views = self._workout_insight(client, workout, perf, settling, detail)
                     if views:
                         summary['insights'] = views
                 summaries.append(summary)

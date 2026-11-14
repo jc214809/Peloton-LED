@@ -112,6 +112,62 @@ def muscle_groups(perf, limit=MUSCLE_GROUPS_SHOWN):
     return groups[:limit] or None
 
 
+STRENGTH_TIERS = ('gold', 'silver', 'bronze')
+WEIGHT_UNITS = ('lb', 'kg')
+
+
+def _count(value):
+    """A whole, positive count, or None (0 means nothing was tracked)."""
+    value = number(value)
+    return int(value + 0.5) if value else None
+
+
+def _top_movement(aggregates, unit_name):
+    """The movement Peloton tagged as the most volume (else the most reps), as
+    {'name', 'reps', 'volume', 'weight'}; None when none is tagged."""
+    entries = [m for m in aggregates if isinstance(m, dict) and str(m.get('movement_name') or '').strip()]
+    for tag in ('most_volume', 'most_reps'):
+        entry = next((m for m in entries if tag in (m.get('tags') or [])), None)
+        if entry is None:
+            continue
+        stats = {s.get('slug'): s.get('completed_number') for s in entry.get('stats') or [] if isinstance(s, dict)}
+        weights = [number(w.get('weight_value')) for group in (entry.get('weight_info_summary_data') or {}).values()
+                   if isinstance(group, list) for w in group
+                   if isinstance(w, dict) and (w.get('weight_unit') or unit_name) == unit_name]
+        weights = [w for w in weights if w]
+        return {'name': str(entry['movement_name']).strip(), 'reps': _count(stats.get('total_reps')),
+                'volume': _count(stats.get('total_volume')), 'weight': max(weights) if weights else None}
+    return None
+
+
+def strength_tracker(detail):
+    """What Peloton's movement tracker counted in a strength class, from the workout detail
+    (GET /api/workout/<id>): {'reps', 'volume', 'unit', 'movements', 'targets_pct',
+    'streak', 'tier', 'top'}; None when the class wasn't tracked. Any figure the
+    tracker didn't record is None, so a screen drops it."""
+    detail = detail if isinstance(detail, dict) else {}
+    tracker = detail.get('movement_tracker_data')
+    summary = tracker.get('completed_movements_summary_data') if isinstance(tracker, dict) else None
+    if not isinstance(summary, dict):
+        return None
+    unit_name = str(summary.get('weight_unit') or 'lb').strip().lower()
+    unit_name = unit_name if unit_name in WEIGHT_UNITS else None
+    aggregates = summary.get('movement_aggregate_data')
+    percent = number(summary.get('completion_percentage'))
+    tier = str(detail.get('movement_tracker_tier') or '').strip().lower()
+    result = {
+        'reps': _count(summary.get('total_repetitions')),
+        'volume': _count(summary.get('total_volume')) if unit_name else None,
+        'unit': unit_name,
+        'movements': _count(summary.get('num_movements')),
+        'targets_pct': int(percent + 0.5) if percent is not None and percent <= 100 else None,
+        'streak': _count(summary.get('longest_streak')),
+        'tier': tier if tier in STRENGTH_TIERS else None,
+        'top': _top_movement(aggregates, unit_name) if isinstance(aggregates, list) and unit_name else None,
+    }
+    return result if any(v is not None for k, v in result.items() if k != 'unit') else None
+
+
 def _zone_of(bpm, lower_bounds):
     """1-5 zone for a heart rate, given each zone's min bpm (zone 1 first)."""
     zone = None
@@ -154,7 +210,9 @@ def _display_discipline(workout, ride=None):
         key, key.replace('_', ' ').title())
 
 
-def summarize_workout(workout, perf=None):
+def summarize_workout(workout, perf=None, detail=None):
+    """The workout page's figures. `detail` is the workout detail (GET /api/workout/<id>), fetched
+    only for strength classes, for what the movement tracker counted."""
     perf = perf or {}
     ride = workout.get('ride') or {}
     discipline = _display_discipline(workout)
@@ -227,6 +285,7 @@ def summarize_workout(workout, perf=None):
         'graph': performance_graph(perf),
         'hr_zone_seconds': heart_rate_zone_seconds(perf),
         'muscles': muscle_groups(perf),
+        'strength': strength_tracker(detail),
     }
     for key in ('calories', 'max_speed', 'avg_incline', 'max_incline', 'elevation',
                 'avg_cadence', 'avg_resistance', 'avg_stroke_rate', 'hr_avg', 'hr_max'):

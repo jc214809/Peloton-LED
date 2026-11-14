@@ -202,6 +202,18 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   with the name and percent in white over them. Unlike the graph and zones
   slides it keeps the heart-rate/calorie row.
 
+### Strength tracker (both boards, 2026-11-13)
+- `TOTAL REPS`, `TOTAL VOLUME` and `TARGETS HIT` are ordinary stat frames on both boards
+  (`TARGETS HIT` in the tier colour). The `TOP LIFT` slide replaces the muscles slide on a
+  tracked class and holds 1 s longer, like it.
+- 64x64: discipline title kept; `TOP LIFT` (tom-thumb, grey) 10 rows under it, the movement in
+  5x8 on up to two lines 9 apart (4x6 when 5x8 would cut it), then reps x weight in gold in
+  6x13 (5x8 when too wide), 22 rows under the label for one line, 31 for two; heart-rate row kept.
+- 64x32: no room for the discipline title, so the slide takes the whole panel like the graph:
+  `TOP LIFT` (4x6) at baseline 6, the movement in 4x6 at 13 and 20, the figure in 5x8 at 30
+  (23 for a one-line name); no heart-rate row.
+- Every other page is unchanged on both boards (no cache had tracker data before this).
+
 ### Insight frames (both boards, `display.workout_insights`, card + bars 2026-11-11)
 - Replace version 2's two-line insight slide. At most 2 insights a workout (`MAX_BOARD_INSIGHTS`), after
   the graph / zones / muscles slides; every frame holds 1 s longer, like those. 64x64 shows each as a card

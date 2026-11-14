@@ -127,9 +127,10 @@ Which stats appear depends on the discipline. A stat Peloton didn't record is si
 | Cycling, Bike Bootcamp | Total output, Strive score, avg speed, avg cadence, avg resistance, distance |
 | Running, Walking, Tread Bootcamp (and outdoor/hiking) | Distance, avg pace, elevation gain, avg incline |
 | Rowing, Row Bootcamp | Distance, stroke rate, split per 500 m, avg output |
-| Everything else (Strength, Yoga, Stretching, Meditation, Cardio, and any future discipline) | Strive score, max heart rate, distance, avg output |
+| Strength | Strive score, total reps, total volume (weight x reps), targets hit, max heart rate |
+| Everything else (Yoga, Stretching, Meditation, Cardio, and any future discipline) | Strive score, max heart rate, distance, avg output |
 
-Every discipline then adds the graph and zone bar if they're available.
+Every discipline then adds the graph and zone bar if they're available. Strength then shows its top lift (the movement Peloton says moved the most weight, as reps x heaviest weight); the reps, volume, targets and top lift come from Peloton's movement tracker, so a class it didn't track shows the muscles worked instead. Targets hit is the share of movements where you hit the rep target, in gold, silver or bronze for the medal Peloton gave the class.
 
 <details>
 <summary>Screenshots for every discipline</summary>
