@@ -156,6 +156,22 @@ def test_the_insights_card_lists_each_riders_history():
     assert '1 workout<' in card and 'updated' not in card and 'no insights until' not in card
 
 
+def test_the_insights_card_lists_recent_workouts_missing_data():
+    rider = {**HISTORY[0], 'incomplete': [
+        {'id': 'a', 'start': 1, 'date': '2026-09-02', 'disc': 'strength', 'title': '30 min Full Body <Strength>',
+         'missing': ['performance graph', 'movement list']},
+        {'id': 'b', 'start': 0, 'date': None, 'disc': 'cycling', 'title': None, 'missing': ['class details']}]}
+    card = _insights_section(page.settings_page(TWO_RIDERS, history=[rider]))
+    assert '<details class="incomplete whole">' in card and '2 missing data' in card and 'in the last 30 days' in card
+    assert 'Sep 2 &middot; 30 min Full Body &lt;Strength&gt;' in card
+    assert 'no performance graph, no movement list' in card
+    assert 'Unknown day &middot; Untitled workout' in card and 'no class details' in card
+    whole = _insights_section(page.settings_page(TWO_RIDERS, history=[{**HISTORY[0], 'incomplete': []}]))
+    assert 'Every workout in the last 30 days has its full data.' in whole and 'missing data' not in whole
+    # Not ready: no history, so nothing to check.
+    assert 'full data' not in _insights_section(page.settings_page(TWO_RIDERS, history=HISTORY[1:]))
+
+
 def test_without_history_the_card_is_just_the_switch():
     card = _insights_section(page.settings_page(TWO_RIDERS))
     assert 'id="workout_insights"' in card and 'History on this board' not in card
