@@ -93,8 +93,9 @@ def test_frame_times_per_page_kind():
     assert frame_times('last_workout', {}, 0, 4) == [0.6]
     assert frame_times('journey', {}, 8, 4) == [1.0]  # settled, after the bar fills
     assert frame_times('journey', {'step_seconds': 4}, 8, 4) == [1.0, 5.0]  # 32 rows: both steps
-    # The flame's still frame, so the README's streak screenshots don't change with the flicker.
-    assert frame_times('streak', {}, 8, 4) == frame_times('streak_risk', {}, 8, 4) == [0.0]
+    # The README streak screenshots' flame.
+    from scripts.render_streaks import FLAME_SECONDS
+    assert frame_times('streak', {}, 8, 4) == frame_times('streak_risk', {}, 8, 4) == [FLAME_SECONDS]
 
 
 def test_preview_dashboard_celebrates_only_a_just_reached_milestone():

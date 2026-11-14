@@ -30,7 +30,9 @@ The startup logo (`LogoMaskScreen`) is drawn, not decoded: the red mark (`logo_a
 
 ## Streak flame (`display/ui/streak_screen.py`)
 
-The streak page and the streak reminder share the 12x16 flame (`FLAME_FRAMES`) through the `FlickeringFlame` mixin: `animated`, `atomic_frames`, a frame every `FLAME_FRAME_SECONDS` (0.12 s) in the uneven `FLAME_SEQUENCE` order (added 2026-11-14, Joel asked to animate it). Frame 0 is the original still flame: a page opens on it and `render_rotation.frame_times` captures streak pages at 0 s, so the README's screenshots keep it. Only the tips and core move; the bottom five rows stay put so the flame doesn't wobble, and every frame stays in the 12x16 box, so the layouts' fit checks still hold.
+The streak page and the streak reminder share the 12x16 flame through the `FlickeringFlame` mixin (`animated`, `atomic_frames`, 20 fps via `frame_seconds`). It is drawn, not stored: `flame_pixels(t)` unions three teardrop tongues (`FLAME_LOBES`: the middle one and two at the shoulders), each with its own tip height and lean from smooth value noise, eats into their edges with turbulence that rises over time, and colours each pixel by heat on `FLAME_RAMP` (deep-red rim to a pale-yellow core low in the middle). Sometimes a spark rises beside the tongues (`SPARK_SECONDS`). The bulb stays put, so it burns without wobbling, and every pixel stays in the 12x16 box, so the layouts' fit checks hold. It's a pure function of time: the same `t` always draws the same flame, which the tests and screenshots rely on. About 0.5 ms a frame on a Mac, so roughly 10 ms on a Pi Zero 2 W.
+
+History (2026-11-14, Joel): four hand-drawn frames swapped at 8 fps came first (#112); on the board they read as jumps, not flicker, so they were replaced by this. `scripts/render_streaks.py` draws the README's `streaks.png` and `streak-risk.png` at `FLAME_SECONDS` (a moment with all three tongues up; `render_rotation.frame_times` uses it too); until then they were drawn by hand. Redraw them after any change to the flame or either page.
 
 ## Models (`models/`)
 

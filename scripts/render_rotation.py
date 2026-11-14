@@ -143,7 +143,8 @@ def frame_times(name, state, duration, detail_interval, height=64):
         from display.ui.celebration_screen import INTRO_SECONDS
         return [0.3, INTRO_SECONDS + 0.7]
     if name in ('streak', 'streak_risk'):
-        return [0.0]  # the flame's still frame; it flickers after that
+        from scripts.render_streaks import FLAME_SECONDS
+        return [FLAME_SECONDS]  # the README screenshots' flame
     return [0.5]
 
 

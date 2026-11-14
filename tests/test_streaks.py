@@ -6,9 +6,9 @@ import pytest
 
 from display.display import initialize_fonts
 from display.ui.streak_risk_screen import StreakRiskScreen
-from display.ui.streak_screen import (FLAME_COLORS, FLAME_FRAME_SECONDS, FLAME_FRAMES, FLAME_H, FLAME_SEQUENCE,
-                                      FLAME_W, StreakScreen, daily_streak_lines, flame_frame, since_text,
-                                      streak_lines, streak_views)
+from display.ui.streak_screen import (FLAME_FRAME_SECONDS, FLAME_H, FLAME_RAMP, FLAME_W, SPARK_SECONDS,
+                                      StreakScreen, _spark, daily_streak_lines, flame_color, flame_pixels,
+                                      since_text, streak_lines, streak_views)
 from peloton.activity import daily_streak_start
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import load_config
@@ -54,7 +54,7 @@ def test_streak_screen_fits_the_panel(height, streaks):
     initialize_fonts(height)
     assert StreakScreen().render(matrix, streaks)
     found = {c for _, c in matrix.image.getcolors(64 * 64)}
-    assert set(FLAME_COLORS.values()) <= found
+    assert set(flame_pixels(0).values()) <= found
     # Nothing is drawn in the 1-px side margins, so no text ran off the edge.
     pixels = matrix.image.load()
     assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))
@@ -202,36 +202,73 @@ def test_config_accepts_streaks_section_and_duration(tmp_path):
     assert load_config(str(path))['display']['rotation'] == ['streaks']
 
 
-def test_flame_frames_keep_the_box_colours_and_base():
-    assert len(FLAME_FRAMES) > 1
-    for frame in FLAME_FRAMES:
-        assert len(frame) == FLAME_H and {len(row) for row in frame} == {FLAME_W}
-        assert set(''.join(frame)) <= set(FLAME_COLORS) | {'.'}
-        # The base never moves, so the flame flickers without wobbling.
-        assert frame[-5:] == FLAME_FRAMES[0][-5:]
-    assert set(FLAME_SEQUENCE) == set(range(len(FLAME_FRAMES)))
+def _frames(seconds=8.0, step=FLAME_FRAME_SECONDS):
+    return [flame_pixels(i * step) for i in range(int(seconds / step))]
 
 
-def test_flame_frame_follows_the_sequence_and_starts_still():
-    assert flame_frame(0) == 0
-    for step, frame in enumerate(FLAME_SEQUENCE * 2):
-        assert flame_frame((step + 0.5) * FLAME_FRAME_SECONDS) == frame
-    for bad in (None, -1, float('nan'), float('inf'), '1'):
-        assert flame_frame(bad) == 0
+def test_flame_stays_in_its_box_on_a_steady_base():
+    frames = _frames()
+    for pixels in frames:
+        assert pixels and all(0 <= x < FLAME_W and 0 <= y < FLAME_H for x, y in pixels)
+        # The bottom row is always lit across the middle: the base doesn't jump.
+        assert {(x, FLAME_H - 1) for x in range(4, 8)} <= set(pixels)
+    # The shape moves from one 20 fps frame to the next, but only a few pixels.
+    changes = [len(set(a) ^ set(b)) for a, b in zip(frames, frames[1:])]
+    assert sum(changes) > 0
+    assert sum(changes) / len(changes) < 8
+
+
+def test_flame_has_a_hot_core_and_tongues_that_rise_and_fall():
+    frames = _frames()
+    for pixels in frames:
+        # The hottest colour sits low in the middle; the top rows are only tips.
+        hottest = max(pixels, key=lambda p: sum(pixels[p]))
+        assert hottest[1] >= 8 and 3 <= hottest[0] <= 8
+    tops = [min(y for _, y in pixels) for pixels in frames]
+    assert min(tops) == 0 and max(tops) >= 2
+    # The side tongues rise and fall: how much is lit up beside the middle one changes.
+    sides = [sum(1 for x, y in p if y <= 6 and (x <= 3 or x >= 8)) for p in frames]
+    assert max(sides) - min(sides) >= 4
+
+
+def test_flame_colours_follow_the_ramp():
+    assert flame_color(-1) == FLAME_RAMP[0][1] and flame_color(2) == FLAME_RAMP[-1][1]
+    for heat, rgb in FLAME_RAMP:
+        assert flame_color(heat) == rgb
+    reds = [flame_color(h / 20)[1] for h in range(21)]
+    assert reds == sorted(reds)  # cooler to hotter only ever adds green: red, orange, yellow
+
+
+def test_flame_is_repeatable_and_safe_with_odd_times():
+    assert flame_pixels(3.21) == flame_pixels(3.21)
+    for bad in (None, -1, float('nan'), float('inf'), '1', True):
+        assert flame_pixels(bad) == flame_pixels(0)
+    assert flame_pixels(1e12)  # any page length still draws
+
+
+def test_sparks_rise_in_some_spans_and_not_others():
+    spans = [[_spark(span * SPARK_SECONDS + i * 0.05) for i in range(int(SPARK_SECONDS / 0.05))]
+             for span in range(20)]
+    with_spark = [s for s in spans if any(s)]
+    assert 0 < len(with_spark) < len(spans)
+    for span in with_spark:
+        rows = [spark[1] for spark in span if spark]
+        assert rows == sorted(rows, reverse=True) and rows[0] == 6 and rows[-1] <= 1
+        assert all(2 <= spark[0] < FLAME_W - 2 for spark in span if spark)
 
 
 @pytest.mark.parametrize('screen, state', [
     (StreakScreen, {'current_weekly': 1234, 'best_weekly': 1500}),
     (StreakRiskScreen, {'current': 1234, 'days_left': 2})])
 @pytest.mark.parametrize('height', [32, 64])
-def test_flame_flickers_on_the_page_and_restarts_on_entry(screen, state, height):
+def test_flame_burns_on_the_page_and_restarts_on_entry(screen, state, height):
     initialize_fonts(height)
     page = screen()
     assert page.animated is True and page.atomic_frames is True
     assert page.frame_seconds == FLAME_FRAME_SECONDS
     drawn = []
     page.on_enter(None, state)
-    for step in range(len(FLAME_SEQUENCE)):
+    for _ in range(10):
         matrix = ImageMatrix(height=height)
         assert page.render(matrix, state)
         pixels = matrix.image.load()
@@ -239,10 +276,42 @@ def test_flame_flickers_on_the_page_and_restarts_on_entry(screen, state, height)
         assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))
         drawn.append(matrix.image.tobytes())
         page.update(FLAME_FRAME_SECONDS)
-    assert len(set(drawn)) == len(FLAME_FRAMES)
+    assert len(set(drawn)) == len(drawn)
     page.update(-5)
     page.update(None)
     page.on_enter(None, state)
     matrix = ImageMatrix(height=height)
     page.render(matrix, state)
     assert matrix.image.tobytes() == drawn[0]
+
+
+def test_render_streaks_draws_the_readme_screenshots(tmp_path, capsys):
+    """Both README sheets: each page on 64x64 above and 64x32 below, from the screen code."""
+    from PIL import Image
+
+    from scripts import render_logo, render_streaks
+    render_streaks.main(['--out-dir', str(tmp_path)])
+    scale, gap, left = render_logo.SHEET_SCALE, render_logo.GAP, render_logo.LABEL_WIDTH
+    for name, (screen_class, states) in render_streaks.SHEETS.items():
+        sheet = Image.open(tmp_path / name).convert('RGB')
+        assert sheet.size == (left + len(states) * (64 * scale + gap),
+                              gap + 64 * scale + gap * 2 + 32 * scale + gap)
+        top = gap
+        for height in (64, 32):
+            initialize_fonts(height)
+            for index, state in enumerate(states):
+                matrix = ImageMatrix(64, height)
+                page = screen_class()
+                page.update(render_streaks.FLAME_SECONDS)
+                assert page.render(matrix, state)
+                x = left + index * (64 * scale + gap)
+                panel = sheet.crop((x, top, x + 64 * scale, top + height * scale))
+                assert panel.tobytes() == matrix.image.resize(panel.size, Image.NEAREST).tobytes()
+            top += height * scale + gap * 2
+    assert capsys.readouterr().out.count('Wrote') == 2
+
+
+def test_render_streaks_stops_on_a_page_it_cannot_draw():
+    from scripts import render_streaks
+    with pytest.raises(RuntimeError, match='drew nothing'):
+        render_streaks.panels(StreakScreen, [{}], 64)
