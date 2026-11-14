@@ -119,9 +119,34 @@ The `next_milestone` page (`CountdownScreen`; the total's or a discipline's) sta
 `4 MORE` (10x20 and 7x13B), `500TH` (10x20, raised `TH`) and the name (6x13B,
 smaller fonts for long names, in its Lifetime colour) over a bar on 64x64.
 32 rows can't fit a second 13-pixel number line and a bar, so it reads
-`4 MORE` (7x13B), `TO 500` (6x9 and 7x13B, no ordinal ending) and the name
-(`WORKOUTS` for the total; 6x9, `TREAD BOOTCAMP` in 4x6), with no bar. Not 5x8: its narrow G and T
-left uneven gaps (`S TRENG TH`). The celebration's noun is the
+`3 AWAY FROM / YOUR 500TH / STRENGTH`, with no bar (Joel's wording and colours,
+2026-11-14, from mock-ups; it was `4 MORE / TO 500 / STRENGTH`, whose discipline
+names didn't read as a sentence: `TO 600 CYCLING`). The nouns are 64x64's
+(`RIDE`, `WORKOUT`, the discipline's name where it has no word of its own).
+- `3 AWAY FROM`: 5x8, every word the same size (Joel: a big `3 AWAY` beside a
+  small `FROM` looked inconsistent; all 7x13B only fit with 2 px between words,
+  edge to edge), 3 px added between words (`LEAD_WORD_GAP`). The count is cyan
+  (`_COUNT`), its own colour beside the gold milestone; the words are white.
+- `YOUR 500TH`: `YOUR` is 4x6, white, floating mid-number: its 5 px capitals have
+  2 rows of the 9 px 7x13B digits above and 2 below (6x9's 6 px couldn't centre:
+  an odd 3 rows). The number is gold with a raised `TH` (`ordinal_line`); where
+  `YOUR` leaves it no room (`100,000TH`) it stands alone.
+- The name: 7x13B, like the number. A bootcamp is drawn as on 64x64: 5x8 with
+  the tight space and kerning, centred by `NAME_INK` (`TREAD BOOTCAMP` runs edge to
+  edge). A name too wide for 7x13B (`STRETCHING`, `MEDITATION`) is 5x8, else 4x6
+  (`OUTDOOR WALKING`).
+- Rows 3-8, 12-20, 23-31; a page whose name is smaller than 7x13B closes up to
+  4-9, 12-20, 23-28 (Joel: the bootcamps' 5-row gap looked loose), so the number
+  stays on the same rows on every page.
+- Every line is centred by its lit pixels (`_lit_centre_x`), an odd spare column
+  going left: every 7x13B, 4x6 and 5x8 glyph a line starts or ends with is lit from
+  its first column and leaves `LINE_TRAILING_BLANK` (1) column after it, except the
+  5x8 `0` and `1`, which start blank (`LEAD_DIGIT_BLANK`).
+- Sized for the largest values, not the README's: a 4-digit count (`1000 AWAY FROM`
+  is exactly 64 columns; `milestone_within` has no upper limit), `100,000TH`, and
+  `OUTDOOR WALKING`; `test_the_32_row_countdown_fits_the_largest_values` checks every
+  discipline in the real totals and the longest labels.
+The celebration's noun is the
 discipline's name (`STRENGTH`); `TREAD BOOTCAMP` and `BIKE BOOTCAMP` are too
 wide beside the trophy (47 columns, 4x6), so they fall back to their last
 word, `BOOTCAMP`. 64x64 fits the whole name.

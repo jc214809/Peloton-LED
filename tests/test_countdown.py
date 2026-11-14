@@ -114,7 +114,7 @@ def test_total_countdown_reads_3_more_2200th_workout(height, monkeypatch):
     assert CountdownScreen().render(matrix, {'total': 2197, 'previous': 2100, 'target': 2200,
                                              'title': title, 'discipline': None})
     expected = (['3', 'TO GO', 'TILL YOUR', '2', ',', '200', 'TH', 'WORKOUT'] if height == 64
-                else ['3', 'MORE', 'TO', '2,200', 'WORKOUTS'])
+                else ['3', 'AWAY', 'FROM', 'YOUR', '2', ',', '200', 'TH', 'WORKOUT'])
     assert drawn == expected
     pixels = matrix.image.load()
     assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))
@@ -139,3 +139,47 @@ def test_config_milestone_step(tmp_path):
         load_config(str(path))
     path.write_text('{"display": {"rotation": ["next_milestone"], "screen_durations": {"next_milestone": 6}}}')
     assert load_config(str(path))['display']['screen_durations'] == {'next_milestone': 6}
+
+
+def test_render_countdown_draws_both_panel_sizes(tmp_path, capsys):
+    """The README's next-milestone screenshot: every page on 64x64 above and 64x32 below, from the screen code."""
+    from PIL import Image
+
+    from scripts import render_countdown, render_logo
+    out = tmp_path / 'next-milestone.png'
+    render_countdown.main(['--out', str(out)])
+    sheet = Image.open(out).convert('RGB')
+    scale, gap, left = render_logo.SHEET_SCALE, render_logo.GAP, render_logo.LABEL_WIDTH
+    count = len(render_countdown.PAGES)
+    assert sheet.size == (left + count * (64 * scale + gap), gap + 64 * scale + gap * 2 + 32 * scale + gap)
+    top = gap
+    for height in (64, 32):
+        initialize_fonts(height)
+        for index, state in enumerate(render_countdown.PAGES):
+            matrix = ImageMatrix(64, height)
+            assert CountdownScreen().render(matrix, state)
+            x = left + index * (64 * scale + gap)
+            panel = sheet.crop((x, top, x + 64 * scale, top + height * scale))
+            assert panel.tobytes() == matrix.image.resize(panel.size, Image.NEAREST).tobytes()
+        top += height * scale + gap * 2
+    assert 'Wrote' in capsys.readouterr().out
+
+
+def test_render_countdown_stops_on_a_page_it_cannot_draw(monkeypatch):
+    from scripts import render_countdown
+    monkeypatch.setattr(render_countdown, 'PAGES', [{'total': 600, 'target': 600, 'previous': 500}])
+    with pytest.raises(RuntimeError, match='drew nothing'):
+        render_countdown.panels(64)
+
+
+def test_render_countdown_runs_from_the_command_line(tmp_path, monkeypatch, capsys):
+    """`python scripts/render_countdown.py` from anywhere: the script puts the repo on sys.path itself."""
+    import runpy
+    import sys
+    from pathlib import Path
+    root = str(Path(__file__).resolve().parents[1])
+    out = tmp_path / 'sheet.png'
+    monkeypatch.setattr(sys, 'path', [p for p in sys.path if p not in (root, '')])
+    monkeypatch.setattr(sys, 'argv', ['render_countdown.py', '--out', str(out)])
+    runpy.run_path(str(Path(root) / 'scripts' / 'render_countdown.py'), run_name='__main__')
+    assert out.exists() and 'Wrote' in capsys.readouterr().out

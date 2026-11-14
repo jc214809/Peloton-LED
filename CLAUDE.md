@@ -59,6 +59,7 @@ Things that bite across the codebase:
 - **Screen times are never 0.** Hiding a screen is leaving it out of `rotation`; `peloton/screen_times.py` is import-free because the settings service uses it too.
 - **The cache holds anything.** Screens validate what they read from the snapshot (`insight_views`, `cache.py`), since an old or hand-edited cache can carry anything.
 - **The `stats` font is a fixed 4 px:** 15 characters fill the 60 px a label has.
+- **Size layouts for the largest values, not the README's.** Any layout change is checked against the longest names and biggest numbers the data can hold (every discipline in the real caches' totals, `TREAD BOOTCAMP`, Peloton labels like `OUTDOOR WALKING`, 4+ digit counts, 6-digit totals), on both heights, with a test.
 
 ## Topic notes
 

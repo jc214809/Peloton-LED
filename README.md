@@ -244,7 +244,7 @@ A full-size page with your lifetime workout count: the title in `color`, the num
 
 ![Next milestone countdown](docs/screenshots/rotation/next-milestone.png)
 
-A countdown in big type when you're close to a milestone: how many to go (`3 TO GO`, then a small `TILL YOUR`; with one left, `NEXT ONE` then `IS YOUR` instead), the milestone in gold with a raised ending (`2,200TH`), and what it counts (`WORKOUT`, or the discipline's noun in its colour from the `lifetime` page: `RIDE`, `RUN`, `WALK`, `ROW`, else its name), over a progress bar from the previous milestone. On 64x32 it reads `3 MORE / TO 2,200 / WORKOUTS` (the discipline's name there), with no bar.
+A countdown in big type when you're close to a milestone: how many to go (`3 TO GO`, then a small `TILL YOUR`; with one left, `NEXT ONE` then `IS YOUR` instead), the milestone in gold with a raised ending (`2,200TH`), and what it counts (`WORKOUT`, or the discipline's noun in its colour from the `lifetime` page: `RIDE`, `RUN`, `WALK`, `ROW`, else its name), over a progress bar from the previous milestone. On 64x32 it reads `3 AWAY FROM / YOUR 2,200TH / WORKOUT`, with no bar: the count in cyan, the words in white, the milestone in gold and the name in its colour, the same nouns as 64x64. A bootcamp's name is drawn as on 64x64 and its page closes up around it. `python scripts/render_countdown.py` redraws this screenshot from the screen code.
 
 Your total and each discipline follow the same rule: a page appears only when it's 5 or fewer workouts away (`milestone_within`), closest first and at most 3 pages (`milestone_pages`), so most of the time this section shows nothing. Your total's milestone is the next value in `milestones` above it, else the next multiple of `milestone_step` (default `100`). A discipline's are picked automatically: 25, 50, 100, then every 100. Discipline counts are Peloton's own per-discipline totals, the ones on the `lifetime` pages, so Bike, Tread and Row Bootcamp count separately from rides, runs and rows. Options: `screen_durations.next_milestone` / `overview_duration`, per page.
 
@@ -517,7 +517,7 @@ Live mode cycles through every completed workout on the latest active day. Every
 - `driver/`: hardware/emulator selection
 - `utils/`: matrix settings, health heartbeat, Wi-Fi setup state
 - `scripts/refresh_cookies.py`: browser login, refresh-token renewal, board seeding, and verified token saving
-- `scripts/render_rotation.py`, `render_demo.py`: screen previews (PNG contact sheets)
+- `scripts/render_rotation.py`, `render_demo.py`: screen previews (PNG contact sheets); `render_logo.py`, `render_countdown.py`: redraw the README's logo and next-milestone screenshots
 - `scripts/list_facts.py`, `workout_insights.py`: checking name-page facts and insights against a real log
 
 ## Architecture
