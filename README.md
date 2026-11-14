@@ -33,7 +33,7 @@ Run commands from the project directory. The default panel is 64×64. The browse
    ```
    Check it with `--status` or `--verify-only`. Keep these tokens on the Mac: Auth0 refresh tokens are single-use, so a board gets its own login from `scripts/seed_board.sh user@board`, never a copy of these.
 2. Copy `config.json` to `config.local.json` and change each rider's `token_path` and `cache_path` to repo-relative files (`cookies-joel.txt`, `cookies-joel-dashboard-cache.json`), the `display.cache_path` to `dashboard-cache.json`, and remove `matrix.gpio_mapping`.
-3. Run it, then open http://localhost:8888 (the VS Code "Peloton LED Emulator" launch entries pass `--config` for you):
+3. Run it, then open http://localhost:8888 (the VS Code "Peloton LED Emulator" launch entries pass `--config` for you, and first run the "Refresh Peloton tokens" task, `scripts/refresh_cookies.py --ensure --all-users --config config.local.json`, which renews any rider's token that is rejected or within 12 hours of expiry):
    ```bash
    ./peloton_led.py --emulated --config config.local.json   # add --led-rows 64 for the 64-row view
    ```

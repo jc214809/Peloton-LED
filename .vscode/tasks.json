@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Refresh Peloton tokens",
+      "detail": "Verify each rider's token in config.local.json; renew it if rejected or within 12 hours of expiry",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "scripts/refresh_cookies.py",
+        "--ensure",
+        "--all-users",
+        "--config",
+        "config.local.json"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

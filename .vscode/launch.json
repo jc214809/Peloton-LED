@@ -13,6 +13,7 @@
         "--led-cols=64",
         "--led-rows=64"
       ],
+      "preLaunchTask": "Refresh Peloton tokens",
       "justMyCode": true
     },
     {
@@ -27,6 +28,7 @@
         "--led-cols=64",
         "--led-rows=32"
       ],
+      "preLaunchTask": "Refresh Peloton tokens",
       "justMyCode": true
     },
     {
