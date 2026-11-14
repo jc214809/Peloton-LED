@@ -19,9 +19,14 @@ RANK_SHARE = 0.8           # ... and beyond this share of the peers
 COST_PCT = 8               # output per heartbeat this far under the peer median = "cost you more"
 EASY_HR_PCT = 4            # work heart rate this far under the peer median = "easier effort"
 SAME_HR_BPM = 3            # work heart rate within this many bpm of the peer median = "the same heart"
-# Class difficulty (Peloton's rating, row['difficulty'])
-TOUGH_POINTS = 1.0         # a class rated this many points or more above the similar classes' median is "tough"
-MIN_RATED = 3              # similar classes with a rating before the median means anything
+# Class difficulty (Peloton's rating, row['difficulty']) against the rider's usual: their last USUAL_CLASSES classes
+# in the discipline (any class type or length, indoor and outdoor together; Joel, 2026-11-13)
+TOUGH_POINTS = 1.0         # a class rated this many points or more above the usual's median is "tough"
+USUAL_CLASSES = 12
+USUAL_DAYS = 365
+MIN_RATED = 5              # rated classes in the usual before its median means anything
+USUAL_MIN_SECS = 600       # shorter classes (rated 3-4) are left out on both sides, as are ...
+USUAL_SKIP_TYPES = ('Warm Up', 'Cool Down')  # ... class types containing these
 # Callouts
 RESISTANCE_UNDER_PCT = 25  # share of callout time under the resistance range
 CADENCE_UNDER_PCT = 35
@@ -150,24 +155,42 @@ def _is_rating(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value <= 10
 
 
-def tough_class(target, group, main):
-    """('tough_class', text, facts) when the class was rated TOUGH_POINTS+ above the median rating of the real
-    peers (at least MIN_RATED rated), else None. It replaces the output insight, so it reuses its figures
-    (`main`'s facts); an easier class gets nothing: the output insight stands."""
-    rating = target.get('difficulty')
-    if not main or not _is_rating(rating):
+def _counts_for_usual(row):
+    """A complete, rated class of USUAL_MIN_SECS or more that isn't a warm-up or cool-down."""
+    ctype = row.get('ctype') or ''
+    return (row.get('complete') and row.get('wtype') == 'class' and (row.get('dur') or 0) >= USUAL_MIN_SECS
+            and not any(skip in ctype for skip in USUAL_SKIP_TYPES) and _is_rating(row.get('difficulty')))
+
+
+def usual_classes(target, rows):
+    """The rider's last USUAL_CLASSES counted classes in the target's discipline from the USUAL_DAYS before it,
+    newest first: any class type or length, indoor and outdoor together."""
+    start = target['start'] - USUAL_DAYS * compare.DAY
+    found = [r for r in rows if r['id'] != target['id'] and r['disc'] == target['disc']
+             and start <= r['start'] < target['start'] and _counts_for_usual(r)]
+    found.sort(key=lambda r: -r['start'])
+    return found[:USUAL_CLASSES]
+
+
+def tough_class(target, rows, main):
+    """('tough_class', text, facts) when the class was rated TOUGH_POINTS+ above the median rating of the rider's
+    usual (`usual_classes`, at least MIN_RATED of them), else None. With an output insight (`main`) it takes its
+    place and reuses its figures; without one it stands alone. An easier class gets nothing."""
+    if not _counts_for_usual(target):
         return None
-    rated = [p['difficulty'] for p in group if _is_rating(p.get('difficulty'))]
-    if len(rated) < MIN_RATED:
+    usual_rows = usual_classes(target, rows)
+    if len(usual_rows) < MIN_RATED:
         return None
-    usual = statistics.median(rated)
+    rating = target['difficulty']
+    usual = statistics.median(r['difficulty'] for r in usual_rows)
     # Rounded so exactly 1 point up holds in floating point (8.1 - 7.1 is 0.99999... in binary).
     if round(rating - usual, 9) < TOUGH_POINTS:
         return None
-    facts = {**main[2], 'difficulty': rating, 'usual_difficulty': usual, 'reason': None}
     noun = NOUN[target['disc']]
-    return ('tough_class', f'Tough {noun}: rated {rating:.1f} against your {TYPICAL} {usual:.1f} for '
-                           f'{plural(noun)} like this.', facts)
+    facts = {**(main[2] if main else {'noun': noun}), 'difficulty': rating, 'usual_difficulty': usual,
+             'rated': len(usual_rows), 'reason': None}
+    return ('tough_class', f'Tough {noun}: rated {rating:.1f} against your usual {usual:.1f} over your last '
+                           f'{len(usual_rows)} {plural(noun)}.', facts)
 
 
 # 5.2 Callouts
@@ -369,11 +392,13 @@ def insights(target, rows):
     # A class without a class type has no peers (spec section 4) but still gets the single-workout rules.
     group, _, real = compare.comparison_group(target, rows)
     main = output_insight(target, group, real)
-    # A much harder class than usual is applauded in place of the output insight (an easier one is not remarked on).
-    main = tough_class(target, group[:real], main) or main
-    # "Of this kind" is only true of real peers: fill-ins never decide the effort message.
+    # "Of this kind" is only true of real peers: fill-ins never decide the effort message. A strong or weak output's
+    # text already speaks to heart rate, so effort is dropped beside it, but not beside a tough class (Joel, 2026-11-13).
+    # A much harder class than usual is applauded in place of the output insight, or on its own when there is none
+    # (an easier one is not remarked on).
+    main = tough_class(target, rows, main) or main
     effort = effort_insight(target, group[:real])
-    if main and main[0] != 'in_line':
+    if main and main[0] in ('output_up', 'output_down'):
         effort = None
     out = ([main] if main else []) + callouts + strength + ([effort] if effort else [])
     noun = NOUN[target['disc']]

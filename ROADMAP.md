@@ -12,7 +12,6 @@ Workout graphs ── research first; builds on `performance_graph` in peloton/s
 Name page together facts ── shares figures with item 6 (head to head)
 Name page facts settings and log fields ── maybe
 Workout compare: Cardio classes ── unlikely (measured 2026-11-12: too rare to say much); independent
-Tough class vs what you've done lately ── independent; decide the effort-insight question with it
 Ideas (not yet sized) ── trend charts share windows with item 6; yearly goal and weekly recap use `frame_stats`
 ```
 
@@ -156,33 +155,6 @@ Brainstormed 2026-11-11, after workout insights ran on PelotonPi. Pick one, size
 - **Disciplines version 1 leaves out** (freestyle, stretching, yoga, meditation, cardio): decide which, if any, deserve peers. Measure first, as the bike fill-in did. Cardio was measured on 2026-11-12: unlikely (see "Workout compare: Cardio classes").
 - **Learn from the boards.** The `changed while settling` and `insights changed` log lines were added to find out whether Peloton revises a finished workout; after a couple of weeks of PelotonPi logs, decide whether the settling hour is needed.
 - **Walk + Run is split in two.** Jen's Walk + Run classes are logged as `walking` (57) or `running` (52), and peers must share the discipline, so each half compares with only its own. Decide whether a class type that appears under both should count as one.
-
-### Workout insights: a tough class is harder than what you've done lately
-Raised 2026-11-13. Today the tough class (`workout_insights.tough_class`) compares the class's difficulty rating only with peers of the same class type, and needs the output insight's 5 peers (3 rated). So when a rider takes on something harder and new, a first Tabata run or a first Sims 60, the board says nothing (`too_few`) until there are 5 of that type. The same-type rule came from the output comparison, where it is needed (watts in an interval row and a steady row don't compare); the rating is Peloton's 1-10 scale for every class, so it doesn't need it.
-
-**Decided 2026-11-13 (Joel):** a class is tough when it is rated 1.0+ (`TOUGH_POINTS`) above the median rating of the rider's **last 12 classes in the same discipline** (any class type, any length) from the past 365 days, needing 5 rated. Warm-ups, cool-downs (class type contains `Warm Up` / `Cool Down`) and classes **under 10 minutes** are left out on both sides: they're rated 3-4 and pull "usual" down (with them in, Jen's count goes from 8 to 17 and ordinary classes get celebrated). A hard class done often becomes the rider's usual and stops being celebrated: that's intended ("when it becomes the normal, we just analyze"); the output insight then speaks as usual.
-
-Measured 2026-11-13 over the last 365 days of the Mac's row stores:
-
-| | Joel | Jen |
-|---|---|---|
-| Classes in compare | 183 | 433 |
-| First insight `too_few` (nothing shown) | 46 | 98 |
-| Tough class, today's rule | 1 | 1 |
-| Tough class, the decided rule | 5 | 8 |
-| Same, 15-minute cutoff instead of 10 | 5 | 7 |
-| Same, but length within 30% (rejected) | 1 | 0 |
-
-The decided rule finds: Joel's Spring Cross-Training Run (7.6 against 6.2), 20 min Walk + Run (6.7 / 5.7), HIIT Row (7.8 / 6.6), HIIT & Hills Ride (8.4 / 7.4), Max Out Row (8.6 / 7.0); Jen's Sims 60 (8.6 / 6.9), Sims 60: Hip Hop (8.4 / 6.9), 45 min Bootcamp: 50/50 (8.2 / 7.1), The Feast (8.2 / 6.9), 45 min Full Body Strength (7.9 / 6.4), two HiLit hikes (8.0 and 7.6 / 6.2), 45 min Walk to Run (6.9 / 5.9). Matching length finds almost none: a harder class is often a longer one.
-
-Still to decide:
-- What the card shows when there's no output insight to replace (no 5 output peers, so no `TODAY 178 W / TYPICAL 134 W` bars): a bars frame of the two ratings (`8.6` against `6.9`), or a words-only card like the instructor milestone (`figure: None`).
-- The wording: `YOUR TYPICAL IS 7.2` and the footer `8 SIMILAR ROWS` described same-type peers; with the new pool it is "your usual row", footer e.g. `VS YOUR LAST 12 ROWS`.
-- Whether indoor and outdoor classes mix in the pool.
-- Its place among the insights: today it replaces the output insight; with none, it leads.
-- Whether the effort insight still drops after a tough class (2026-11-13: the reason it drops after a strong or weak output, that their text already speaks to heart rate, does not hold for the tough class; Joel leaning toward keeping it).
-
-Rules in `peloton/workout_insights.py` (the new pool beside `tough_class`, tested on hand-made rows), wording in `peloton/insight_lines.py`, the spec's section 5.1a (`WORKOUT-COMPARE-SPEC.md`, outside the repo), `docs/dev/WORKOUT-INSIGHTS.md`. Measurement script: ask Claude to regenerate. Depends on: nothing.
 
 ### Whose data is this? (multi-rider boards)
 The username page names the rider, but once it's gone nothing says whose workout, goal, journey or milestone is on screen, which matters most on the pages that show what they did that day. Single-rider boards show nothing extra. Mocked up 2026-11-12 on Jen's real pages (a Tread Bootcamp workout, a goal, the journey) on both boards; Joel kept all five as options, undecided:
