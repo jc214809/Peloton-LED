@@ -48,6 +48,9 @@ class Board:
         monkeypatch.delenv('PUSHOVER_USER_KEY', raising=False)
         self.monkeypatch = monkeypatch
         self.httpd = make_server(self.settings, '127.0.0.1', 0)
+        # Track handler threads so teardown's server_close() joins them: reboot and poweroff run
+        # systemctl after the reply, and a late call must not land in the next test's fake.
+        self.httpd.daemon_threads = False
         self.url = f'http://127.0.0.1:{self.httpd.server_address[1]}'
         # The default 0.5 s poll made every shutdown() (each test's teardown) wait half a second.
         threading.Thread(target=self.httpd.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
@@ -468,6 +471,15 @@ def systemctl(board, monkeypatch):
     """Fake systemctl for the Power menu: .calls is every command run, .result its next answer."""
     fake = SimpleNamespace(calls=[], result=(0, ''), error=None)
 
+    def wait_for(count):
+        """The calls once count have run: reboot and poweroff reply first, so theirs land a moment later."""
+        for _ in range(200):
+            if len(fake.calls) >= count:
+                break
+            time.sleep(0.01)
+        return fake.calls
+    fake.wait_for = wait_for
+
     def run(cmd, **kwargs):
         fake.calls.append(cmd)
         if fake.error:
@@ -531,7 +543,7 @@ def test_reboot_and_shutdown_answer_with_a_message_page(board, systemctl, action
     board.sign_in()
     status, _, body = board.request('/power', {'action': action})
     assert status == 200 and title in body and text in body
-    assert systemctl.calls == [POWER_COMMANDS[action]]
+    assert systemctl.wait_for(1) == [POWER_COMMANDS[action]]
 
 
 def test_the_message_page_is_sent_before_the_machine_is_told_to_go_down(board, systemctl, monkeypatch):
@@ -546,6 +558,10 @@ def test_the_message_page_is_sent_before_the_machine_is_told_to_go_down(board, s
         returncode=0, stderr=''))
     board.sign_in()
     board.request('/power', {'action': 'reboot'})
+    for _ in range(200):  # the command runs a moment after the reply
+        if 'run' in order:
+            break
+        time.sleep(0.01)
     assert order[-2:] == ['sent', 'run']
 
 
@@ -563,7 +579,7 @@ def test_power_with_no_display_unit_is_unavailable_for_the_display_only_actions(
     board.sign_in()
     assert board.request('/power', {'action': 'stop-display'})[1]['Location'] == '/?power=unavailable'
     assert board.request('/power', {'action': 'reboot'})[0] == 200
-    assert systemctl.calls == [POWER_COMMANDS['reboot']]
+    assert systemctl.wait_for(1) == [POWER_COMMANDS['reboot']]
 
 
 @pytest.mark.parametrize('action', list(POWER_COMMANDS))
