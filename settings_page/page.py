@@ -8,6 +8,7 @@ page loads and follows a running update.
 """
 import copy
 import re
+from datetime import date as calendar_date
 from html import escape
 from zoneinfo import available_timezones
 
@@ -17,6 +18,7 @@ from self_update.state import ROLLBACK_FAILED, UNFINISHED
 from self_update.update import (BETA, BETA_BRANCH, CURRENT, RELEASES, WAITING, WOULD_UPDATE, beta_number, name_of,
                                 release_of)
 from settings_page import logo
+from settings_page.history import RECENT_DAYS
 from settings_page.logins import RENEW_BEFORE_S, renews_at, when
 from settings_page.updates import BUSY, START_FAILED, STARTED, STEPS
 from peloton.screen_times import (FRAME_SECONDS, HIGHLIGHT_SECONDS, VERSUS_STATS, least_seconds, page_seconds,
@@ -340,6 +342,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .facts dd { margin: 0; display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
 .facts .hint { margin: 0; }
 @media (max-width: 640px) { .facts { grid-template-columns: 1fr; gap: 2px; } .facts dd { margin-bottom: 8px; } }
+.facts .whole { flex-basis: 100%; }
+details.incomplete > summary { cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+details.incomplete ul { margin: 8px 0 0; padding-left: 18px; }
+details.incomplete li { margin: 4px 0; }
 .pill.now { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 .pill.now::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
   animation: beat 1.2s ease-in-out infinite; }
@@ -1432,13 +1438,37 @@ HISTORY_TEXT = {
 }
 
 
+def _workout_day(date):
+    """'2026-09-02' (the workout's own day, from its row) as 'Sep 2'; anything else as it is."""
+    try:
+        found = calendar_date.fromisoformat(date)
+    except (TypeError, ValueError):
+        return str(date or 'Unknown day')
+    return f'{found:%b} {found.day}'
+
+
+def _incomplete(workouts):
+    """The last RECENT_DAYS' workouts saved without all their data (settings_page.history), as a
+    closed list under the count; a line saying so when there are none."""
+    if not workouts:
+        return f'<span class="hint whole">Every workout in the last {RECENT_DAYS} days has its full data.</span>'
+    items = ''.join(
+        f'<li>{escape(_workout_day(w.get("date")))} &middot; {escape(w.get("title") or "Untitled workout")}'
+        f' <span class="hint">&middot; no {escape(", no ".join(w["missing"]))}</span></li>' for w in workouts)
+    count = len(workouts)
+    return (f'<details class="incomplete whole"><summary>{_pill("warn", f"{count} missing data")}'
+            f'<span class="hint">in the last {RECENT_DAYS} days</span></summary><ul>{items}</ul>'
+            '<p class="hint">Peloton didn\'t send this when the workout was saved; older workouts '
+            'aren\'t checked, since Peloton used to send less.</p></details>')
+
+
 def _history_row(rider, zone):
     if rider['state'] == 'ready':
         workouts = rider['workouts']
         value = _pill('ok', f'{workouts:,} workout{"" if workouts == 1 else "s"}')
         if rider.get('updated'):
             value += f'<span class="hint">to compare with &middot; updated {escape(_at(rider["updated"], zone))}</span>'
-        return rider['name'], value
+        return rider['name'], value + _incomplete(rider.get('incomplete') or [])
     kind, label, advice = HISTORY_TEXT.get(rider['state'], HISTORY_TEXT['unreadable'])
     return rider['name'], _pill(kind, label) + f'<span class="hint">{escape(advice)}</span>'
 
