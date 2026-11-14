@@ -262,7 +262,7 @@ def test_shared_goals_blank_is_no_goal_and_milestones_are_sorted_once_each():
     new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, goal_workouts='', goal_minutes='150',
                                                   milestones='500, 100 250,100', milestone_step=''))
     assert problems == []
-    assert new['display']['weekly_goals'] == {'workouts': 0, 'minutes': 150}
+    assert new['display']['weekly_goals'] == {'workouts': 0, 'minutes': 150, 'active_days': 0}
     assert new['display']['milestones'] == [100, 250, 500]
     assert 'milestone_step' not in new['display']
 
@@ -286,7 +286,7 @@ def test_each_rider_has_own_goals_or_everyones():
     assert problems == []
     joel, jen = new['users']
     assert 'weekly_goals' not in joel and 'milestones' not in joel
-    assert jen['weekly_goals'] == {'workouts': 4, 'minutes': 0}
+    assert jen['weekly_goals'] == {'workouts': 4, 'minutes': 0, 'active_days': 0}
     assert jen['milestones'] == [50, 100]
     assert jen['username'] == 'JenRides'
     new, _ = apply_form(new, posted(new, rider_1_username=''))
@@ -389,7 +389,8 @@ def test_number_fields_show_their_units():
     expected = {'duration_goals': 's', 'overview_duration': 's', 'refresh_interval': 's', 'logo_duration': 's',
                 'last_workout_detail_interval': 's', 'quiet_interval': 's', 'goal_minutes': 'min',
                 'goal_workouts': 'workouts', 'milestone_step': 'workouts', 'milestone_within': 'to go',
-                'milestone_pages': 'pages', 'rider_0_minutes': 'min',
+                'milestone_pages': 'pages', 'rider_0_minutes': 'min', 'goal_active_days': 'days',
+                'rider_1_active_days': 'days',
                 'rider_1_workouts': 'workouts', 'bright_day': '%', 'bright_night': '%', 'matrix_brightness': '%',
                 'matrix_pwm_lsb_nanoseconds': 'ns', 'matrix_limit_refresh': 'Hz'}
     assert {name: units.get(name) for name in expected} == expected
@@ -472,3 +473,19 @@ def test_rotation_has_column_headings_with_tooltips():
     assert '0 skips' not in html and '0 hides' not in html, 'a time is never 0: screens are switched off'
     assert rotation.index('id="screens-head"') < rotation.index('id="screens"')
     assert "getElementById('screens-head').classList.add('js')" in html, 'lines up with the grip column'
+
+
+def test_active_days_goal_saves_for_everyone_and_each_rider_up_to_seven():
+    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, goal_active_days='5', rider_0_workouts='',
+                                                  rider_0_minutes='', rider_0_active_days='4'))
+    assert problems == []
+    assert new['display']['weekly_goals']['active_days'] == 5
+    assert new['users'][0]['weekly_goals'] == {'workouts': 0, 'minutes': 0, 'active_days': 4}
+    html = page.settings_page(new)
+    assert 'id="goal_active_days"' in _card(html, 'goals') and 'id="rider_0_active_days"' in html
+    assert posted(new)['rider_0_active_days'] == ['4']  # shown again on the page
+    _, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, goal_active_days='8'))
+    assert problems and 'active_days can be at most 7' in problems[0]
+    # A page loaded before the field existed posts without it: no active-days goal, nothing rejected.
+    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, goal_active_days=None))
+    assert problems == [] and new['display']['weekly_goals']['active_days'] == 0

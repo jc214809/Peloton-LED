@@ -92,7 +92,7 @@ Default order:
 | [`journey`](#journey--lifetime-miles-as-a-trip) | Lifetime miles as a trip between two places, split into bike, walk/run and row | Some distance has been tallied | `overview_duration` |
 | [`heatmap`](#heatmap--last-12-weeks) | One cell per day for the last 12 weeks, shaded by minutes | The full history is in the workout log and has a workout in those weeks | `overview_duration` |
 | [`milestones`](#milestones--milestone-celebration) | A trophy and confetti for a lifetime milestone you just reached (all workouts, or one discipline's), ahead of the rest of the rotation | A milestone is reached, until midnight on the day it first shows | `overview_duration` (at least 5.8 s) |
-| [`goals`](#goals--weekly-goals) | Progress bar toward each weekly goal | `weekly_goals.workouts` and/or `.minutes` is above 0 | `overview_duration` per goal |
+| [`goals`](#goals--weekly-goals) | Progress bar toward each weekly goal | `weekly_goals.workouts`, `.minutes` or `.active_days` is above 0 | `overview_duration` per goal |
 
 Any section's time can be overridden with `screen_durations.<section>`. A time is never `0`: to hide a section, leave it out of `rotation` (the settings page's Show switch). An older config's `0` still loads: the board treats it as switched off (that section leaves `rotation`, and a `0` fallback such as `overview_duration` switches off the sections using it) and logs what it did; saving the settings page writes it that way. Where a page has several frames (`username`'s highlights, `versus` on 64×32), more time makes each frame stay up longer instead of starting over. The one exception is `total_workouts`: it has no key of its own and follows `screen_durations.lifetime`, so the two stay in step.
 
@@ -297,10 +297,10 @@ Each discipline's round numbers (25, 50, 100, then every 100, as on the `next_mi
 
 ![Weekly goals](docs/screenshots/rotation/goals.png)
 
-One page per weekly goal, showing current / target and a progress bar: **workouts** and/or **minutes** completed since Monday at midnight in your timezone. Turn a goal on by giving it a number above 0:
+One page per weekly goal, showing current / target and a progress bar: **workouts**, **minutes** and/or **active days** completed since Monday at midnight in your timezone. An active day is a day with at least one completed workout, so two workouts on Tuesday count once (`3/5 ACTIVE DAYS`); its goal is 1 to 7. Turn a goal on by giving it a number above 0:
 
 ```json
-"weekly_goals": {"workouts": 3, "minutes": 300}
+"weekly_goals": {"workouts": 3, "minutes": 300, "active_days": 5}
 ```
 
 `0` (the default) hides that goal. Goals can be set per rider under `users[]`.
@@ -325,7 +325,7 @@ Peloton rejected the token or it's missing, or renewal found the rider needs a f
 
 ## Phase 6 customization
 
-Weekly goals are optional. Set `weekly_goals.workouts` and/or `weekly_goals.minutes` to a positive number to add progress screens; zero disables that goal. Progress counts completed workouts from Monday at midnight in the configured/profile timezone. Set `milestones` to lifetime Total Workouts thresholds such as `[100, 250, 500, 1000]`. Each reached threshold celebrates for the rest of the day it first shows (see [`milestones`](#milestones--milestone-celebration)).
+Weekly goals are optional. Set `weekly_goals.workouts`, `weekly_goals.minutes` and/or `weekly_goals.active_days` (at most 7) to a positive number to add progress screens; zero disables that goal. Progress counts completed workouts from Monday at midnight in the configured/profile timezone. Set `milestones` to lifetime Total Workouts thresholds such as `[100, 250, 500, 1000]`. Each reached threshold celebrates for the rest of the day it first shows (see [`milestones`](#milestones--milestone-celebration)).
 
 Set `brightness_schedule` to `null` to retain command-line brightness, or use a day/night schedule:
 
@@ -394,7 +394,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `cache_path` | Beside token | Optional persistent snapshot and PR-state file |
 | `rotation` | See below | Screen sections to show, and their order |
 | `screen_durations` | `{}` | Per-section seconds, overriding the individual duration settings above; above 0 (leave a section out of `rotation` to hide it) |
-| `weekly_goals` | `{"workouts": 0, "minutes": 0}` | Weekly workout/minute targets; `0` disables that goal. See [Phase 6 customization](#phase-6-customization) |
+| `weekly_goals` | `{"workouts": 0, "minutes": 0}` | Weekly workout, minute and active-day targets (`active_days` optional, 0-7); `0` disables that goal. See [Phase 6 customization](#phase-6-customization) |
 | `milestones` | `[]` | Lifetime Total Workouts thresholds that celebrate once each, e.g. `[100, 250, 500]` |
 | `streak_reminder_day` | `5` (Saturday) | First weekday (`0` Monday … `6` Sunday) the [streak reminder](#streaks--weekly-and-daily-streaks) can replace the streak page; `null` turns it off |
 | `milestone_step` | `100` | Also count down to (and celebrate) every Nth lifetime workout, e.g. 2,200 after 2,100; `0` turns this off |

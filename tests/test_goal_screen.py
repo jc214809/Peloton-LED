@@ -6,7 +6,7 @@ from display.ui.goal_screen import MAX_VALUE_WIDTH, GoalScreen, value_font
 from scripts.render_demo import ImageMatrix
 
 CASES = [('workouts', 0, 5), ('workouts', 12, 7), ('minutes', 30, 300), ('minutes', 135, 300),
-         ('minutes', 300, 300), ('minutes', 1200, 1500)]
+         ('minutes', 300, 300), ('minutes', 1200, 1500), ('active days', 3, 5), ('active days', 7, 7)]
 
 
 def render(height, unit, current, target):

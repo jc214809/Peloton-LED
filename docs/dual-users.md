@@ -12,7 +12,7 @@ Start with `config.dual-users-example.json`. Each entry under `users` requires:
 - `log_path` (optional): that rider's workout log. Defaults to the cache path with `.workouts.json` in place of `.json`.
 - `email_env` and `password_env`: environment-variable names used only for unattended token renewal.
 - `username` (optional): board name override. When omitted, the account's Peloton username is shown.
-- `weekly_goals` (optional): per-rider weekly workout/minute targets. Falls back to `display.weekly_goals` when omitted.
+- `weekly_goals` (optional): per-rider weekly workout, minute and active-day targets. Falls back to `display.weekly_goals` when omitted.
 - `milestones` (optional): per-rider lifetime-workout milestone thresholds. Falls back to `display.milestones` when omitted.
 
 User order in the JSON array is display order. Token and cache paths must be unique. Relative paths resolve beside the configuration file.

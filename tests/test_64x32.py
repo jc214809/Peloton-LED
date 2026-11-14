@@ -204,8 +204,9 @@ def test_32_row_two_line_discipline_name_clears_the_count():
     assert len(gaps) == 2 and gaps[-1] >= 3
 
 
-def test_32_row_goal_screen_says_what_it_counts():
-    state = {'title': 'Weekly Goal', 'current': 2, 'target': 5, 'unit': 'workouts'}
+@pytest.mark.parametrize('unit', ['workouts', 'active days'])
+def test_32_row_goal_screen_says_what_it_counts(unit):
+    state = {'title': 'Weekly Goal', 'current': 2, 'target': 5, 'unit': unit}
     from display.display import loaded_fonts, get_text_width
     from display.ui.goal_screen import GoalScreen
     matrix = ImageMatrix(height=32)
