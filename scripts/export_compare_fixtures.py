@@ -36,7 +36,8 @@ EXPECTED = (
     ('joel', 'e9a1055b', ['in_line']),
     ('jen', 'f4c69f0d', ['in_line', 'effort_high']),
     ('jen', '96bf6669', ['in_line', 'resistance_low', 'effort_low']),
-    ('jen', '823e0327', ['output_down', 'resistance_low']),
+    # resistance_low until 2026-11-13: 25% under counted the break before the floor block; 24% in the riding.
+    ('jen', '823e0327', ['output_down']),
     ('jen', '587c1988', ['in_line']),
     ('joel', '0f931cbb', ['freestyle']),
 )

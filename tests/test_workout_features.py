@@ -75,6 +75,50 @@ def test_callouts_count_only_inside_work_segments():
     assert row['target_under'] == {'cadence': 50}
 
 
+def test_a_callout_running_into_an_arms_section_counts_only_the_riding_seconds():
+    # Riding 0-30 then arms 30-60 (pedalling optional); one cadence/resistance callout spans both.
+    cadence = [90] * 6 + [0] * 6        # on target while riding, stopped for the arms
+    resistance = [40] * 6 + [10] * 6    # turned down for the arms
+    g = graph({'cadence': cadence, 'resistance': resistance}, 12,
+              segment_list=[seg('cycling', 0, 30), seg('upper_body', 30, 30)])
+    g['target_metrics_performance_data'] = {'target_metrics': [
+        {'offsets': {'start': 0, 'end': 59}, 'metrics': [
+            {'name': 'cadence', 'lower': 80, 'upper': 100}, {'name': 'resistance', 'lower': 35, 'upper': 45}]}]}
+    row = build_row(detail(), g)
+    assert row['mode'] == 'arms'
+    assert row['target_under'] == {'cadence': 0, 'resistance': 0}
+    assert row['target_in'] == {'cadence': 100, 'resistance': 100}
+    assert row['target_pos'] == {'cadence': 0.5, 'resistance': 0.5}
+
+
+def test_a_callout_level_is_weighted_by_its_seconds_in_work_segments():
+    # 10 s of the first callout is riding, 50 s runs into the cool-down; the second is 30 s of riding.
+    g = graph({'cadence': [90] * 20}, 20, segment_list=[seg('cycling', 0, 40), seg('cooldown', 40, 60)])
+    g['target_metrics_performance_data'] = {'target_metrics': [
+        {'offsets': {'start': 30, 'end': 89}, 'metrics': [{'name': 'cadence', 'lower': 60, 'upper': 60}]},
+        {'offsets': {'start': 0, 'end': 29}, 'metrics': [{'name': 'cadence', 'lower': 100, 'upper': 100}]}]}
+    row = build_row(detail(), g)
+    assert row['target'] == {'cadence': 90.0}  # (60 x 10 + 100 x 30) / 40, not the whole 60 s of the first
+
+
+def test_a_callout_starting_in_the_warm_up_counts_its_work_part():
+    g = graph({'cadence': [50] * 6 + [70] * 6}, 12, segment_list=[seg('warmup', 0, 30), seg('cycling', 30, 30)])
+    g['target_metrics_performance_data'] = {'target_metrics': [
+        {'offsets': {'start': 20, 'end': 59}, 'metrics': [{'name': 'cadence', 'lower': 80, 'upper': 100}]}]}
+    row = build_row(detail(), g)
+    assert row['target'] == {'cadence': 90.0}
+    assert row['target_under'] == {'cadence': 100}  # the 6 riding samples at 70, not the warm-up's 50s
+
+
+def test_pace_callouts_are_weighted_by_their_work_seconds():
+    g = graph({'pace': [10] * 24}, 24, segment_list=[seg('run', 0, 60), seg('cooldown', 60, 60)])
+    g['target_metrics_performance_data'] = {'target_metrics': [
+        {'offsets': {'start': 0, 'end': 29}, 'metrics': [{'name': 'pace_intensity', 'lower': 2, 'upper': 2}]},
+        {'offsets': {'start': 30, 'end': 119}, 'metrics': [{'name': 'pace_intensity', 'lower': 3, 'upper': 3}]}]}
+    row = build_row(detail(fitness_discipline='running'), g)
+    assert row['pace_plan'] == {'2': 50, '3': 50}  # 30 s each in the run; the cool-down's 60 s left out
+
+
 def test_graph_none_gives_a_bare_row():
     row = build_row(detail(), None)
     assert row['has_graph'] is False
