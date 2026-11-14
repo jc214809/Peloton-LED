@@ -321,7 +321,27 @@ def test_weekly_progress_uses_local_monday_and_completed_duration():
          'ride': {'duration': 1200}, 'total_work': 99000},
     ]
     # Output only counts completed workouts from this week.
-    assert weekly_progress(workouts, 'UTC', now) == {'workouts': 1, 'minutes': 30, 'output_kj': 250}
+    assert weekly_progress(workouts, 'UTC', now) == {'workouts': 1, 'minutes': 30, 'output_kj': 250,
+                                                     'active_days': 1}
+
+
+def test_active_days_count_each_local_day_once():
+    from datetime import datetime, timezone
+    from peloton.goals import weekly_progress
+    now = datetime(2026, 9, 18, 12, tzinfo=timezone.utc)  # Friday
+    at = lambda *args: datetime(*args, tzinfo=timezone.utc).timestamp()
+    workouts = [
+        {'status': 'COMPLETE', 'start_time': at(2026, 9, 14, 13)},  # Monday, twice: one active day
+        {'status': 'COMPLETE', 'start_time': at(2026, 9, 14, 18)},
+        {'status': 'COMPLETE', 'start_time': at(2026, 9, 16, 2)},  # Tuesday evening in New York
+        {'status': 'COMPLETE', 'start_time': at(2026, 9, 15, 22)},  # also Tuesday in New York
+        {'status': 'IN_PROGRESS', 'start_time': at(2026, 9, 17, 13)},  # not finished: not active
+        {'status': 'COMPLETE', 'start_time': at(2026, 9, 13, 13)},  # last week
+        {'status': 'COMPLETE', 'start_time': at(2026, 9, 19, 13)},  # after now
+    ]
+    assert weekly_progress(workouts, 'UTC', now)['active_days'] == 3  # Mon, Tue, Wed in UTC
+    assert weekly_progress(workouts, 'America/New_York', now)['active_days'] == 2  # Mon, Tue
+    assert weekly_progress([], 'UTC', now)['active_days'] == 0
 
 
 def test_caesar_bootcamp_normalizes_to_row_bootcamp():

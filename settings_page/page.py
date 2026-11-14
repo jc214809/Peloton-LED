@@ -923,7 +923,10 @@ def _rider(index, rider, display):
                         ' step="1" inputmode="numeric"', 'workouts'))
         + _mini(f'rider_{index}_minutes', 'Minutes a week',
                 _number(f'rider_{index}_minutes', goals.get('minutes'), shared.get('minutes', 0),
-                        ' step="1" inputmode="numeric"', 'min')))
+                        ' step="1" inputmode="numeric"', 'min'))
+        + _mini(f'rider_{index}_active_days', 'Active days a week',
+                _number(f'rider_{index}_active_days', goals.get('active_days'), shared.get('active_days', 0),
+                        ' step="1" max="7" inputmode="numeric"', 'days')))
     return (f'<div class="rider"><h3>{escape(name)}</h3>'
             f'<input type="hidden" name="rider_{index}_name" value="{_attr(name)}">'
             f'<div class="rider-grid">{fields}</div></div>')
@@ -1530,12 +1533,17 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
         + _field('goal_minutes', 'Minutes a week',
                  _number('goal_minutes', shared_goals.get('minutes'), 0, ' step="1" inputmode="numeric"', 'min'),
                  '0 or blank for no minutes goal.')
+        + _field('goal_active_days', 'Active days a week',
+                 _number('goal_active_days', shared_goals.get('active_days'), 0,
+                         ' step="1" max="7" inputmode="numeric"', 'days'),
+                 'Days with at least one workout, Monday to Sunday (two on one day count once). '
+                 '0 or blank for no active-days goal.')
         + _field('streak_reminder_day', 'Streak reminder from',
                  _options('streak_reminder_day', [('off', 'Never')] + [(str(i), d) for i, d in enumerate(WEEKDAYS)],
                           'off' if reminder is None else str(reminder)),
                  'From this day, a week with no workout yet shows "keep your streak" instead of the streak.')
-        + (('<h3>Each rider</h3><p class="hint">Blank uses Everyone\'s. Setting either weekly goal gives the '
-            'rider their own pair (the other blank is no goal).</p>'
+        + (('<h3>Each rider</h3><p class="hint">Blank uses Everyone\'s. Setting any weekly goal gives the '
+            'rider their own set (the others blank are no goal).</p>'
             + ''.join(_rider(i, rider, display) for i, rider in rider_list)) if rider_list else '')
     ), 'target')
 

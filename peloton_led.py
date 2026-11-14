@@ -196,7 +196,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
             if target > 0:
                 groups['goals'].append(('goal', {
                     'title': 'Weekly Goal', 'current': progress.get(key, 0),
-                    'target': target, 'unit': key}, goal_duration))
+                    'target': target, 'unit': key.replace('_', ' ')}, goal_duration))
     # A celebration leads the rotation (after the logo), wherever 'milestones' sits in it. One per
     # rotation: the newest total-workouts milestone (acknowledging it retires any older ones), and any
     # discipline's taking turns with it pass by pass, so each shows during its day.

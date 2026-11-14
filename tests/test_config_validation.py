@@ -33,6 +33,8 @@ def _load(tmp_path, config):
     ({'users': [{'name': 'Joel', 'email_env': 'lower-case'}]}, 'must be an environment variable name'),
     ({'users': [{'name': 'Joel', 'weekly_goals': {'workouts': -1}}]}, 'weekly_goals values must be non-negative'),
     ({'display': {'weekly_goals': {'workouts': True}}}, 'weekly_goals values must be non-negative'),
+    ({'display': {'weekly_goals': {'active_days': 8}}}, 'weekly_goals.active_days can be at most 7'),
+    ({'users': [{'name': 'Joel', 'weekly_goals': {'active_days': -1}}]}, 'weekly_goals values must be non-negative'),
     ({'display': {'font': 'comic-sans'}}, 'unsupported display.font'),
     ({'display': {'color': 'plaid'}}, 'unsupported display.color'),
     ({'display': {'timezone': 'Mars/Olympus'}}, 'invalid display.timezone'),

@@ -38,7 +38,8 @@
     },
     "weekly_goals": {
       "workouts": 0,
-      "minutes": 0
+      "minutes": 0,
+      "active_days": 0
     },
     "milestones": [],
     "milestone_step": 100,

@@ -8,7 +8,7 @@ Every check is the app's own (peloton.config.validate_config), so a saved config
 import copy
 import re
 
-from peloton.config import DEFAULTS, MATRIX_DEFAULTS, ROTATION_SECTIONS, validate_config
+from peloton.config import DEFAULTS, MATRIX_DEFAULTS, ROTATION_SECTIONS, WEEKLY_GOAL_KEYS, validate_config
 from peloton.screen_times import least_seconds, retire_zero_times
 
 # Marks a post as this page's whole form: switches post nothing when off, so a partial post
@@ -233,7 +233,7 @@ def apply_form(config, form):
         display['refresh_schedule'] = None
 
     # Goals and Milestones: everyone's, then each rider's own (blank for everyone's)
-    display['weekly_goals'] = {key: _number(one(f'goal_{key}') or '0') for key in ('workouts', 'minutes')}
+    display['weekly_goals'] = {key: _number(one(f'goal_{key}') or '0') for key in WEEKLY_GOAL_KEYS}
     display['milestones'] = _milestones(one('milestones'))
     set_or_drop(display, 'milestone_step', 'milestone_step')
     for key in MILESTONE_KEYS:
@@ -247,7 +247,7 @@ def apply_form(config, form):
             problems.append('The riders in config.json changed since this page loaded: reload it and try again.')
             break
         set_or_drop(user, 'username', f'rider_{index}_username', str)
-        goals = {key: one(f'rider_{index}_{key}') for key in ('workouts', 'minutes')}
+        goals = {key: one(f'rider_{index}_{key}') for key in WEEKLY_GOAL_KEYS}
         if any(goals.values()):
             user['weekly_goals'] = {key: _number(text or '0') for key, text in goals.items()}
         else:

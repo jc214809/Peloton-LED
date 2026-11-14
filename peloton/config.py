@@ -120,12 +120,17 @@ def load_dotenv(path='.env'):
             os.environ[key] = value
 
 
+WEEKLY_GOAL_KEYS = ('workouts', 'minutes', 'active_days')
+
+
 def _validate_weekly_goals(path, goals, prefix):
-    if not isinstance(goals, dict) or not set(goals) <= {'workouts', 'minutes'}:
-        raise ValueError(f'{path}: {prefix}weekly_goals must contain workouts and/or minutes')
+    if not isinstance(goals, dict) or not set(goals) <= set(WEEKLY_GOAL_KEYS):
+        raise ValueError(f'{path}: {prefix}weekly_goals must contain only workouts, minutes and active_days')
     for value in goals.values():
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ValueError(f'{path}: {prefix}weekly_goals values must be non-negative integers')
+    if goals.get('active_days', 0) > 7:
+        raise ValueError(f'{path}: {prefix}weekly_goals.active_days can be at most 7')
 
 
 def _validate_milestones(path, milestones, prefix):

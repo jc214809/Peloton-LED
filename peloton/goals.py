@@ -28,17 +28,20 @@ def week_start(timezone_name=None, now=None):
 
 
 def weekly_progress(workouts, timezone_name=None, now=None):
-    """Return completed workouts, minutes and output (kJ) since local Monday."""
+    """Return completed workouts, minutes, output (kJ) and active days (local dates with at least one
+    completed workout) since local Monday."""
     zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
     monday, current = week_start(timezone_name, now)
     count = 0
     seconds = 0
     joules = 0
+    days = set()
     for workout in workouts:
         stamp = workout_timestamp(workout, timezone_name)
         if not is_completed(workout) or stamp is None or not monday <= stamp.astimezone(zone) <= current:
             continue
         count += 1
+        days.add(stamp.astimezone(zone).date())
         ride = workout.get('ride') if isinstance(workout.get('ride'), dict) else {}
         duration = workout.get('duration') or workout.get('length') or ride.get('duration') or 0
         if isinstance(duration, (int, float)) and not isinstance(duration, bool):
@@ -47,7 +50,7 @@ def weekly_progress(workouts, timezone_name=None, now=None):
         if isinstance(work, (int, float)) and not isinstance(work, bool) and work > 0:
             joules += work
     return {'workouts': count, 'minutes': int(round(seconds / 60)),
-            'output_kj': int(round(joules / 1000))}
+            'output_kj': int(round(joules / 1000)), 'active_days': len(days)}
 
 
 # A step milestone only celebrates if it was crossed this recently, so the

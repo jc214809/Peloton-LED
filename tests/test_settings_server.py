@@ -106,7 +106,7 @@ def test_the_pin_signs_in_and_saving_restarts_the_display(board):
     status, headers, _ = board.request('/save', posted(TWO_RIDERS, debug='on', goal_minutes='90'))
     assert status == 303 and headers['Location'] == '/?saved=restarted'
     saved = board.saved()
-    assert saved['debug'] is True and saved['display']['weekly_goals'] == {'workouts': 3, 'minutes': 90}
+    assert saved['debug'] is True and saved['display']['weekly_goals'] == {'workouts': 3, 'minutes': 90, 'active_days': 0}
     assert json.loads((board.config.parent / 'config.json.bak').read_text()) == TWO_RIDERS
     assert oct(os.stat(board.config).st_mode & 0o777) == '0o640'
     assert board.restarts == [1]

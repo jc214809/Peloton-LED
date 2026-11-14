@@ -486,14 +486,18 @@ def test_configured_rotation_order_and_disabled_sections():
     dashboard.should_celebrate_pr.return_value = False
     snapshot = {'me': {'username': 'Rider'}, 'summaries': [{'workout_id': 'one'}],
                 'totals': {'Total Workouts': 10, 'Cycling': 10}, 'status': 'ready',
-                'weekly_progress': {'workouts': 2, 'minutes': 45}}
-    display = {'rotation': ['goals', 'username'], 'weekly_goals': {'workouts': 3},
+                'weekly_progress': {'workouts': 2, 'minutes': 45, 'active_days': 2}}
+    display = {'rotation': ['goals', 'username'], 'weekly_goals': {'workouts': 3, 'active_days': 4},
                'screen_durations': {'goals': 6}, 'last_workout_duration': 30,
                'overview_duration': 4, 'duration': 4, 'color': 'white'}
     pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
-    assert [page[0] for page in pages] == ['goal', 'username']
+    assert [page[0] for page in pages] == ['goal', 'goal', 'username']
     assert pages[0][1]['current'] == 2
     assert pages[0][2] == 6
+    assert pages[1][1] == {'title': 'Weekly Goal', 'current': 2, 'target': 4, 'unit': 'active days'}
+    # A cache from before active days were counted shows 0 until the next refresh.
+    snapshot['weekly_progress'] = {'workouts': 2, 'minutes': 45}
+    assert build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)[1][1]['current'] == 0
 
 
 def test_last_workout_duration_stretches_to_fit_every_stat():
