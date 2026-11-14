@@ -64,7 +64,7 @@ NAME_INK = {'ROW BOOTCAMP': (0, 56), 'BIKE BOOTCAMP': (2, 59), 'TREAD BOOTCAMP':
 LINE_TRAILING_BLANK = 1
 LEAD_DIGIT_BLANK = {'0': 1, '1': 1}
 LEAD_WORD_GAP = 3   # px added between the top line's words (the 5x8 space is wider than it needs)
-_COUNT = (0, 220, 255)   # 32 rows: the count is cyan, its own colour beside the gold milestone
+_COUNT = _GOLD   # 32 rows: the count is gold like the milestone (Joel, 2026-11-14: it was cyan)
 
 
 def _lit_centre_x(matrix, runs, lead_blank=0):
@@ -119,7 +119,7 @@ class CountdownScreen(Screen):
 
     @staticmethod
     def _render_short(matrix, left_to_go, target, name, color, bold):
-        """32 rows: 3 AWAY FROM / YOUR 600TH / RIDE, no bar. The top line in 5x8 (the count cyan, the words
+        """32 rows: 3 AWAY FROM / YOUR 600TH / RIDE, no bar. The top line in 5x8 (the count gold, the words
         white), then YOUR (4x6, white, floating mid-line: 2 rows either side) and the gold 7x13B number with its
         raised TH, then the name in 7x13B in its Lifetime colour. Lines on rows 3-8, 12-20, 23-31; a name in a
         smaller font (a bootcamp's 5x8, STRETCHING) closes up to 4-9, 12-20, 23-28 so the gaps match. Every line is centred by

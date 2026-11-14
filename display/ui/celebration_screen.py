@@ -186,7 +186,9 @@ def _number_runs(font, digits):
 
 
 def ordinal_line(number, digit_fonts, suffix_font, baseline, color, left, right):
-    """2,000 big with a small TH raised to the digits' top, like a superscript; centred as one piece.
+    """2,000 big with a small TH raised to the digits' top, like a superscript. Centred on the digits plus
+    half the TH (centring the two as one piece set the digits off to the left; centring the digits alone left
+    the TH crowding the right edge), moved left only as far as keeping the TH inside `right` needs.
     With a comma like the board's other totals, unless dropping it keeps the number in a bigger font
     (10000 on 64 columns). None when it fits in none of the digit fonts."""
     plain, suffix = str(number), ordinal(number)[len(str(number)):]
@@ -196,7 +198,8 @@ def ordinal_line(number, digit_fonts, suffix_font, baseline, color, left, right)
         runs, digits_width = _number_runs(font, digits)
         width = digits_width + 1 + suffix_width
         if width <= right - left - 1:
-            x = left + max((right - left - width) // 2, 0)
+            centred = digits_width + (1 + suffix_width) // 2
+            x = max(left, min(left + (right - left - centred) // 2, right - width))
             parts = [(font, x + dx, baseline, color, text) for dx, text in runs]
             if suffix_font:
                 raised = baseline - _cap_height(font) + _cap_height(suffix_font)
@@ -266,12 +269,16 @@ class CelebrationScreen(Screen):
 
     @staticmethod
     def _lines_32(matrix, big, noun, subtitle):
-        # The name goes on top, over the number, beside the trophy.
+        # The name goes on top, over the number, beside the trophy. The risen trophy starts below
+        # the name's row, so a name too wide for that column (a 14-letter Peloton username) is
+        # centred across the whole panel instead.
         w = matrix.width
         room = w - TEXT_LEFT_32 - 1
         info = [loaded_fonts.get('info')]
+        name = (_placed(_fit(subtitle, info, room), subtitle, 7, _BLUE, TEXT_LEFT_32, w)
+                or _placed(_fit(subtitle, info, w - 2), subtitle, 7, _BLUE, 0, w))
         lines = [
-            _placed(_fit(subtitle, info, room), subtitle, 7, _BLUE, TEXT_LEFT_32, w),
+            name,
             CelebrationScreen._big_line(big, [loaded_fonts.get('big'), loaded_fonts.get('countdown'),
                                               loaded_fonts.get('info')], loaded_fonts.get('info'),
                                         20, TEXT_LEFT_32, w),

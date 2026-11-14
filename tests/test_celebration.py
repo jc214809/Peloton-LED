@@ -132,6 +132,16 @@ def test_number_always_fits_inside_the_panel(height, number):
         assert get_text_width(loaded_fonts['big'], ordinal(number)) <= 62
 
 
+@pytest.mark.parametrize('name', ['xxjclarksterxx', 'ABCDEFGHIJKLMNO'])
+def test_32_row_name_too_wide_beside_the_trophy_spans_the_panel_above_it(name):
+    # Regression: a Peloton username of 12-15 letters used to be left off on 32 rows.
+    image = _render(32, INTRO_SECONDS + 0.1, {**STATE, 'subtitle': name})
+    blue = _text_box(image, BLUE)
+    trophy_top = min(y for _, y in _lit(image, TROPHY_GOLD))
+    assert blue[0] >= 0 and blue[2] <= 63 and blue[3] < trophy_top
+    assert blue[3] < _text_box(image, WHITE)[1]
+
+
 @pytest.mark.parametrize('height', [32, 64])
 def test_a_name_too_long_to_fit_is_left_off(height):
     image = _render(height, INTRO_SECONDS + 0.1, {**STATE, 'subtitle': 'Christopher Longname-Smith'})
@@ -270,6 +280,37 @@ def test_ordinal_ending_is_small_and_raised_to_the_top_of_the_digits(height, num
     assert min(suffix_rows) == min(digit_rows) and max(suffix_rows) < max(digit_rows) - 2
 
 
+@pytest.mark.parametrize('height, number, left', [(64, 600, 0), (64, 2000, 0), (32, 600, TEXT_LEFT_32),
+                                                  (32, 21, TEXT_LEFT_32)])
+def test_the_number_is_centred_on_its_digits_plus_half_the_ending(height, number, left):
+    # Joel, 2026-11-14: centring 600TH as one piece set the digits off to the left, and centring the
+    # digits alone crowded the TH against the right edge.
+    from display.ui.celebration_screen import ordinal_line
+    initialize_fonts(height)
+    fonts = [loaded_fonts['big'], loaded_fonts['countdown']]
+    parts = ordinal_line(number, fonts, loaded_fonts['info'], 30, (1, 1, 1), left, 64)
+    digits_left = parts[0][1]
+    digits_right = max(x + get_text_width(font, text) for font, x, _, _, text in parts[:-1])
+    suffix_font, _, _, _, suffix = parts[-1]
+    centred_right = digits_right + (1 + get_text_width(suffix_font, suffix)) // 2
+    assert abs((digits_left + centred_right) - (left + 64)) <= 1
+
+
+@pytest.mark.parametrize('height, number, left', [(64, 2000, 0), (64, 10000, 0), (32, 2000, TEXT_LEFT_32),
+                                                  (32, 10000, TEXT_LEFT_32), (32, 123456, TEXT_LEFT_32)])
+def test_a_wide_number_moves_left_only_enough_to_keep_its_ending_on(height, number, left):
+    from display.ui.celebration_screen import ordinal_line
+    initialize_fonts(height)
+    fonts = [loaded_fonts['big'], loaded_fonts['countdown']]
+    parts = ordinal_line(number, fonts, loaded_fonts['info'], 30, (1, 1, 1), left, 64)
+    font, x, _, _, text = parts[-1]
+    end = x + get_text_width(font, text)
+    digits_right = max(px + get_text_width(f, s) for f, px, _, _, s in parts[:-1])
+    centred = abs((parts[0][1] + digits_right + (1 + get_text_width(font, text)) // 2) - (left + 64)) <= 1
+    assert parts[0][1] >= left and end <= 64
+    assert centred or end == 64 or parts[0][1] == left
+
+
 def test_ordinal_that_fits_no_font_is_left_off():
     from display.ui.celebration_screen import ordinal_line
     initialize_fonts(64)
@@ -315,3 +356,38 @@ def test_number_runs_leave_fonts_without_measurements_alone():
     assert _number_runs(font, '2,000') == ([(0, '2,000')], 25)
     initialize_fonts(64)
     assert _number_runs(loaded_fonts['big'], '600') == ([(0, '600')], 30)
+
+
+def test_render_celebration_draws_both_panel_sizes(tmp_path, capsys):
+    """The README's celebration screenshot: every frame on 64x64 above and 64x32 below, from the screen code."""
+    from PIL import Image
+
+    from scripts import render_celebration, render_logo
+    out = tmp_path / 'milestones.png'
+    render_celebration.main(['--out', str(out)])
+    sheet = Image.open(out).convert('RGB')
+    scale, gap, left = render_logo.SHEET_SCALE, render_logo.GAP, render_logo.LABEL_WIDTH
+    count = len(render_celebration.FRAME_SECONDS)
+    assert sheet.size == (left + count * (64 * scale + gap), gap + 64 * scale + gap * 2 + 32 * scale + gap)
+    top = gap
+    for height in (64, 32):
+        for index, seconds in enumerate(render_celebration.FRAME_SECONDS):
+            image = _render(height, seconds, render_celebration.STATE)
+            x = left + index * (64 * scale + gap)
+            panel = sheet.crop((x, top, x + 64 * scale, top + height * scale))
+            assert panel.tobytes() == image.resize(panel.size, Image.NEAREST).tobytes()
+        top += height * scale + gap * 2
+    assert 'Wrote' in capsys.readouterr().out
+
+
+def test_render_celebration_runs_from_the_command_line(tmp_path, monkeypatch, capsys):
+    """`python scripts/render_celebration.py` from anywhere: the script puts the repo on sys.path itself."""
+    import runpy
+    import sys
+    from pathlib import Path
+    root = str(Path(__file__).resolve().parents[1])
+    out = tmp_path / 'sheet.png'
+    monkeypatch.setattr(sys, 'path', [p for p in sys.path if p not in (root, '')])
+    monkeypatch.setattr(sys, 'argv', ['render_celebration.py', '--out', str(out)])
+    runpy.run_path(str(Path(root) / 'scripts' / 'render_celebration.py'), run_name='__main__')
+    assert out.exists() and 'Wrote' in capsys.readouterr().out
