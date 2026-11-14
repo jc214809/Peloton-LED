@@ -129,6 +129,13 @@ class PelotonClient:
         except Exception:
             return None
 
+    def get_current_challenges(self, user_id: str) -> Dict[str, Any]:
+        """The running challenges the rider joined, each with their progress and tiers."""
+        resp = self._get(f"{BASE}/api/user/{user_id}/challenges/current", params={"has_joined": "true"},
+                         timeout=20)
+        resp.raise_for_status()
+        return self._object(resp)
+
     def get_overview(self, user_id: str) -> Dict[str, Any]:
         resp = self._get(f"{BASE}/api/user/{user_id}/overview", timeout=20)
         resp.raise_for_status()

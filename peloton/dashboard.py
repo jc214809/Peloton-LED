@@ -11,7 +11,8 @@ from pathlib import Path
 import requests
 from .api import PelotonClient, make_session
 from .cache import load_snapshot, save_snapshot
-from .config import renewal_failed_path
+from .challenges import parse_challenges
+from .config import DEFAULTS, renewal_failed_path
 from .demo import demo_data
 from .selection import is_brief, last_active_day
 from .summaries import summarize_workout
@@ -56,6 +57,10 @@ MISMATCH_LIMIT = 3
 REWALK_INTERVAL_SECONDS = 24 * 3600
 # A workout whose detail could not be had (404, not COMPLETE yet) is not asked for again this long.
 INSIGHT_RETRY_SECONDS = 3600
+# Challenge progress moves a class at a time, so hourly is plenty: 24 calls a day per rider. A failed
+# fetch keeps the last list and tries again sooner.
+CHALLENGES_REFRESH_SECONDS = 3600
+CHALLENGES_RETRY_SECONDS = 900
 
 
 def slim_profile(me):
@@ -113,6 +118,9 @@ class Dashboard:
         self._insight_views = {}
         self._rows_generation = 0
         self._profile_checked_at = None
+        # When the challenges were last asked for (monotonic), and how long until the next ask.
+        self._challenges_checked_at = None
+        self._challenges_wait = CHALLENGES_REFRESH_SECONDS
         self._derive_args = None
         # Log figures are computed under the log lock but published later; the
         # sequence keeps an older computation from overwriting a newer one.
@@ -132,7 +140,7 @@ class Dashboard:
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
                       'distance_totals': {}, 'personal_records': {},
                       'streak_week_workouts': None, 'activity_days': {},
-                      'time_frames': {}, 'events': {}}
+                      'time_frames': {}, 'events': {}, 'challenges': []}
         self.demo = demo
         if demo:
             data = demo_data()
@@ -143,6 +151,7 @@ class Dashboard:
                 summaries=[with_demo_insight(summarize_workout(w, data['performance'][w['id']]), data, config)
                            for w in data['workouts']],
                 weekly_progress=weekly_progress(data['workouts'], zone),
+                challenges=parse_challenges(data['challenges']),
                 login_required=demo_login_needed, status='ready', last_updated=time.time(),
                 generation=1)
         else:
@@ -392,6 +401,34 @@ class Dashboard:
             self._details.popitem(last=False)
         return detail
 
+    def _shows_challenges(self):
+        rotation = self.config.get('rotation', DEFAULTS['rotation'])
+        return isinstance(rotation, list) and 'challenges' in rotation
+
+    def _refresh_challenges(self, client, user_id):
+        """Fetch the joined challenges when due (hourly; sooner after a failure) and publish them. Only when the
+        challenges page is in the rotation. A failure keeps the last list; only a 401 escapes."""
+        if not self._shows_challenges():
+            return
+        now = time.monotonic()
+        if self._challenges_checked_at is not None and now - self._challenges_checked_at < self._challenges_wait:
+            return
+        self._challenges_checked_at = now
+        try:
+            challenges = parse_challenges(client.get_current_challenges(user_id))
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 401:
+                raise
+            logger.warning('Challenges fetch failed (%s); keeping the last list', type(exc).__name__)
+            self._challenges_wait = CHALLENGES_RETRY_SECONDS
+            return
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning('Challenges fetch failed (%s); keeping the last list', type(exc).__name__)
+            self._challenges_wait = CHALLENGES_RETRY_SECONDS
+            return
+        self._challenges_wait = CHALLENGES_REFRESH_SECONDS
+        self._publish(challenges=challenges)
+
     def _stamp(self):
         try:
             stat = self.token_path.stat()
@@ -517,8 +554,9 @@ class Dashboard:
                 self._client = candidate
                 self._token_stamp = stamp
                 self._failures = 0
-                # A replaced token may be a different account: re-read the profile.
+                # A replaced token may be a different account: re-read the profile and its challenges.
                 self._profile_checked_at = None
+                self._challenges_checked_at = None
             elif self.login_required:
                 # Rejected token: wait for a replacement instead of retrying it.
                 return self._finish_attempt(started, interval,
@@ -534,6 +572,7 @@ class Dashboard:
             if not user_id:
                 raise ValueError('Profile response has no user ID')
             overview = client.get_overview(user_id)
+            self._refresh_challenges(client, user_id)
             with self._lock:
                 stored_records = self._data.get('personal_records', {})
             personal_records = merge_personal_records(stored_records, parse_personal_records(overview))

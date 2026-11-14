@@ -91,4 +91,20 @@ def demo_data():
         'workouts': workouts, 'performance': performance,
         # Lifetime miles by discipline, as the dashboard's distance tally holds them.
         'distance_totals': {'cycling': 612.4, 'running': 88.2, 'walking': 41.0},
-        'insights': insights})
+        'insights': insights,
+        # GET challenges/current?has_joined=true: one challenge on a numbered tier, one between named tiers.
+        'challenges': {'challenges': [
+            _demo_challenge('The Annual 2026', 5503, '5,503', 'min', ('5K', 5000), ('6K', 6000), '497'),
+            _demo_challenge('November 2026 Rep Goal Challenge', 1640, '1,640', 'reps', ('Bronze', 1500),
+                            ('Silver', 3000), '1,360')]}})
+
+
+def _demo_challenge(title, value, shown, unit, tier, following, to_next):
+    def level(name, at):
+        return {'title': name, 'metric_value': float(at), 'metric_display_value': f'{at:,}',
+                'metric_display_unit': unit}
+    return {'challenge_summary': {'id': title.lower().replace(' ', '-'), 'title': title,
+                                  'start_time': 1767225600, 'end_time': 4102444799},
+            'progress': {'has_joined': True, 'metric_value': value, 'metric_display_value': shown,
+                         'metric_display_unit': unit, 'metric_display_value_to_next_tier': to_next,
+                         'current_tier': level(*tier), 'next_tier': level(*following)}}

@@ -21,7 +21,7 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'performance_cache_size': 32,
             'rotation': ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
                          'next_milestone', 'lifetime', 'journey',
-                         'heatmap', 'milestones', 'goals'],
+                         'heatmap', 'milestones', 'goals', 'challenges'],
             'screen_durations': {},
             'weekly_goals': {'workouts': 0, 'minutes': 0},
             'milestones': [],
@@ -54,9 +54,9 @@ RETIRED_DISPLAY_KEYS = ('history_days', 'history_limit', 'history_page_size',
 
 ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
                      'next_milestone', 'lifetime', 'journey', 'heatmap',
-                     'milestones', 'goals'}
+                     'milestones', 'goals', 'challenges'}
 DURATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'next_milestone',
-                     'lifetime', 'journey', 'heatmap', 'milestones', 'goals'}
+                     'lifetime', 'journey', 'heatmap', 'milestones', 'goals', 'challenges'}
 
 
 def user_slug(name):

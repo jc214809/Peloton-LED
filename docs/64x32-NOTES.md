@@ -231,6 +231,11 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   with the name and percent in white over them. Unlike the graph and zones
   slides it keeps the heart-rate/calorie row.
 
+### Challenges (both boards, 2026-11-14)
+- 64x64 is the ring ("C1", `docs/dev/ROTATION.md`); there's no room for it on 32 rows, so 64x32 is layout "A" from the same mock-ups: the title in gold 4x6 at baseline 6 (words dropped from the end past 64 px), the number in 7x13B at 18 (`123K` past 62 px), a 3-row blue bar from column 3 to 60 at row 21 (tier to tier, over (35, 35, 35)), then at 31 the current tier in its colour at x 2 (`0` before the first) and `497 TO 6K` right-aligned to 61, or that line centred alone when both don't fit with 4 px between (`BRONZE` + `1,360 TO SILVER`). No unit on 32 rows.
+- Checked against the largest values (`tests/test_challenges.py` `LARGEST`): 5- and 6-digit numbers, `PLATINUM`, a long title, every unit, on both heights, nothing off the panel and no text over the ring.
+- Every other page is unchanged on both boards.
+
 ### Strength tracker (both boards, 2026-11-13)
 - `TOTAL REPS`, `TOTAL VOLUME` and `TARGETS HIT` are ordinary stat frames on both boards
   (`TARGETS HIT` in the tier colour). The `TOP LIFT` slide replaces the muscles slide on a
