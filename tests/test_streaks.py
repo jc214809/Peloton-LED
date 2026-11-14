@@ -5,8 +5,10 @@ from unittest.mock import Mock
 import pytest
 
 from display.display import initialize_fonts
-from display.ui.streak_screen import (FLAME_COLORS, StreakScreen, daily_streak_lines, since_text, streak_lines,
-                                      streak_views)
+from display.ui.streak_risk_screen import StreakRiskScreen
+from display.ui.streak_screen import (FLAME_COLORS, FLAME_FRAME_SECONDS, FLAME_FRAMES, FLAME_H, FLAME_SEQUENCE,
+                                      FLAME_W, StreakScreen, daily_streak_lines, flame_frame, since_text,
+                                      streak_lines, streak_views)
 from peloton.activity import daily_streak_start
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import load_config
@@ -198,3 +200,49 @@ def test_config_accepts_streaks_section_and_duration(tmp_path):
     path = tmp_path / 'config.json'
     path.write_text('{"display": {"rotation": ["streaks"], "screen_durations": {"streaks": 5}}}')
     assert load_config(str(path))['display']['rotation'] == ['streaks']
+
+
+def test_flame_frames_keep_the_box_colours_and_base():
+    assert len(FLAME_FRAMES) > 1
+    for frame in FLAME_FRAMES:
+        assert len(frame) == FLAME_H and {len(row) for row in frame} == {FLAME_W}
+        assert set(''.join(frame)) <= set(FLAME_COLORS) | {'.'}
+        # The base never moves, so the flame flickers without wobbling.
+        assert frame[-5:] == FLAME_FRAMES[0][-5:]
+    assert set(FLAME_SEQUENCE) == set(range(len(FLAME_FRAMES)))
+
+
+def test_flame_frame_follows_the_sequence_and_starts_still():
+    assert flame_frame(0) == 0
+    for step, frame in enumerate(FLAME_SEQUENCE * 2):
+        assert flame_frame((step + 0.5) * FLAME_FRAME_SECONDS) == frame
+    for bad in (None, -1, float('nan'), float('inf'), '1'):
+        assert flame_frame(bad) == 0
+
+
+@pytest.mark.parametrize('screen, state', [
+    (StreakScreen, {'current_weekly': 1234, 'best_weekly': 1500}),
+    (StreakRiskScreen, {'current': 1234, 'days_left': 2})])
+@pytest.mark.parametrize('height', [32, 64])
+def test_flame_flickers_on_the_page_and_restarts_on_entry(screen, state, height):
+    initialize_fonts(height)
+    page = screen()
+    assert page.animated is True and page.atomic_frames is True
+    assert page.frame_seconds == FLAME_FRAME_SECONDS
+    drawn = []
+    page.on_enter(None, state)
+    for step in range(len(FLAME_SEQUENCE)):
+        matrix = ImageMatrix(height=height)
+        assert page.render(matrix, state)
+        pixels = matrix.image.load()
+        # Every frame keeps the 1-px side margins clear.
+        assert all(pixels[x, y] == (0, 0, 0) for x in (0, 63) for y in range(height))
+        drawn.append(matrix.image.tobytes())
+        page.update(FLAME_FRAME_SECONDS)
+    assert len(set(drawn)) == len(FLAME_FRAMES)
+    page.update(-5)
+    page.update(None)
+    page.on_enter(None, state)
+    matrix = ImageMatrix(height=height)
+    page.render(matrix, state)
+    assert matrix.image.tobytes() == drawn[0]

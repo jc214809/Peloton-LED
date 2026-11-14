@@ -3,7 +3,7 @@ from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
 from .screen import Screen
-from .streak_screen import FLAME_H, FLAME_W, draw_flame
+from .streak_screen import FLAME_H, FLAME_W, FlickeringFlame, draw_flame
 
 _ORANGE = graphics.Color(255, 140, 0)
 _GREY = graphics.Color(145, 165, 190)
@@ -15,8 +15,9 @@ def days_left_text(days_left):
     return 'LAST DAY' if days_left <= 1 else f'{days_left} DAYS LEFT'
 
 
-class StreakRiskScreen(Screen):
-    """state: {'current': weeks in the streak, 'days_left': days left this week, today included}"""
+class StreakRiskScreen(FlickeringFlame, Screen):
+    """state: {'current': weeks in the streak, 'days_left': days left this week, today included}.
+    The flame flickers like the streak page's."""
 
     def render(self, matrix, state=None):
         state = state if isinstance(state, dict) else {}
@@ -35,7 +36,7 @@ class StreakRiskScreen(Screen):
 
         streak = f'{current:,}-WEEK STREAK'
         if matrix.height < 64:
-            draw_flame(matrix, 2, 0)
+            draw_flame(matrix, 2, 0, self.flame)
             x = 2 + FLAME_W + 3
             graphics.DrawText(matrix, small, x, 7, _GOLD, '1 WORKOUT')
             graphics.DrawText(matrix, small, x, 15, _GREY, 'KEEPS YOUR')
@@ -44,7 +45,7 @@ class StreakRiskScreen(Screen):
             center(small, streak, 23, _ORANGE)
             center(small, days_left_text(days_left), 31, _WHITE)
             return True
-        draw_flame(matrix, (w - FLAME_W) // 2, 1)
+        draw_flame(matrix, (w - FLAME_W) // 2, 1, self.flame)
         center(title, '1 WORKOUT', FLAME_H + 10, _GOLD)
         center(small, 'KEEPS YOUR', FLAME_H + 18, _GREY)
         center(big, f'{current:,}', FLAME_H + 34, _WHITE)
