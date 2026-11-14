@@ -13,7 +13,6 @@ Name page together facts ── shares figures with item 6 (head to head)
 Name page facts settings and log fields ── maybe
 Workout compare: Cardio classes ── unlikely (measured 2026-11-12: too rare to say much); independent
 Tough class vs what you've done lately ── independent; decide the effort-insight question with it
-Arms sections never count against you ── independent
 Ideas (not yet sized) ── trend charts share windows with item 6; yearly goal and weekly recap use `frame_stats`
 ```
 
@@ -184,13 +183,6 @@ Still to decide:
 - Whether the effort insight still drops after a tough class (2026-11-13: the reason it drops after a strong or weak output, that their text already speaks to heart rate, does not hold for the tough class; Joel leaning toward keeping it).
 
 Rules in `peloton/workout_insights.py` (the new pool beside `tough_class`, tested on hand-made rows), wording in `peloton/insight_lines.py`, the spec's section 5.1a (`WORKOUT-COMPARE-SPEC.md`, outside the repo), `docs/dev/WORKOUT-INSIGHTS.md`. Measurement script: ask Claude to regenerate. Depends on: nothing.
-
-### Workout insights: arms sections never count against you
-Raised 2026-11-13. In an Intervals & Arms ride, pedalling and resistance are optional during the arms sections, so slowing down or turning the resistance down there must never count against the rider. Checked 2026-11-13 over both riders' bike rides: the arms sections are found in every arms ride (`segment_kind` → `arms` from the `upper_body` segment; the six titled "Upper Body" not found are bootcamps, whose floor segments are left out the same way), and they are already left out of the work output, output per heartbeat, the bike plan and the callouts that start in them.
-
-The leak: `workout_features._callouts` keeps a callout when its **start** is in a work segment, then counts every sample to the callout's end. A callout that starts in a riding segment and runs into the arms section (or a floor block, or the cool-down) counts the arms seconds against the cadence and resistance checks. Measured over the saved raw files: arms seconds counted in 21 of Joel's 39 arms rides and 75 of Jen's 99, usually a few 5-second samples; it wrongly gave Jen `resistance_low` 4 times and `cadence_low` once (none for Joel: his 10 `cadence_low` arms rides were under in the riding segments too).
-
-The fix: count only the samples inside work segments, and weight a callout's level by the seconds it overlaps them. No `ROW_VERSION` bump: the callout fields (`target`, `target_pos`, `target_in`, `target_under`) are only read for the workout itself (`callout_insights`), never a peer's, so old rows stay valid and a board's next workout gets the fix with no re-push (a bump would make boards ignore every row until re-pushed). Depends on: nothing.
 
 ### Whose data is this? (multi-rider boards)
 The username page names the rider, but once it's gone nothing says whose workout, goal, journey or milestone is on screen, which matters most on the pages that show what they did that day. Single-rider boards show nothing extra. Mocked up 2026-11-12 on Jen's real pages (a Tread Bootcamp workout, a goal, the journey) on both boards; Joel kept all five as options, undecided:

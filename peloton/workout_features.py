@@ -350,25 +350,35 @@ def build_row(detail, graph=None, ride=None):
     return row
 
 
+def _overlap(a, b, windows):
+    """Seconds of [a, b) inside the windows."""
+    return sum(max(0, min(b, hi) - max(a, lo)) for lo, hi in windows)
+
+
 def _callouts(row, graph, times, series, work_windows):
-    """The instructor's callouts inside work segments: their level, and where the rider sat in them."""
+    """The instructor's callouts inside work segments: their level, and where the rider sat in them.
+
+    Only the seconds inside work segments count: a callout that runs on into an arms section (pedalling
+    optional), a floor block or the cool-down never counts those seconds against the rider.
+    """
     callouts = (graph.get('target_metrics_performance_data') or {}).get('target_metrics') or []
     level, position, inside, under, pace = {}, {}, {}, {}, {}
     for callout in callouts:
         a, b = callout['offsets']['start'], callout['offsets']['end'] + 1
-        if not _in_windows(a, work_windows):
+        seconds = _overlap(a, b, work_windows)
+        if not seconds:
             continue
         for metric in callout.get('metrics') or []:
             name, lo, hi = metric['name'], metric['lower'], metric['upper']
             if name == 'pace_intensity':
-                pace[str(int(lo))] = pace.get(str(int(lo)), 0) + b - a
+                pace[str(int(lo))] = pace.get(str(int(lo)), 0) + seconds
                 continue
-            level.setdefault(name, []).append(((lo + hi) / 2, b - a))
+            level.setdefault(name, []).append(((lo + hi) / 2, seconds))
             source = TARGET_SERIES.get(name)
             if source in series and hi > lo:
                 for i in range(min(len(times), len(series[source]))):
                     value = series[source][i]
-                    if value is not None and a <= times[i] < b:
+                    if value is not None and a <= times[i] < b and _in_windows(times[i], work_windows):
                         position.setdefault(name, []).append((value - lo) / (hi - lo))
                         inside.setdefault(name, []).append(lo <= value <= hi)
                         under.setdefault(name, []).append(value < lo)
