@@ -170,3 +170,16 @@ def test_render_countdown_stops_on_a_page_it_cannot_draw(monkeypatch):
     monkeypatch.setattr(render_countdown, 'PAGES', [{'total': 600, 'target': 600, 'previous': 500}])
     with pytest.raises(RuntimeError, match='drew nothing'):
         render_countdown.panels(64)
+
+
+def test_render_countdown_runs_from_the_command_line(tmp_path, monkeypatch, capsys):
+    """`python scripts/render_countdown.py` from anywhere: the script puts the repo on sys.path itself."""
+    import runpy
+    import sys
+    from pathlib import Path
+    root = str(Path(__file__).resolve().parents[1])
+    out = tmp_path / 'sheet.png'
+    monkeypatch.setattr(sys, 'path', [p for p in sys.path if p not in (root, '')])
+    monkeypatch.setattr(sys, 'argv', ['render_countdown.py', '--out', str(out)])
+    runpy.run_path(str(Path(root) / 'scripts' / 'render_countdown.py'), run_name='__main__')
+    assert out.exists() and 'Wrote' in capsys.readouterr().out
