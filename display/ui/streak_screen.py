@@ -1,5 +1,6 @@
 """Streaks: a pixel flame over the weekly streak and the best one, or the
 daily streak and the day it started (one per rotation pass)."""
+import math
 from datetime import date
 
 from driver import graphics
@@ -7,25 +8,88 @@ from driver import graphics
 from display.display import get_text_width, loaded_fonts
 from .screen import Screen
 
-# 12 wide x 16 tall: R red edge, O orange, Y yellow core.
-FLAME_ROWS = (
-    ".....R......",
-    ".....RR.....",
-    "....RRR.....",
-    "....RRRR..R.",
-    "...RRORRR.R.",
-    "...RROORRRR.",
-    "..RROOORRRR.",
-    "..RROOOORRR.",
-    ".RRROOYOORRR",
-    ".RROOYYOOORR",
-    ".RROOYYYOORR",
-    ".RROYYYYOORR",
-    ".RROYYYYYORR",
-    "..RROYYYORR.",
-    "...RROOORR..",
-    "....RRRRR...",
+# 12 wide x 16 tall: R red edge, O orange, Y yellow core. Frame 0 is the
+# still flame (screenshots, the first frame); the others flicker its tips and
+# core, and the base stays put so the flame doesn't wobble on the panel.
+FLAME_FRAMES = (
+    (
+        ".....R......",
+        ".....RR.....",
+        "....RRR.....",
+        "....RRRR..R.",
+        "...RRORRR.R.",
+        "...RROORRRR.",
+        "..RROOORRRR.",
+        "..RROOOORRR.",
+        ".RRROOYOORRR",
+        ".RROOYYOOORR",
+        ".RROOYYYOORR",
+        ".RROYYYYOORR",
+        ".RROYYYYYORR",
+        "..RROYYYORR.",
+        "...RROOORR..",
+        "....RRRRR...",
+    ),
+    (
+        "....R.......",
+        "....RR......",
+        "....RRR.....",
+        "...RRRR.....",
+        "...RROR..R..",
+        "..RRROORRR..",
+        "..RROOORRRR.",
+        "..RROOOORRR.",
+        ".RRROOOOORRR",
+        ".RROOYYOOORR",
+        ".RROOYYYOORR",
+        ".RROYYYYOORR",
+        ".RROYYYYYORR",
+        "..RROYYYORR.",
+        "...RROOORR..",
+        "....RRRRR...",
+    ),
+    (
+        "......R.....",
+        ".....RR...R.",
+        ".....RRR..R.",
+        "....RRRR..R.",
+        "...RRORRR.R.",
+        "...RROORRRR.",
+        "..RROOORRRR.",
+        "..RROOYORRR.",
+        ".RRROYYOORRR",
+        ".RROOYYYOORR",
+        ".RROYYYYOORR",
+        ".RROYYYYOORR",
+        ".RROYYYYYORR",
+        "..RROYYYORR.",
+        "...RROOORR..",
+        "....RRRRR...",
+    ),
+    (
+        "............",
+        ".....R......",
+        ".....RR.....",
+        "....RRRR.R..",
+        "...RRORRRR..",
+        "...RROORRRR.",
+        "..RROOORRRR.",
+        "..RROOOORRR.",
+        ".RRROOYOORRR",
+        ".RROOYYOOORR",
+        ".RROOYYYOORR",
+        ".RROYYYYOORR",
+        ".RROYYYYYORR",
+        "..RROYYYORR.",
+        "...RROOORR..",
+        "....RRRRR...",
+    ),
 )
+FLAME_ROWS = FLAME_FRAMES[0]
+# The frames in the order they play, one every FLAME_FRAME_SECONDS; uneven so
+# the flicker doesn't read as a loop.
+FLAME_SEQUENCE = (0, 1, 0, 2, 3, 2, 0, 3, 1, 0, 2, 3)
+FLAME_FRAME_SECONDS = 0.12
 FLAME_W, FLAME_H = 12, 16
 # A one-day "streak" is just today's workout; show the daily view from two.
 MIN_DAILY_STREAK = 2
@@ -36,11 +100,42 @@ _GOLD = graphics.Color(255, 215, 0)
 _WHITE = graphics.Color(255, 255, 255)
 
 
-def draw_flame(matrix, x, y):
-    for dy, row in enumerate(FLAME_ROWS):
+def flame_frame(elapsed):
+    """The FLAME_FRAMES index to draw `elapsed` seconds into a page."""
+    if not isinstance(elapsed, (int, float)) or not math.isfinite(elapsed) or elapsed < 0:
+        return 0
+    step = int(elapsed / FLAME_FRAME_SECONDS) % len(FLAME_SEQUENCE)
+    return FLAME_SEQUENCE[step]
+
+
+def draw_flame(matrix, x, y, frame=0):
+    for dy, row in enumerate(FLAME_FRAMES[frame % len(FLAME_FRAMES)]):
         for dx, cell in enumerate(row):
             if cell in FLAME_COLORS:
                 matrix.SetPixel(x + dx, y + dy, *FLAME_COLORS[cell])
+
+
+class FlickeringFlame:
+    """Mixin for a screen with a flame: animated, and the time on the page
+    that picks the frame (`self.flame`)."""
+
+    animated = True
+    atomic_frames = True
+    frame_seconds = FLAME_FRAME_SECONDS
+
+    def __init__(self):
+        self.elapsed = 0.0
+
+    def on_enter(self, matrix, state=None):
+        self.elapsed = 0.0
+
+    def update(self, dt):
+        if isinstance(dt, (int, float)) and dt > 0:
+            self.elapsed += dt
+
+    @property
+    def flame(self):
+        return flame_frame(self.elapsed)
 
 
 def streak_lines(streaks):
@@ -88,11 +183,11 @@ def streak_views(streaks):
     return [(view, lines) for view, lines in views if lines]
 
 
-class StreakScreen(Screen):
+class StreakScreen(FlickeringFlame, Screen):
     """state is the snapshot's 'streaks' dict (see peloton.totals.parse_streaks),
     plus 'daily_start' and 'today' for the daily footer and 'view' ('weekly'
     or 'daily'). Without a 'view', or when that one has nothing to show, the
-    first available view is drawn."""
+    first available view is drawn. The flame flickers (FLAME_SEQUENCE)."""
 
     def render(self, matrix, state=None):
         state = state if isinstance(state, dict) else {}
@@ -111,11 +206,11 @@ class StreakScreen(Screen):
             gap = 3
             group = FLAME_W + gap + get_text_width(big, number)
             left = max((w - group) // 2, 1)
-            draw_flame(matrix, left, 0)
+            draw_flame(matrix, left, 0, self.flame)
             graphics.DrawText(matrix, big, left + FLAME_W + gap, 13, _WHITE, number)
             y_label, y_footer = 23, 30
         else:
-            draw_flame(matrix, (w - FLAME_W) // 2, 3)
+            draw_flame(matrix, (w - FLAME_W) // 2, 3, self.flame)
             x = max((w - get_text_width(big, number)) // 2, 1)
             graphics.DrawText(matrix, big, x, 39, _WHITE, number)
             y_label, y_footer = 50, 60

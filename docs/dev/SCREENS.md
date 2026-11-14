@@ -28,6 +28,10 @@ All screens implement the `Screen` ABC (`display/ui/screen.py`):
 
 The startup logo (`LogoMaskScreen`) is drawn, not decoded: the red mark (`logo_art.MARK`, cropped from the 32-row art), PELOTON and L E D in the loaded fonts, and a zone bar in `ZONE_COLORS` (also the workout pages' `HR_ZONE_COLORS`). 64 rows stack them; fewer put the mark on the left. `display.logo_path` swaps in an image file (`LogoScreen`). `settings_page/logo.py` draws the settings page's icons from the same art (inline SVG for the header and favicon, `/apple-touch-icon.png` served without a PIN), so `logo_art` must stay import-free. `scripts/render_logo.py` regenerates `docs/logo.png` and the README's startup screenshot. `prepared_logos/` and the `prepare_image`/`postprocess_logos` scripts are only for `logo_path` images.
 
+## Streak flame (`display/ui/streak_screen.py`)
+
+The streak page and the streak reminder share the 12x16 flame (`FLAME_FRAMES`) through the `FlickeringFlame` mixin: `animated`, `atomic_frames`, a frame every `FLAME_FRAME_SECONDS` (0.12 s) in the uneven `FLAME_SEQUENCE` order (added 2026-11-14, Joel asked to animate it). Frame 0 is the original still flame: a page opens on it and `render_rotation.frame_times` captures streak pages at 0 s, so the README's screenshots keep it. Only the tips and core move; the bottom five rows stay put so the flame doesn't wobble, and every frame stays in the 12x16 box, so the layouts' fit checks still hold.
+
 ## Models (`models/`)
 
 Typed workout data models for each discipline: `cycling.py`, `running.py`, `rowing.py`, `strength.py`, all extending `models/core.py`. Used by `peloton/summaries.py` to normalize raw API payloads into structured workout summaries.
