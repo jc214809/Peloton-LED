@@ -34,6 +34,9 @@ SCREENS = (
      'A trophy for a milestone just reached, all workouts or one discipline\'s, for the rest of that '
      'day. Always first, after the logo.'),
     ('goals', 'Weekly goals', "Progress toward this week's goals."),
+    ('challenges', 'Challenges',
+     'Each Peloton challenge you joined: how far to its next tier. Only running challenges with some '
+     'progress and a tier still to reach.'),
 )
 # The Milestones card's countdown settings; blank is the app's default.
 MILESTONE_KEYS = ('milestone_within', 'milestone_pages')

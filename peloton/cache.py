@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 
+from .challenges import valid_challenge
 from .goals import parse_milestone_key
 
 
@@ -12,7 +13,7 @@ PERSISTED_KEYS = (
     'active_day_count', 'celebrated_pr_ids', 'pr_shown_at',
     'weekly_progress', 'celebrated_milestones', 'personal_records', 'streaks',
     'milestone_shown_at', 'celebrated_discipline_milestones', 'discipline_milestone_shown_at',
-    'name_facts_passes', 'name_facts_shown',
+    'name_facts_passes', 'name_facts_shown', 'challenges',
 )
 
 
@@ -84,6 +85,11 @@ def load_snapshot(path):
                 or not all(isinstance(at, int) and not isinstance(at, bool) for at in facts.values())):
             restored.pop('name_facts_passes', None)
             restored.pop('name_facts_shown', None)
+    # Challenges: a damaged list only hides the page until the next hourly fetch.
+    challenges = restored.get('challenges')
+    if challenges is not None and (not isinstance(challenges, list)
+                                   or not all(valid_challenge(c) for c in challenges)):
+        del restored['challenges']
     return restored
 
 
