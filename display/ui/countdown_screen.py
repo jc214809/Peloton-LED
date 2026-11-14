@@ -1,4 +1,4 @@
-"""Next milestone: 3 TO GO / TILL YOUR / 600TH / RIDE, or NEXT ONE / IS YOUR / 600TH / RIDE when one is left (32 rows: 3 MORE / TO 600 / CYCLING), with a progress bar.
+"""Next milestone: 3 TO GO / TILL YOUR / 600TH / RIDE, or NEXT ONE / IS YOUR / 600TH / RIDE when one is left, with a progress bar (32 rows: 3 AWAY FROM / YOUR 600TH / RIDE, no bar).
 
 One page per target within a few workouts, the total's or a discipline's.
 state: {'total': 597, 'target': 600, 'previous': 500, 'title': 'Cycling', 'discipline': 'cycling'};
@@ -8,7 +8,7 @@ previous is where the bar starts. The name is drawn in the discipline's Lifetime
 from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
-from .celebration_screen import discipline_noun, ordinal_line
+from .celebration_screen import _cap_height, discipline_noun, ordinal_line
 from .lifetime_overview import discipline_color
 from .screen import Screen
 
@@ -58,6 +58,21 @@ BOO_SHIFT = 2               # BOO is drawn 2 px right of where it falls, TCAMP a
 NAME_INK = {'ROW BOOTCAMP': (0, 56), 'BIKE BOOTCAMP': (2, 59), 'TREAD BOOTCAMP': (1, 63)}
 
 
+# Every 7x13B letter and digit, and the 4x6 and 5x8 letters a 32-row line starts or ends with (YOUR, TH, FROM),
+# is lit from its first column, with one blank column after it; of the 5x8 digits the count starts with, 0 and 1
+# start with a blank column. Measured once, like NAME_INK (test_countdown_line_edge_ink re-checks it).
+LINE_TRAILING_BLANK = 1
+LEAD_DIGIT_BLANK = {'0': 1, '1': 1}
+LEAD_WORD_GAP = 3   # px added between the top line's words (the 5x8 space is wider than it needs)
+_COUNT = (0, 220, 255)   # 32 rows: the count is cyan, its own colour beside the gold milestone
+
+
+def _lit_centre_x(matrix, runs, lead_blank=0):
+    """Where the first lit column goes so the runs' lit pixels are centred, an odd spare column going left."""
+    lit = sum(get_text_width(font, text) + gap for font, text, _, gap in runs) - LINE_TRAILING_BLANK - lead_blank
+    return max((matrix.width - lit + 1) // 2, 0)
+
+
 def _draw_runs_at(matrix, runs, baseline, x):
     for font, text, color, gap in runs:
         graphics.DrawText(matrix, font, x, baseline, graphics.Color(*color), text)
@@ -102,6 +117,49 @@ def _fit(text, fonts, room):
 
 class CountdownScreen(Screen):
 
+    @staticmethod
+    def _render_short(matrix, left_to_go, target, name, color, bold):
+        """32 rows: 3 AWAY FROM / YOUR 600TH / RIDE, no bar. The top line in 5x8 (the count cyan, the words
+        white), then YOUR (4x6, white, floating mid-line: 2 rows either side) and the gold 7x13B number with its
+        raised TH, then the name in 7x13B in its Lifetime colour. Lines on rows 3-8, 12-20, 23-31; a name in a
+        smaller font (a bootcamp's 5x8, STRETCHING) closes up to 4-9, 12-20, 23-28 so the gaps match. Every line is centred by
+        its lit pixels."""
+        small = (_fonts('stats', 'info') or [bold])[0]
+        lead_font = (_fonts('discipline') or [bold])[0]
+        raise_by = (_cap_height(bold) - _cap_height(small)) // 2
+        tight = name in NAME_INK and tight_name_runs(name, loaded_fonts.get('discipline'), color, matrix.width)
+        name_font = None if tight else _fit(name, [bold] + _fonts('discipline', 'info'),
+                                                          matrix.width + LINE_TRAILING_BLANK)
+        top, number_y, name_y = (9, 21, 32) if name_font is bold else (10, 21, 29)
+        count = str(left_to_go)
+        lead = [(lead_font, count, _COUNT, LEAD_WORD_GAP), (lead_font, 'AWAY', _WHITE, LEAD_WORD_GAP),
+                (lead_font, 'FROM', _WHITE, 0)]
+        blank = LEAD_DIGIT_BLANK.get(count[0], 0) if lead_font is loaded_fonts.get('discipline') else 0
+        _draw_runs_at(matrix, lead, top, _lit_centre_x(matrix, lead, blank) - blank)
+        your = get_text_width(small, 'YOUR') + 2
+        gold = graphics.Color(*_GOLD)
+        # The number beside YOUR (its comma dropped if that's what fits); too wide for that, on its own.
+        parts = ordinal_line(target, [bold], small, number_y, gold, 0, matrix.width + LINE_TRAILING_BLANK - your)
+        with_your = parts is not None
+        parts = parts or ordinal_line(target, [bold], small, number_y, gold, 0, matrix.width + LINE_TRAILING_BLANK)
+        if parts:
+            first = min(x for _, x, _, _, _ in parts)
+            end = max(x + get_text_width(font, text) for font, x, _, _, text in parts)
+            lit = end - first - LINE_TRAILING_BLANK + (your if with_your else 0)
+            x = max((matrix.width - lit + 1) // 2, 0)
+            if with_your:
+                _draw_runs_at(matrix, [(small, 'YOUR', _WHITE, 0)], number_y - raise_by, x)
+                x += your
+            for font, part_x, y, part_color, text in parts:
+                graphics.DrawText(matrix, font, x + part_x - first, y, part_color, text)
+        if tight:   # drawn as on 64 rows: 5x8 with the tight space and kerning
+            left, lit = NAME_INK[name]
+            _draw_runs_at(matrix, tight, name_y, (matrix.width - lit + 1) // 2 - left)
+        else:   # discipline_noun always gives a word
+            runs = [(name_font, name, color, 0)]
+            _draw_runs_at(matrix, runs, name_y, _lit_centre_x(matrix, runs))
+        return True
+
     def render(self, matrix, state=None):
         state = state if isinstance(state, dict) else {}
         total, target, previous = state.get('total'), state.get('target'), state.get('previous', 0)
@@ -112,28 +170,16 @@ class CountdownScreen(Screen):
         if not big or not bold:
             return False
         big, bold = big[0], bold[0]
-        name = str(state.get('title') or '').upper()
         color = discipline_color(state.get('discipline'))
         fraction = (total - previous) / (target - previous) if target > previous else 0
-        # 64 rows: 3 TO GO / 600TH / RIDE, the same noun the celebration uses (the discipline's name only where
-        # it has no word of its own); 32 rows keep 3 MORE / TO 600 / CYCLING.
-        more = [(big if matrix.height >= 64 else bold, str(target - total), _WHITE, 3 if matrix.height >= 64 else 2),
-                (bold, 'TO GO' if matrix.height >= 64 else 'MORE', _WHITE, 0)]
-        if matrix.height >= 64:
-            name = (discipline_noun(state.get('discipline'), state.get('title')) if state.get('discipline')
-                    else 'WORKOUT')
-        # 64 rows: the 7x13B 'bold' where the name fits (6x13B squashed STRENGTH and WORKOUT), 6x13B for the
-        # two widest (STRETCHING, MEDITATION). 32 rows: 6x9 ('countdown'), since 5x8's narrow G and T leave gaps (S TRENG TH).
-        names = _fonts('bold', 'title_bold', 'titles', 'info') if matrix.height >= 64 else _fonts('countdown', 'info')
+        # The same noun the celebration uses (the discipline's name only where it has no word of its own).
+        name = discipline_noun(state.get('discipline'), state.get('title')) if state.get('discipline') else 'WORKOUT'
         if matrix.height < 64:
-            # No room to stack a big 600TH: TO 600 in one line, and no bar.
-            _draw_runs(matrix, more, 11)
-            _draw_runs(matrix, [(loaded_fonts.get('countdown') or bold, 'TO', _GREY, 2),
-                                (bold, f'{target:,}', _GOLD, 0)], 22)
-            if name and names:
-                font = _fit(name, names, matrix.width - 2)
-                _draw_runs(matrix, [(font, name, color, 0)], 30)
-            return True
+            return self._render_short(matrix, target - total, target, name, color, bold)
+        more = [(big, str(target - total), _WHITE, 3), (bold, 'TO GO', _WHITE, 0)]
+        # The 7x13B 'bold' where the name fits (6x13B squashed STRENGTH and WORKOUT), 6x13B for the two widest
+        # (STRETCHING, MEDITATION).
+        names = _fonts('bold', 'title_bold', 'titles', 'info')
         titles = loaded_fonts.get('titles')
         # Four lines and the bar, spaced evenly: 3 TO GO / TILL YOUR / 600TH / RIDE, or with one left
         # (the next workout is the milestone) NEXT ONE / IS YOUR / 600TH / RIDE in the same places.
