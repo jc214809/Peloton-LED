@@ -150,20 +150,40 @@ CHEER_32 = ['WAY TO', 'CHALLENGE', 'YOURSELF!']
 ARROW = 'arrow'
 
 
+# The tough class is against the rider's usual (their last 12 classes in the discipline), not similar classes, so
+# it says USUAL where the others say TYPICAL (Joel, 2026-11-13), on the card and the bars' label alike.
+USUAL_WORD = 'USUAL'
+RATING_TOP = 10            # the rating bars are drawn on Peloton's 0-10 scale
+
+
+def _usual_footer(facts):
+    """`LAST 12 ROWS`, or `LAST 12 CLASSES` when the noun won't fit (bootcamps)."""
+    rated, noun = facts['rated'], _plural(facts['noun']).upper()
+    if isinstance(rated, bool) or not isinstance(rated, int) or rated < 1:
+        raise ValueError('bad usual count')
+    line = f'LAST {rated} {noun}'
+    return line if len(line) <= LINE_MAX else f'LAST {rated} CLASSES'
+
+
 def _tough(code, facts):
-    unit = facts['unit'].lower()
     mine, usual = f"{facts['difficulty']:.1f}", f"{facts['usual_difficulty']:.1f}"
-    ratings = wrap(f'{mine} CLASS, YOUR TYPICAL IS {usual}.')
+    ratings = wrap(f'{mine} CLASS, YOUR {USUAL_WORD} IS {usual}.')
     if len(ratings) > 2:  # a 10.0 class: '10.0 CLASS, YOUR' would run past the line
-        ratings = wrap(f'{mine} CLASS. TYPICAL {usual}.')
+        ratings = wrap(f'{mine} CLASS. {USUAL_WORD} {usual}.')
     lines = CHEER_64 + ratings
-    figure = _bars(facts['value'], facts['usual'], unit if unit == 'mph' else 'W')
+    sentence = {'lines64': lines, 'pages32': [list(CHEER_32)], 'text': ' '.join(lines)}
+    if facts.get('value') is None:
+        # No output insight behind it (too few similar classes, or strength): the two ratings are the bars.
+        figure = {'kind': 'bars', 'today': facts['difficulty'], 'usual': facts['usual_difficulty'],
+                  'today_text': mine, 'usual_text': usual, 'unit': '', 'top': RATING_TOP, 'usual_label': USUAL_WORD}
+        return 'TOUGH CLASS', sentence, figure, 'CLASS RATING', _usual_footer(facts)
+    unit = facts['unit'].lower()
+    figure = {**_bars(facts['value'], facts['usual'], unit if unit == 'mph' else 'W'), 'usual_label': USUAL_WORD}
     # `text` is the bottom line as words (for logs); `parts` is how the screen draws it, the arrow between.
     # A 10.0 class draws `10` on the bottom line: `10.0 → USUALLY 9.0` would be 67 px of the 63 it has.
     short = mine if len(mine) <= 3 else f"{facts['difficulty']:.0f}"
     reason = {'text': f'{mine} TO USUALLY {usual}', 'parts': [short, ARROW, f'USUALLY {usual}']}
-    return 'TOUGH CLASS', {'lines64': lines, 'pages32': [list(CHEER_32)], 'text': ' '.join(lines)}, figure, reason, \
-        _similar(facts)
+    return 'TOUGH CLASS', sentence, figure, reason, _usual_footer(facts)
 
 
 def _effort(code, facts):

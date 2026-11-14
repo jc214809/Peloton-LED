@@ -336,7 +336,10 @@ def _good_figure(figure) -> bool:
         return False
     if figure['kind'] == 'bars' and not all(isinstance(figure.get(k), str) for k in ('today_text', 'usual_text')):
         return False
-    if not all(isinstance(figure.get(key, ''), str) for key in ('unit', 'label')):
+    if not all(isinstance(figure.get(key, ''), str) for key in ('unit', 'label', 'usual_label')):
+        return False
+    # The 64x64 bars' label for the usual figure sits left of its number: TYPICAL's 7 characters at most.
+    if len(figure.get('usual_label', '')) > len(TYPICAL_LABEL) or not _number(figure.get('top', 0)):
         return False
     if figure['kind'] == 'share' and figure['pct'] > 100:
         return False
@@ -630,14 +633,20 @@ def _draw_insight_card(matrix, view: dict, discipline: str, index: int, count: i
     _centred(matrix, stats, 61, _LABEL_GREY, view['footer'])
 
 
+def _bars_top(figure: dict):
+    """The value a full bar stands for: the figure's own `top` (a 0-10 rating scale), else the larger of the two."""
+    return max(figure.get('top') or 0, figure['today'], figure['usual']) or 1
+
+
 def _bars_tall(matrix, figure: dict, colour) -> None:
     """64x64 figure: TODAY / TYPICAL bars on baselines 32 and 45, a share bar on 32, or blocks from row 34."""
     stats = loaded_fonts['stats']
     kind = figure['kind']
     if kind == 'bars':
-        top = max(figure['today'], figure['usual']) or 1
+        top = _bars_top(figure)
+        usual_label = figure.get('usual_label') or TYPICAL_LABEL
         for y, label, value, text, rgb, bar in ((32, 'TODAY', figure['today'], figure['today_text'], colour, colour),
-                                                (45, TYPICAL_LABEL, figure['usual'], figure['usual_text'], _LABEL_GREY,
+                                                (45, usual_label, figure['usual'], figure['usual_text'], _LABEL_GREY,
                                                  _USUAL_BAR)):
             unit = figure.get('unit', '')
             # Weights read as one word, 40LB, as in the sentence; watts and mph keep their space.
@@ -676,7 +685,7 @@ def _bars_short(matrix, figure: dict, colour) -> None:
     stats = loaded_fonts['stats']
     kind = figure['kind']
     if kind == 'bars':
-        top = max(figure['today'], figure['usual']) or 1
+        top = _bars_top(figure)
         for y, value, text, rgb, bar in ((13, figure['today'], figure['today_text'], colour, colour),
                                          (21, figure['usual'], figure['usual_text'], _LABEL_GREY, _USUAL_BAR)):
             _rect(matrix, 1, y - 4, 1 + round(40 * min(value, top) / top), y, bar)

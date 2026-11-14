@@ -74,7 +74,7 @@ def demo_data():
     insights = {
         'demo-cycling': demo_insights(
             ('tough_class', {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 9,
-                             'real': 9, 'reason': None, 'difficulty': 9.1, 'usual_difficulty': 7.0}),
+                             'real': 9, 'reason': None, 'difficulty': 9.1, 'usual_difficulty': 7.0, 'rated': 12}),
             ('effort_high', {'n': 12, 'value': 29.4, 'noun': 'ride', 'rate': 0.98, 'usual_rate': 0.76})),
         # An instructor milestone (words only, gold): no figure, so one card / one page.
         'demo-rowing': demo_insights(

@@ -237,6 +237,9 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   `9.1`, 14-18 after `9.0`: the 1 has 2 px of ink, other digits 3; `_parts_layout`; Joel, 2026-11-12: it sat
   a row low and off-centre); `9.1` from column 1, ending at column 63). 64x64 draws the same line on
   baseline 61 and a 5-line card whose first line, `WAY TO CHALLENGE`, is the one 16-character (64 px) line.
+  With no output insight behind it the bars are the two ratings on a 0-10 scale (the figure's `top`: a 7.8
+  fills 31 of the 64x32 bar's 40 px, not all of it) and the reason line is plain `CLASS RATING`, no arrow;
+  the 64x64 bars label the usual `USUAL` (the figure's `usual_label`), with or without output.
 - A reason wider than 60 px (only a movement name) scrolls like the name page's highlights (hold, glide,
   hold; `UsernameScreen.scroll_offset`), the 2-px margins blanked.
 - Spacing (Joel, 2026-11-11): weights are one word, `40LB`, in the sentence, the reason and the 64x64 bars

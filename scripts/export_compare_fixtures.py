@@ -32,7 +32,14 @@ EXPECTED = (
     ('joel', 'eb281dcd', ['too_few']),
     ('joel', 'e6ea7ca1', ['output_down']),
     ('joel', '7611a8ea', ['output_down']),
-    ('joel', '26beff7c', ['output_down']),
+    # output_down until 2026-11-13: rated 6.7 against a usual 5.7, the tough class now takes its place.
+    ('joel', '26beff7c', ['tough_class']),
+    # Tough against the rider's usual with no output insight behind it (too_few / nothing before 2026-11-13).
+    ('joel', '4d00ee5e', ['tough_class']),
+    ('jen', 'a0e7650f', ['tough_class']),
+    ('jen', '4a0027bc', ['tough_class']),
+    # Tough, and the effort insight now stays after it.
+    ('joel', 'a9ad33b7', ['tough_class', 'effort_high']),
     ('joel', 'e9a1055b', ['in_line']),
     ('jen', 'f4c69f0d', ['in_line', 'effort_high']),
     ('jen', '96bf6669', ['in_line', 'resistance_low', 'effort_low']),
