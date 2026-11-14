@@ -112,7 +112,11 @@ its right: the name on top (4x6), the number (7x13B) with a raised `TH`
 board's other totals, except when dropping it keeps the big font: five
 digits (`10000`) don't fit it with one on either size. The fonts give the
 comma a whole digit-wide cell, which left a wide gap either side of it, so
-it's drawn closed up, with the same gap as between digits (`_COMMA_INK`). A name too long for its line is left off.
+it's drawn closed up, with the same gap as between digits (`_COMMA_INK`). The name's
+column holds 11 characters, but the board shows the Peloton username (`xxjclarksterxx` is 14), which
+used to be left off; the risen trophy starts below the name's row, so a name too wide for the column
+is centred across the whole panel instead (2026-11-14). The number is centred on its digits plus half the `TH` (as on 64x64), moved
+left only when the `TH` would run off the panel. Only a name wider than 64 columns is left off.
 
 ### Next milestone (done)
 The `next_milestone` page (`CountdownScreen`; the total's or a discipline's) stacks
@@ -125,8 +129,8 @@ names didn't read as a sentence: `TO 600 CYCLING`). The nouns are 64x64's
 (`RIDE`, `WORKOUT`, the discipline's name where it has no word of its own).
 - `3 AWAY FROM`: 5x8, every word the same size (Joel: a big `3 AWAY` beside a
   small `FROM` looked inconsistent; all 7x13B only fit with 2 px between words,
-  edge to edge), 3 px added between words (`LEAD_WORD_GAP`). The count is cyan
-  (`_COUNT`), its own colour beside the gold milestone; the words are white.
+  edge to edge), 3 px added between words (`LEAD_WORD_GAP`). The count is gold
+  (`_COUNT`) like the milestone (cyan until 2026-11-14; Joel preferred gold); the words are white.
 - `YOUR 500TH`: `YOUR` is 4x6, white, floating mid-number: its 5 px capitals have
   2 rows of the 9 px 7x13B digits above and 2 below (6x9's 6 px couldn't centre:
   an odd 3 rows). The number is gold with a raised `TH` (`ordinal_line`); where

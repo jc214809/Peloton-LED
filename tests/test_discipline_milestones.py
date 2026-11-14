@@ -269,7 +269,8 @@ def test_discipline_countdown_reads_3_to_go_and_3_away_from(monkeypatch):
     drawn.clear()
     initialize_fonts(32)
     CountdownScreen().render(ImageMatrix(height=32), {**state, 'total': 1997, 'target': 2000})
-    # 32 rows: 3 AWAY FROM / YOUR 2,000TH / RIDE; the count cyan, the words white, the milestone gold.
+    # 32 rows: 3 AWAY FROM / YOUR 2,000TH / RIDE; the count and the milestone gold, the words white.
+    assert screen_count() == (255, 215, 0)
     assert drawn == [('3', screen_count()), ('AWAY', (255, 255, 255)), ('FROM', (255, 255, 255)),
                      ('YOUR', (255, 255, 255)), ('2', (255, 215, 0)), (',', (255, 215, 0)), ('000', (255, 215, 0)),
                      ('TH', (255, 215, 0)), ('RIDE', red)]
@@ -538,7 +539,7 @@ def test_the_32_row_lines_are_centred_and_your_floats_mid_number(target, left, n
         xs = [x for x, _ in cells]
         assert min(xs) - (63 - max(xs)) in (0, 1), (top, bottom)   # centred, an odd spare column to the left
     number_top, number_bottom = lines[1]
-    assert {y for _, y in lit(range(lines[0][0], lines[0][1] + 1), screen._COUNT)}   # the count is cyan
+    assert {y for _, y in lit(range(lines[0][0], lines[0][1] + 1), screen._COUNT)}   # the count is gold
     # YOUR (4x6, 5 px) has 2 rows of the 9 px digits above it and 2 below.
     your = {y for x, y in lit(range(number_top, number_bottom + 1), (255, 255, 255))}
     assert your == set(range(number_top + 2, number_bottom - 1))
