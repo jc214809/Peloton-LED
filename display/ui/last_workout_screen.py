@@ -168,6 +168,67 @@ def _wrap_two_lines(font, text: str, max_px: int) -> List[str]:
     return [line1]
 
 
+# The value colour of TARGETS HIT by Peloton's movement-tracker tier; no tier (or "inprogress") stays white.
+TRACKER_TIER_COLORS = {'gold': (255, 200, 0), 'silver': (200, 205, 215), 'bronze': (205, 127, 50)}
+
+
+def _count(value) -> Optional[int]:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
+
+def strength_tracker(summary: dict) -> dict:
+    """The movement tracker's figures (peloton.summaries.strength_tracker), checked, since the cache
+    can hold anything: {'reps', 'volume', 'unit', 'targets_pct', 'tier', 'top'}, each None when
+    missing or malformed; {} for an untracked workout."""
+    tracker = summary.get('strength')
+    if not isinstance(tracker, dict):
+        return {}
+    unit = tracker.get('unit') if tracker.get('unit') in ('lb', 'kg') else None
+    pct = tracker.get('targets_pct')
+    top = tracker.get('top')
+    name = top.get('name') if isinstance(top, dict) else None
+    if isinstance(name, str) and name.strip():
+        weight = top.get('weight')
+        weight = weight if isinstance(weight, (int, float)) and not isinstance(weight, bool) and weight > 0 and unit else None
+        top = {'name': name.strip(), 'reps': _count(top.get('reps')), 'weight': weight}
+        top = top if top['reps'] or top['weight'] else None
+    else:
+        top = None
+    return {'reps': _count(tracker.get('reps')), 'volume': _count(tracker.get('volume')) if unit else None,
+            'unit': unit, 'targets_pct': pct if isinstance(pct, int) and not isinstance(pct, bool) and 0 <= pct <= 100 else None,
+            'tier': tracker.get('tier') if tracker.get('tier') in TRACKER_TIER_COLORS else None, 'top': top}
+
+
+def _tracker_details(summary: dict) -> List[dict]:
+    """A tracked strength class's reps, volume (weight x reps) and share of movements on target."""
+    tracker = strength_tracker(summary)
+    details = []
+    if tracker.get('reps'):
+        details.append({'label': 'total reps', 'value': f"{tracker['reps']:,}"})
+    if tracker.get('volume'):
+        details.append({'label': 'total volume', 'value': f"{tracker['volume']:,} {tracker['unit']}"})
+    if tracker.get('targets_pct') is not None:
+        detail = {'label': 'targets hit', 'value': f"{tracker['targets_pct']}%"}
+        if tracker['tier']:
+            detail['color'] = TRACKER_TIER_COLORS[tracker['tier']]
+        details.append(detail)
+    return details
+
+
+def _value_color(detail: dict):
+    """A stat's value colour: white, or the detail's own (TARGETS HIT in its tier colour)."""
+    rgb = detail.get('color')
+    return graphics.Color(*rgb) if rgb else _WHITE
+
+
+def top_lift_text(top: dict, unit: str) -> str:
+    """The top lift's figure: reps x the heaviest weight (`33 X 40 LB`), or whichever of the two there is."""
+    weight = f"{top['weight']:g} {unit}".upper() if top.get('weight') else ''
+    if weight and top.get('reps'):
+        return f"{top['reps']} X {weight}"
+    return weight or f"{top['reps']} REPS"
+
+
 def _stat_details(summary: dict) -> List[dict]:
     """Discipline-specific stat values with spelled-out labels, one detail per
     stat, for the rotating single-item display (e.g. "output", not "kj")."""
@@ -227,6 +288,7 @@ def _stat_details(summary: dict) -> List[dict]:
         distance_unit = summary.get("distance_unit") or ""
         avg_output = summary.get("avg_output_w")
         add("strive score", _fmt_strive(strive) if isinstance(strive, (int, float)) else None)
+        details.extend(_tracker_details(summary))
         add("max heart rate", f"{_whole(hr_max)}" if isinstance(hr_max, (int, float)) else None)
         add("distance", _fmt_distance(distance, distance_unit) if isinstance(distance, (int, float)) else None)
         add("avg output", f"{_whole(avg_output)}W" if isinstance(avg_output, (int, float)) else None)
@@ -248,7 +310,8 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
     64-row panels show the instructor in the intro, so only stats rotate.
     32-row panels have no room for it there, so it leads the rotation.
     The workout graph and heart-rate zone bar close out the rotation when the
-    workout recorded them, then the top muscle groups for MUSCLE_DISCIPLINES.
+    workout recorded them, then a tracked strength class's top lift, or else
+    the top muscle groups for MUSCLE_DISCIPLINES.
     """
     details = _stat_details(summary)
     stats = [d for d in details if d['label'] != 'instructor']
@@ -261,7 +324,12 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
     zones = summary.get('hr_zone_seconds')
     if isinstance(zones, list) and len(zones) == 5 and sum(zones) > 0:
         stats.append({'label': 'hr zones', 'value': '', 'kind': 'zones'})
-    if summary.get('muscles') and (summary.get('discipline') or '').strip().lower() in MUSCLE_DISCIPLINES:
+    tracker = strength_tracker(summary)
+    if tracker.get('top'):
+        stats.append({'label': 'top lift', 'value': '', 'kind': 'top_lift'})
+    # A tracked class has stats enough without the muscles slide, which keeps the page from running long.
+    if (summary.get('muscles') and (summary.get('discipline') or '').strip().lower() in MUSCLE_DISCIPLINES
+            and not (tracker.get('top') or _tracker_details(summary))):
         stats.append({'label': 'muscles worked', 'value': '', 'kind': 'muscles'})
     for index, view in enumerate(insight_views(summary)):
         # Workout compare: 64 rows show the card then the bars; 32 rows the bars then the sentence pages.
@@ -494,6 +562,44 @@ def _draw_muscle_rows(matrix, muscles: List[dict], font, top: int) -> None:
             for y in range(y0, y0 + 5):
                 matrix.SetPixel(x, y, r // 2, g // 2, b // 2)
         _muscle_row_text(matrix, font, y0 + 5, group)
+
+
+TOP_LIFT_LABEL = 'TOP LIFT'
+
+
+def _centred(matrix, font, y: int, rgb, text: str) -> None:
+    _draw_text(matrix, font, max((matrix.width - _text_width(font, text)) // 2, 2), y, graphics.Color(*rgb), text)
+
+
+def _draw_top_lift(matrix, summary: dict, label_font, name_font, small_name_font, value_fonts, label_y: int) -> None:
+    """The movement Peloton tagged as the class's most volume: a label, its name on up to two lines
+    (in the smaller font when the bigger one would cut it short), and reps x heaviest weight in gold.
+
+    64 rows: under the discipline title, above the heart-rate row. 32 rows: the whole panel, like the
+    graph slide."""
+    tracker = strength_tracker(summary)
+    top = tracker['top']
+    w = matrix.width
+    name = top['name'].upper()
+    lines = _wrap_two_lines(name_font, name, w - 4)
+    if ' '.join(lines) != name:
+        name_font = small_name_font
+        lines = _wrap_two_lines(name_font, name, w - 4)
+    _centred(matrix, label_font, label_y, _LABEL_GREY, TOP_LIFT_LABEL)
+    tall = matrix.height >= 64
+    step = getattr(name_font, 'height', 6) + 1
+    y = label_y + (10 if tall else 7)
+    for line in lines:
+        _centred(matrix, name_font, y, _PEAK_WHITE, line)
+        y += step
+    value = top_lift_text(top, tracker['unit'])
+    font = next((f for f in value_fonts if get_text_width(f, value) <= w - 4), value_fonts[-1])
+    if tall:
+        value_y = label_y + (31 if len(lines) > 1 else 22)
+    else:
+        value_y = matrix.height - 2 if len(lines) > 1 else label_y + 17
+    graphics.DrawText(matrix, font, max((w - get_text_width(font, value)) // 2, 2), value_y,
+                      graphics.Color(*_INSIGHT_GOLD), value)
 
 
 # 7-wide × 7-tall pixel trophy marking PRs: 'C' gold cup, 'B' darker stem/base.
@@ -837,7 +943,7 @@ GRAPH_FRAME_EXTRA_SECONDS = 1.0
 
 def detail_hold_seconds(detail: dict, interval: float) -> float:
     """Seconds one rotating detail stays up."""
-    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'muscles') + INSIGHT_KINDS:
+    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'muscles', 'top_lift') + INSIGHT_KINDS:
         return interval + GRAPH_FRAME_EXTRA_SECONDS
     return interval
 
@@ -919,6 +1025,15 @@ class LastWorkoutScreen(Screen):
 
         if self.elapsed >= self.detail_interval and self._insight_frame(matrix, summary, discipline):
             return True
+        if self.elapsed >= self.detail_interval:
+            details = rotating_details(summary, matrix.height)
+            if details:
+                index, _ = detail_at(details, self.detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS,
+                                     self.elapsed - self.detail_interval)
+                if details[index].get('kind') == 'top_lift':
+                    # The whole panel, like the graph slide: no room for the title or the bar.
+                    _draw_top_lift(matrix, summary, text_font, text_font, text_font, (title_font, text_font), 6)
+                    return True
 
         # ── Discipline: fixed at the top for both phases ────────────────────
         disc_text = discipline.upper()
@@ -987,7 +1102,7 @@ class LastWorkoutScreen(Screen):
                     # leaves the blank row above the HR bar.
                     value_y -= 1
                 vx = max((w - get_text_width(value_font, value)) // 2, 2)
-                graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value)
+                graphics.DrawText(matrix, value_font, vx, value_y + offset, _value_color(detail), value)
                 if summary.get("is_output_pr") and detail['label'] == 'total output':
                     star_x = vx + get_text_width(value_font, value) + 2
                     _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)
@@ -1113,6 +1228,9 @@ class LastWorkoutScreen(Screen):
             elif detail.get('kind') == 'muscles':
                 # Starts higher than the other slides: three rows need the room.
                 _draw_muscles(matrix, summary['muscles'], text_font, block_y + 8)
+            elif detail.get('kind') == 'top_lift':
+                _draw_top_lift(matrix, summary, stat_font, titles_font or text_font, text_font,
+                               (title_font, titles_font or text_font), block_y + 10)
             else:
                 value_font = (title_font if get_text_width(title_font, detail['value'].upper()) <= w - 4
                               else text_font)
@@ -1124,7 +1242,7 @@ class LastWorkoutScreen(Screen):
                 value_text = _truncate(value_font, detail['value'].upper(), w - 4)
                 vx = max((w - get_text_width(value_font, value_text)) // 2, 2)
                 star = bool(summary.get("is_output_pr")) and detail['label'] == 'total output'
-                graphics.DrawText(matrix, value_font, vx, value_y + offset, _WHITE, value_text)
+                graphics.DrawText(matrix, value_font, vx, value_y + offset, _value_color(detail), value_text)
                 if star:
                     star_x = vx + get_text_width(value_font, value_text) + 2
                     _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)

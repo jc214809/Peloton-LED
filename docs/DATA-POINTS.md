@@ -50,7 +50,9 @@ score or a measurement.
 | Calories | ✅ shown | ✅ shown | ✅ shown | ✅ shown (50 of 54) |
 | Heart-rate zones | ✅ shown (12 of 13) | ✅ shown | ✅ shown | ✅ shown (49 of 54) |
 | Output / heart-rate graph | ✅ shown | ✅ shown | ✅ shown | ✅ shown |
-| Muscle groups worked | ❌ not shown (11 of 13) | ❌ not shown (6 of 11) | ❌ not shown | ✅ shown on Strength only (47 of 54) |
+| Muscle groups worked | ❌ not shown (11 of 13) | ❌ not shown (6 of 11) | ❌ not shown | ✅ shown on Strength only (47 of 54), when the class wasn't tracked |
+| Movement tracker: total reps, total volume, targets hit, top lift | — | — | — | ✅ shown on tracked Strength classes (workout detail, not the performance graph) |
+| Movement tracker: target streak, number of movements, form tips | — | — | — | ❌ not shown |
 | Per-mile splits | ❌ not shown (11 of 13) | ❌ not shown (10 of 11) | — | — |
 | GPS route | — | ❌ not shown (3 of 11: outdoor only) | — | — |
 
@@ -88,7 +90,13 @@ Stats Peloton sends that the board doesn't show, and why:
 
 - **Muscle groups** except on Strength: Strength pages have the fewest stats,
   so they got the screen first (2026-11-07). Adding another discipline is one
-  entry in `MUSCLE_DISCIPLINES`.
+  entry in `MUSCLE_DISCIPLINES`. A tracked Strength class shows its top lift
+  instead (2026-11-13), to keep the page from running long.
+- **Movement tracker extras** on Strength: the target streak overlaps targets
+  hit; Peloton's form tip runs 24 characters on average and up to 53, too long
+  for a page. Both are in `movement_tracker_data` if wanted later.
+  Coverage: the tracker counts most strength classes since 2025 (Joel 137 of
+  148, Jen 194 of 307); bodyweight classes have reps but no volume.
 
 Extras that could be new features rather than fixes: per-mile splits and the
 GPS route. Peloton also sends the **max** (peak) for every
@@ -109,10 +117,11 @@ calories on its bottom row.
 | Outdoor run or walk | 4: distance, avg pace, Strive, elevation gain | 7 | 8 | 30 |
 | Row | 5: total output, Strive, distance, stroke rate, split per 500 m | 8 | 9 | 34 |
 | No equipment | 2: Strive, max heart rate | 5 (Strength 6) | 6 (Strength 7) | 22 (Strength 27) |
+| Strength, tracked | 5: Strive, total reps, total volume, targets hit, max heart rate | 9 | 10 | 39 |
 
 **Screens** = the intro (class length, title and, on 64x64, instructor) + one
 per stat + the output or heart-rate graph + the heart-rate zones bar, and on
-Strength the top three muscle groups. 64x32 has no room for the instructor in the intro, so it
+Strength the top lift (tracked) or else the top three muscle groups. 64x32 has no room for the instructor in the intro, so it
 gets its own screen. A missing stat, graph, zones bar or muscle list drops its
 screen.
 
