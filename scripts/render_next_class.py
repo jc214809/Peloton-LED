@@ -4,7 +4,8 @@
   python scripts/render_next_class.py
 
 writes docs/screenshots/rotation/next_class.png: the next-class page for each case in PAGES, on a 64x64 panel
-(top row) and a 64x32 panel (bottom row), labelled like the README's other screenshots.
+(top row) and a 64x32 panel (bottom row), labelled like the README's other screenshots (the tag at full brightness). `--gifs FOLDER` (or `write_gifs(folder)`)
+writes next-class-pulse-64.gif and -32.gif instead: one cycle of the tag's pulse for a LIVE class 5 minutes out.
 """
 import argparse
 import os
@@ -17,7 +18,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from display.display import initialize_fonts  # noqa: E402
-from display.ui.next_class_screen import NextClassScreen  # noqa: E402
+from display.ui.next_class_screen import PULSE_FRAME_SECONDS, PULSE_PERIOD, NextClassScreen  # noqa: E402
 from scripts.render_demo import ImageMatrix  # noqa: E402
 from scripts.render_logo import GAP, LABEL_WIDTH, SHEET_BACKGROUND, SHEET_SCALE  # noqa: E402
 
@@ -51,6 +52,30 @@ def panels(height, scale=SHEET_SCALE):
     return images
 
 
+def pulse_frames(height, scale=8, starts_in=300):
+    """One pulse cycle of a LIVE class `starts_in` seconds out, a frame every PULSE_FRAME_SECONDS."""
+    initialize_fonts(height)
+    state = {'booking': _page('cycling', 20, 'Ben Alldis', 'LIVE', starts_in), 'now': NOW, 'timezone': ZONE}
+    screen = NextClassScreen()
+    screen.on_enter(None, state)
+    frames = []
+    for _ in range(round(PULSE_PERIOD / PULSE_FRAME_SECONDS)):
+        matrix = ImageMatrix(64, height)
+        screen.render(matrix, state)
+        frames.append(matrix.image.resize((64 * scale, height * scale), Image.NEAREST))
+        screen.update(PULSE_FRAME_SECONDS)
+    return frames
+
+
+def write_gifs(folder):
+    for height in (64, 32):
+        frames = pulse_frames(height)
+        path = os.path.join(folder, f'next-class-pulse-{height}.gif')
+        frames[0].save(path, save_all=True, append_images=frames[1:], duration=round(PULSE_FRAME_SECONDS * 1000),
+                       loop=0)
+        print(f'Wrote {path}')
+
+
 def sheet():
     rows = [(f'64x{height}', panels(height)) for height in (64, 32)]
     width = LABEL_WIDTH + len(PAGES) * (64 * SHEET_SCALE + GAP)
@@ -69,7 +94,11 @@ def sheet():
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--out', default=os.path.join(ROOT, 'docs', 'screenshots', 'rotation', 'next_class.png'))
+    parser.add_argument('--gifs', metavar='FOLDER', help='write the pulse GIFs to FOLDER instead of the sheet')
     options = parser.parse_args(argv)
+    if options.gifs:
+        write_gifs(options.gifs)
+        return
     sheet().save(options.out)
     print(f'Wrote {options.out}')
 

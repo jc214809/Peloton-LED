@@ -8,13 +8,14 @@ import pytest
 import requests
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.next_class_screen import (COLUMN_LEFT, LINE_WIDTH, TAG_COLORS, NextClassScreen, fitted)
+from display.ui.next_class_screen import (COLUMN_LEFT, LINE_WIDTH, PULSE_FLOOR, PULSE_FRAME_SECONDS, PULSE_PERIOD,
+                                          PULSE_WINDOW, TAG_COLORS, NextClassScreen, fitted, pulse_level, pulses)
 from peloton import dashboard as dashboard_module
 from peloton.booked_classes import (NOUNS, SHOWN_AFTER_START, class_lines, day_word, instructor_lines,
                                     next_booking, reservation_ids, slim_class, valid_booking, when)
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import DEFAULTS
-from peloton_led import build_rotation_pages
+from peloton_led import _tick_seconds, build_rotation_pages
 from scripts.render_demo import ImageMatrix
 from tests.test_dashboard import setup_dashboard
 
@@ -449,3 +450,138 @@ def test_render_next_class_stops_on_a_page_it_cannot_draw(monkeypatch):
     monkeypatch.setattr(render_next_class, 'PAGES', [booking(minutes=0)])
     with pytest.raises(RuntimeError):
         render_next_class.panels(64)
+
+
+# ---- the tag's pulse: last 10 minutes only ----------------------------------------------------------------------
+def page(starts_in, **overrides):
+    return {'booking': booking(start=NOW + starts_in, **overrides), 'now': NOW, 'timezone': ZONE}
+
+
+def pixels_of(matrix):
+    image = matrix.image
+    return [image.getpixel((x, y)) for y in range(image.height) for x in range(image.width)]
+
+
+def entered(state, height=64):
+    initialize_fonts(height)
+    screen = NextClassScreen()
+    screen.on_enter(None, state)
+    return screen
+
+
+@pytest.mark.parametrize('starts_in, expected', [
+    (22 * HOUR, False), (HOUR, False), (PULSE_WINDOW + 60, False), (PULSE_WINDOW + 1, False),
+    (PULSE_WINDOW, True), (60, True), (1, True), (0, True), (-300, True), (-SHOWN_AFTER_START, True)])
+def test_only_the_last_ten_minutes_animate(starts_in, expected):
+    assert entered(page(starts_in)).animated is expected
+    assert pulses(page(starts_in)) is expected
+
+
+def test_a_page_with_no_tag_or_no_time_never_animates():
+    assert PULSE_WINDOW == 600
+    assert not entered(page(60, tag=None)).animated
+    for state in (None, 'junk', {}, {'booking': booking(start=NOW + 60)}, {'booking': booking(), 'now': True},
+                  {'booking': booking(minutes=0, start=NOW), 'now': NOW}):
+        assert pulses(state) is False
+
+
+def test_each_showing_decides_afresh_and_the_loop_ticks_only_in_the_window():
+    screen = entered(page(5 * 60))
+    assert screen.animated and _tick_seconds(Mock(current=screen)) == PULSE_FRAME_SECONDS
+    screen.on_enter(None, page(HOUR))
+    assert screen.animated is False  # the next showing is a still page
+
+
+def pulse_cycle(state, height):
+    """Every frame of one cycle (and the one after it), nothing drawn off the panel."""
+    screen = entered(state, height)
+    frames = []
+    for _ in range(round(PULSE_PERIOD / PULSE_FRAME_SECONDS) + 1):
+        matrix = EdgeMatrix(height=height)
+        assert screen.render(matrix, state)
+        assert matrix.off_panel == 0
+        frames.append(matrix)
+        screen.update(PULSE_FRAME_SECONDS)
+    return frames
+
+
+@pytest.mark.parametrize('height', [64, 32])
+@pytest.mark.parametrize('tag', ['LIVE', 'ENCORE'])
+@pytest.mark.parametrize('starts_in', [5 * 60, 0, -120])
+def test_the_pulse_changes_only_the_tag_block_and_stays_between_55_and_100_percent(height, tag, starts_in):
+    state = page(starts_in, tag=tag, discipline='tread_bootcamp', instructor='Hannah Frankson')
+    frames = pulse_cycle(state, height)
+    colour = TAG_COLORS[tag]
+    base = frames[0].image.load()
+    block = {(x, y) for x in range(64) for y in range(height) if base[x, y] == colour}
+    assert block
+    levels = []
+    for matrix in frames:
+        pixels = matrix.image.load()
+        shades = {pixels[x, y] for x, y in block}
+        assert len(shades) == 1  # the block dims together
+        levels.append([channel / full for channel, full in zip(shades.pop(), colour) if full][0])
+        for x in range(64):
+            for y in range(height):
+                if (x, y) not in block:
+                    assert pixels[x, y] == base[x, y], (x, y)  # text, icon and every other line never change
+    assert max(levels) == 1.0
+    assert min(levels) == pytest.approx(PULSE_FLOOR, abs=0.02)
+    assert all(PULSE_FLOOR - 0.02 <= level <= 1.0 for level in levels)
+    assert levels[-1] == pytest.approx(1.0)  # a whole cycle
+    assert len({tuple(pixels_of(m)) for m in frames}) > 5  # smooth: many steps, not a blink
+    assert pixels_of(frames[0]) == pixels_of(draw(state, height))  # frame 0 is the static page
+
+
+@pytest.mark.parametrize('height', [64, 32])
+def test_the_first_frame_after_entering_is_the_static_page_and_elapsed_resets(height):
+    state = page(5 * 60)
+    screen = entered(state, height)
+    first = EdgeMatrix(height=height)
+    screen.render(first, state)
+    assert pixels_of(first) == pixels_of(draw(state, height))
+    screen.update(PULSE_PERIOD / 2)  # the dimmest point
+    dim = EdgeMatrix(height=height)
+    screen.render(dim, state)
+    assert pixels_of(dim) != pixels_of(first)
+    screen.on_enter(None, state)
+    assert screen.elapsed == 0.0
+    again = EdgeMatrix(height=height)
+    screen.render(again, state)
+    assert pixels_of(again) == pixels_of(first)
+
+
+def test_the_pulse_level_is_full_at_the_start_and_once_per_cycle_and_survives_odd_time():
+    assert pulse_level(0) == 1.0 and pulse_level(PULSE_PERIOD) == pytest.approx(1.0)
+    assert pulse_level(PULSE_PERIOD / 2) == pytest.approx(PULSE_FLOOR)
+    assert pulse_level(-5) == 1.0
+    screen = NextClassScreen()
+    screen.update(-1)
+    assert screen.elapsed == 0.0
+
+
+@pytest.mark.parametrize('height', [64, 32])
+def test_a_still_page_stays_still_whatever_the_elapsed_time(height):
+    state = page(HOUR)
+    screen = entered(state, height)
+    screen.update(PULSE_PERIOD / 2)  # an overlay repaint still ticks the screen
+    matrix = EdgeMatrix(height=height)
+    screen.render(matrix, state)
+    assert pixels_of(matrix) == pixels_of(draw(state, height))
+    assert not screen.animated
+
+
+def test_render_next_class_writes_the_pulse_gifs(tmp_path, capsys):
+    from PIL import Image
+    from scripts import render_next_class
+    render_next_class.main(['--gifs', str(tmp_path)])
+    out = capsys.readouterr().out
+    for height in (64, 32):
+        gif = Image.open(tmp_path / f'next-class-pulse-{height}.gif')
+        assert gif.n_frames == round(PULSE_PERIOD / PULSE_FRAME_SECONDS) and gif.size == (512, height * 8)
+        assert f'next-class-pulse-{height}.gif' in out
+
+
+def test_the_rotation_preview_draws_the_next_class_page_at_full_brightness():
+    from scripts.render_rotation import frame_times
+    assert frame_times('next_class', {}, 7, 4.0) == [0.0]
