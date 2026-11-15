@@ -26,6 +26,23 @@ isn't a candidate. A board with few facts (a log still downloading) shows a shor
 from the workout log appear only once the log holds the whole history.
 `python scripts/list_facts.py --demo` prints every candidate with its score and the first passes.
 
+## Class-led workouts only
+
+Every figure from the workout log (`period_stats`, `frame_stats`, `event_stats`: all of them start at
+`_stamped` in `peloton/activity.py`) counts only workouts an instructor led (`class_led`: a non-empty
+text `ride.instructor.id`). `instructor_id` is empty on exactly the non-class workouts: Outdoor
+Walking, Just Walk/Run/Ride/Stretch/Cardio/Meditate, Cardio: Pickleball, Entertainment and music
+rides, music warm-ups and cool-downs, and scenic rides and rows (`5 KM Alaska Girdwood Ride`). Not
+`ride_id` (the scenic ones have a real one) and not the title (`Just Tabata` and `Justin Bieber`
+classes have instructors). Untimed sessions distorted facts (a forgotten 299-minute `Just Meditate`
+was the `LONGEST WORKOUT`). A missing, None, empty or non-text ID is a non-class workout. The
+frames' workouts, minutes, active days, disciplines, bests, ranks, comparisons, averages and events
+(`A YEAR AGO`'s counts, `WELCOME BACK`, `NEW DISCIPLINE`, `LAST <noun>`, anniversary dates) all
+exclude them. Left as Peloton's overview counts, so they include non-class workouts (and run
+ahead of the frames' all-time count): `TOTAL WORKOUTS` and `TOP DISCIPLINE`, which the milestones and
+Lifetime pages also read (Joel, 2026-11-15: totals are totals of Peloton workouts). `list_facts.py`'s overview-against-log comparison therefore now shows the
+non-class workouts as the gap.
+
 ## Fitting rules
 
 - A highlight is a label (tom-thumb, `stats` font) and two lines (4x6, `info` font), or one big number.
