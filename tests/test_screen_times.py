@@ -128,7 +128,7 @@ def test_head_to_head_on_32_rows_shares_its_time_across_the_stats():
 SECTION_OF = {'username': 'username', 'streak': 'streaks', 'streak_risk': 'streaks', 'versus': 'versus',
               'discipline': 'total_workouts', 'lifetime': 'lifetime', 'countdown': 'next_milestone',
               'journey': 'journey', 'heatmap': 'heatmap', 'goal': 'goals', 'celebration': 'milestones',
-              'challenge': 'challenges'}
+              'challenge': 'challenges', 'next_class': 'next_class'}
 
 
 @pytest.mark.parametrize('rows', [32, 64])
@@ -153,7 +153,8 @@ def test_the_settings_page_says_the_times_the_board_plays(tmp_path, rows):
             assert f'({page.number_text(round(duration, 1))} s in all)' in line, line
         elif section != 'username':  # its line gives the rule (it depends on the day's highlights)
             assert line.startswith(f'{page.number_text(round(duration, 1))} s'), (section, line)
-    assert {'username', 'versus', 'total_workouts', 'lifetime', 'goals', 'journey', 'challenges'} <= seen
+    assert {'username', 'versus', 'total_workouts', 'lifetime', 'goals', 'journey', 'challenges',
+            'next_class'} <= seen
 
 
 def _rotation_row(html, name):

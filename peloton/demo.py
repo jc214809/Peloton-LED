@@ -99,6 +99,16 @@ def demo_data():
                             ('Silver', 3000), '1,360')]}})
 
 
+
+def demo_bookings(now):
+    """Two booked classes as the board keeps them (peloton.booked_classes.slim_class): a live ride in 45
+    minutes, so the page counts down, and an encore Tread Bootcamp tomorrow."""
+    return [{'id': 'demo-live-ride', 'start': float(now + 45 * 60), 'tag': 'LIVE', 'discipline': 'cycling',
+             'minutes': 20, 'instructor': 'Ben Alldis'},
+            {'id': 'demo-encore-bootcamp', 'start': float(now + 26 * 3600), 'tag': 'ENCORE',
+             'discipline': 'tread_bootcamp', 'minutes': 45, 'instructor': 'Jess Sims'}]
+
+
 def _demo_challenge(title, value, shown, unit, tier, following, to_next):
     def level(name, at):
         return {'title': name, 'metric_value': float(at), 'metric_display_value': f'{at:,}',

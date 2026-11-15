@@ -136,6 +136,21 @@ class PelotonClient:
         resp.raise_for_status()
         return self._object(resp)
 
+    def get_reservations(self, user_id: str) -> Dict[str, Any]:
+        """The live and encore classes the rider booked: only their IDs (`peloton_id`), unsorted."""
+        resp = self._get(f"{BASE}/api/user/{user_id}/reservations", timeout=20)
+        resp.raise_for_status()
+        return self._object(resp)
+
+    def get_scheduled_class(self, peloton_id: str) -> Optional[Dict[str, Any]]:
+        """One scheduled class with its start, live/encore flags, class and instructor; None when it's gone."""
+        resp = self._get(f"{BASE}/api/peloton/{peloton_id}", params={"joins": "ride,ride.instructor"},
+                         timeout=20)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return self._object(resp)
+
     def get_overview(self, user_id: str) -> Dict[str, Any]:
         resp = self._get(f"{BASE}/api/user/{user_id}/overview", timeout=20)
         resp.raise_for_status()

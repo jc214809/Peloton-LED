@@ -900,15 +900,66 @@ pt -X DELETE "$API/api/reservation/eeee5555ffff6666aaaa7777bbbb8888"
 {"deleted": true}
 ```
 
-### `GET /api/peloton/{reservation_id}`
+### `GET /api/user/{user_id}/reservations`
 
-The status of a scheduled class you reserved: whether it is upcoming, live or over.
+The live and encore classes you booked. Each row is only the booking's IDs: `id` and `peloton_id` are the same scheduled-class ID, so ask `/api/peloton/{peloton_id}` for the class. The board's next-class page asks for this on every refresh.
 
-**Auth:** Token + Platform · **Source:** Undocumented (the spec has an example, but it is not reproduced here)
+**Auth:** Token + Platform · **Source:** Tested (2026-11-14, with two live classes booked) · **Size:** 140 bytes with no bookings, 420 with two
 
 ```bash
-pt "$API/api/peloton/eeee5555ffff6666aaaa7777bbbb8888"
+pt "$API/api/user/$PELOTON_USER/reservations"
 ```
+
+```json
+{
+  "data": [
+    {"id": "eeee5555ffff6666aaaa7777bbbb8888", "user_id": "0123456789abcdef0123456789abcdef",
+     "peloton_id": "eeee5555ffff6666aaaa7777bbbb8888"}
+  ],
+  "total": 1,
+  "show_next": false
+}
+```
+
+- Sorted by `id`, not by start time: sort by the classes' `scheduled_start_time` yourself.
+- Still to see: whether a class leaves this list once it starts or ends. The board stops showing a class 10 minutes after its start either way.
+
+### `GET /api/peloton/{peloton_id}`
+
+One scheduled class (live or encore): when it starts, whether it is upcoming, live or over, and, with `joins`, the class and its instructor.
+
+**Auth:** Token + Platform · **Source:** Tested (2026-11-14) · **Params:** `joins=ride,ride.instructor` · **Size:** about 7.7 KB with `joins`, 741 bytes without (then only `ride_id`)
+
+```bash
+pt "$API/api/peloton/eeee5555ffff6666aaaa7777bbbb8888?joins=ride,ride.instructor"
+```
+
+```json
+{
+  "id": "eeee5555ffff6666aaaa7777bbbb8888",
+  "scheduled_start_time": 1794841200,
+  "status": "PRE_START",
+  "is_live": true,
+  "is_encore": false,
+  "start_time": null,
+  "countdown": null,
+  "total_home_reservations": 812,
+  "ride_id": "bbbb2222cccc3333dddd4444eeee5555",
+  "ride": {
+    "id": "bbbb2222cccc3333dddd4444eeee5555",
+    "title": "20 min Pop Ride",
+    "fitness_discipline": "cycling",
+    "duration": 1200,
+    "instructor": {"id": "cccc3333dddd4444eeee5555ffff6666", "name": "Coach Example"}
+  }
+}
+```
+
+- `start_time` and `countdown` are `null` before the start.
+- `fitness_discipline` is Peloton's class key: Tread Bootcamp is `circuit`, rowing `caesar`.
+- Titles run to 32 characters (`Countdown to TB Full Body: W3 D4`).
+- Not seen yet: an encore booking's flags (the board takes `is_encore: true` as ENCORE before `is_live`).
+- For finding bookings, prefer `reservations` over `/api/v3/ride/live`: each scheduled class there has `authed_user_reservation_id`, but one day's schedule is about 340 KB (80% joined `instructors`, `rides`, `ride_types`, `class_types`), it stops at 100 classes and ignores filters such as `is_reserved`.
 
 ---
 

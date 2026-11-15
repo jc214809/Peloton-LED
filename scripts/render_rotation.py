@@ -23,7 +23,7 @@ import unittest  # noqa: F401,E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 SCALE = 4
-ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'next_milestone', 'lifetime', 'journey', 'heatmap', 'milestones', 'goals', 'challenges']
+ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'next_milestone', 'lifetime', 'journey', 'heatmap', 'milestones', 'goals', 'challenges', 'next_class']
 
 
 class PreviewDashboard:
@@ -90,7 +90,9 @@ def add_log_figures(snapshot, options):
 def load_snapshot_for(options):
     if options.demo:
         from peloton.challenges import parse_challenges
-        from peloton.demo import demo_data
+        import time
+
+        from peloton.demo import demo_bookings, demo_data
         from peloton.summaries import summarize_workout
         from peloton.totals import extract_discipline_totals, parse_streaks
         data = demo_data()
@@ -103,7 +105,8 @@ def load_snapshot_for(options):
                 'instructor_counts': {}, 'status': 'ready',
                 'streaks': parse_streaks(data['overview']),
                 'distance_totals': data['distance_totals'],
-                'challenges': parse_challenges(data['challenges'])}
+                'challenges': parse_challenges(data['challenges']),
+                'booked_classes': demo_bookings(time.time())}
     from peloton.cache import load_snapshot
     snapshot = load_snapshot(options.cache)
     if snapshot is None:
@@ -168,6 +171,7 @@ def render(options):
     from display.ui.streak_risk_screen import StreakRiskScreen
     from display.ui.username import UsernameScreen
     from display.ui.challenge_screen import ChallengeScreen
+    from display.ui.next_class_screen import NextClassScreen
     from display.ui.login_indicator import draw_login_indicator
     from display.ui.stale_indicator import draw_stale_indicator
     from peloton.config import DEFAULTS
@@ -186,7 +190,8 @@ def render(options):
                'countdown': CountdownScreen(),
                'journey': JourneyScreen(),
                'heatmap': HeatmapScreen(), 'streak_risk': StreakRiskScreen(),
-               'celebration': CelebrationScreen(), 'challenge': ChallengeScreen()}
+               'celebration': CelebrationScreen(), 'challenge': ChallengeScreen(),
+               'next_class': NextClassScreen()}
     snapshot = load_snapshot_for(options)
     username = options.username or (snapshot.get('me') or {}).get('username') or 'Rider'
     pages = [('logo', None, 1.0)]
