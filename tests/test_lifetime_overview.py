@@ -103,3 +103,16 @@ def test_render_lifetime_stops_on_a_page_it_cannot_draw(monkeypatch):
     monkeypatch.setattr(render_lifetime.LifetimeOverviewScreen, 'render', lambda self, matrix, state: False)
     with pytest.raises(RuntimeError):
         render_lifetime.panels(64)
+
+
+def test_render_lifetime_runs_from_the_command_line(tmp_path, monkeypatch, capsys):
+    """`python scripts/render_lifetime.py` from anywhere: the script puts the repo on sys.path itself."""
+    import runpy
+    import sys
+    from pathlib import Path
+    root = str(Path(__file__).resolve().parents[1])
+    out = tmp_path / 'sheet.png'
+    monkeypatch.setattr(sys, 'path', [p for p in sys.path if p not in (root, '')])
+    monkeypatch.setattr(sys, 'argv', ['render_lifetime.py', '--out', str(out)])
+    runpy.run_path(str(Path(root) / 'scripts' / 'render_lifetime.py'), run_name='__main__')
+    assert out.exists() and 'Wrote' in capsys.readouterr().out
