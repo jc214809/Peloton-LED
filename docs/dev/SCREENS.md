@@ -28,6 +28,12 @@ All screens implement the `Screen` ABC (`display/ui/screen.py`):
 
 The startup logo (`LogoMaskScreen`) is drawn, not decoded: the red mark (`logo_art.MARK`, cropped from the 32-row art), PELOTON and L E D in the loaded fonts, and a zone bar in `ZONE_COLORS` (also the workout pages' `HR_ZONE_COLORS`). 64 rows stack them; fewer put the mark on the left. `display.logo_path` swaps in an image file (`LogoScreen`). `settings_page/logo.py` draws the settings page's icons from the same art (inline SVG for the header and favicon, `/apple-touch-icon.png` served without a PIN), so `logo_art` must stay import-free. `scripts/render_logo.py` regenerates `docs/logo.png` and the README's startup screenshot. `prepared_logos/` and the `prepare_image`/`postprocess_logos` scripts are only for `logo_path` images.
 
+## Discipline icons (`display/ui/discipline_icons.py`)
+
+Each discipline's icon is a 26x24 canvas used by the `lifetime` tiles (`draw_icon` in `lifetime_overview.py`) and the next-class page: bitmap rows in `DISCIPLINE_ICON_ROWS` (plus a hollow square head from `DISCIPLINE_HEAD_SQUARES`), else line drawings in `draw_icon` (pilates/barre, hiking/outdoor, boxing, mobility). Every icon stands on row 20 (its lowest lit row; `test_every_icon_stands_on_the_same_row`), so tiles side by side line up, and rows 21-23 stay blank: the next-class page needs rows 22-23 blank above its tag. Every icon is also centred across the 26 columns, an odd spare column on the right (`test_every_icon_is_horizontally_centred_in_its_canvas`). A moved or new icon must keep both. `python scripts/render_lifetime.py` and `scripts/render_next_class.py` redraw the README shots that show them.
+
+History (2026-11-15, Joel): a redraw of all 15 in 1 px lines with round heads and more detail was rejected ("the old ones are way better"); keep this weight and the square heads.
+
 ## Streak flame (`display/ui/streak_screen.py`)
 
 Other animated screens follow the journey page's pattern: `animated = True`, `atomic_frames = True` (drawn on a frame canvas and swapped in, so no flicker), `frame_seconds = 0.05`, `elapsed` zeroed in `on_enter` and advanced by `update(dt)`, an `INTRO_SECONDS` after which the frame is the static page (previews and screenshots draw it there). The challenges page does this for its ring / bar fill and number count-up (`docs/dev/ROTATION.md`).
