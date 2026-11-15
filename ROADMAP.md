@@ -11,7 +11,7 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 4 Name page together facts ── shares figures with item 1 (head to head)
 5 Name page facts settings and log fields ── maybe
 6 Workout compare: Cardio classes ── unlikely (measured 2026-11-12: too rare to say much); independent
-7-21 Ideas (not yet sized) ── 10 trend charts share windows with item 1; 11 yearly goal and 14 weekly recap use `frame_stats`; 9 goes with 3
+7-18, 20, 21, 24, 25 Ideas (not yet sized) ── 10 trend charts share windows with item 1; 11 yearly goal and 14 weekly recap use `frame_stats`; 9 goes with 3; 24 builds on the challenges page (#114); 25 is independent
 22 Icon touch-ups (by hand) ── independent
 ```
 
@@ -200,14 +200,40 @@ Serve the `render_rotation.py` contact sheet from the settings page ("what will 
 ### 18. Live workout
 Research: does the API expose an in-progress workout (current output, heart rate, time left)? If so, a page that takes over the rotation while the rider is mid-class. If not, drop the item. Settings: on/off per rider.
 
-### 19. Next booked class
-Research: Peloton's reservation/schedule endpoints for "ride at 6:30 AM with Jess". A page before the class, from one extra call per refresh (check the rate limit).
-
 ### 20. Fitness trend page
 The private analysis (kept outside this repo; effort over time by class type, 90 W hold by quarter) suggests a "stronger / flat / weaker than last quarter" page. Only if a measure survives the checks in the README (interval classes dominated the hold figure, so it isn't a fitness number as it stands). Joel decides whether a board should say this at all.
 
 ### 21. Housekeeping
 - Drop the retired keys (`compact_workout_pages`, `last_workout_duration`, `screen_durations.latest_workouts`, `discipline_milestone_celebrate_within`, `font`) from the loader once every board's config has been saved through the settings page; keep `RETIRED_DISPLAY_KEYS` until then.
+
+### 24. Challenge history: a trophy case
+Finished challenges, from `GET /api/user/{user_id}/challenges/past?has_joined=true` (probed by hand on 2026-11-14). Each has the title, start and end, `challenge_type`, the final `current_tier` and `metric_display_value` / `metric_display_unit`. Ideas:
+- A medal tally (Gold / Silver / Bronze, plus `Goal` and `2K`-style tiers) as a closing frame on the challenges page.
+- Last month's results ("SEPTEMBER: ACTIVITY BRONZE, 12 DAYS").
+- Runs of monthly Activity Challenge golds, the best year, and other name-page facts.
+
+What to handle:
+- **The whole list every time.** It's about 570 KB for a few hundred challenges going back to 2020, and `limit`, `page` and `start_time` are ignored (no paging: `next`/`previous` are empty). It only changes when a challenge ends, so fetch it once a day and keep a trimmed copy in the cache (title, end, tier, value, unit).
+- **Patchy results.** Many are `Unearned` at 0 (joined, nothing counted). Some 2021 ones say `No Tier` (no result stored). Some months have none, so "last month" can be empty. Units come singular and plural (`workout` / `workouts`, `day` / `days`). There's one `community` challenge with the community's total, not the rider's.
+- Validate every field read from the cache, as the challenges page does.
+
+Depends on: nothing (the challenges page merged in #114).
+
+### 25. Club Peloton level and points
+A page for the rider's Club Peloton level: the gem, `GOLD III`, the points, a bar across the tier and `N TO CHAMPION`. Probed by hand on 2026-11-14 with the board's token; none of it is in `docs/PELOTON-API.md` yet, which gets the tested shapes when this is built.
+- **`GET /api/me`** (already called once a day): `badge_level` is the level as a number, 0 (Bronze I) to 10 (Legend); Joel's is 8 (Gold III). `badge_url` / `no_mask_badge_url` are S3 images of the gem. Enough for the level and gem with no new call, but no points.
+- **`GET https://members-score.onepeloton.com/v2/user/{user_id}/score`** (about 7.8 KB, same bearer token): the call Peloton's own web app makes. `badge_level_name`, `total_earned_points`, and `progress_bar` (`score`, `tier_base_points`, `tier_max_points`, `segment_tiers_max_points[]` with each level's `label`, `min_points`, `max_points`, `next_level_name`), plus `boost` (a double-points promotion: `title`, `status`, `expires_at`; null when there's none). Reading it twice left `last_visit_timestamp` and `points_since_last_visit` alone, so the board doesn't reset the app's "new points" animation.
+- Not for the board: `members-score…/v1/users/{id}/score` (27.7 KB, the app's point-history page, more likely to change) and its `/breakdown`; never the `/admin/...` routes the same JavaScript lists. Peloton's `/api/...` club, loyalty and points guesses all 404, and the GraphQL gateway has no club field.
+- Levels: Bronze I-III (0-99), Silver I-III (100-1,999), Gold I-III (2,000-14,999), Champion (15,000-29,999), Legend (30,000+). Widest name `CHAMPION` (8 characters). Points come from workout days (2 each), streak and milestone badges, programs, challenges (10), weekly high fives / live classes / team activity, and membership years.
+
+What to handle:
+- **An undocumented host.** It can change or vanish without notice: a failure keeps the last figures and never fails the refresh, as the challenges fetch does.
+- **No score.** Free-trial or cancelled riders: expect a 404 or missing fields, and no page.
+- **Rate.** Points move when a workout lands or weekly: fetch when the board sees a new workout plus every 6 hours (about 4-10 calls a day per rider). Show the level and gem from `/api/me` until the first score arrives.
+- `boost` is time-limited: check `status` and `expires_at` before a `2X POINTS` line. Validate every field read from the cache.
+- Settings: on/off like the other pages.
+
+Depends on: nothing.
 
 ## Joel, by hand
 

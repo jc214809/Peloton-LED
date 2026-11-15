@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 
+from .booked_classes import valid_bookings
 from .challenges import valid_challenge
 from .goals import parse_milestone_key
 
@@ -13,7 +14,7 @@ PERSISTED_KEYS = (
     'active_day_count', 'celebrated_pr_ids', 'pr_shown_at',
     'weekly_progress', 'celebrated_milestones', 'personal_records', 'streaks',
     'milestone_shown_at', 'celebrated_discipline_milestones', 'discipline_milestone_shown_at',
-    'name_facts_passes', 'name_facts_shown', 'challenges',
+    'name_facts_passes', 'name_facts_shown', 'challenges', 'booked_classes',
 )
 
 
@@ -90,6 +91,9 @@ def load_snapshot(path):
     if challenges is not None and (not isinstance(challenges, list)
                                    or not all(valid_challenge(c) for c in challenges)):
         del restored['challenges']
+    # Booked classes: a damaged list only hides the page until the next refresh asks again.
+    if 'booked_classes' in restored and not valid_bookings(restored['booked_classes']):
+        del restored['booked_classes']
     return restored
 
 

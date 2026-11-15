@@ -231,6 +231,11 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   with the name and percent in white over them. Unlike the graph and zones
   slides it keeps the heart-rate/calorie row.
 
+### Next booked class (64x32, 2026-11-14)
+- The icon at (0, 5) and a 36 px text column from x 28, everything centred in it: the tag block on rows 0-6 (text baseline 6), the time in 5x8 (`discipline`) at baseline 17 with `AM`/`PM` in 4x6 beside it (`10:00AM`, 34 px), or `45` in 7x13B with `MIN` in 4x6 at 18 in the last hour, `NOW` in 7x13B from the start; the day in gold 4x6 at 24 (`WEDNESDAY` is exactly 36 px; in the last hour the clock time `12:45 PM` without the 64x64's `AT`, which doesn't fit; `STARTING` from the start); the first name alone in grey 4x6 at 31 (no `WITH`, no class line, no full names: `HANNAH FRANKSON` is 60 px).
+- Swept like 64x64 (`tests/test_next_class.py`): nothing off the panel, rows 7-8, 18 and 24-25 blank in the column, columns 26-27 blank between icon and text, and no first name cut.
+- Every other page is unchanged on both boards.
+
 ### Challenges (both boards, 2026-11-14)
 - 64x64 is the ring ("C1", `docs/dev/ROTATION.md`); there's no room for it on 32 rows, so 64x32 is layout "A" from the same mock-ups: the title in gold 4x6 at baseline 6 (words dropped from the end past 64 px), the number in 7x13B at 18 (`123K` past 62 px), a 3-row blue bar from column 3 to 60 at row 21 (tier to tier, over (35, 35, 35)), then at 31 the current tier in its colour at x 2 (`0` before the first) and `497 TO 6K` right-aligned to 61, or that line centred alone when both don't fit with 4 px between (`BRONZE` + `1,360 TO SILVER`). No unit on 32 rows.
 - Checked against the largest values (`tests/test_challenges.py` `LARGEST`): 5- and 6-digit numbers, `PLATINUM`, a long title, every unit, on both heights, nothing off the panel and no text over the ring.

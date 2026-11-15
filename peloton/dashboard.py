@@ -11,9 +11,10 @@ from pathlib import Path
 import requests
 from .api import PelotonClient, make_session
 from .cache import load_snapshot, save_snapshot
+from .booked_classes import reservation_ids, slim_class
 from .challenges import parse_challenges
 from .config import DEFAULTS, renewal_failed_path
-from .demo import demo_data
+from .demo import demo_bookings, demo_data
 from .selection import is_brief, last_active_day
 from .summaries import summarize_workout
 from .timestamps import workout_date, workout_timestamp
@@ -61,6 +62,9 @@ INSIGHT_RETRY_SECONDS = 3600
 # fetch keeps the last list and tries again sooner.
 CHALLENGES_REFRESH_SECONDS = 3600
 CHALLENGES_RETRY_SECONDS = 900
+# A booked class whose details could not be had is not asked for again this long (the reservations list
+# itself is asked for every refresh: about 140-420 bytes, 288 calls a day at the default 300 s).
+BOOKING_RETRY_SECONDS = 3600
 
 
 def slim_profile(me):
@@ -121,6 +125,9 @@ class Dashboard:
         # When the challenges were last asked for (monotonic), and how long until the next ask.
         self._challenges_checked_at = None
         self._challenges_wait = CHALLENGES_REFRESH_SECONDS
+        # Booked classes' details by class ID, fetched once each; and when a detail fetch last failed.
+        self._bookings = {}
+        self._booking_failed = {}
         self._derive_args = None
         # Log figures are computed under the log lock but published later; the
         # sequence keeps an older computation from overwriting a newer one.
@@ -140,7 +147,7 @@ class Dashboard:
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
                       'distance_totals': {}, 'personal_records': {},
                       'streak_week_workouts': None, 'activity_days': {},
-                      'time_frames': {}, 'events': {}, 'challenges': []}
+                      'time_frames': {}, 'events': {}, 'challenges': [], 'booked_classes': []}
         self.demo = demo
         if demo:
             data = demo_data()
@@ -152,6 +159,7 @@ class Dashboard:
                            for w in data['workouts']],
                 weekly_progress=weekly_progress(data['workouts'], zone),
                 challenges=parse_challenges(data['challenges']),
+                booked_classes=demo_bookings(time.time()),
                 login_required=demo_login_needed, status='ready', last_updated=time.time(),
                 generation=1)
         else:
@@ -167,6 +175,8 @@ class Dashboard:
                             # Switched off: cached insights must not keep showing.
                             summary.pop('insights', None)
                 self._publish(**cached, status='cached', data_stale=True, cache_loaded=True)
+                # Booked classes' details survive a restart (the cache validated them).
+                self._bookings = {b['id']: b for b in cached.get('booked_classes') or []}
             self._log = WorkoutLog.load(self.log_path)
             # Lifetime figures come from the log, so they show at once after a restart.
             me = (cached or {}).get('me') or {}
@@ -429,6 +439,57 @@ class Dashboard:
         self._challenges_wait = CHALLENGES_REFRESH_SECONDS
         self._publish(challenges=challenges)
 
+    def _shows_next_class(self):
+        rotation = self.config.get('rotation', DEFAULTS['rotation'])
+        return isinstance(rotation, list) and 'next_class' in rotation
+
+    def _scheduled_class(self, client, identity):
+        """One booked class's details, slimmed, or None (logged) when they can't be had. Only a 401 escapes."""
+        try:
+            booking = slim_class(client.get_scheduled_class(identity), identity)
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 401:
+                raise
+            booking, reason = None, type(exc).__name__
+        except (requests.RequestException, ValueError) as exc:
+            booking, reason = None, type(exc).__name__
+        else:
+            reason = 'not a class the page can show'
+        if booking is None:
+            logger.warning('Booked class %s: no details (%s); asking again in an hour', identity, reason)
+        return booking
+
+    def _refresh_bookings(self, client, user_id):
+        """Every refresh while the next-class page is in the rotation: the booked classes' IDs (one small call),
+        then each new one's details once, kept by ID while it stays booked. A failure keeps the last list and
+        never fails the refresh; only a 401 escapes."""
+        if not self._shows_next_class():
+            return
+        try:
+            ids = reservation_ids(client.get_reservations(user_id))
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 401:
+                raise
+            logger.warning('Reservations fetch failed (%s); keeping the last list', type(exc).__name__)
+            return
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning('Reservations fetch failed (%s); keeping the last list', type(exc).__name__)
+            return
+        now = time.monotonic()
+        bookings = []
+        for identity in ids:
+            booking = self._bookings.get(identity)
+            failed_at = self._booking_failed.get(identity)
+            if booking is None and (failed_at is None or now - failed_at >= BOOKING_RETRY_SECONDS):
+                booking = self._scheduled_class(client, identity)
+                if booking is None:
+                    self._booking_failed[identity] = now
+            if booking is not None:
+                bookings.append(booking)
+        self._bookings = {b['id']: b for b in bookings}
+        self._booking_failed = {k: at for k, at in self._booking_failed.items() if k in ids}
+        self._publish(booked_classes=sorted(bookings, key=lambda b: b['start']))
+
     def _stamp(self):
         try:
             stat = self.token_path.stat()
@@ -573,6 +634,7 @@ class Dashboard:
                 raise ValueError('Profile response has no user ID')
             overview = client.get_overview(user_id)
             self._refresh_challenges(client, user_id)
+            self._refresh_bookings(client, user_id)
             with self._lock:
                 stored_records = self._data.get('personal_records', {})
             personal_records = merge_personal_records(stored_records, parse_personal_records(overview))

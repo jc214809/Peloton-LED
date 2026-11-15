@@ -67,8 +67,8 @@ Read the note before changing its area; update it in the same PR.
 
 | Area | Note |
 |---|---|
-| Display loop, rotation, screen times, milestones and countdown, PR celebration, workout-page stats, challenges page | `docs/dev/ROTATION.md` |
-| Peloton API, `Dashboard`, workout log, journey, activity figures, name-page facts engine, challenges fetch | `docs/dev/DATA.md` (built facts and ideas: `docs/NAME-PAGE-FACTS.md`; log design: `docs/WORKOUT-LOG-PLAN.md`) |
+| Display loop, rotation, screen times, milestones and countdown, PR celebration, workout-page stats, challenges page, next booked class | `docs/dev/ROTATION.md` |
+| Peloton API, `Dashboard`, workout log, journey, activity figures, name-page facts engine, challenges fetch, bookings fetch | `docs/dev/DATA.md` (built facts and ideas: `docs/NAME-PAGE-FACTS.md`; log design: `docs/WORKOUT-LOG-PLAN.md`) |
 | Workout compare and the board's insights | `docs/dev/WORKOUT-INSIGHTS.md` |
 | Settings page, PIN, Power menu, Wi-Fi setup | `docs/dev/SETTINGS-PAGE.md` |
 | Installer, systemd units, token renewal, Pushover, root/PWM/audio on the Pi | `docs/dev/BOARD-INSTALL.md` (troubleshooting for people: `docs/install.md`) |

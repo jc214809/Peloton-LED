@@ -37,6 +37,9 @@ SCREENS = (
     ('challenges', 'Challenges',
      'Each Peloton challenge you joined: how far to its next tier. Only running challenges with some '
      'progress and a tier still to reach.'),
+    ('next_class', 'Next booked class',
+     'The next live or encore class you booked in the Peloton app: when, the class and the instructor. '
+     'Only when one is booked.'),
 )
 # The Milestones card's countdown settings; blank is the app's default.
 MILESTONE_KEYS = ('milestone_within', 'milestone_pages')
