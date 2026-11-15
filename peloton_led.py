@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from peloton.activity import daily_streak_start
 from peloton.booked_classes import next_booking
 from peloton.challenges import shown_challenges
+from peloton.club import club_page
 from peloton.config import load_config, load_dotenv, user_cache_path, user_token_path
 from peloton.dashboard import Dashboard
 from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
@@ -34,7 +35,7 @@ logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
 DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
                     'next_milestone', 'lifetime', 'journey', 'heatmap',
-                    'milestones', 'goals', 'challenges', 'next_class')
+                    'milestones', 'goals', 'challenges', 'next_class', 'club')
 # Seconds per Wi-Fi setup page; the hotspot is rechecked between pages.
 WIFI_SETUP_PAGE_SECONDS = 5
 
@@ -211,6 +212,11 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
         if booking is not None:
             groups['next_class'].append(('next_class', {'booking': booking, 'now': now, 'timezone': zone},
                                          page_seconds(display, 'next_class', matrix_height)))
+    if 'club' in groups:
+        # Club Peloton: the score's level and points, else the level from the profile (the cache is validated).
+        club = club_page(snapshot.get('club'), snapshot.get('me'), time.time())
+        if club is not None:
+            groups['club'].append(('club', club, page_seconds(display, 'club', matrix_height)))
     # A celebration leads the rotation (after the logo), wherever 'milestones' sits in it. One per
     # rotation: the newest total-workouts milestone (acknowledging it retires any older ones), and any
     # discipline's taking turns with it pass by pass, so each shows during its day.
@@ -411,6 +417,7 @@ def main():
     from display.ui.wifi_setup_screen import WifiSetupScreen
     from display.ui.challenge_screen import ChallengeScreen
     from display.ui.next_class_screen import NextClassScreen
+    from display.ui.club_screen import ClubScreen
 
     matrix = RGBMatrix(options=led_matrix_options(options, config['matrix']))
     ensure_privileges_dropped()
@@ -442,6 +449,7 @@ def main():
     manager.register('wifi_setup', WifiSetupScreen())
     manager.register('challenge', ChallengeScreen())
     manager.register('next_class', NextClassScreen())
+    manager.register('club', ClubScreen())
     configured_logo = display.get('logo_path')
     logo = Path(configured_logo) if configured_logo else None
     for profile in profiles:

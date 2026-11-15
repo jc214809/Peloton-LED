@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .booked_classes import valid_bookings
 from .challenges import valid_challenge
+from .club import valid_club
 from .goals import parse_milestone_key
 
 
@@ -14,7 +15,7 @@ PERSISTED_KEYS = (
     'active_day_count', 'celebrated_pr_ids', 'pr_shown_at',
     'weekly_progress', 'celebrated_milestones', 'personal_records', 'streaks',
     'milestone_shown_at', 'celebrated_discipline_milestones', 'discipline_milestone_shown_at',
-    'name_facts_passes', 'name_facts_shown', 'challenges', 'booked_classes',
+    'name_facts_passes', 'name_facts_shown', 'challenges', 'booked_classes', 'club',
 )
 
 
@@ -94,6 +95,9 @@ def load_snapshot(path):
     # Booked classes: a damaged list only hides the page until the next refresh asks again.
     if 'booked_classes' in restored and not valid_bookings(restored['booked_classes']):
         del restored['booked_classes']
+    # Club Peloton: a damaged record falls back to the level from the profile until the next fetch.
+    if restored.get('club') is not None and not valid_club(restored['club']):
+        del restored['club']
     return restored
 
 

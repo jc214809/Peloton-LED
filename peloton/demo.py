@@ -1,6 +1,7 @@
 """Synthetic API-shaped data for offline screen previews."""
 import math
 from copy import deepcopy
+from datetime import datetime, timezone
 
 from .insight_lines import board_view
 
@@ -107,6 +108,29 @@ def demo_bookings(now):
              'minutes': 20, 'instructor': 'Ben Alldis'},
             {'id': 'demo-encore-bootcamp', 'start': float(now + 26 * 3600), 'tag': 'ENCORE',
              'discipline': 'tread_bootcamp', 'minutes': 45, 'instructor': 'Jess Sims'}]
+
+
+def demo_club_score(now):
+    """GET members-score .../v2/user/{id}/score, cut to what the board reads: Gold III, 1,341 points from
+    Champion, with a double-points boost running for another week."""
+    expires = datetime.fromtimestamp(now + 7 * 86400, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    return {'badge_level_name': 'Gold III', 'total_earned_points': 13659,
+            'boost': {'status': 'active', 'expires_at': expires, 'title': 'Double Club Peloton points'},
+            'progress_bar': {'badge_level_name': 'Gold III', 'score': 13659, 'ignore_segments_on_profile': False,
+                             'tier_base_points': 2000, 'tier_max_points': 15000,
+                             'segment_tiers_max_points': [
+                                 {'label': 'Gold I', 'min_points': 2000, 'max_points': 4000,
+                                  'next_level_name': 'Gold II'},
+                                 {'label': 'Gold II', 'min_points': 4000, 'max_points': 6000,
+                                  'next_level_name': 'Gold III'},
+                                 {'label': 'Gold III', 'min_points': 6000, 'max_points': 15000,
+                                  'next_level_name': 'Champion'}]}}
+
+
+def demo_club(now):
+    """The demo rider's Club Peloton record as the board keeps it (peloton.club.parse_score)."""
+    from .club import parse_score
+    return parse_score(demo_club_score(now), now)
 
 
 def _demo_challenge(title, value, shown, unit, tier, following, to_next):

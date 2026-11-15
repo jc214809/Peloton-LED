@@ -10,6 +10,8 @@ import logging
 logger = logging.getLogger("peloton-led.api")
 
 BASE = "https://api.onepeloton.com"
+# Club Peloton's level and points: an undocumented host Peloton's web app calls (docs/PELOTON-API.md).
+MEMBERS_SCORE = "https://members-score.onepeloton.com"
 
 
 def load_token(path: Path) -> str:
@@ -133,6 +135,16 @@ class PelotonClient:
         """The running challenges the rider joined, each with their progress and tiers."""
         resp = self._get(f"{BASE}/api/user/{user_id}/challenges/current", params={"has_joined": "true"},
                          timeout=20)
+        resp.raise_for_status()
+        return self._object(resp)
+
+    def get_club_score(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Club Peloton's level, points and tier for the rider; None when Peloton has no score (404: a free
+        trial or cancelled membership). Not through `_get`: a 401 from this undocumented host must not mark
+        the token as rejected when the main API just took it."""
+        resp = self._session.get(f"{MEMBERS_SCORE}/v2/user/{user_id}/score", timeout=20)
+        if resp.status_code == 404:
+            return None
         resp.raise_for_status()
         return self._object(resp)
 

@@ -4,7 +4,7 @@
 
 ![Tests](https://github.com/jc214809/Peloton-LED/actions/workflows/tests.yml/badge.svg) [![codecov](https://codecov.io/gh/jc214809/Peloton-LED/graph/badge.svg)](https://codecov.io/gh/jc214809/Peloton-LED)
 
-A Python dashboard for a Raspberry Pi RGB LED matrix (64×64 or 64×32), with a desktop browser emulator. It shows every completed workout from your latest active day (with personal-record celebrations and optional insights against your similar workouts), your name with rotating highlights, streaks, a household head-to-head, lifetime counts by discipline, milestone countdowns and celebrations, your lifetime miles as a trip, a 12-week heatmap, weekly goals, your progress in Peloton challenges and the next live class you booked. Each board has a settings page and updates itself.
+A Python dashboard for a Raspberry Pi RGB LED matrix (64×64 or 64×32), with a desktop browser emulator. It shows every completed workout from your latest active day (with personal-record celebrations and optional insights against your similar workouts), your name with rotating highlights, streaks, a household head-to-head, lifetime counts by discipline, milestone countdowns and celebrations, your lifetime miles as a trip, a 12-week heatmap, weekly goals, your progress in Peloton challenges, the next live class you booked and your Club Peloton level. Each board has a settings page and updates itself.
 
 ## Setup
 
@@ -77,7 +77,7 @@ Default order:
 ```json
 "rotation": ["latest_workouts", "username", "streaks", "versus", "total_workouts",
              "next_milestone", "lifetime", "journey", "heatmap",
-             "milestones", "goals", "challenges", "next_class"]
+             "milestones", "goals", "challenges", "next_class", "club"]
 ```
 
 | Section | What it shows | Shown when | Time on screen |
@@ -95,6 +95,7 @@ Default order:
 | [`goals`](#goals--weekly-goals) | Progress bar toward each weekly goal | `weekly_goals.workouts`, `.minutes` or `.active_days` is above 0 | `overview_duration` per goal |
 | [`challenges`](#challenges--peloton-challenges) | Each Peloton challenge you joined: your number and how far to its next tier | A challenge is running, has some progress and a tier still to reach | `overview_duration` per challenge |
 | [`next_class`](#next_class--next-booked-class) | The next live or encore class you booked: the time (a countdown in the last hour), the day, the class and the instructor | A class is booked, until 10 minutes after its start | `overview_duration` |
+| [`club`](#club--club-peloton-level-and-points) | Your Club Peloton level as a gem, your points, a bar across the tier and how far to the next level | Peloton has a Club Peloton score for you (the level alone until the first one arrives) | `overview_duration` |
 
 Any section's time can be overridden with `screen_durations.<section>`. A time is never `0`: to hide a section, leave it out of `rotation` (the settings page's Show switch). An older config's `0` still loads: the board treats it as switched off (that section leaves `rotation`, and a `0` fallback such as `overview_duration` switches off the sections using it) and logs what it did; saving the settings page writes it that way. Where a page has several frames (`username`'s highlights, `versus` on 64×32), more time makes each frame stay up longer instead of starting over. The one exception is `total_workouts`: it has no key of its own and follows `screen_durations.lifetime`, so the two stay in step.
 
@@ -324,6 +325,14 @@ The soonest live or encore class you booked in the Peloton app. On 64x64, top to
 
 The board asks Peloton for your bookings on every refresh while `next_class` is in `rotation` (a call of a few hundred bytes: 288 a day at the default `refresh_interval`), plus one call per newly booked class for its details. No booking, no page; book or cancel in the Peloton app. Options: `screen_durations.next_class` / `overview_duration`. `python scripts/render_next_class.py` redraws this screenshot from the screen code.
 
+### `club` — Club Peloton level and points
+
+![Club Peloton](docs/screenshots/rotation/club.png)
+
+Your Club Peloton level. On 64x64: the level's gem (bronze, silver or gold hexagon, the Champion octagon, the Legend diamond), the level in its colour (`GOLD III`), your points (`13,659 PTS`), a bar across the tier (Gold runs from 2,000 to 15,000 points, with a gap where Gold II and Gold III start), then `1,341 TO` over the next level in its colour (`CHAMPION`), or `TOP LEVEL` for a Legend. `2X` shows in gold in the bottom left corner while Peloton runs a double-points boost. On 64x32 the gem is at the left with the level and points beside it, then the bar and `1,341 TO GO` (`14334 TO LEGEND` where the next level's name fits; `CHAMPION` never does), with `2X` at the left when there's room.
+
+The board asks Peloton for your score when it sees a new workout and every 6 hours (about 4-10 calls a day per rider), only while `club` is in `rotation`. The score comes from a Peloton address the app uses but doesn't document, so if it fails the page keeps the last figures; until the first score arrives the page shows the gem and level from your profile. A rider Peloton has no score for (a free trial, say) gets no page. Options: `screen_durations.club` / `overview_duration`. `python scripts/render_club.py` redraws this screenshot from the screen code.
+
 ### Status screens
 
 When there's no workout data to show, a short status screen takes the place of the `latest_workouts` section. It stays up for the smaller of 2 s and the workout duration.
@@ -425,7 +434,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |
 
-`rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `heatmap`, `milestones`, `goals`, `challenges`, `next_class`, each at most once. See [Screens and rotation](#screens-and-rotation) for what each one shows. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `heatmap`, `milestones`, `goals`, `challenges`, `next_class` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
+`rotation` accepts any subset of `latest_workouts`, `username`, `streaks`, `versus`, `total_workouts`, `next_milestone`, `lifetime`, `journey`, `heatmap`, `milestones`, `goals`, `challenges`, `next_class`, `club`, each at most once. See [Screens and rotation](#screens-and-rotation) for what each one shows. `screen_durations` keys are `latest_workouts`, `username`, `streaks`, `versus`, `next_milestone`, `lifetime`, `journey`, `heatmap`, `milestones`, `goals`, `challenges`, `next_class`, `club` — `lifetime` controls both Total Workouts and lifetime discipline pages so their timing stays synchronized.
 
 Each full-board workout screen shows a discipline/duration/title intro, then shows each of that discipline's stats once, one at a time, each held for `last_workout_detail_interval` seconds, with one extra second for the graph and the zone bar. The page lasts exactly that long (`last_workout_detail_interval * (1 + stat count)`, plus 1 s per graph or zone bar), so every stat gets one full turn with no cut-offs and no repeats. A workout with no stats shows its intro for one interval. The two-page "compact" 64×32 layout is gone: an older config's `compact_workout_pages`, `last_workout_duration` and `screen_durations.latest_workouts` still load and do nothing, and saving the settings page removes them.
 
@@ -473,7 +482,7 @@ Each refresh saves Peloton's output personal-records table (one record per disci
     "performance_cache_size": 32,
     "rotation": ["latest_workouts", "username", "streaks", "versus", "total_workouts",
                  "next_milestone", "lifetime", "journey", "heatmap", "milestones", "goals", "challenges",
-                 "next_class"],
+                 "next_class", "club"],
     "screen_durations": { "username": 30, "lifetime": 5, "milestones": 5.8, "goals": 4 },
     "weekly_goals": { "workouts": 3, "minutes": 300 },
     "milestones": [250, 500, 1000, 2000],
