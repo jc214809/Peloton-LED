@@ -80,12 +80,25 @@ def frame_bounds(timezone_name=None, now=None):
             'all': (None, None)}
 
 
+def class_led(workout):
+    """True when an instructor led the workout. An empty instructor_id marks exactly the non-class
+    workouts (Just Walk/Ride/Meditate, Outdoor Walking, music and scenic rides, Entertainment), so
+    it is the test, not ride_id (scenic rides have one) and not the title ("Just Tabata" has an
+    instructor). A missing or non-text ID counts as no instructor: the cache can hold anything."""
+    ride = workout.get('ride') if isinstance(workout.get('ride'), dict) else {}
+    instructor = ride.get('instructor') if isinstance(ride.get('instructor'), dict) else {}
+    identity = instructor.get('id')
+    return isinstance(identity, str) and bool(identity.strip())
+
+
 def _stamped(workouts, timezone_name):
-    """[(local timestamp, workout)] for completed workouts that have a time."""
+    """[(local timestamp, workout)] for completed, class-led workouts that have a time. The name page's
+    facts (period_stats, frame_stats, event_stats) all start here, so an untimed Just Meditate never
+    counts toward a total, a longest workout or an active day."""
     rows = []
     for workout in workouts:
         stamp = workout_timestamp(workout, timezone_name)
-        if is_completed(workout) and stamp is not None:
+        if is_completed(workout) and class_led(workout) and stamp is not None:
             rows.append((stamp, workout))
     return rows
 

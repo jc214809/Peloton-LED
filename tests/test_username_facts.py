@@ -9,7 +9,7 @@ import pytest
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.username import UsernameScreen
 from peloton.activity import (MIN_RANK_BLOCKS, SUBJECT_DISCIPLINES, SUBJECT_INSTRUCTORS, block_rank, frame_bounds,
-                              frame_stats, period_stats)
+                              event_stats, frame_stats, period_stats)
 from peloton.username_facts import (COOLDOWN_PASSES, FRAME_ORDER, KINDS, MAX_COMPARE_BONUS, MIN_RANKED_CLASSES,
                                     MIN_STREAK_WEEKS, RANK_FIRST_BONUS, RECENT_RECORD_BONUS, _comparison_fact,
                                     _since_fact,
@@ -102,19 +102,86 @@ def test_period_stats_counts_completed_workouts_in_a_window():
                 _w('old', NOW - timedelta(days=45))]
     start = frame_bounds(ZONE, NOW)['30d'][0]
     assert period_stats(workouts, start, None, ZONE, NOW) == {
-        'workouts': 3, 'minutes': 85, 'disciplines': {'strength': 1, 'cycling': 1, 'meditation': 1},
-        'instructor_counts': {'jess': 1, 'cody': 1}, 'instructors': 2, 'classes': 3, 'active_days': 3}
+        'workouts': 2, 'minutes': 75, 'disciplines': {'strength': 1, 'cycling': 1},
+        'instructor_counts': {'jess': 1, 'cody': 1}, 'instructors': 2, 'classes': 2, 'active_days': 2}
     assert period_stats([], None, None, ZONE, NOW)['workouts'] == 0
-    assert period_stats(workouts, None, None, ZONE, NOW)['workouts'] == 4      # everything up to now
+    assert period_stats(workouts, None, None, ZONE, NOW)['workouts'] == 3      # everything up to now
 
 
 def test_different_classes_count_a_class_once_and_leave_out_workouts_with_no_class():
+    # (A workout with no class has no instructor either, so it is left out of every count: see the
+    # class-led tests below.)
     workouts = [_w('a', NOW - timedelta(days=1), ride_id='hiit'), _w('b', NOW - timedelta(days=2), ride_id='hiit'),
                 _w('c', NOW - timedelta(days=3), ride_id='power')]
     workouts.append({'id': 'just-ride', 'status': 'COMPLETE', 'start_time': int((NOW - timedelta(days=4)).timestamp()),
                      'fitness_discipline': 'cycling', 'ride': {}})
     stats = period_stats(workouts, None, None, ZONE, NOW)
-    assert (stats['workouts'], stats['classes'], stats['active_days']) == (4, 2, 4)
+    assert (stats['workouts'], stats['classes'], stats['active_days']) == (3, 2, 3)
+
+
+# class-led workouts only
+
+def _non_class(identity, when, discipline, title='', ride_id='0' * 32, instructor_id=None, minutes=20, **extra):
+    """A workout as the log rebuilds it: `instructor_id` empty (or absent) is the mark of no class."""
+    ride = {'fitness_discipline': discipline, 'duration': minutes * 60, 'id': ride_id, 'title': title}
+    if instructor_id is not None:
+        ride['instructor'] = {'id': instructor_id}
+    return dict({'id': identity, 'status': 'COMPLETE', 'start_time': int(when.timestamp()),
+                 'fitness_discipline': discipline, 'ride': ride}, **extra)
+
+
+def test_non_class_workouts_are_left_out_of_every_fact_figure():
+    day = lambda n: NOW - timedelta(days=n)       # noqa: E731
+    workouts = [
+        _w('class', day(1), minutes=30),
+        # a forgotten 299-minute meditation timer, and a walk: no instructor
+        _non_class('timer', day(2), 'meditation', 'Just Meditate', minutes=299, instructor_id=''),
+        _non_class('walk', day(3), 'walking', 'Outdoor Walking', instructor_id=''),
+        # a scenic ride: a real (non-zero) class ID, still no instructor
+        _non_class('scenic', day(4), 'cycling', '5 KM Alaska Girdwood Ride', ride_id='a1b2c3', instructor_id=''),
+        # the instructor key missing altogether, or None, or not text
+        _non_class('absent', day(5), 'cycling', 'Just Ride'),
+        _non_class('none', day(6), 'running', 'Just Run', instructor_id=None),
+        _non_class('number', day(7), 'cycling', 'Odd', instructor_id=12345),
+        dict(_w('norid', day(8)), ride=None),
+    ]
+    workouts[5]['ride']['instructor'] = {'id': None}
+    stats = frame_stats(workouts, ZONE, NOW)
+    for key in ('30d', 'all'):
+        assert (stats[key]['workouts'], stats[key]['minutes'], stats[key]['active_days']) == (1, 30, 1)
+        assert stats[key]['disciplines'] == {'strength': 1} and stats[key]['classes'] == 1
+    assert period_stats(workouts, None, None, ZONE, NOW)['workouts'] == 1
+
+
+def test_the_longest_workout_is_never_a_forgotten_meditation_timer():
+    workouts = [_w('class', NOW - timedelta(days=1), minutes=45),
+                _non_class('timer', NOW - timedelta(days=2), 'meditation', 'Just Meditate', minutes=299,
+                           instructor_id='')]
+    longest = frame_stats(workouts, ZONE, NOW)['all']['longest']
+    assert (longest['minutes'], longest['discipline']) == (45, 'strength')
+    events = event_stats(workouts, ZONE, NOW)
+    assert 'meditation' not in events['disciplines'] and events['first_ever'] == '2026-11-07'
+
+
+def test_a_class_whose_title_starts_with_just_is_kept_when_it_has_an_instructor():
+    workouts = [_non_class('tabata', NOW - timedelta(days=1), 'cardio', 'Just Tabata', ride_id='t1',
+                           instructor_id='jess'),
+                _non_class('bieber', NOW - timedelta(days=2), 'cycling', 'Justin Bieber Ride', ride_id='t2',
+                           instructor_id='cody'),
+                _non_class('just', NOW - timedelta(days=3), 'cycling', 'Just Ride', instructor_id='')]
+    stats = period_stats(workouts, None, None, ZONE, NOW)
+    assert (stats['workouts'], stats['classes'], stats['instructor_counts']) == (2, 2, {'jess': 1, 'cody': 1})
+
+
+def test_a_log_row_with_no_instructor_id_is_not_a_class_for_the_facts():
+    log = WorkoutLog('unused')
+    log.merge([_w('class', NOW - timedelta(days=1)),
+               _non_class('scenic', NOW - timedelta(days=2), 'rowing', '5 min Coron Row', ride_id='r9',
+                          instructor_id='')])
+    log.backfill['complete'] = True
+    derived = log.derived(tzname=ZONE, now=NOW)
+    assert derived['time_frames']['all']['workouts'] == 1
+    assert derived['events']['first_ever'] == '2026-11-07'
 
 
 def test_the_first_of_a_month_still_has_the_last_30_days():
@@ -578,7 +645,7 @@ def test_frame_stats_split_each_frame_by_discipline_and_instructor_in_one_pass()
     assert month['by_discipline']['strength'] == period_stats(workouts, start, None, ZONE, NOW, discipline='strength')
     assert month['by_instructor']['jess'] == period_stats(workouts, start, None, ZONE, NOW, instructor='jess')
     # Only the most-seen: the 4th instructor and the 6th discipline are left out.
-    many = [_w(f'x{n}', NOW - timedelta(days=1), discipline=f'd{n}', instructor=None) for n in range(7)]
+    many = [_w(f'x{n}', NOW - timedelta(days=1), discipline=f'd{n}') for n in range(7)]
     assert len(frame_stats(many, ZONE, NOW)['30d']['by_discipline']) == SUBJECT_DISCIPLINES
     assert len(frame_stats(workouts, ZONE, NOW)['all']['by_instructor']) <= SUBJECT_INSTRUCTORS
     assert frame_stats([], ZONE, NOW)['all']['by_discipline'] == {}
