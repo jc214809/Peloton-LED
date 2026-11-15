@@ -12,20 +12,29 @@ UNITS = {'min': 'MIN', 'minutes': 'MIN', 'workouts': 'CLASSES', 'classes': 'CLAS
          'miles': 'MILES', 'mi': 'MILES', 'km': 'KM', 'meters': 'METERS', 'm': 'METERS', 'reps': 'REPS'}
 # Before the first tier Peloton calls the current tier this.
 UNEARNED = 'UNEARNED'
-_MONTHS = ('January|February|March|April|May|June|July|August|September|October|November|December')
+_MONTH_NAMES = ('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
+                'November', 'December')
+_MONTHS = '|'.join(_MONTH_NAMES)
+# 'NOV': what a monthly challenge's title keeps of its month (the screens never drop it when a title is too long).
+MONTH_ABBREVIATIONS = {name.upper(): name[:3].upper() for name in _MONTH_NAMES}
 _NUMBER = re.compile(r'^\d{1,3}(,\d{3})*(\.\d+)?$|^\d+(\.\d+)?$')
 # Longest text kept from a response; anything longer is cut, never trusted to fit.
 MAX_TEXT = 40
 
 
 def short_title(title):
-    """The page's title: 'The Annual 2026' -> 'ANNUAL 2026', 'November 2026 Rep Goal Challenge' -> 'REP GOAL',
-    'The Countdown to Turkey Burn Challenge' -> 'TURKEY BURN'."""
+    """The page's title: 'The Annual 2026' -> 'ANNUAL 2026', 'The Countdown to Turkey Burn Challenge' ->
+    'TURKEY BURN'. A monthly challenge keeps its month, abbreviated and first, and drops the year:
+    'November 2026 Rep Goal Challenge' -> 'NOV REP GOAL'."""
     text = ' '.join(str(title or '').split())
     text = re.sub(r'^the\s+', '', text, flags=re.I)
     text = re.sub(r'^countdown\s+to\s+', '', text, flags=re.I)
-    text = re.sub(rf'^({_MONTHS})\s+\d{{4}}\s+', '', text, flags=re.I)
-    text = re.sub(r'\s+challenge$', '', text, flags=re.I)
+    month = re.search(rf'\b({_MONTHS})\s+\d{{4}}\b\s*', text, flags=re.I)
+    if month:  # '<Month> <Year>' wherever it sits: out of the text, in front as the abbreviation
+        text = text[:month.start()] + text[month.end():]
+    text = re.sub(r'\s+challenge$', '', text.strip(), flags=re.I)
+    if month:
+        text = f'{MONTH_ABBREVIATIONS[month.group(1).upper()]} {text}'.strip()
     return text.upper()[:MAX_TEXT].strip()
 
 
