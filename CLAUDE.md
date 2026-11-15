@@ -73,7 +73,7 @@ Read the note before changing its area; update it in the same PR.
 | Settings page, PIN, Power menu, Wi-Fi setup | `docs/dev/SETTINGS-PAGE.md` |
 | Installer, systemd units, token renewal, Pushover, root/PWM/audio on the Pi | `docs/dev/BOARD-INSTALL.md` (troubleshooting for people: `docs/install.md`) |
 | Releases, auto-tagging, `self_update/`, the Updates card | `docs/dev/UPDATER.md` |
-| Screen ABC, `ScreenManager`, driver, fonts, logo, models | `docs/dev/SCREENS.md` |
+| Screen ABC, `ScreenManager`, driver, fonts, logo, discipline icons, models | `docs/dev/SCREENS.md` |
 | Which stats Peloton sends per equipment | `docs/DATA-POINTS.md` |
 | Every 64x32 layout difference | `docs/64x32-NOTES.md` |
 

@@ -71,3 +71,35 @@ def test_only_four_tiles_and_a_page_dot_per_page():
 def test_nothing_to_draw_returns_false(state):
     initialize_fonts(64)
     assert LifetimeOverviewScreen().render(ImageMatrix(height=64), state) is False
+
+
+ALL_ICONS = sorted(DISCIPLINE_ICON_ROWS) + LINE_DRAWN
+
+
+@pytest.mark.parametrize('key', ALL_ICONS)
+def test_every_icon_is_horizontally_centred_in_its_canvas(key):
+    """Equal blank columns each side; an odd spare column goes on the right."""
+    left, _, right, _ = _icon(key).getbbox()
+    spare_left, spare_right = left, 26 - right
+    assert spare_right - spare_left in (0, 1)
+
+
+@pytest.mark.parametrize('key', ALL_ICONS)
+def test_every_icon_stands_on_the_same_row(key):
+    """Tiles side by side line up: every icon's lowest lit row is row 20."""
+    _, _, _, bottom = _icon(key).getbbox()
+    assert bottom - 1 == 20
+
+
+def test_render_lifetime_draws_both_panel_sizes(tmp_path, capsys):
+    from scripts import render_lifetime
+    out = tmp_path / 'lifetime.png'
+    render_lifetime.main(['--out', str(out)])
+    assert out.exists() and 'Wrote' in capsys.readouterr().out
+
+
+def test_render_lifetime_stops_on_a_page_it_cannot_draw(monkeypatch):
+    from scripts import render_lifetime
+    monkeypatch.setattr(render_lifetime.LifetimeOverviewScreen, 'render', lambda self, matrix, state: False)
+    with pytest.raises(RuntimeError):
+        render_lifetime.panels(64)

@@ -734,8 +734,8 @@ def test_row_bootcamp_custom_rail_connects_to_its_machine():
     bootcamp = ImageMatrix(height=64)
     color = (0, 150, 255)
     draw_icon(bootcamp, 'row_bootcamp', 0, 0, color)
-    assert all(bootcamp.image.getpixel((x, 14)) == color for x in range(9, 18))
-    assert all(bootcamp.image.getpixel((18, y)) == color for y in range(11, 14))
+    assert all(bootcamp.image.getpixel((x, 17)) == color for x in range(10, 19))
+    assert all(bootcamp.image.getpixel((19, y)) == color for y in range(14, 17))
 
 
 @pytest.mark.parametrize('discipline', ['bike_bootcamp', 'tread_bootcamp', 'row_bootcamp'])

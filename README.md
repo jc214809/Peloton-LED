@@ -255,7 +255,7 @@ Your total and each discipline follow the same rule: a page appears only when it
 
 ![Lifetime discipline totals](docs/screenshots/rotation/lifetime.png)
 
-Every discipline you've done gets its own colored pixel-icon tile with its exact lifetime count, biggest first. That's four tiles per page on 64×64 and two on 64×32, with as many pages as needed. Disciplines are never merged: Bike, Tread and Row Bootcamp each keep their own tile, and their icons alternate with a strength dumbbell. All tiles on a page appear in the same frame.
+Every discipline you've done gets its own colored pixel-icon tile with its exact lifetime count, biggest first. That's four tiles per page on 64×64 and two on 64×32, with as many pages as needed. Disciplines are never merged: Bike, Tread and Row Bootcamp each keep their own tile, and their icons alternate with a strength dumbbell. All tiles on a page appear in the same frame. `python scripts/render_lifetime.py` redraws this screenshot from the screen code.
 
 Options: `screen_durations.lifetime` / `overview_duration`, per page, minimum 5 s.
 
