@@ -40,6 +40,8 @@ SCREENS = (
     ('next_class', 'Next booked class',
      'The next live or encore class you booked in the Peloton app: when, the class and the instructor. '
      'Only when one is booked.'),
+    ('club', 'Club Peloton',
+     'Your Club Peloton level and points, and how many points to the next level.'),
 )
 # The Milestones card's countdown settings; blank is the app's default.
 MILESTONE_KEYS = ('milestone_within', 'milestone_pages')

@@ -22,6 +22,7 @@ Every ID, name and number in the examples is made up, so the examples are safe t
 - [Classes (rides)](#classes-rides)
 - [Instructors](#instructors)
 - [Challenges](#challenges)
+- [Club Peloton](#club-peloton)
 - [GraphQL (tags)](#graphql-tags)
 - [Gotchas](#gotchas)
 - [Sources](#sources)
@@ -34,6 +35,7 @@ Every ID, name and number in the examples is made up, so the examples are safe t
 | `https://auth.onepeloton.com` | Auth0 login and token renewal. |
 | `https://gql-graphql-gateway.prod.k8s.onepeloton.com/graphql` | The GraphQL gateway (tags). |
 | `https://members.onepeloton.com/login` | The web login page that issues the tokens. |
+| `https://members-score.onepeloton.com` | Club Peloton's level and points (see [Club Peloton](#club-peloton)). The web app calls it; it isn't in any community spec. |
 
 ## Authentication
 
@@ -217,9 +219,14 @@ pt "$API/api/me"
     {"name": "Tread Bootcamp", "slug": "bootcamp", "count": 12}
   ],
   "cycling_ftp": 210,
-  "default_max_heart_rate": 178
+  "default_max_heart_rate": 178,
+  "badge_level": 8,
+  "badge_url": "https://example.com/badge_8_2_1.png",
+  "no_mask_badge_url": "https://example.com/no_mask_badge_8_1_1.png"
 }
 ```
+
+- **`badge_level`** is the Club Peloton level as a number (tested 2026-11-14): 0 (Bronze I) to 10 (Legend), in the order Bronze I-III, Silver I-III, Gold I-III, Champion, Legend. It has no points; those come from [members-score](#get-v2useruser_idscore-on-members-score).
 
 ### `GET /api/user/{user_id or username}`
 
@@ -1140,6 +1147,63 @@ Leaves a challenge. The response is an empty 200.
 pt -X POST "$API/api/user/$PELOTON_USER/challenges/dddd4444eeee5555ffff6666aaaa7777/leave"
 ```
 
+## Club Peloton
+
+### `GET /v2/user/{user_id}/score` (on members-score)
+
+Your Club Peloton level, points and where they sit in the tier, from `https://members-score.onepeloton.com`, the call Peloton's web app makes for its Club Peloton page. About 8 KB, mostly media URLs and help text.
+
+**Auth:** Token (the same bearer token) · **Source:** Tested (2026-11-14, two accounts) · the board calls it for the `club` page
+
+```bash
+pt "https://members-score.onepeloton.com/v2/user/$PELOTON_USER/score"
+```
+
+```json
+{
+  "badge_level_name": "Gold III",
+  "level_slug": 8,
+  "level_tag": null,
+  "total_earned_points": 12480,
+  "previous_total_earned_points": 11892,
+  "points_since_last_visit": 588,
+  "last_visit_timestamp": "2026-11-10T18:00:00Z",
+  "boost": {
+    "boost_id": "member-celebration-2x-20261015",
+    "status": "active",
+    "expires_at": "2026-12-01T04:59:00Z",
+    "title": "Celebrate! You're getting double Club Peloton points",
+    "expiration_label": "Until Nov 30"
+  },
+  "progress_bar": {
+    "badge_level_name": "Gold III",
+    "score": 12480,
+    "tier_base_points": 2000,
+    "tier_max_points": 15000,
+    "ignore_segments_on_profile": false,
+    "end_label": null,
+    "segment_tiers_max_points": [
+      {"label": "Gold I", "min_points": 2000, "max_points": 4000, "next_level_name": "Gold II"},
+      {"label": "Gold II", "min_points": 4000, "max_points": 6000, "next_level_name": "Gold III"},
+      {"label": "Gold III", "min_points": 6000, "max_points": 15000, "next_level_name": "Champion"}
+    ]
+  },
+  "awards_carousel": [
+    {"badge_id": "Gold III", "badge_name": "Gold", "achieved_date": "2022-03-05T15:20:00Z", "in_progress": true}
+  ],
+  "earn_points": [{"header_label": "Workout days", "sub_header_label": "Earn points for each workout day."}],
+  "static_badge_url": "https://example.com/badge_8_2_1.png"
+}
+```
+
+- **Levels:** Bronze I-III (0-99), Silver I-III (100-1,999), Gold I-III (2,000-14,999), Champion (15,000-29,999), Legend (30,000+). The tier is the metal: `tier_base_points` to `tier_max_points` (Gold: 2,000 to 15,000).
+- **Champion is different.** Its `segment_tiers_max_points` is the whole ladder, one row per metal with odd `min_points` (`Bronze` 50-100, `Silver` 900-2,000), and `ignore_segments_on_profile` is `true`; `level_tag` was `"15K"`. Find your segment by its `label` matching `badge_level_name`, not by the points. A Legend's row has `max_points: null` and `next_level_name: ""` (from the Champion response; no Legend account was tried).
+- **`boost`** is a double-points promotion, `null` when there's none. Check `status` and `expires_at`.
+- **Reading it doesn't count as a visit:** two reads left `last_visit_timestamp` and `points_since_last_visit` alone, so the app's "new points" animation still plays.
+- **No score:** a free-trial or cancelled account is expected to get a 404 (not tried).
+- **Points:** 2 per workout day; streak and milestone badges; 2 per program week; 10 per challenge; at most 1 a week each for a high five, a live class and a team; membership years.
+- **Not for regular use:** `/v1/users/{id}/score` (27.7 KB, the app's point history) and its `/breakdown`, and the `/admin/...` routes listed in the same JavaScript. The `/api/...` club, loyalty and points paths people guess all 404, and the GraphQL gateway has no club field.
+
 ---
 
 ## GraphQL (tags)
@@ -1186,4 +1250,4 @@ The exact query text lives in `graphql.postman_collection.json` in the Postman r
 - [geudrik/peloton-client-library, API_DOCS.md](https://github.com/geudrik/peloton-client-library/blob/master/API_DOCS.md)
 - [philosowaffle/peloton-to-garmin, ApiClient.cs](https://github.com/philosowaffle/peloton-to-garmin/blob/master/src/Peloton/ApiClient.cs)
 - [peloton-to-garmin discussion #822 (November 2025)](https://github.com/philosowaffle/peloton-to-garmin/discussions/822)
-- This repo: `peloton/api.py` (the board's calls), `peloton/summaries.py`, `peloton/records.py`, `peloton/totals.py` and `peloton/workout_features.py` (the fields it reads), and `scripts/refresh_cookies.py` (Auth0 login and renewal)
+- This repo: `peloton/api.py` (the board's calls), `peloton/club.py` (the Club Peloton score), `peloton/summaries.py`, `peloton/records.py`, `peloton/totals.py` and `peloton/workout_features.py` (the fields it reads), and `scripts/refresh_cookies.py` (Auth0 login and renewal)

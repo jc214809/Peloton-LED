@@ -231,6 +231,11 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   with the name and percent in white over them. Unlike the graph and zones
   slides it keeps the heart-rate/calorie row.
 
+### Club Peloton (both boards, 2026-11-14)
+- 64x64: `docs/dev/ROTATION.md`. 64x32: a 12 px gem at (1, 1) (13 px until the gems became hand-drawn grids, 2026-11-14: an even size centres the hexagon's 2-px point), the level in its colour in 5x8 (`discipline`) at x 17, baseline 7 (4x6 past 47 px: `SILVER III`), `13,659 PTS` in white 4x6 at 14, a 3-row bar from column 3 to 60 at row 19, then at 30 `1,341 TO GO` centred. `1,341 TO CHAMPION` is 68 px and `1341 TO CHAMPION` 64, more than the 62 px line, so a Gold III rider sees `TO GO`; `14,334 TO LEGEND` fits only without its comma (`14334 TO LEGEND`). During a boost `2X` goes in gold at x 2 with the line right-aligned to 61, when both fit with 4 px between; otherwise the line alone. Before the first score: the gem at (2, 10) and the level at baseline 18, nothing else.
+- Checked against the largest values (`tests/test_club.py` `LARGEST`) on both heights: nothing off the panel, the gem's box clear of text, clear rows around the bar.
+- Every other page is unchanged on both boards.
+
 ### Next booked class (64x32, 2026-11-14)
 - The icon at (0, 5) and a 36 px text column from x 28, everything centred in it: the tag block on rows 0-6 (text baseline 6), the time in 5x8 (`discipline`) at baseline 17 with `AM`/`PM` in 4x6 beside it (`10:00AM`, 34 px), or `45` in 7x13B with `MIN` in 4x6 at 18 in the last hour, `NOW` in 7x13B from the start; the day in gold 4x6 at 24 (`WEDNESDAY` is exactly 36 px; in the last hour the clock time `12:45 PM` without the 64x64's `AT`, which doesn't fit; `STARTING` from the start); the first name alone in grey 4x6 at 31 (no `WITH`, no class line, no full names: `HANNAH FRANKSON` is 60 px).
 - Swept like 64x64 (`tests/test_next_class.py`): nothing off the panel, rows 7-8, 18 and 24-25 blank in the column, columns 26-27 blank between icon and text, and no first name cut.

@@ -13,8 +13,9 @@ from .api import PelotonClient, make_session
 from .cache import load_snapshot, save_snapshot
 from .booked_classes import reservation_ids, slim_class
 from .challenges import parse_challenges
+from .club import NOT_A_MEMBER, parse_score
 from .config import DEFAULTS, renewal_failed_path
-from .demo import demo_bookings, demo_data
+from .demo import demo_bookings, demo_club, demo_data
 from .selection import is_brief, last_active_day
 from .summaries import summarize_workout
 from .timestamps import workout_date, workout_timestamp
@@ -39,7 +40,8 @@ logger = logging.getLogger('peloton-led.dashboard')
 RENEWAL_MARKER_CHECK_SECONDS = 30
 # The only profile fields the board reads; the rest of /api/me (email,
 # birthday, phone, weight, ...) is never stored.
-PROFILE_KEYS = ('id', 'username', 'timezone', 'height_unit', 'created_at')
+# badge_level: the Club Peloton level (0-10), shown until the club page's first score arrives.
+PROFILE_KEYS = ('id', 'username', 'timezone', 'height_unit', 'created_at', 'badge_level')
 # id never changes and the rest rarely does, so the profile is fetched at
 # startup and then once a day.
 PROFILE_REFRESH_SECONDS = 24 * 3600
@@ -65,6 +67,11 @@ CHALLENGES_RETRY_SECONDS = 900
 # A booked class whose details could not be had is not asked for again this long (the reservations list
 # itself is asked for every refresh: about 140-420 bytes, 288 calls a day at the default 300 s).
 BOOKING_RETRY_SECONDS = 3600
+# Club Peloton points move when a workout lands (2 a workout day) or weekly (streaks, high fives), so the score
+# is asked for when a new workout shows up and every 6 hours: about 4-10 calls a day per rider. A failed fetch
+# keeps the last figures and tries again sooner.
+CLUB_REFRESH_SECONDS = 6 * 3600
+CLUB_RETRY_SECONDS = 900
 
 
 def slim_profile(me):
@@ -128,6 +135,11 @@ class Dashboard:
         # Booked classes' details by class ID, fetched once each; and when a detail fetch last failed.
         self._bookings = {}
         self._booking_failed = {}
+        # When the Club Peloton score was last asked for (monotonic), how long until the next ask, and the
+        # newest workout then (a new one asks again at once).
+        self._club_checked_at = None
+        self._club_wait = CLUB_REFRESH_SECONDS
+        self._club_workout = None
         self._derive_args = None
         # Log figures are computed under the log lock but published later; the
         # sequence keeps an older computation from overwriting a newer one.
@@ -147,7 +159,7 @@ class Dashboard:
                       'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
                       'distance_totals': {}, 'personal_records': {},
                       'streak_week_workouts': None, 'activity_days': {},
-                      'time_frames': {}, 'events': {}, 'challenges': [], 'booked_classes': []}
+                      'time_frames': {}, 'events': {}, 'challenges': [], 'booked_classes': [], 'club': None}
         self.demo = demo
         if demo:
             data = demo_data()
@@ -160,6 +172,7 @@ class Dashboard:
                 weekly_progress=weekly_progress(data['workouts'], zone),
                 challenges=parse_challenges(data['challenges']),
                 booked_classes=demo_bookings(time.time()),
+                club=demo_club(time.time()),
                 login_required=demo_login_needed, status='ready', last_updated=time.time(),
                 generation=1)
         else:
@@ -490,6 +503,35 @@ class Dashboard:
         self._booking_failed = {k: at for k, at in self._booking_failed.items() if k in ids}
         self._publish(booked_classes=sorted(bookings, key=lambda b: b['start']))
 
+    def _shows_club(self):
+        rotation = self.config.get('rotation', DEFAULTS['rotation'])
+        return isinstance(rotation, list) and 'club' in rotation
+
+    def _refresh_club(self, client, user_id, newest_workout):
+        """Fetch the Club Peloton score when due (a new workout, else every 6 hours; sooner after a failure) and
+        publish it. Only while the club page is in the rotation. The host is undocumented, so any failure,
+        a 401 included, keeps the last figures and never fails the refresh; a 404 means the rider has no score."""
+        if not self._shows_club():
+            return
+        now = time.monotonic()
+        new_workout = newest_workout is not None and newest_workout != self._club_workout
+        if (self._club_checked_at is not None and not new_workout
+                and now - self._club_checked_at < self._club_wait):
+            return
+        self._club_checked_at = now
+        self._club_workout = newest_workout
+        try:
+            payload = client.get_club_score(user_id)
+            club = NOT_A_MEMBER if payload is None else parse_score(payload, time.time())
+        except (requests.RequestException, ValueError) as exc:
+            status = getattr(getattr(exc, 'response', None), 'status_code', None)
+            logger.warning('Club Peloton score fetch failed (%s%s); keeping the last figures',
+                           type(exc).__name__, f' {status}' if status else '')
+            self._club_wait = CLUB_RETRY_SECONDS
+            return
+        self._club_wait = CLUB_REFRESH_SECONDS
+        self._publish(club=club)
+
     def _stamp(self):
         try:
             stat = self.token_path.stat()
@@ -618,6 +660,7 @@ class Dashboard:
                 # A replaced token may be a different account: re-read the profile and its challenges.
                 self._profile_checked_at = None
                 self._challenges_checked_at = None
+                self._club_checked_at = None
             elif self.login_required:
                 # Rejected token: wait for a replacement instead of retrying it.
                 return self._finish_attempt(started, interval,
@@ -643,6 +686,7 @@ class Dashboard:
                 if self._log.claim(user_id):
                     self._log.save()
             workouts, total = self._fetch_recent(client, user_id, tz)
+            self._refresh_club(client, user_id, workouts[0].get('id') if workouts else None)
             # A workout under a minute (a start tapped by accident) isn't a latest workout,
             # and doesn't make its day the last active one on its own.
             active_day = last_active_day([w for w in workouts if not is_brief(w)], tz)

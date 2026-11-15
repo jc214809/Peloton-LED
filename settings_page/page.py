@@ -828,6 +828,8 @@ def shows_for(name, display, rows):
         return f'{_secs(t)} a goal.'
     if name == 'challenges':
         return f'{_secs(t)} a challenge.'
+    if name == 'club':
+        return f'{_secs(t)}.'
     if name == 'next_class':
         return f'{_secs(t)}, when a class is booked.'
     if name == 'journey' and rows < 64:
