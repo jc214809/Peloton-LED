@@ -238,6 +238,7 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
 
 ### Next booked class (64x32, 2026-11-14)
 - The icon at (0, 5) and a 36 px text column from x 28, everything centred in it: the tag block on rows 0-6 (text baseline 6), the time in 5x8 (`discipline`) at baseline 17 with `AM`/`PM` in 4x6 beside it (`10:00AM`, 34 px), or `45` in 7x13B with `MIN` in 4x6 at 18 in the last hour, `NOW` in 7x13B from the start; the day in gold 4x6 at 24 (`WEDNESDAY` is exactly 36 px; in the last hour the clock time `12:45 PM` without the 64x64's `AT`, which doesn't fit; `STARTING` from the start); the first name alone in grey 4x6 at 31 (no `WITH`, no class line, no full names: `HANNAH FRANKSON` is 60 px).
+- The tag pulses in the last 10 minutes exactly as on 64x64 (its colour only, on rows 0-6; `docs/dev/ROTATION.md`).
 - Swept like 64x64 (`tests/test_next_class.py`): nothing off the panel, rows 7-8, 18 and 24-25 blank in the column, columns 26-27 blank between icon and text, and no first name cut.
 - Every other page is unchanged on both boards.
 

@@ -154,6 +154,8 @@ def frame_times(name, state, duration, detail_interval, height=64):
     if name in ('streak', 'streak_risk'):
         from scripts.render_streaks import FLAME_SECONDS
         return [FLAME_SECONDS]  # the README screenshots' flame
+    if name == 'next_class':
+        return [0.0]  # the tag's full brightness, as in the README (it pulses in the last 10 minutes)
     return [0.5]
 
 
