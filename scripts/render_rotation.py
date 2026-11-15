@@ -139,6 +139,9 @@ def frame_times(name, state, duration, detail_interval, height=64):
         from display.ui.journey_screen import INTRO_SECONDS
         share = state.get('step_seconds')
         return [INTRO_SECONDS, share + INTRO_SECONDS] if share else [INTRO_SECONDS]
+    if name == 'challenge':
+        from display.ui.challenge_screen import INTRO_SECONDS  # settled, as in the README
+        return [INTRO_SECONDS]
     if name == 'username':
         share = state.get('detail_seconds') or 4.0
         return [0.6 + i * share for i in range(max(1, len(state.get('details', []))))]

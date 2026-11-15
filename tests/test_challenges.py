@@ -7,8 +7,8 @@ import pytest
 import requests
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.challenge_screen import (BLUE, GOLD, RING_TRACK, TIER_COLORS, ChallengeScreen, compact_number,
-                                         ring_pixels, tier_color)
+from display.ui.challenge_screen import (BLUE, GOLD, INTRO_SECONDS, RING_TRACK, SWEEP_SECONDS, TIER_COLORS, ChallengeScreen,
+                                         compact_number, counted_shown, fitted_title, ring_pixels, tier_color)
 from peloton import dashboard as dashboard_module
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.challenges import (UNEARNED, format_number, parse_challenges, short_title, shown_challenges,
@@ -45,17 +45,31 @@ TURKEY = entry('The Countdown to Turkey Burn Challenge', 0, '0', 'workouts', ('U
                '18', end=NOW + 11 * 86400)
 
 
+@pytest.mark.parametrize('month, short', [('January', 'JAN'), ('February', 'FEB'), ('March', 'MAR'),
+                                          ('April', 'APR'), ('May', 'MAY'), ('June', 'JUN'), ('July', 'JUL'),
+                                          ('August', 'AUG'), ('September', 'SEP'), ('October', 'OCT'),
+                                          ('November', 'NOV'), ('December', 'DEC')])
+def test_every_month_is_kept_abbreviated_and_the_year_dropped(month, short):
+    assert short_title(f'{month} 2026 Rep Goal Challenge') == f'{short} REP GOAL'
+    assert short_title(f'{month.upper()} 2027 Rep Goal Challenge') == f'{short} REP GOAL'
+
+
 # ---- parsing --------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('title, short', [
     ('The Annual 2026', 'ANNUAL 2026'),
     ('The Countdown to Turkey Burn Challenge', 'TURKEY BURN'),
-    ('November 2026 Rep Goal Challenge', 'REP GOAL'),
-    ('November 2026 Meditation Challenge', 'MEDITATION'),
-    ('  October   2025 Rowing Challenge ', 'ROWING'),
+    ('November 2026 Rep Goal Challenge', 'NOV REP GOAL'),
+    ('November 2026 Meditation Challenge', 'NOV MEDITATION'),
+    ('  October   2025 Rowing Challenge ', 'OCT ROWING'),
+    ('the Rowing Challenge: December 2026', 'DEC ROWING CHALLENGE:'),
+    ('Rep Goal November 2026 Challenge', 'NOV REP GOAL'),
+    ('NOVEMBER 2026 rep goal challenge', 'NOV REP GOAL'),
+    ('May 2027 Strength Challenge', 'MAY STRENGTH'),
+    ('May the Fourth Challenge', 'MAY THE FOURTH'),
     ('Challenge Accepted', 'CHALLENGE ACCEPTED'),
     (None, ''),
 ])
-def test_short_titles_drop_the_and_the_month_and_challenge(title, short):
+def test_short_titles_drop_the_and_the_year_and_challenge_but_keep_the_month(title, short):
     assert short_title(title) == short
 
 
@@ -115,7 +129,7 @@ def test_shown_challenges_need_progress_a_next_tier_and_time_left():
     endless = slim_challenge(entry('No End', end=None))
     zero = slim_challenge(TURKEY)
     shown = shown_challenges([annual, top, ended, zero, endless, soon, {'title': 'junk'}, None], NOW)
-    assert [c['title'] for c in shown] == ['REP GOAL', 'ANNUAL 2026', 'NO END'], 'soonest ending first'
+    assert [c['title'] for c in shown] == ['NOV REP GOAL', 'ANNUAL 2026', 'NO END'], 'soonest ending first'
     assert shown_challenges(None, NOW) == [] and shown_challenges({'a': 1}, NOW) == []
 
 
@@ -273,10 +287,14 @@ class EdgeMatrix(ImageMatrix):
         super().SetPixel(x, y, r, g, b)
 
 
-def draw(state, height):
+def draw(state, height, at=INTRO_SECONDS):
+    """The page `at` seconds after it appeared (by default settled)."""
     initialize_fonts(height)
     matrix = EdgeMatrix(height=height)
-    assert ChallengeScreen().render(matrix, state)
+    screen = ChallengeScreen()
+    screen.on_enter(matrix, state)
+    screen.update(at)
+    assert screen.render(matrix, state)
     assert matrix.off_panel == 0
     return matrix
 
@@ -296,6 +314,10 @@ LARGEST = [
     entry('November 2026 Rowing Challenge', 123456, '123,456', 'meters', ('Gold', 100000), ('Platinum', 250000),
           '126,544'),
     entry('November 2026 Meditation Challenge', 11, '11', 'workouts', ('Unearned', 0), ('Bronze', 15), '4'),
+    entry('September 2026 Strength Rep Goal Challenge', 1640, '1,640', 'reps', ('Bronze', 1500), ('Silver', 3000),
+          '1,360'),
+    entry('September 2026 Supercalifragilisticexpialidocious Challenge', 12, '12', 'reps', ('Unearned', 0),
+          ('Bronze', 15), '3'),
     entry('November 2026 Cycling Challenge', 123.4, '123.4', 'miles', ('Silver', 100), ('Gold', 200), '76.6'),
     entry('The Countdown to Turkey Burn Challenge', 11, '11', 'workouts', ('Unearned', 0), ('Gold', 18), '7'),
     entry('The Extraordinarily Long Holiday Countdown Spectacular Challenge', 3, '3', 'days', ('Unearned', 0),
@@ -332,6 +354,28 @@ def test_32_rows_fit_the_largest_values(raw):
     assert bottom and max(x for x, _ in bottom) <= 62
 
 
+@pytest.mark.parametrize('height', [64, 32])
+@pytest.mark.parametrize('title', ['September 2026 Strength Rep Goal Challenge',
+                                   'September 2026 Supercalifragilisticexpialidocious Challenge',
+                                   'November 2026 Rep Goal Challenge'])
+def test_a_long_title_keeps_its_month_and_fits(title, height):
+    state = slim_challenge(entry(title))
+    initialize_fonts(height)
+    fonts = [loaded_fonts['titles'], loaded_fonts['stats']] if height == 64 else [loaded_fonts['stats']]
+    font, text = fitted_title(state['title'], fonts, 64)
+    assert text.startswith(state['title'].split()[0] + ' ')
+    assert get_text_width(font, text) <= 64
+
+
+def test_too_long_a_title_drops_words_from_the_end_not_the_month():
+    initialize_fonts(32)
+    stats = loaded_fonts['stats']
+    assert fitted_title('SEP REP GOAL', [stats], 64) == (stats, 'SEP REP GOAL')
+    assert fitted_title('SEP STRENGTH REP GOAL', [stats], 64) == (stats, 'SEP STRENGTH REP')
+    assert fitted_title('SEP SUPERCALIFRAGILISTIC GOAL', [stats], 64)[1].startswith('SEP ')
+    assert fitted_title('TURKEY BURN CLASSES EXTRA LONG', [stats], 64) == (stats, 'TURKEY BURN')
+
+
 def test_the_32_row_bottom_line_puts_the_tier_left_when_both_fit():
     initialize_fonts(32)
     annual = draw(slim_challenge(entry()), 32)
@@ -344,12 +388,12 @@ def test_the_32_row_bottom_line_puts_the_tier_left_when_both_fit():
 def test_the_ring_fills_clockwise_from_twelve_in_the_next_tiers_colour():
     initialize_fonts(64)
     half = {p[:2]: p[2:] for p in ring_pixels(0.5, GOLD)}
-    assert half[(32, 15)] == GOLD and half[(52, 35)] == GOLD, 'the top and the right'
-    assert half[(12, 35)] == RING_TRACK, 'the left is still track'
+    assert half[(32, 12)] == GOLD and half[(52, 32)] == GOLD, 'the top and the right'
+    assert half[(12, 32)] == RING_TRACK, 'the left is still track'
     empty = {p[2:] for p in ring_pixels(0.0, GOLD)}
     assert GOLD not in empty and RING_TRACK in empty
     full = {p[:2]: p[2:] for p in ring_pixels(1.0, TIER_COLORS['SILVER'])}
-    assert full[(12, 35)] == TIER_COLORS['SILVER']
+    assert full[(12, 32)] == TIER_COLORS['SILVER']
     assert tier_color('Bronze ') == TIER_COLORS['BRONZE'] and tier_color('6K') == GOLD
 
 
@@ -384,7 +428,9 @@ def test_render_challenges_draws_both_panel_sizes(tmp_path, capsys):
         for index, state in enumerate(render_challenges.PAGES):
             assert valid_challenge(state)
             matrix = ImageMatrix(64, height)
-            assert ChallengeScreen().render(matrix, state)
+            screen = ChallengeScreen()
+            screen.update(INTRO_SECONDS)
+            assert screen.render(matrix, state)
             x = left + index * (64 * scale + gap)
             panel = sheet.crop((x, top, x + 64 * scale, top + height * scale))
             assert panel.tobytes() == matrix.image.resize(panel.size, Image.NEAREST).tobytes()
@@ -406,3 +452,205 @@ def test_the_remaining_line_shortens_to_fit():
     assert remaining_line(state, font, 64) == '497 TO 6K'
     assert remaining_line({**state, 'next': {'title': 'PLATINUM PLUS', 'value': 1}}, font, 64) == '497 TO GO'
     assert remaining_line({**state, 'to_next': '12,345,678,901'}, font, 40) == '12,345,678,901'
+
+
+# ---- the intro -----------------------------------------------------------------------------------------------
+FRAMES = [i * ChallengeScreen.frame_seconds for i in range(round((INTRO_SECONDS + 0.5) / ChallengeScreen.frame_seconds))]
+INTRO_CASES = [
+    slim_challenge(entry()),
+    slim_challenge(entry('Supercalifragilisticexpialidocious', 1, '1', 'workouts', ('Unearned', 0), ('Bronze', 15), '14')),
+    slim_challenge(entry('November 2026 Cycling Challenge', 43.5, '43.5', 'miles', ('Unearned', 0), ('Bronze', 50),
+                         '6.5')),
+    slim_challenge(LARGEST[2]),  # 18,000: drops its comma
+    slim_challenge(LARGEST[3]),  # 123,456: smaller font
+    slim_challenge(entry('November 2026 Rowing Challenge', 12345678, '12,345,678', 'meters', ('Gold', 100000),
+                         ('Platinum', 250000000), '1')),  # 12346K
+    slim_challenge(TURKEY),  # Unearned, 0 of 18
+]
+
+
+def ink(matrix):
+    return matrix.image.tobytes()
+
+
+def ring_light(matrix):
+    """The ring's total brightness (every tier colour is at least as bright as the track in each channel)."""
+    pixels = matrix.image.load()
+    return sum(sum(pixels[x, y]) for x, y, *_ in ring_pixels(0.0, GOLD))
+
+
+@pytest.mark.parametrize('height', [64, 32])
+@pytest.mark.parametrize('state', INTRO_CASES, ids=lambda state: state['title'])
+def test_the_settled_frame_is_the_static_page(state, height):
+    settled = ink(draw(state, height, INTRO_SECONDS))
+    assert ink(draw(state, height, INTRO_SECONDS + 0.05)) == settled
+    assert ink(draw(state, height, 30)) == settled
+    assert ink(draw(state, height, 0)) != settled or tier_progress(state) == 0, 'the intro starts from empty'
+
+
+def test_the_intro_is_done_by_intro_seconds_and_runs_at_20_fps():
+    assert ChallengeScreen.animated and ChallengeScreen.atomic_frames and ChallengeScreen.frame_seconds == 0.05
+    assert INTRO_SECONDS <= 1.0
+
+
+@pytest.mark.parametrize('height', [64, 32])
+@pytest.mark.parametrize('state', INTRO_CASES, ids=lambda state: state['title'])
+def test_every_intro_frame_stays_on_the_panel_and_the_title_and_lines_never_move(state, height):
+    frames = [draw(state, height, t) for t in FRAMES]  # draw() asserts nothing is off the panel
+    rows = range(0, 9) if height == 64 else range(0, 7)
+    first = [(x, y) for x, y in sorted(lit(frames[0], rows=rows))]
+    bottom = range(58, 64) if height == 64 else range(25, 32)
+    for matrix in frames:
+        assert sorted(lit(matrix, rows=rows)) == first
+        assert lit(matrix, rows=bottom) == lit(frames[0], rows=bottom)
+
+
+@pytest.mark.parametrize('state', INTRO_CASES, ids=lambda state: state['title'])
+def test_the_64_row_ring_only_grows_and_the_number_stays_inside_the_final_width(state):
+    initialize_fonts(64)
+    previous = -1
+    for t in FRAMES:
+        if t <= SWEEP_SECONDS:  # after the sweep only the flash changes the colours
+            light = ring_light(draw(state, 64, t))
+            assert light >= previous, 'the arc never shrinks'
+            previous = light
+        font, text = ring_final(state, t)
+        assert font == ring_final(state)[0], 'one font throughout'
+        assert get_text_width(font, text) <= get_text_width(font, ring_final(state)[1])
+    assert ring_light(draw(state, 64, 0)) < ring_light(draw(state, 64)) or tier_progress(state) == 0
+
+
+def ring_final(state, at=None):
+    """(font, text) of the number at `at` seconds, or the settled one: what the screen draws inside the ring."""
+    from display.ui.challenge_screen import ring_number, sweep
+    font, final = ring_number(state['shown'])
+    if at is None:
+        return font, final
+    text = counted_shown(state['shown'], sweep(at))
+    if final != state['shown']:
+        text = text.replace(',', '') if final == state['shown'].replace(',', '') else compact_number(text)
+    return font, text
+
+
+def test_the_number_counts_from_zero_to_the_value_never_over_it():
+    initialize_fonts(64)
+    state = INTRO_CASES[0]
+    counted = [float(ring_final(state, t)[1].replace(',', '')) for t in FRAMES]
+    assert counted[0] == 0 and counted[-1] == 5503
+    assert counted == sorted(counted) and max(counted) == 5503
+    assert counted_shown('5,503', 0.5) == '2,752'
+    assert counted_shown('43.5', 0.5) == '21.8' and counted_shown('43.5', 0) == '0.0'
+    assert counted_shown('1,640', 1) == '1,640' and counted_shown('1234', 0.5) == '617'
+    for odd in ('abc', 'nan', 'inf', '1.2K', ''):
+        assert counted_shown(odd, 0.5) == odd
+
+
+@pytest.mark.parametrize('raw', LARGEST, ids=lambda raw: raw['challenge_summary']['title'])
+def test_the_biggest_values_count_up_inside_the_ring_and_the_bar(raw):
+    state = slim_challenge(raw)
+    for height in (64, 32):
+        initialize_fonts(height)
+        for t in FRAMES:
+            draw(state, height, t)  # nothing off the panel
+    initialize_fonts(64)
+    ring = ring_pixels(round(tier_progress(state), 3), tier_color(state['next']['title']))
+    inside = {(x, y) for x, y, *_ in ring}
+    for t in FRAMES:
+        matrix = draw(state, 64, t)
+        text = lit(matrix, (255, 255, 255), range(12, 56))
+        assert not text & inside, 'the counting number never touches the ring'
+
+
+def test_the_32_row_bar_fills_from_the_left_in_step_with_the_number():
+    state = INTRO_CASES[3]  # 18,000 of 15,000-18,000: full
+    full = {x for x, _ in lit(draw(state, 32), BLUE, range(21, 24))}
+    previous = -1
+    for t in FRAMES:
+        matrix = draw(state, 32, t)
+        bar = {x for x, _ in lit(matrix, BLUE, range(21, 24))}
+        assert bar == set(range(3, 3 + len(bar))), 'filled from the left, no gaps'
+        assert len(bar) >= previous and bar <= full
+        previous = len(bar)
+    assert previous == len(full) == 58
+    assert not lit(draw(state, 32, 0), BLUE, range(21, 24)), 'empty to begin with'
+    assert lit(draw(state, 32, 0), (255, 255, 255), range(8, 19)), '0 before it counts'
+
+
+def test_the_ring_flashes_once_when_the_sweep_lands_then_holds_still():
+    from display.ui.challenge_screen import flash
+    state = INTRO_CASES[0]
+    settled = ink(draw(state, 64))
+    strengths = [flash(t) for t in FRAMES]
+    assert all(s == 0 for t, s in zip(FRAMES, strengths) if t < SWEEP_SECONDS or t >= INTRO_SECONDS)
+    assert max(strengths) > 0 and all(0 <= s <= 1 for s in strengths)
+    flashing = [t for t in FRAMES if SWEEP_SECONDS <= t < INTRO_SECONDS]
+    assert flashing and all(ink(draw(state, 64, t)) != settled for t in flashing)
+    assert all(ink(draw(state, 64, t)) == settled for t in FRAMES if t >= INTRO_SECONDS)
+    assert ink(draw(state, 32, SWEEP_SECONDS)) == ink(draw(state, 32))  # no flash on the bar
+
+
+def test_the_screen_replays_the_intro_each_time_it_is_shown():
+    initialize_fonts(64)
+    state, screen = INTRO_CASES[0], ChallengeScreen()
+    matrix = EdgeMatrix(height=64)
+    screen.update(5)
+    screen.on_enter(matrix, state)
+    screen.render(matrix, state)
+    assert ink(matrix) == ink(draw(state, 64, 0))
+    screen.update(-3)  # a backwards clock never rewinds it
+    assert screen.elapsed == 0
+
+
+def test_the_ring_is_centred_between_the_title_and_the_bottom_line():
+    matrix = draw(INTRO_CASES[0], 64)
+    rows = {y for _, y, *_ in ring_pixels(1.0, GOLD)}
+    assert (min(rows), max(rows)) == (12, 54), 'the ring is 43 rows: its centre is 33.5'
+    title, line = lit(matrix, rows=range(0, 10)), lit(matrix, rows=range(56, 64))
+    assert (max(y for _, y in title), min(y for _, y in line)) == (7, 58)
+    # 50 rows between the title and the line, 43 of them the ring: 4 blank above, 3 below (Joel's pick; 7 can't split evenly)
+    assert min(rows) - 1 - max(y for _, y in title) == 4 and 58 - max(rows) - 1 == 3
+
+
+def reference_ring(fraction, color):
+    """The ring as first written: every pixel sampled afresh. ring_pixels must match it exactly."""
+    import math
+    from display.ui.challenge_screen import RING_CENTRE, RING_RADIUS, RING_WIDTH, SUBSAMPLES
+    cx, cy = RING_CENTRE
+    outer, width = RING_RADIUS, RING_WIDTH
+    inner, mid = outer - width, outer - width / 2
+    end = math.tau * fraction
+    caps = [(cx + mid * math.sin(a), cy - mid * math.cos(a)) for a in (0, end)] if fraction > 0 else []
+    total, pixels = SUBSAMPLES ** 2, []
+    for y in range(int(cy - outer) - 1, int(cy + outer) + 2):
+        for x in range(int(cx - outer) - 1, int(cx + outer) + 2):
+            if not inner - 1 <= math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= outer + 1:
+                continue
+            lit_n = track = 0
+            for i in range(SUBSAMPLES):
+                for j in range(SUBSAMPLES):
+                    px, py = x + (i + 0.5) / SUBSAMPLES, y + (j + 0.5) / SUBSAMPLES
+                    in_band = inner <= math.hypot(px - cx, py - cy) <= outer
+                    in_arc = in_band and math.atan2(px - cx, cy - py) % math.tau <= end
+                    if in_arc or any(math.hypot(px - qx, py - qy) <= width / 2 for qx, qy in caps):
+                        lit_n += 1
+                    elif in_band:
+                        track += 1
+            if lit_n or track:
+                pixels.append((x, y) + tuple(min(255, round(color[k] * lit_n / total + RING_TRACK[k] * track / total))
+                                             for k in range(3)))
+    return tuple(pixels)
+
+
+@pytest.mark.parametrize('fraction', [0.0, 0.001, 0.05, 0.25, 0.3333, 0.5, 0.731, 0.999, 1.0])
+def test_the_ring_matches_the_slow_reference(fraction):
+    assert ring_pixels(fraction, GOLD) == reference_ring(fraction, GOLD)
+
+
+def test_render_challenges_writes_the_intro_gifs(tmp_path):
+    from PIL import Image
+
+    from scripts import render_challenges
+    render_challenges.write_gifs(str(tmp_path))
+    for height in (64, 32):
+        gif = Image.open(tmp_path / f'challenge-intro-{height}.gif')
+        assert gif.size == (64 * 6, height * 6) and gif.n_frames > 10 and gif.info['duration'] == 50
