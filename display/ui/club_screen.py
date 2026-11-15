@@ -4,12 +4,11 @@ to the next level.
 64 rows: the gem (20 px) at the top, `GOLD III` in the tier's colour, `13,659 PTS`, the bar across the tier
 (a gap where each of its levels starts), then `1,341 TO` over `CHAMPION` in that level's colour (`TOP LEVEL` for
 a Legend); `2X` in gold in the bottom left corner during a double-points boost.
-32 rows: a 13 px gem at the left with the level and points beside it, the bar, then `1,341 TO CHAMPION`
+32 rows: a 12 px gem at the left with the level and points beside it, the bar, then `1,341 TO CHAMPION`
 (`2X` at its left when both fit).
 Before the first score only the gem and the level show (from /api/me).
 State: peloton.club.club_page (validated again here: the cache can hold anything).
 """
-import math
 from functools import lru_cache
 
 from driver import graphics
@@ -28,21 +27,121 @@ GEM_COLORS = {'BRONZE': (235, 115, 35), 'SILVER': (150, 180, 215), 'GOLD': (240,
               'CHAMPION': (225, 175, 245), 'LEGEND': (210, 30, 50)}
 TEXT_COLORS = {'BRONZE': (240, 140, 60), 'SILVER': (200, 215, 235), 'GOLD': (255, 215, 0),
                'CHAMPION': (235, 190, 250), 'LEGEND': (240, 60, 75)}
-# Champion's gem shimmers: its facets take turns in these.
-CHAMPION_FACETS = ((240, 190, 245), (180, 220, 245), (205, 170, 245), (245, 215, 235))
-# The gems' outlines in a 2 x 2 box centred on 0: a hexagon (bronze, silver, gold), an octagon (champion) and
-# a cut diamond (legend), as Peloton draws them; and the point the facets meet at.
-SHAPES = {
-    'HEX': ([(0.9 * math.cos(math.radians(a)), math.sin(math.radians(a))) for a in (-90, -30, 30, 90, 150, 210)],
-            (0.0, 0.0)),
-    'OCT': ([(-0.55, -1), (0.55, -1), (1, -0.55), (1, 0.55), (0.55, 1), (-0.55, 1), (-1, 0.55), (-1, -0.55)],
-            (0.0, 0.0)),
-    'DIAMOND': ([(-0.55, -0.75), (0.55, -0.75), (1, -0.25), (0, 1), (-1, -0.25)], (0.0, -0.25)),
+# The gems, hand-drawn pixel art in Peloton's shapes: a hexagon (bronze, silver, gold), an octagon (Champion) and
+# a cut diamond (Legend). `#` is the flat top face; every other letter is a facet, named for the way it faces,
+# and lit by how much it faces the top left (FACET_SHADES). Outlines step evenly (2 across 1 down on the
+# hexagon, 1 and 1 on the others), facets are flat colour and nothing is blended, so every pixel is crisp.
+# Hand-editable: change a letter, then `python scripts/render_club.py` to see it.
+GEM_ROWS = {
+    ('HEX', 20): (
+        '.........qp.........',
+        '.......qqqppp.......',
+        '.....qqqqqppppp.....',
+        '...qqqqqqqppppppp...',
+        '.wqqqqqqq##pppppppe.',
+        '.wwwqqq######pppeee.',
+        '.wwww##########eeee.',
+        '.wwww##########eeee.',
+        '.wwww##########eeee.',
+        '.wwww##########eeee.',
+        '.wwww##########eeee.',
+        '.wwww##########eeee.',
+        '.wwww##########eeee.',
+        '.wwww##########eeee.',
+        '.wwwzzz######mmmeee.',
+        '.wzzzzzzz##mmmmmmme.',
+        '...zzzzzzzmmmmmmm...',
+        '.....zzzzzmmmmm.....',
+        '.......zzzmmm.......',
+        '.........zm.........'),
+    ('HEX', 12): (
+        '.....qp.....',
+        '...qqqppp...',
+        '.qqqqqppppp.',
+        'wqqqq##ppppe',
+        'wwq######pee',
+        'www######eee',
+        'www######eee',
+        'wwz######mee',
+        'wzzzz##mmmme',
+        '.zzzzzmmmmm.',
+        '...zzzmmm...',
+        '.....zm.....'),
+    ('OCT', 20): (
+        '.....nnnnnnnnnn.....',
+        '....qqnnnnnnnnpp....',
+        '...qqqnnnnnnnnppp...',
+        '..qqqqnnnnnnnnpppp..',
+        '.qqqqqq######pppppp.',
+        'wqqqqq########pppppe',
+        'wwwwq##########peeee',
+        'wwww############eeee',
+        'wwww############eeee',
+        'wwww############eeee',
+        'wwww############eeee',
+        'wwww############eeee',
+        'wwww############eeee',
+        'wwwwz##########meeee',
+        'wzzzzz########mmmmme',
+        '.zzzzzz######mmmmmm.',
+        '..zzzzssssssssmmmm..',
+        '...zzzssssssssmmm...',
+        '....zzssssssssmm....',
+        '.....ssssssssss.....'),
+    ('OCT', 12): (
+        '...nnnnnn...',
+        '..qnnnnnnp..',
+        '.qqnnnnnnpp.',
+        'wqqq####pppe',
+        'wwq######pee',
+        'www######eee',
+        'www######eee',
+        'wwz######mee',
+        'wzzz####mmme',
+        '.zzssssssmm.',
+        '..zssssssm..',
+        '...ssssss...'),
+    ('DIAMOND', 20): (
+        '....................',
+        '....................',
+        '....................',
+        '....qq########pp....',
+        '...qqqn######nppp...',
+        '..qqqqnn####nnpppp..',
+        '.qqqqqnnnnnnnnppppp.',
+        'qqqqqqnnnnnnnnpppppp',
+        '.wwwwwwwwwmmmmmmmmm.',
+        '..wwwwwwwwmmmmmmmm..',
+        '...wwwwwwwmmmmmmm...',
+        '....wwwwwwmmmmmm....',
+        '.....wwwwwmmmmm.....',
+        '......wwwwmmmm......',
+        '.......wwwmmm.......',
+        '........wwmm........',
+        '.........wm.........',
+        '....................',
+        '....................',
+        '....................'),
+    ('DIAMOND', 12): (
+        '............',
+        '............',
+        '..qq####pp..',
+        '.qqqn##nppp.',
+        'qqqqnnnnpppp',
+        '.wwwwwmmmmm.',
+        '..wwwwmmmm..',
+        '...wwwmmm...',
+        '....wwmm....',
+        '.....wm.....',
+        '............',
+        '............'),
 }
 SHAPE_OF = {'CHAMPION': 'OCT', 'LEGEND': 'DIAMOND'}
-TABLE = 0.5  # the flat top face, as a share of the gem
-LIGHT = (-0.6, -0.8)  # light from the top left
-SUBSAMPLES = 4
+# How bright each facet is against the gem's colour: up-left brightest, down-right darkest.
+FACET_SHADES = {'#': 1.06, 'q': 1.3, 'n': 1.15, 'p': 0.9, 'w': 0.95, 'e': 0.6, 'z': 0.72, 's': 0.55, 'm': 0.45}
+# Champion's corner facets catch blue light, as on Peloton's badge.
+CHAMPION_CORNER = (175, 215, 240)
+CORNER_FACETS = frozenset('qpzm')
 # Where the 64-row page puts things: gem box, text baselines, bar rows.
 GEM_64, GEM_TOP_64 = 20, 1
 NAME_Y_64, POINTS_Y_64, BAR_TOP_64, TO_Y_64, NEXT_Y_64 = 33, 42, 45, 55, 63
@@ -50,26 +149,7 @@ TOP_LEVEL_Y_64 = 59  # `TOP LEVEL` alone, midway between the bar and the bottom
 BAR_LEFT, BAR_RIGHT = 3, 60
 # The level name's widest: a pixel clear of each edge.
 LEVEL_WIDTH = 62
-GEM_32, NAME_X_32, NAME_Y_32, POINTS_Y_32, BAR_TOP_32, LINE_Y_32 = 13, 17, 7, 14, 19, 30
-
-
-def _inside(point, polygon):
-    """Inside a convex polygon whose points run clockwise (y down)."""
-    x, y = point
-    for (ax, ay), (bx, by) in zip(polygon, polygon[1:] + polygon[:1]):
-        if (bx - ax) * (y - ay) - (by - ay) * (x - ax) < 0:
-            return False
-    return True
-
-
-def _facet(point, polygon, centre):
-    """Which edge's facet a point is in: the wedge from the centre between that edge's two corners."""
-    angle = math.atan2(point[1] - centre[1], point[0] - centre[0])
-    corners = [math.atan2(y - centre[1], x - centre[0]) for x, y in polygon]
-    for i, start in enumerate(corners[:-1]):
-        if (angle - start) % math.tau <= (corners[i + 1] - start) % math.tau:
-            return i
-    return len(corners) - 1  # the wedge from the last corner round to the first
+GEM_32, NAME_X_32, NAME_Y_32, POINTS_Y_32, BAR_TOP_32, LINE_Y_32 = 12, 17, 7, 14, 19, 30
 
 
 def _shade(color, factor):
@@ -78,37 +158,18 @@ def _shade(color, factor):
 
 @lru_cache(maxsize=16)
 def gem_pixels(kind, size):
-    """Every lit pixel of a `size`-pixel gem as (x, y, r, g, b) from its box's top left: the flat top face in
-    the gem's colour, each edge's facet lit by how much it faces the top left, the edges smoothed (4 x 4
-    samples a pixel). Cached: the page draws the same gem often."""
+    """Every lit pixel of a `size`-pixel gem (20 or 12) as (x, y, r, g, b) from its box's top left, from
+    GEM_ROWS: each facet one flat shade of the gem's colour. An unknown kind is gold. Cached."""
     kind = kind if kind in KINDS else 'GOLD'
-    polygon, centre = SHAPES[SHAPE_OF.get(kind, 'HEX')]
-    table = [(centre[0] + (x - centre[0]) * TABLE, centre[1] + (y - centre[1]) * TABLE) for x, y in polygon]
+    rows = GEM_ROWS[(SHAPE_OF.get(kind, 'HEX'), size)]
     base = GEM_COLORS[kind]
-    colors = []
-    for i, ((ax, ay), (bx, by)) in enumerate(zip(polygon, polygon[1:] + polygon[:1])):
-        length = math.hypot(bx - ax, by - ay) or 1
-        normal = ((by - ay) / length, -(bx - ax) / length)  # outward, for clockwise points with y down
-        facing = normal[0] * LIGHT[0] + normal[1] * LIGHT[1]
-        color = CHAMPION_FACETS[i % len(CHAMPION_FACETS)] if kind == 'CHAMPION' else base
-        colors.append(_shade(color, 0.8 + 0.45 * facing))
-    top = _shade(base, 1.05)
     pixels = []
-    total = SUBSAMPLES * SUBSAMPLES
-    for y in range(size):
-        for x in range(size):
-            mix = [0, 0, 0]
-            for i in range(SUBSAMPLES):
-                for j in range(SUBSAMPLES):
-                    point = (((x + (i + 0.5) / SUBSAMPLES) / size) * 2 - 1,
-                             ((y + (j + 0.5) / SUBSAMPLES) / size) * 2 - 1)
-                    if not _inside(point, polygon):
-                        continue
-                    color = top if _inside(point, table) else colors[_facet(point, polygon, centre)]
-                    for k in range(3):
-                        mix[k] += color[k]
-            if any(mix):
-                pixels.append((x, y) + tuple(round(m / total) for m in mix))
+    for y, row in enumerate(rows):
+        for x, facet in enumerate(row):
+            if facet == '.':
+                continue
+            color = CHAMPION_CORNER if kind == 'CHAMPION' and facet in CORNER_FACETS else base
+            pixels.append((x, y) + _shade(color, FACET_SHADES[facet]))
     return tuple(pixels)
 
 

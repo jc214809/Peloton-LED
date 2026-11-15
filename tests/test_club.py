@@ -7,8 +7,9 @@ import pytest
 import requests
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.club_screen import (BAR_LEFT, BAR_RIGHT, BAR_TRACK, BOOST, GEM_32, GEM_64, GEM_COLORS, TEXT_COLORS,
-                                    ClubScreen, gem_pixels, next_line, points_line)
+from display.ui.club_screen import (BAR_LEFT, BAR_RIGHT, BAR_TRACK, BOOST, FACET_SHADES, GEM_32, GEM_64,
+                                    GEM_COLORS, GEM_ROWS, SHAPE_OF, TEXT_COLORS, ClubScreen, gem_pixels, next_line,
+                                    points_line)
 from peloton import dashboard as dashboard_module
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.club import (LEVELS, NOT_A_MEMBER, club_page, gem_kind, level_from_me, parse_score, tier_fraction,
@@ -498,11 +499,33 @@ def test_lines_shorten_to_fit():
 def test_gems_are_cached_and_lit_in_their_own_colours():
     assert gem_pixels('GOLD', 20) is gem_pixels('GOLD', 20)
     for kind in GEM_COLORS:
-        pixels = gem_pixels(kind, GEM_64)
-        assert len(pixels) > 150 and all(0 <= x < GEM_64 and 0 <= y < GEM_64 for x, y, *_ in pixels)
-    assert gem_pixels('PLATINUM', 13) == gem_pixels('GOLD', 13)
+        for size in (GEM_64, GEM_32):
+            pixels = gem_pixels(kind, size)
+            assert len(pixels) > size * size // 3 and all(0 <= x < size and 0 <= y < size for x, y, *_ in pixels)
+    assert gem_pixels('PLATINUM', GEM_32) == gem_pixels('GOLD', GEM_32)
     red = [(r, g, b) for *_, r, g, b in gem_pixels('LEGEND', GEM_64)]
     assert all(r >= g and r >= b for r, g, b in red)
+    corners = {(r, g, b) for *_, r, g, b in gem_pixels('CHAMPION', GEM_64)}
+    assert any(b > r for r, g, b in corners), "Champion's blue corner facets"
+
+
+@pytest.mark.parametrize('key', sorted(GEM_ROWS))
+def test_the_gem_grids_are_square_symmetric_pixel_art(key):
+    shape, size = key
+    rows = GEM_ROWS[key]
+    assert len(rows) == size and all(len(row) == size for row in rows)
+    assert all(set(row) <= set(FACET_SHADES) | {'.'} for row in rows), 'only known facets'
+    assert all([c == '.' for c in row] == [c == '.' for c in row[::-1]] for row in rows), 'a symmetric outline'
+    assert sum(row.count('#') for row in rows) > 0, 'a flat top face'
+
+
+def test_the_gems_are_crisp_flat_facets():
+    """Each facet is one colour: a gem has no more colours than facets (no blended edges)."""
+    for kind in GEM_COLORS:
+        for size in (GEM_64, GEM_32):
+            rows = GEM_ROWS[(SHAPE_OF.get(kind, 'HEX'), size)]
+            facets = set(''.join(rows)) - {'.'}
+            assert len({tuple(p[2:]) for p in gem_pixels(kind, size)}) <= len(facets)
 
 
 @pytest.mark.parametrize('state', [
