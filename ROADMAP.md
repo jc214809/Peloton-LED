@@ -17,6 +17,7 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 22 Icon touch-ups (by hand) ── independent
 30 Weekly goals from Peloton's Activity Goals ── independent; targets only (Peloton's week turns at UTC midnight)
 31 Redraw the 64x32 contact sheets ── independent
+32 Judge the bike on output against the class plan ── after the missed-callout rule; reshapes 25-27 and the CADENCE/RESISTANCE LOW flags
 ```
 
 Suggested order: 1, then the remaining items. Item 1 adds frames to a screen that shares its page time across frames (`peloton/screen_times.py`), so more stats mean a longer minimum page. Icon touch-ups (22) whenever Joel has time.
@@ -301,6 +302,28 @@ Why context and not the trigger (Fable 5.2, 2026-11-15, past year, the output in
 - A per-rider bar (the rider's worst 10% of their last 20 rides) was also tried and rejected: it changed 7 rides in a year, mostly for the worse (it drifted up after bad stretches; Jen's 21% on 2026-11-13 would have been silent).
 
 To decide when building: show it only with 5+ scored peers; where it goes on the card and bars (the share figure today is one bar; a second "usual" bar like the output insight's), both heights; the Mac text. Needs `target_missed` on the peers, which every row built since branch `cadence-missed-rule` has (the boards' seeded rows don't until a re-push). Depends on: `cadence-missed-rule`.
+
+### 32. Judge the bike on output against the class plan, not cadence and resistance
+Joel's words, 2026-11-16, as he said them:
+
+> I just want to add something to the roadmap while I'm thinking about it, but maybe how we should be judging people. Is around are you excelling at increasing your output? And projected output based on the class details versus whatever your getting out of the ride. So do cadence and resistance really matter if the combination of those two things is equal to or greater than the output that Peloton thinks you should be at? Does that make sense on how to add that in as a roadmap item?
+
+In short: what matters is the power, not how the rider made it. A rider who runs a heavier gear at a lower cadence, or the reverse, and still makes the output the callouts ask for, did the class. So judge a bike class on output against what the class planned, and let cadence and resistance speak only when the output fell short.
+
+Two parts:
+- **Output against the plan, per class.** The row already has the plan: `bike_plan` turns each callout's cadence and resistance into `planned_watts` through `BIKE_CURVE` (Peloton's power from cadence and resistance), with `planned_watts` (mean) and `planned_watts_high` in `row['plan']`. Compare the rider's actual watts over the same callout seconds (work segments only, as `_callouts` counts them) with the planned watts: "you made 112% of the class's plan". When it's at or over the plan, drop CADENCE LOW / RESISTANCE LOW for that class (or turn them into praise for the trade: "heavy gear, same power"); when it's under, the callout flags explain where the power went.
+- **Are you getting better at it?** The rider's share of plan over time, against their own recent bike classes (like `callout_best`'s last 20 rides in 90 days): "best share of plan in 20 rides", or a trend ("up from 94% to 103% over 3 months"). This is the "excelling at increasing your output" side, independent of class length or difficulty, since the plan scales with the class.
+
+Already part-way there: the missed-callout rule (#123) applies the idea per reading (a reading under the range only counts as missed when its `planned_watts` are also under the callout floors'). This item takes it to the whole class and makes it the headline.
+
+To decide when building:
+- Plan level: the callout floors, the middle of each range, or the top; and whether non-callout seconds (recoveries, arms, warm-up and cool-down segments) count. Measure each against both riders' past year, as the callout bars were, and see how often a rider beats each.
+- How `BIKE_CURVE` holds against real readings at the extremes (very heavy gear, very high cadence), since a heavy-gear rider's actual watts can run above the curve.
+- Power Zone classes have no cadence/resistance callouts (zones from FTP); leave them out or plan from the rider's FTP.
+- Where it sits beside `output_up` / `output_down` (against similar classes) in `insights()` order and the board's slots; whether it replaces the callout scolds outright or only gates them.
+- What it does to items 25-27 (coasting, sprints, similar-class figure): each becomes the reason under a short-of-plan class, not a flag of its own.
+- Wording and bars, both heights (`TOP RESISTANCE`-style headlines are 14 characters on 64x32). New row fields (actual callout watts, share of plan) are only read for the workout and its recent rides; check whether the trend needs older rows rebuilt (a `ROW_VERSION` bump and a re-push).
+- Depends on: the missed-callout rule (#123, merged); measure before choosing.
 
 ### 29. Re-measure the callout bars (from 2027-02-15)
 The bars were set on 2026-11-15 from the past year (cadence 12, resistance 20: the 90th percentile of both riders). About 90 days on, re-run the measurement (fires per rider; Jen's resistance median, 14 at the time): step resistance down to 17 by hand when her median is near 10 (in her good quarter, 17 fired on 3 of 13 rides; today it would fire on 10 of her last 36). The scripts were scratch (Fable's `sim.py` / `trend.py`); rebuild them from the private README's 2026-11-15 log entries. Depends on: nothing.
