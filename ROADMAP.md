@@ -15,6 +15,7 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 25 Coasting between efforts, 26 Sprints under the callout ── after the "missed callout" rule (branch cadence-missed-rule); independent of each other
 27 Similar-class figure beside a callout flag ── after cadence-missed-rule; 29 Re-measure the callout bars ── from 2027-02-15
 22 Icon touch-ups (by hand) ── independent
+30 Weekly goals from Peloton's Activity Goals ── independent; targets only (Peloton's week turns at UTC midnight)
 ```
 
 Suggested order: 1, then the remaining items. Item 1 adds frames to a screen that shares its page time across frames (`peloton/screen_times.py`), so more stats mean a longer minimum page. Icon touch-ups (22) whenever Joel has time.
@@ -147,6 +148,41 @@ If it's built (the shape that measured best: loosened rule, extremes only):
 - Rules in `peloton/workout_compare.py` (a Cardio peer rule beside `is_peer`) and `peloton/workout_insights.py` (`NOUN`, and whatever the "usual" line needs); board wording in `peloton/insight_lines.board_view` (headline, sentence, `STRIVE PER MIN` bars, footer such as `12 CARDIO CLASSES`). Tests on hand-made rows, plus the real-row fixture if it gains Cardio workouts.
 - Board rows: `build_board_rows.py` / `trim_for_board` keep only `DISCIPLINES`, so the boards need a re-push (`scripts/push_workout_rows.sh`) once Cardio is in. No `ROW_VERSION` bump: the rows already carry Strive and length.
 - Depends on: nothing.
+
+### 30. Weekly goals from Peloton's own Activity Goals
+The Goals page (`display/ui/goal_screen.py`) reads its targets from config (`weekly_goals`: `workouts`, `minutes`, `active_days`; `peloton/config.py` `_validate_weekly_goals`, per-rider override) and works out progress itself (`peloton/goals.py` `weekly_progress`: local Monday 00:00 to now, completed workouts, minutes from duration, distinct local dates). Peloton's app has its own weekly "Activity Goals" card with the same three goals, so the rider sets them twice.
+
+**The endpoint** (found 2026-11-15 in the members.onepeloton.com `_app` JavaScript bundle, `GetUserGoals`; every `api.onepeloton.com` goal path returns 404): `GET https://progress-tracking.prod.k8s.onepeloton.com/api/users/{user_id}/goals` (`users`, plural). It takes the board's bearer token and `peloton-platform: web`, and returns about 800 bytes:
+
+```json
+{"data": {"user_id": "…", "has_goal_inactivity": false, "goals": [
+  {"type": "active_days", "target": 5,   "progress": 0, "units": "days",     "frequency": "weekly", "start_date": "2026-11-16", "end_date": "2026-11-22", "status": "active"},
+  {"type": "time",        "target": 150, "progress": 0, "units": "minutes",  "frequency": "weekly", "start_date": "2026-11-16", "end_date": "2026-11-22", "status": "active"},
+  {"type": "workouts",    "target": 6,   "progress": 0, "units": "workouts", "frequency": "weekly", "start_date": "2026-11-16", "end_date": "2026-11-22", "status": "active"}]}}
+```
+
+These were Joel's real targets: 5 days, 2h 30m, 6 workouts. `time` is in minutes, and the dates are the Monday and Sunday of the goal week. There is no percent or badge field: the app's "Completed 0 percent of badge 0" is built from `progress` / `target`.
+
+**Plan.**
+- A `get_user_goals(user_id)` in `peloton/api.py` on a `PROGRESS_TRACKING` host constant, like `MEMBERS_SCORE`.
+- A parser that validates each goal (known `type`, numeric `target` above 0) and skips the rest.
+- Fetch about once an hour (24 calls a day per rider) and cache it in the snapshot.
+- Peloton's targets override config `weekly_goals`. Config stays the fallback when the call fails, returns 401/404, or has no goals.
+- Keep progress local until it's checked against Peloton's `progress` over a normal week.
+- Mock the call in tests, including a bad response, missing fields, an unknown `type` and an empty `goals` list.
+- Document the endpoint in `docs/PELOTON-API.md` (it lists the hosts) and `docs/dev/DATA.md`.
+
+**To check first.**
+- **The week boundary (settled 2026-11-15).** Peloton's goal week turns over at UTC midnight on Sunday, 7 pm Eastern (8 pm in daylight saving time). At 22:59 and again at 23:11 Eastern on Sunday it returned the week starting 11-16 with progress 0. The web app sends `Peloton-Client-Date: 2026-11-15T23:06:28-05:00` (local time with its offset) and only `Accept-Language` besides; sending that header from the board changed nothing, and Joel's own browser got the same zeros. Also tried at 23:17 and no help: `?timezone=America/New_York`, `?tz=`, `?date=2026-11-15`, `?start_date=2026-11-09` and `?week_start=2026-11-09` all returned the 11-16 week, and `/goals/history` is a 404. The account has no time zone (`/api/me` `locale` is null; settings have none), and the web app's goals page makes only this one call. Joel saw the same zeros in the phone app, so it's Peloton's server: the board's own progress is the right one on Sunday evenings. At 23:20 the header was sent with made-up dates (Friday 2026-11-13 18:00 -05:00, Wednesday 11-11 noon, Friday 23:00 UTC), and every one still returned the 11-16 week, so the server ignores `Peloton-Client-Date` for goals. It's a Peloton defect; the board works around it.
+- **Re-check during the week of 2026-11-16, before Sunday 11-22.**
+  - On a weekday evening after a workout, call the endpoint and compare its `progress` with the board's `weekly_progress`: active days, minutes and workouts. This shows how Peloton counts.
+  - On Sunday 11-22 between 7 pm and midnight Eastern, check whether it still rolls over early, in case Peloton fixed it.
+  - Rebuild the probe from the request above: the board's session plus the `progress-tracking` URL, GET only. So the app itself shows 0 every Sunday evening. Take only the targets; keep progress on the board's local Monday-to-Sunday week.
+- **How `progress` counts.** Which workouts count toward `time` and `active_days`: duration or active minutes, and whether imported or partner workouts count. Compare with `weekly_progress` and `/api/user/{id}/calendar`, which lists active days by month.
+- **What comes back with no goals set,** and for a rider who never set them (try Jen's account).
+- **Settings page.** Whether to say "from Peloton" beside the targets, and to stop asking for them when Peloton has them.
+- Read only. The board never sets or changes goals.
+- Depends on: nothing. Probe scripts and the saved responses from 2026-11-15 were scratch: rebuild the probe from the endpoint above.
 
 ## Ideas (not yet sized)
 
