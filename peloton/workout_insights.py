@@ -25,13 +25,13 @@ TOUGH_POINTS = 1.0         # a class rated this many points or more above the us
 USUAL_CLASSES = 12
 USUAL_DAYS = 365
 MIN_RATED = 5              # rated classes in the usual before its median means anything
-USUAL_MIN_SECS = 600       # shorter classes (rated 3-4) are left out on both sides, as are ...
-USUAL_SKIP_TYPES = ('Warm Up', 'Cool Down')  # ... class types containing these
+USUAL_MIN_SECS = 600       # shorter classes (rated 3-4) are left out on both sides, as are warm-ups and cool-downs
 # Callouts
 # Bike: share of callout time missed (row['target_missed']: under the range and short of the callout's
-# floor watts). 12 for cadence from both riders' past year (Fable's rule, Joel 2026-11-15): about 1
-# ride in 8 each; at 10 several of Joel's rides sat right on the line.
-RESISTANCE_UNDER_PCT = 25
+# floor watts). Both bars are the 90th percentile of both riders' past year, warm-ups and cool-downs
+# left out (Fable's rule, Joel 2026-11-15): cadence 12 and resistance 20 each fire on about 1 ride in 8
+# for the rider who misses most. Fixed on purpose: a per-rider bar drifted up after bad stretches.
+RESISTANCE_UNDER_PCT = 20
 CADENCE_UNDER_PCT = 12
 PACE_UNDER_PCT = 35        # Peloton's own below_target share (row, run)
 # Strength
@@ -160,9 +160,8 @@ def _is_rating(value):
 
 def _counts_for_usual(row):
     """A complete, rated class of USUAL_MIN_SECS or more that isn't a warm-up or cool-down."""
-    ctype = row.get('ctype') or ''
     return (row.get('complete') and row.get('wtype') == 'class' and (row.get('dur') or 0) >= USUAL_MIN_SECS
-            and not any(skip in ctype for skip in USUAL_SKIP_TYPES) and _is_rating(row.get('difficulty')))
+            and not compare.is_warm_up_or_cool_down(row) and _is_rating(row.get('difficulty')))
 
 
 def usual_classes(target, rows):
@@ -390,6 +389,8 @@ def insights(target, rows):
         return [('incomplete', 'This workout was cut short, so it is not compared.', {})]
     if target['wtype'] != 'class':
         return [('freestyle', 'Freestyle workouts are not compared yet.', {})]
+    if compare.is_warm_up_or_cool_down(target):
+        return [('warm_up_cool_down', 'Warm-ups and cool-downs are not compared.', {})]
     callouts = callout_insights(target)
     strength = strength_insights(target, rows)
     # A class without a class type has no peers (spec section 4) but still gets the single-workout rules.

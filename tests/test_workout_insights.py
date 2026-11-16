@@ -4,7 +4,7 @@ import itertools
 import pytest
 
 from peloton import workout_compare as compare
-from peloton.insight_lines import number
+from peloton.insight_lines import board_insights, number
 from peloton.workout_insights import insights, strength_insights
 
 T = 1_800_000_000
@@ -205,11 +205,11 @@ def test_walking_and_bootcamp_nouns():
 # 5.2 callouts (no peers: the callout message is the only one, so no too_few)
 
 @pytest.mark.parametrize('disc', ['cycling', 'bike_bootcamp'])
-def test_resistance_low_at_25_not_24(disc):
-    on = ride(0, 100, disc=disc, target_missed={'resistance': 25})
+def test_resistance_low_at_20_not_19(disc):
+    on = ride(0, 100, disc=disc, target_missed={'resistance': 20})
     assert pairs(insights(on, [on])) == [('resistance_low', 'Turn the resistance up in the work segments: you were '
-                                                     'under the callout range and short of its power 25% of the time.')]
-    off = ride(0, 100, disc=disc, target_missed={'resistance': 24})
+                                                     'under the callout range and short of its power 20% of the time.')]
+    off = ride(0, 100, disc=disc, target_missed={'resistance': 19})
     assert codes(insights(off, [off])) == ['too_few']
 
 
@@ -228,6 +228,28 @@ def test_bike_callouts_read_the_missed_share_not_the_under_share():
     assert codes(insights(t, [t])) == ['too_few']
     old = ride(0, 100, target_under={'cadence': 41, 'resistance': 30})  # a row built before target_missed
     assert codes(insights(old, [old])) == ['too_few']
+
+
+@pytest.mark.parametrize('over', [
+    {'ctype': 'Warm Up Ride'}, {'ctype': 'Cool Down Ride'}, {'ctype': 'Strength Warm Up', 'disc': 'strength'},
+    {'ctype': 'OUTDOOR Cool Down Walk', 'disc': 'walking'},
+    {'ctype': 'Theme', 'title': '10 min All for One Warm Up Ride'},
+    {'ctype': 'Power Zone', 'title': '10 min FTP Warm Up Ride'},
+    {'ctype': None, 'title': '5 min Chris Stapleton Cool Down'},
+    {'ctype': 'Full Body (Tread Bootcamp)', 'disc': 'tread_bootcamp', 'title': '5 min Bootcamp warm-up'}])
+def test_a_warm_up_or_cool_down_gets_no_insight(over):
+    # Callouts missed and five peers far below: it would otherwise be strong with a cadence warning.
+    t = ride(0, 200, target_missed={'cadence': 50, 'resistance': 50}, **over)
+    peers = [ride(1 + i, 100, **over) for i in range(5)]
+    result = insights(t, [t] + peers)
+    assert codes(result) == ['warm_up_cool_down']
+    assert board_insights(result) == []
+
+
+def test_recovery_and_extra_10_classes_are_still_compared():
+    for title in ('20 min Recovery Ride', 'Extra 10: Tabata Ride'):
+        t = ride(0, 100, title=title, target_missed={'cadence': 50})
+        assert codes(insights(t, [t])) == ['cadence_low']
 
 
 def test_both_bike_callouts_in_order():

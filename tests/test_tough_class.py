@@ -103,7 +103,7 @@ def test_the_usual_is_any_class_type_or_length_indoor_or_outdoor():
 
 @pytest.mark.parametrize('left_out', [
     {'ctype': 'Warm Up Ride'}, {'ctype': 'Cool Down Ride'}, {'ctype': 'OUTDOOR Cool Down Walk'},
-    {'dur': 599}, {'complete': False}, {'disc': 'running'}, {'wtype': 'freestyle'}, {'difficulty': None}])
+    {'ctype': 'Theme', 'title': '10 min All for One Warm Up Ride'}, {'dur': 599}, {'complete': False}, {'disc': 'running'}, {'wtype': 'freestyle'}, {'difficulty': None}])
 def test_what_the_usual_leaves_out(left_out):
     """Warm-ups, cool-downs and classes under 10 minutes (rated 3-4, they'd pull the usual down), unfinished ones,
     other disciplines, freestyle and unrated: with one of five left out there are too few."""
@@ -114,7 +114,7 @@ def test_what_the_usual_leaves_out(left_out):
 def test_warm_ups_and_short_classes_are_never_tough_themselves():
     rows = [other(1 + i, 3.0) for i in range(5)]
     assert codes(against(9.1, rows)) == ['tough_class']
-    assert codes(against(9.1, rows, ctype='Warm Up Ride')) == ['too_few']
+    assert codes(against(9.1, rows, ctype='Warm Up Ride')) == ['warm_up_cool_down']
     assert codes(against(9.1, rows, dur=300)) == ['too_few']
 
 
