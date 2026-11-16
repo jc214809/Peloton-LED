@@ -18,7 +18,7 @@ MAX_BLOCKS = 30            # more counted sets than this are drawn as this many 
 # label is display/ui/last_workout_screen.py's TYPICAL_LABEL.
 IN_LINE_WORD = 'CONSISTENT'
 TYPICAL_WORD = 'TYPICAL'
-HIDDEN_CODES = ('too_few', 'nothing', 'freestyle', 'incomplete', 'unsupported', 'no_tracker')
+HIDDEN_CODES = ('too_few', 'nothing', 'freestyle', 'incomplete', 'unsupported', 'no_tracker', 'warm_up_cool_down')
 
 GOLD = (255, 200, 0)
 AMBER = (255, 140, 0)

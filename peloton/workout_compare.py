@@ -25,6 +25,17 @@ PLAN_KEYS = ('ride_min', 'arms_min', 'planned_watts', 'planned_watts_high', 'eff
              'efforts_per_10min', 'effort_length_s', 'cadence_mean', 'resistance_mean')
 
 
+# A warm-up or cool-down class is never compared, nor compared with (Joel, 2026-11-15). Matched on the class
+# type or the title, since many are filed under another type (Theme, Power Zone's FTP Warm Up Ride, a
+# Bootcamp Warm Up, music classes with no type).
+WARM_UP_COOL_DOWN = ('warm up', 'warm-up', 'warmup', 'cool down', 'cool-down', 'cooldown')
+
+
+def is_warm_up_or_cool_down(row):
+    text = f"{row.get('ctype') or ''} {row.get('title') or ''}".lower()
+    return any(word in text for word in WARM_UP_COOL_DOWN)
+
+
 def _near_length(a, b):
     if not a['dur'] or not b['dur']:
         return False
@@ -34,6 +45,8 @@ def _near_length(a, b):
 def is_peer(target, row):
     """True when `row` is the same kind of workout as `target` (order and dates not checked)."""
     if row['id'] == target['id'] or not row['complete']:
+        return False
+    if is_warm_up_or_cool_down(target) or is_warm_up_or_cool_down(row):
         return False
     if target['wtype'] != 'class' or not target['ctype']:
         return False  # freestyle and untyped classes have no peers in version 1
@@ -107,7 +120,7 @@ def fill_in(target, rows, real):
                   if start <= r['start'] < target['start'] and r['id'] != target['id']
                   and r['id'] not in taken and r['complete'] and r.get('plan')
                   and r['disc'] == target['disc'] and r['wtype'] == 'class'
-                  and r['mode'] == target['mode'] and _near_length(target, r)]
+                  and r['mode'] == target['mode'] and _near_length(target, r) and not is_warm_up_or_cool_down(r)]
     if not candidates:
         return []
     z = standardise([target['plan']] + [r['plan'] for r in candidates])

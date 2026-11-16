@@ -33,6 +33,7 @@ MIN_EFF_SAMPLES = 24  # two minutes of 5-second samples
 # Fitted 2026-11-11 on 29,842 samples from both riders (R squared 0.982). The bike's physics, not
 # anyone's fitness: a constant, never refitted at run time.
 BIKE_CURVE = (-11.157, 1.702, 2.280)
+MISSED_METRICS = ('cadence', 'resistance')  # bike callouts with a "missed" share (target_missed)
 EFFORT_RATIO = 1.15  # a stretch is an effort at this many times the class's median planned watts
 MIN_EFFORT_SECS = 10
 MIN_PLAN_SAMPLES = 24
@@ -355,19 +356,44 @@ def _overlap(a, b, windows):
     return sum(max(0, min(b, hi) - max(a, lo)) for lo, hi in windows)
 
 
+def _floor_watts(row, callout, series):
+    """The watts a bike callout's two floors ask for, or None (not a bike, or no cadence and resistance pair)."""
+    if row['disc'] not in BIKE or 'cadence' not in series or 'resistance' not in series:
+        return None
+    limits = {m['name']: m['lower'] for m in callout.get('metrics') or []}
+    if 'cadence' not in limits or 'resistance' not in limits:
+        return None
+    return planned_watts(limits['cadence'], limits['resistance'])
+
+
+def _reading_watts(series, i):
+    """The watts one reading's cadence and resistance make on the bike curve, or None when either is missing."""
+    cadence, resistance = series['cadence'], series['resistance']
+    if i >= len(cadence) or i >= len(resistance) or cadence[i] is None or resistance[i] is None:
+        return None
+    return planned_watts(cadence[i], resistance[i])
+
+
 def _callouts(row, graph, times, series, work_windows):
     """The instructor's callouts inside work segments: their level, and where the rider sat in them.
 
     Only the seconds inside work segments count: a callout that runs on into an arms section (pedalling
     optional), a floor block or the cool-down never counts those seconds against the rider.
+
+    `target_under` is the share of readings under the range. On the bike, `target_missed` is the share
+    of cadence and resistance readings that missed: under the range *and* making fewer watts (on the
+    bike curve) than the callout's two floors ask for, so a sprint ridden in a heavier gear at the
+    callout's power is not a miss (Joel, 2026-11-15). Only callouts with both a cadence and a
+    resistance range count toward it.
     """
     callouts = (graph.get('target_metrics_performance_data') or {}).get('target_metrics') or []
-    level, position, inside, under, pace = {}, {}, {}, {}, {}
+    level, position, inside, under, missed, pace = {}, {}, {}, {}, {}, {}
     for callout in callouts:
         a, b = callout['offsets']['start'], callout['offsets']['end'] + 1
         seconds = _overlap(a, b, work_windows)
         if not seconds:
             continue
+        floor_watts = _floor_watts(row, callout, series)
         for metric in callout.get('metrics') or []:
             name, lo, hi = metric['name'], metric['lower'], metric['upper']
             if name == 'pace_intensity':
@@ -382,12 +408,18 @@ def _callouts(row, graph, times, series, work_windows):
                         position.setdefault(name, []).append((value - lo) / (hi - lo))
                         inside.setdefault(name, []).append(lo <= value <= hi)
                         under.setdefault(name, []).append(value < lo)
+                        if floor_watts is not None and name in MISSED_METRICS:
+                            watts = _reading_watts(series, i)
+                            if watts is not None:
+                                missed.setdefault(name, []).append(value < lo and watts < floor_watts)
     if level:
         row['target'] = {n: _round(sum(v * w for v, w in pairs) / sum(w for _, w in pairs))
                          for n, pairs in level.items()}
         row['target_pos'] = {n: _round(_mean(v)) for n, v in position.items()}
         row['target_in'] = {n: round(100 * sum(v) / len(v)) for n, v in inside.items()}
         row['target_under'] = {n: round(100 * sum(v) / len(v)) for n, v in under.items()}
+        if missed:
+            row['target_missed'] = {n: round(100 * sum(v) / len(v)) for n, v in missed.items()}
     if pace:
         total = sum(pace.values())
         row['pace_plan'] = {k: round(100 * v / total) for k, v in sorted(pace.items())}

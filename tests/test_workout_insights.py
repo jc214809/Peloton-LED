@@ -4,7 +4,7 @@ import itertools
 import pytest
 
 from peloton import workout_compare as compare
-from peloton.insight_lines import number
+from peloton.insight_lines import board_insights, number
 from peloton.workout_insights import insights, strength_insights
 
 T = 1_800_000_000
@@ -17,7 +17,7 @@ def ride(days_ago, output, hr=None, eff=None, strive=None, **over):
     row = {'id': f'w{next(_ids)}', 'start': T - days_ago * DAY, 'disc': 'cycling', 'wtype': 'class',
            'ctype': 'Music', 'mode': 'plain', 'outdoor': False, 'dur': 1200, 'complete': True,
            'work': {'output': output, 'heart_rate': hr}, 'eff': eff, 'strive': strive,
-           'target_under': None, 'pace_fit': None, 'sets': None, 'plan': None, 'arms_sections': 0}
+           'target_missed': None, 'pace_fit': None, 'sets': None, 'plan': None, 'arms_sections': 0}
     row.update(over)
     return row
 
@@ -205,30 +205,60 @@ def test_walking_and_bootcamp_nouns():
 # 5.2 callouts (no peers: the callout message is the only one, so no too_few)
 
 @pytest.mark.parametrize('disc', ['cycling', 'bike_bootcamp'])
-def test_resistance_low_at_25_not_24(disc):
-    on = ride(0, 100, disc=disc, target_under={'resistance': 25})
+def test_resistance_low_at_20_not_19(disc):
+    on = ride(0, 100, disc=disc, target_missed={'resistance': 20})
     assert pairs(insights(on, [on])) == [('resistance_low', 'Turn the resistance up in the work segments: you were '
-                                                     'under the callout range 25% of the time.')]
-    off = ride(0, 100, disc=disc, target_under={'resistance': 24})
+                                                     'under the callout range and short of its power 20% of the time.')]
+    off = ride(0, 100, disc=disc, target_missed={'resistance': 19})
     assert codes(insights(off, [off])) == ['too_few']
 
 
 @pytest.mark.parametrize('disc', ['cycling', 'bike_bootcamp'])
-def test_cadence_low_at_35_not_34(disc):
-    on = ride(0, 100, disc=disc, target_under={'cadence': 35})
+def test_cadence_low_at_12_not_11(disc):
+    on = ride(0, 100, disc=disc, target_missed={'cadence': 12})
     assert pairs(insights(on, [on])) == [('cadence_low', 'Pick the cadence up in the work segments: you were under '
-                                                  'the callout range 35% of the time.')]
-    off = ride(0, 100, disc=disc, target_under={'cadence': 34})
+                                                  'the callout range and short of its power 12% of the time.')]
+    off = ride(0, 100, disc=disc, target_missed={'cadence': 11})
     assert codes(insights(off, [off])) == ['too_few']
 
 
+def test_bike_callouts_read_the_missed_share_not_the_under_share():
+    # A heavy gear at the callout's power: under the cadence range 41% of the time, missed only 7%.
+    t = ride(0, 100, target_under={'cadence': 41, 'resistance': 30}, target_missed={'cadence': 7, 'resistance': 0})
+    assert codes(insights(t, [t])) == ['too_few']
+    old = ride(0, 100, target_under={'cadence': 41, 'resistance': 30})  # a row built before target_missed
+    assert codes(insights(old, [old])) == ['too_few']
+
+
+@pytest.mark.parametrize('over', [
+    {'ctype': 'Warm Up Ride'}, {'ctype': 'Cool Down Ride'}, {'ctype': 'Strength Warm Up', 'disc': 'strength'},
+    {'ctype': 'OUTDOOR Cool Down Walk', 'disc': 'walking'},
+    {'ctype': 'Theme', 'title': '10 min All for One Warm Up Ride'},
+    {'ctype': 'Power Zone', 'title': '10 min FTP Warm Up Ride'},
+    {'ctype': None, 'title': '5 min Chris Stapleton Cool Down'},
+    {'ctype': 'Full Body (Tread Bootcamp)', 'disc': 'tread_bootcamp', 'title': '5 min Bootcamp warm-up'}])
+def test_a_warm_up_or_cool_down_gets_no_insight(over):
+    # Callouts missed and five peers far below: it would otherwise be strong with a cadence warning.
+    t = ride(0, 200, target_missed={'cadence': 50, 'resistance': 50}, **over)
+    peers = [ride(1 + i, 100, **over) for i in range(5)]
+    result = insights(t, [t] + peers)
+    assert codes(result) == ['warm_up_cool_down']
+    assert board_insights(result) == []
+
+
+def test_recovery_and_extra_10_classes_are_still_compared():
+    for title in ('20 min Recovery Ride', 'Extra 10: Tabata Ride'):
+        t = ride(0, 100, title=title, target_missed={'cadence': 50})
+        assert codes(insights(t, [t])) == ['cadence_low']
+
+
 def test_both_bike_callouts_in_order():
-    t = ride(0, 100, target_under={'cadence': 50, 'resistance': 50})
+    t = ride(0, 100, target_missed={'cadence': 50, 'resistance': 50})
     assert codes(insights(t, [t])) == ['resistance_low', 'cadence_low']
 
 
 def test_bike_callouts_not_for_rowing():
-    t = ride(0, 100, disc='rowing', target_under={'cadence': 90, 'resistance': 90})
+    t = ride(0, 100, disc='rowing', target_missed={'cadence': 90, 'resistance': 90})
     assert codes(insights(t, [t])) == ['too_few']
 
 
@@ -598,7 +628,7 @@ def test_too_few_wording():
 
 
 def test_too_few_not_added_when_a_callout_fires():
-    target = ride(0, 100, target_under={'resistance': 40})
+    target = ride(0, 100, target_missed={'resistance': 40})
     assert codes(insights(target, [target] + peers_of([100] * 3))) == ['resistance_low']
 
 
@@ -622,14 +652,14 @@ def test_freestyle():
 
 
 def test_freestyle_is_never_compared_even_with_callouts():
-    bike = ride(0, 100, wtype='freestyle', ctype=None, target_under={'resistance': 30})
+    bike = ride(0, 100, wtype='freestyle', ctype=None, target_missed={'resistance': 30})
     assert codes(insights(bike, [bike])) == ['freestyle']
     lift = strength(0, None, wtype='freestyle', ctype=None)
     assert codes(insights(lift, [lift])) == ['freestyle']
 
 
 def test_class_without_class_type_keeps_single_workout_rules():
-    bike = ride(0, 100, ctype=None, target_under={'resistance': 30})
+    bike = ride(0, 100, ctype=None, target_missed={'resistance': 30})
     assert codes(insights(bike, [bike] + peers_of([100] * 5))) == ['resistance_low']
     lift = strength(0, None, ctype=None)
     assert codes(insights(lift, [lift])) == ['no_tracker']
@@ -643,7 +673,7 @@ def test_effort_tie_is_neither_hardest_nor_easiest():
 
 
 def test_incomplete():
-    target = ride(0, 100, complete=False, target_under={'resistance': 40})
+    target = ride(0, 100, complete=False, target_missed={'resistance': 40})
     assert pairs(insights(target, [target] + peers_of([100] * 5))) == [
         ('incomplete', 'This workout was cut short, so it is not compared.')]
 
@@ -654,7 +684,7 @@ def test_unsupported():
 
 
 def test_at_most_three_messages_in_order_output_callouts_effort_dropped():
-    target = ride(0, 100, strive=20, target_under={'resistance': 40, 'cadence': 40})
+    target = ride(0, 100, strive=20, target_missed={'resistance': 40, 'cadence': 40})
     rows = [ride(i, 100, strive=10) for i in range(1, 6)]
     # candidates: in_line, resistance_low, cadence_low, effort_high
     assert codes(insights(target, [target] + rows)) == ['in_line', 'resistance_low', 'cadence_low']
@@ -713,7 +743,7 @@ def test_in_line_facts_in_every_wording_variant():
 
 
 def test_callout_facts_carry_the_percent_in_the_text():
-    t = ride(0, 100, target_under={'resistance': 28, 'cadence': 37})
+    t = ride(0, 100, target_missed={'resistance': 28, 'cadence': 37})
     result = insights(t, [t])
     assert facts_of(result, 'resistance_low') == {'pct': 28} and '28%' in text(result, 'resistance_low')
     assert facts_of(result, 'cadence_low') == {'pct': 37} and '37%' in text(result, 'cadence_low')

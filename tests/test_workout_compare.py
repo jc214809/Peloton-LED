@@ -5,7 +5,7 @@ import itertools
 import pytest
 
 from peloton.workout_compare import (DAY, MAX_PEERS, PLAN_KEYS, baseline, comparison_group, distance,
-                                     fill_in, is_peer, peers, standardise, stat)
+                                     fill_in, is_peer, is_warm_up_or_cool_down, peers, standardise, stat)
 
 T = 1_800_000_000
 _ids = itertools.count(1)
@@ -34,6 +34,27 @@ def target(**over):
 
 def test_same_kind_is_peer():
     assert is_peer(target(), row(5))
+
+
+@pytest.mark.parametrize('ctype, title, expected', [
+    ('Warm Up Ride', '5 min Warm Up Ride', True),
+    ('Cool Down Ride', '10 min Cool Down Ride', True),
+    ('Theme', '10 min All for One Warm Up Ride', True),
+    ('Power Zone', '10 min FTP Warm Up Ride', True),
+    (None, '5 min Chris Stapleton Cool Down', True),
+    ('Barre', '5 min Barre warm-up', True),
+    ('Music (Running)', "10 min Red (Taylor's Version) Cooldown", True),
+    ('Music (Cycling)', '20 min Recovery Ride', False),
+    ('Intervals', 'Extra 10: Tabata Ride', False),
+    (None, None, False)])
+def test_warm_ups_and_cool_downs_by_class_type_or_title(ctype, title, expected):
+    assert is_warm_up_or_cool_down({'ctype': ctype, 'title': title}) is expected
+
+
+def test_warm_ups_and_cool_downs_are_never_peers():
+    assert not is_peer(target(), row(5, title='10 min All for One Warm Up Ride'))
+    warm = dict(ctype='Warm Up Ride', dur=600)
+    assert not is_peer(target(**warm), row(5, **warm))
 
 
 def test_past_mistake_intervals_arms_and_plain_not_peers():
@@ -265,6 +286,13 @@ def test_fill_in_adds_two_nearest_flagged_copies():
     assert rows == snapshot
     assert 'fill_in' not in nearer
     assert filled[0] is not nearer
+
+
+def test_fill_in_skips_warm_ups_and_cool_downs():
+    t = target(plan=plan())
+    real = real_peers(3)
+    warm, near, far = candidate(20, 0.0, title='30 min Warm Up Ride'), candidate(21, 0.1), candidate(22, 3)
+    assert [f['id'] for f in fill_in(t, [t] + real + [warm, near, far], real)] == [near['id'], far['id']]
 
 
 @pytest.mark.parametrize('n', [0, 1, 5, 6])

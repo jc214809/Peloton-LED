@@ -73,6 +73,7 @@ def test_callouts_count_only_inside_work_segments():
     assert row['target_pos'] == {'cadence': 0.0}  # 70 -> -0.5, 90 -> +0.5 against 80..100
     assert row['target_in'] == {'cadence': 50}
     assert row['target_under'] == {'cadence': 50}
+    assert 'target_missed' not in row  # no resistance series, so no watts to test a miss against
 
 
 def test_a_callout_running_into_an_arms_section_counts_only_the_riding_seconds():
@@ -87,8 +88,44 @@ def test_a_callout_running_into_an_arms_section_counts_only_the_riding_seconds()
     row = build_row(detail(), g)
     assert row['mode'] == 'arms'
     assert row['target_under'] == {'cadence': 0, 'resistance': 0}
+    assert row['target_missed'] == {'cadence': 0, 'resistance': 0}
     assert row['target_in'] == {'cadence': 100, 'resistance': 100}
     assert row['target_pos'] == {'cadence': 0.5, 'resistance': 0.5}
+
+
+def _missed_graph():
+    # One 80-100 rpm / 35-45 callout; its floors make planned_watts(80, 35), about 82 W.
+    cadence = [90, 70, 70, 110, 85, 60]
+    resistance = [40, 50, 35, 30, 25, None]
+    g = graph({'cadence': cadence, 'resistance': resistance}, 6, segment_list=[seg('cycling', 0, 30)])
+    g['target_metrics_performance_data'] = {'target_metrics': [
+        {'offsets': {'start': 0, 'end': 29}, 'metrics': [
+            {'name': 'cadence', 'lower': 80, 'upper': 100}, {'name': 'resistance', 'lower': 35, 'upper': 45}]}]}
+    return g
+
+
+@pytest.mark.parametrize('disc', ['cycling', 'bike_bootcamp'])
+def test_a_bike_reading_is_missed_only_when_under_and_short_of_the_floor_watts(disc):
+    row = build_row(detail(fitness_discipline=disc), _missed_graph())
+    # Under: cadence 70, 70, 60 of six; resistance 30, 25 of five (the sixth has none).
+    assert row['target_under'] == {'cadence': 50, 'resistance': 40}
+    # Missed, of the five readings with both figures: 70 rpm at 50 (147 W) is a heavier gear at the
+    # callout's power, 70 at 35 (65 W) is not; 110 rpm at 30 (99 W) spins its way there, 85 at 25 (42 W) doesn't.
+    assert row['target_missed'] == {'cadence': 20, 'resistance': 20}
+
+
+def test_only_the_bike_gets_a_missed_share():
+    row = build_row(detail(fitness_discipline='caesar'), _missed_graph())
+    assert row['target_under'] == {'cadence': 50, 'resistance': 40}
+    assert 'target_missed' not in row
+
+
+def test_a_callout_without_a_resistance_range_counts_toward_no_miss():
+    g = _missed_graph()
+    g['target_metrics_performance_data']['target_metrics'][0]['metrics'].pop()
+    row = build_row(detail(), g)
+    assert row['target_under'] == {'cadence': 50}
+    assert 'target_missed' not in row
 
 
 def test_a_callout_level_is_weighted_by_its_seconds_in_work_segments():

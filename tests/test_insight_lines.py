@@ -253,7 +253,7 @@ def test_real_insights_make_views_from_their_own_facts():
     assert in_line['headline'] == 'CONSISTENT' and in_line['sentence'] == 'CONSISTENT: 100 W VS 100 W.'
     assert hardest['sentence'] == 'HARDEST RIDE OF YOUR LAST 5 BY HEART RATE.'
     assert (hardest['figure']['today_text'], hardest['figure']['usual_text']) == ('1.00', '0.60')
-    t = ride(0, 100, target_under={'resistance': 28})
+    t = ride(0, 100, target_missed={'resistance': 28})
     assert board_insights(insights(t, [t]))[0]['figure'] == {'kind': 'share', 'pct': 28}
     t = ride(0, 100)
     assert board_insights(insights(t, [t])) == []

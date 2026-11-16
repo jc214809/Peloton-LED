@@ -25,11 +25,14 @@ TOUGH_POINTS = 1.0         # a class rated this many points or more above the us
 USUAL_CLASSES = 12
 USUAL_DAYS = 365
 MIN_RATED = 5              # rated classes in the usual before its median means anything
-USUAL_MIN_SECS = 600       # shorter classes (rated 3-4) are left out on both sides, as are ...
-USUAL_SKIP_TYPES = ('Warm Up', 'Cool Down')  # ... class types containing these
+USUAL_MIN_SECS = 600       # shorter classes (rated 3-4) are left out on both sides, as are warm-ups and cool-downs
 # Callouts
-RESISTANCE_UNDER_PCT = 25  # share of callout time under the resistance range
-CADENCE_UNDER_PCT = 35
+# Bike: share of callout time missed (row['target_missed']: under the range and short of the callout's
+# floor watts). Both bars are the 90th percentile of both riders' past year, warm-ups and cool-downs
+# left out (Fable's rule, Joel 2026-11-15): cadence 12 and resistance 20 each fire on about 1 ride in 8
+# for the rider who misses most. Fixed on purpose: a per-rider bar drifted up after bad stretches.
+RESISTANCE_UNDER_PCT = 20
+CADENCE_UNDER_PCT = 12
 PACE_UNDER_PCT = 35        # Peloton's own below_target share (row, run)
 # Strength
 GO_UP_SESSIONS = 3         # classes in a row at this weight or lighter, every target beaten
@@ -157,9 +160,8 @@ def _is_rating(value):
 
 def _counts_for_usual(row):
     """A complete, rated class of USUAL_MIN_SECS or more that isn't a warm-up or cool-down."""
-    ctype = row.get('ctype') or ''
     return (row.get('complete') and row.get('wtype') == 'class' and (row.get('dur') or 0) >= USUAL_MIN_SECS
-            and not any(skip in ctype for skip in USUAL_SKIP_TYPES) and _is_rating(row.get('difficulty')))
+            and not compare.is_warm_up_or_cool_down(row) and _is_rating(row.get('difficulty')))
 
 
 def usual_classes(target, rows):
@@ -198,16 +200,16 @@ def tough_class(target, rows, main):
 def callout_insights(target):
     """Single-workout messages about following the instructor's callouts. No peers needed."""
     out = []
-    under = target.get('target_under') or {}
+    missed = target.get('target_missed') or {}
     if target['disc'] in compare.BIKE:
-        if under.get('resistance', 0) >= RESISTANCE_UNDER_PCT:
+        if missed.get('resistance', 0) >= RESISTANCE_UNDER_PCT:
             out.append(('resistance_low', 'Turn the resistance up in the work segments: you were under the '
-                                          f"callout range {under['resistance']}% of the time.",
-                    {'pct': under['resistance']}))
-        if under.get('cadence', 0) >= CADENCE_UNDER_PCT:
+                                          f"callout range and short of its power {missed['resistance']}% of the time.",
+                    {'pct': missed['resistance']}))
+        if missed.get('cadence', 0) >= CADENCE_UNDER_PCT:
             out.append(('cadence_low', 'Pick the cadence up in the work segments: you were under the '
-                                       f"callout range {under['cadence']}% of the time.",
-                    {'pct': under['cadence']}))
+                                       f"callout range and short of its power {missed['cadence']}% of the time.",
+                    {'pct': missed['cadence']}))
     fit = target.get('pace_fit')
     if target['disc'] in ('rowing', 'row_bootcamp', 'running') and fit and (fit[0] or 0) >= PACE_UNDER_PCT:
         out.append(('pace_low', f'You were under the pace target {fit[0]}% of the time: push the pace, '
@@ -387,6 +389,8 @@ def insights(target, rows):
         return [('incomplete', 'This workout was cut short, so it is not compared.', {})]
     if target['wtype'] != 'class':
         return [('freestyle', 'Freestyle workouts are not compared yet.', {})]
+    if compare.is_warm_up_or_cool_down(target):
+        return [('warm_up_cool_down', 'Warm-ups and cool-downs are not compared.', {})]
     callouts = callout_insights(target)
     strength = strength_insights(target, rows)
     # A class without a class type has no peers (spec section 4) but still gets the single-workout rules.

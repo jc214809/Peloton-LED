@@ -12,6 +12,8 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 5 Name page facts settings and log fields ── maybe
 6 Workout compare: Cardio classes ── unlikely (measured 2026-11-12: too rare to say much); independent
 7-18, 20, 21, 24 Ideas (not yet sized) ── 10 trend charts share windows with item 1; 11 yearly goal and 14 weekly recap use `frame_stats`; 9 goes with 3; 24 builds on the challenges page (#114)
+25 Coasting between efforts, 26 Sprints under the callout ── after the "missed callout" rule (branch cadence-missed-rule); independent of each other
+27 Similar-class figure beside a callout flag, 28 "Best in 20 rides" callout insight ── after cadence-missed-rule; 29 Re-measure the callout bars ── from 2027-02-15
 22 Icon touch-ups (by hand) ── independent
 ```
 
@@ -218,6 +220,59 @@ What to handle:
 - Validate every field read from the cache, as the challenges page does.
 
 Depends on: nothing (the challenges page merged in #114).
+
+### 25. Workout insight: coasting between efforts (bike)
+Found 2026-11-15 while defining a missed cadence (log entries of that date in the private analysis README, `../Peloton-Data-Dump/private/README.md`). Joel's real cadence misses are mostly recoveries taken far deeper than the callout, not slow pedalling. An insight could name that directly ("you coasted between efforts: keep the legs at 60-70 rpm in the recoveries") instead of a general CADENCE LOW.
+
+What the data shows (Joel's 34 bike classes with callouts, 2025-11-15 to 2026-11-15, each 5-second reading inside a callout in a work segment; "missed" is the new rule: cadence under the floor and `planned_watts(cadence, resistance)` under `planned_watts(cadence floor, resistance floor)`):
+- **Coasting is a large share of his misses.** 39% of his missed readings are under 40 rpm. The median missed reading is 30 rpm under the floor (Jen's: 12 rpm, and only 3% under 40 rpm, so this is Joel's pattern, not hers).
+- **Coasting gives up the power.** Coasting readings make about 0.21 of the callout-middle planned watts, against 0.56 for in-range-gear misses and 1.25 for heavy-gear ones.
+- **It builds through the ride.** Missed share by quarter of the work: 3% / 6% / 8% / 8% (Jen flat at 7 / 6 / 7 / 7%).
+- **Example**, 2026-11-15 20 min 2000s Ride (`26749e7c`): near-stops inside callouts at 9:31 (22 W, 29 rpm), 12:11 (29 W, 23 rpm), 13:11 (24 W, 19 rpm) and 16:16 (11 W, 19 rpm), each between blocks of 260-370 W. Of that ride's held misses (15 s+ at 5+ rpm under), 3 readings were coasting, 30 heavy gear, 15 other.
+
+To decide when building:
+- The rule. Candidates: share of work-segment callout time under 40 rpm (or under half the floor); or a count of coasting stretches of 10 s or more. Measure each on both riders' past year with the stored 5-second series, as the missed-cadence rule was, and pick a bar that fires on a sensible share of rides.
+- Whether it replaces CADENCE LOW on a ride where most misses are coasting (they share the slot: `MAX_BOARD_INSIGHTS` is 2), or stands as its own code.
+- The board wording (15 characters a line in the `stats` font; card plus bars on 64x64, bars plus words on 64x32), and what the bars show (for example, time coasting today against the usual).
+- Needs a new row field (coasting share), which is only read for the workout itself, like the callout fields: no `ROW_VERSION` bump.
+- Depends on: the missed-callout rule (branch `cadence-missed-rule`).
+
+### 26. Workout insight: sprints under the callout (bike)
+Same analysis, 2026-11-15. Jen's clearest pattern: she misses the sprint callouts (cadence floors of 90 rpm or more) a lot more than anything else, all year, without the heavy gear that excuses Joel's. An insight could say "sprints under the callout: spin up to 90+" instead of a general CADENCE LOW.
+
+What the data shows (new missed rule; Jen 67 bike classes with callouts in the past year, Joel 34):
+- **Jen:** sprint floors are 8% of her callout time and she misses 39% of it (climbs 4%, flats 4%). Steady across the year: 39% November-April, 38% May-November. Her missed readings sit about 12 rpm under the floor at the resistance floor (+1), so it isn't a gear trade. Fable's count: sprints supply about 42% of each rider's misses. Bike Bootcamps double her overall cadence misses (14% against 6% on rides); not caused by slow starts after floor blocks (0-3 misses in the first 30 s of a bike block).
+- **Joel:** sprint floors are 14% of his callout time; he misses 19% of it, down from 23% (November-April) to 8% (May-November). Before the power test he was under 57% of sprint time; most of that was a heavy gear that kept the callout's power.
+- **Bootcamps are where it bites (Fable 5.2's review, 2026-11-15).** 7 of Jen's 10 CADENCE LOW rides in the past year are Bike Bootcamps (13 of her 67 bike classes); plain rides fire on 3 of 54. In her bootcamps, callouts with a 90+ rpm floor are missed 33% of the time against 9-11% for the rest. Her cadence flags rise with the callout level (by thirds of rides, lowest to highest: 0 / 3 / 7), not with the class rating. So this item should come before any more tuning of the cadence bar.
+- **Example:** on Joel's 2026-11-15 ride, 28 of 34 sprint readings were under the floor (16:37 averaged 72 rpm and 18:39 83 rpm against 90-120), mostly in a heavy gear at or above the callout's power, so the new rule doesn't count most of them.
+
+To decide when building:
+- The rule: missed share of sprint-callout time (floor 90+) with a minimum amount of sprint time in the class (short classes have one or two sprints), measured on both riders' past year; a bar that doesn't fire on nearly every ride for Jen.
+- Whether it replaces CADENCE LOW when most misses are in sprints, or stands as its own code; how it ranks against the output insight for the two board slots.
+- Whether to also say it as progress ("sprints: 8% missed, down from 23%"), which would need a per-rider history like the tough-class usual.
+- Wording and bars, both heights. Needs a new row field (sprint missed share), only read for the workout itself: no `ROW_VERSION` bump.
+- Depends on: the missed-callout rule (branch `cadence-missed-rule`).
+
+### 27. Callout flags: show the rider's similar-class figure beside it (bike)
+CADENCE LOW / RESISTANCE LOW fire on fixed bars (12% / 20% of the work missed; `workout_insights.CADENCE_UNDER_PCT`, `RESISTANCE_UNDER_PCT`). Add, as context only, the rider's usual for similar classes, the way the output insight shows today against the typical: "21% MISSED, YOUR USUAL FOR THIS CLASS 10%". It never decides whether the flag fires.
+
+Why context and not the trigger (Fable 5.2, 2026-11-15, past year, the output insight's own peers via `workout_compare.baseline`, "worse than 80% of peers and 5+ points over their median"):
+- Coverage: only 47 of Jen's 67 and 23 of Joel's 34 bike classes have 5 or more scored peers.
+- It excuses a habit where it's worst: Jen's 50/50 bootcamps have a resistance peer median of 14-19, so her 2026-11-06 bootcamp at 22% would be silent.
+- Without a floor it flags trivia: Joel at 6% and 9% against peer medians of 0 and 1.
+- It does catch what a fixed bar can't: Jen's Intervals & Arms rides at 14-18% against her usual 10 for that class.
+- A per-rider bar (the rider's worst 10% of their last 20 rides) was also tried and rejected: it changed 7 rides in a year, mostly for the worse (it drifted up after bad stretches; Jen's 21% on 2026-11-13 would have been silent).
+
+To decide when building: show it only with 5+ scored peers; where it goes on the card and bars (the share figure today is one bar; a second "usual" bar like the output insight's), both heights; the Mac text. Needs `target_missed` on the peers, which every row built since branch `cadence-missed-rule` has (the boards' seeded rows don't until a re-push). Depends on: `cadence-missed-rule`.
+
+### 28. Callout insight: "best in your last 20 rides" (bike)
+The positive side of the callout flags, as a habit-change lever: a scold alone can't say "you're getting better". Fable 5.2's rule (2026-11-15): today's missed share (resistance or cadence) is strictly lower than every one of the rider's previous 20 bike classes (none older than 90 days, at least 8 of them), the class is 15 minutes or longer, and the rider's median over that window is 10% or more, so it only speaks where there's a habit to change.
+- Past year: Jen resistance 7 of 67 (11 of 141 over two years), cadence 0; Joel 0 for both. Without the median condition it praises 0-1% cadence rides (Jen 4, Joel 2).
+- Jen's resistance missed, by quarter over two years (oldest first): 13, 13.5, 11.5, 13, 9, 14, 15.5, 14. Flat apart from one good quarter (about Nov 2025 to Feb 2026), so the target is a level she has already ridden.
+To decide: headline and wording (e.g. `RESISTANCE: BEST IN 20 RIDES`), colour (green, like the tough class), the bars (today against the usual), its place among the two board slots, both heights; a new code in `insight_lines`. Depends on: `cadence-missed-rule`.
+
+### 29. Re-measure the callout bars (from 2027-02-15)
+The bars were set on 2026-11-15 from the past year (cadence 12, resistance 20: the 90th percentile of both riders). About 90 days on, re-run the measurement (fires per rider; Jen's resistance median, 14 at the time): step resistance down to 17 by hand when her median is near 10 (in her good quarter, 17 fired on 3 of 13 rides; today it would fire on 10 of her last 36). The scripts were scratch (Fable's `sim.py` / `trend.py`); rebuild them from the private README's 2026-11-15 log entries. Depends on: nothing.
 
 ## Joel, by hand
 
