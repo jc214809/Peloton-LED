@@ -34,6 +34,16 @@ USUAL_MIN_SECS = 600       # shorter classes (rated 3-4) are left out on both si
 RESISTANCE_UNDER_PCT = 20
 CADENCE_UNDER_PCT = 12
 PACE_UNDER_PCT = 35        # Peloton's own below_target share (row, run)
+# Bike: the praise side (Fable's rule, 2026-11-15): today's missed share is strictly under every one of the rider's
+# last BEST_RIDES bike classes (none older than BEST_DAYS, at least BEST_MIN_RIDES), in a class of BEST_MIN_SECS or
+# more, and their median is BEST_USUAL_PCT or more, so it only speaks where there's a habit to change. Past year:
+# Jen resistance 7 of 64, cadence 0; Joel 0 (without the median bar it praised 0-1% cadence rides).
+BEST_RIDES = 20
+BEST_DAYS = 90
+BEST_MIN_RIDES = 8
+BEST_MIN_SECS = 900
+BEST_USUAL_PCT = 10
+BEST_METRICS = (('resistance', RESISTANCE_UNDER_PCT), ('cadence', CADENCE_UNDER_PCT))
 # Strength
 GO_UP_SESSIONS = 3         # classes in a row at this weight or lighter, every target beaten
 GO_UP_RATIO = 1.2          # reps done / rep target
@@ -217,6 +227,47 @@ def callout_insights(target):
     return out
 
 
+def _missed(row, metric):
+    """The row's missed share for `metric`, or None (no callouts with both ranges, or built before the field)."""
+    value = (row.get('target_missed') or {}).get(metric)
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def recent_rides(target, rows, metric):
+    """The rider's last BEST_RIDES complete bike classes with a `metric` missed share from the BEST_DAYS before the
+    target, newest first; any length, warm-ups and cool-downs left out."""
+    start = target['start'] - BEST_DAYS * compare.DAY
+    found = [r for r in rows if r['id'] != target['id'] and r['disc'] in compare.BIKE and start <= r['start']
+             < target['start'] and r.get('complete') and r.get('wtype') == 'class'
+             and not compare.is_warm_up_or_cool_down(r) and _missed(r, metric) is not None]
+    found.sort(key=lambda r: -r['start'])
+    return found[:BEST_RIDES]
+
+
+def callout_best(target, rows):
+    """('callout_best', text, facts) for each bike callout metric where today's missed share is the rider's best
+    (strictly) of their recent rides (`recent_rides`), whose median is BEST_USUAL_PCT or more. Never beside that
+    metric's own scold."""
+    if target['disc'] not in compare.BIKE or (target.get('dur') or 0) < BEST_MIN_SECS:
+        return []
+    out = []
+    for metric, scold in BEST_METRICS:
+        today = _missed(target, metric)
+        if today is None or today >= scold:
+            continue
+        recent = recent_rides(target, rows, metric)
+        if len(recent) < BEST_MIN_RIDES:
+            continue
+        shares = [_missed(r, metric) for r in recent]
+        usual = statistics.median(shares)
+        if today < min(shares) and usual >= BEST_USUAL_PCT:
+            out.append(('callout_best', f'Your best {metric} in {len(recent)} rides: under the callout range and '
+                                        f'short of its power {today}% of the time, against your usual '
+                                        f'{usual:.0f}%.',
+                        {'metric': metric, 'pct': today, 'usual': usual, 'n': len(recent)}))
+    return out
+
+
 # 5.3 Strength
 
 def _history(target, rows, days):
@@ -391,7 +442,7 @@ def insights(target, rows):
         return [('freestyle', 'Freestyle workouts are not compared yet.', {})]
     if compare.is_warm_up_or_cool_down(target):
         return [('warm_up_cool_down', 'Warm-ups and cool-downs are not compared.', {})]
-    callouts = callout_insights(target)
+    callouts = callout_insights(target) + callout_best(target, rows)
     strength = strength_insights(target, rows)
     # A class without a class type has no peers (spec section 4) but still gets the single-workout rules.
     group, _, real = compare.comparison_group(target, rows)

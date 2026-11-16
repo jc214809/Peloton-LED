@@ -27,7 +27,7 @@ RED = (230, 40, 40)
 SOFT_WHITE = (200, 205, 215)   # not 255: full white is glaring on the panel
 COLOURS = {'output_down': AMBER, 'missed_targets': AMBER, 'resistance_low': AMBER, 'cadence_low': AMBER,
            'pace_low': AMBER, 'output_up': GREEN, 'go_up_lighter': GREEN, 'go_up_streak': GREEN,
-           'went_heavier': GREEN, 'tough_class': GREEN, 'effort_low': GREEN, 'effort_high': RED, 'in_line': SOFT_WHITE}
+           'went_heavier': GREEN, 'tough_class': GREEN, 'callout_best': GREEN, 'effort_low': GREEN, 'effort_high': RED, 'in_line': SOFT_WHITE}
 OUTPUT_CODES = ('output_down', 'output_up', 'in_line')
 CALLOUT_CODES = ('resistance_low', 'cadence_low', 'pace_low')
 STRENGTH_CODES = ('go_up_lighter', 'went_heavier', 'go_up_streak', 'missed_targets')
@@ -208,6 +208,23 @@ def _callout(code, facts):
     return headline, sentence, {'kind': 'share', 'pct': max(0, min(100, pct))}, why, 'VS THE CALLOUTS'
 
 
+# A callout's best in the rider's recent rides (workout_insights.callout_best). The headline fits the 64x32 bars
+# frame's 14 characters, so it says TOP; the sentence says BEST.
+BEST_HEADLINES = {'resistance': 'TOP RESISTANCE', 'cadence': 'TOP CADENCE'}
+
+
+def _best(code, facts):
+    what, n = facts['metric'].upper(), facts['n']
+    headline = BEST_HEADLINES[facts['metric']]
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        raise ValueError('bad ride count')
+    pct, usual = f"{facts['pct']:.0f}", f"{facts['usual']:.0f}"
+    sentence = (f'YOUR BEST {what} IN {n} RIDES', f'{pct}% MISSED',f'USUALLY {usual}%.')
+    figure = {'kind': 'bars', 'today': facts['pct'], 'usual': facts['usual'], 'today_text': f'{pct}%',
+              'usual_text': f'{usual}%', 'unit': '', 'usual_label': USUAL_WORD}
+    return headline, sentence, figure, 'TIME MISSED', f'LAST {n} RIDES'
+
+
 def _strength(code, facts):
     if code == 'go_up_streak':
         lb, n, cat = number(facts['lb'], 'lb'), facts['n'], facts['category'].upper()
@@ -251,6 +268,8 @@ def _rule(code):
         return _effort
     if code in CALLOUT_CODES:
         return _callout
+    if code == 'callout_best':
+        return _best
     if code in STRENGTH_CODES:
         return _strength
     return None

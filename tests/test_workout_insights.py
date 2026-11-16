@@ -287,6 +287,79 @@ def test_no_callout_data_is_silent():
     assert codes(insights(t, [t])) == ['too_few']
 
 
+# 5.2 callouts: the best missed share in the rider's recent bike classes
+
+def recent(shares, metric='resistance', first_day=1, **over):
+    """Bike classes 1, 2, 3 ... days back, each with one missed share for `metric`."""
+    return [ride(first_day + i, 100, target_missed={metric: s}, **over) for i, s in enumerate(shares)]
+
+
+def best(today, history, metric='resistance', **over):
+    from peloton.workout_insights import callout_best
+    target = ride(0, 100, target_missed={metric: today}, **over)
+    return callout_best(target, [target] + history)
+
+
+def test_best_fires_strictly_under_every_recent_ride():
+    assert best(11, recent([12] * 10)) == [(
+        'callout_best', 'Your best resistance in 10 rides: under the callout range and short of its power 11% of '
+                        'the time, against your usual 12%.',
+        {'metric': 'resistance', 'pct': 11, 'usual': 12, 'n': 10})]
+    assert best(12, recent([12] * 10)) == []          # a tie is not a best
+    assert best(11, recent([20] * 9 + [11])) == []    # one earlier ride already did it
+
+
+def test_best_needs_a_usual_of_10_or_more():
+    assert best(9, recent([10] * 8))
+    assert best(8, recent([9, 10] * 4)) == []         # median 9.5: no habit to change
+    assert best(0, recent([1] * 10, metric='cadence'), metric='cadence') == []
+
+
+def test_best_needs_8_recent_rides_from_the_last_90_days():
+    assert best(5, recent([20] * 7)) == []
+    assert best(5, recent([20] * 8))
+    assert best(5, recent([20] * 7) + [ride(90, 100, target_missed={'resistance': 20})])
+    assert best(5, recent([20] * 7) + [ride(91, 100, target_missed={'resistance': 20})]) == []
+
+
+def test_best_reads_only_the_last_20_rides():
+    assert best(5, recent([20] * 20) + [ride(25, 100, target_missed={'resistance': 3})])
+    assert best(5, recent([20] * 19) + [ride(25, 100, target_missed={'resistance': 3})]) == []
+
+
+def test_best_needs_a_15_minute_class_but_counts_any_length_before_it():
+    assert best(5, recent([20] * 8), dur=899) == []
+    assert best(5, recent([20] * 8), dur=900)
+    assert best(5, recent([20] * 8, dur=300), dur=900)
+
+
+def test_best_counts_bootcamps_and_leaves_out_what_is_not_a_finished_bike_class():
+    assert best(5, recent([20] * 8, disc='bike_bootcamp'))
+    assert best(5, recent([20] * 8), disc='bike_bootcamp')
+    for over in ({'ctype': 'Warm Up Ride'}, {'complete': False}, {'wtype': 'freestyle'}, {'disc': 'rowing'},
+                 {'target_missed': {'cadence': 3}}, {'target_missed': None}, {'target_missed': {'resistance': 'x'}}):
+        # Seven real rides and a better one that must not count: only seven left.
+        assert best(5, recent([20] * 7) + [ride(8, 100, **{'target_missed': {'resistance': 3}, **over})]) == [], over
+    assert best(5, recent([20] * 8), disc='rowing') == []
+
+
+def test_best_never_beside_its_own_scold():
+    assert best(20, recent([30] * 10)) == []
+    assert best(19, recent([30] * 10))
+    assert best(12, recent([15] * 10, metric='cadence'), metric='cadence') == []
+    assert best(11, recent([15] * 10, metric='cadence'), metric='cadence')
+    assert best(5, recent([15] * 10, metric='cadence'), metric='cadence')[0][2]['metric'] == 'cadence'
+
+
+def test_best_in_insights_follows_the_scolds():
+    history = [ride(1 + i, 100, target_missed={'resistance': 25, 'cadence': 5}) for i in range(10)]
+    t = ride(0, 100, target_missed={'resistance': 4, 'cadence': 30})
+    assert codes(insights(t, [t] + history)) == ['in_line', 'cadence_low', 'callout_best']
+    both = [ride(1 + i, 100, target_missed={'resistance': 25, 'cadence': 11}) for i in range(10)]
+    t = ride(0, 100, target_missed={'resistance': 4, 'cadence': 3})
+    assert [f['metric'] for c, _, f in insights(t, [t] + both) if c == 'callout_best'] == ['resistance', 'cadence']
+
+
 # 5.3 strength
 
 def missed_case(missed, total):

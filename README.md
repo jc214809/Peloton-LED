@@ -185,6 +185,8 @@ Every discipline then adds the graph and zone bar if they're available. Strength
 
 ![A tough class with no output insight behind it (a first Sims 60): the cheer, then the two ratings as bars](docs/screenshots/rotation/insights-tough-class-ratings.png)
 
+![Your best resistance in 20 rides (Jen's 15 min Low Impact Ride): 3% of the callout time missed against her usual 14%](docs/screenshots/rotation/insights-callout-best.png)
+
 ![Strength insights: go up a weight, then three classes in a row over target](docs/screenshots/rotation/insights-strength.png)
 
 ![Instructor milestones: your 200th class with Jess Sims, your first class with Zacharias Niedzwiecki, on both boards](docs/screenshots/rotation/insights-instructor.png)
@@ -196,6 +198,7 @@ Every discipline then adds the graph and zone bar if they're available. Strength
 | A tough class: rated 1+ point above the middle of your usual, your last 12 classes in that discipline from the past year (any class type or length, indoor or outdoor; warm-ups, cool-downs and classes under 10 minutes left out; needs 5). It takes the output insight's place, or stands alone when there's none, so a first class of a harder kind counts too; an easier class says nothing | Green | `WAY TO CHALLENGE YOURSELF!`, `YOU TOOK ON A 8.6 CLASS, YOUR USUAL IS 7.0.`, `LAST 12 ROWS`; bars `TOUGH CLASS` with the output and `8.6 → USUALLY 7.0`, or with no output insight the two ratings and `CLASS RATING` |
 | Output (bike, rower) or speed (tread, walk, run) against your typical | Green up, amber down, white when it's in your typical range | `OUTPUT DOWN VS YOUR TYPICAL / 124 W VS 188 W`; `SAME HEART, MORE POWER.` when your heart rate was within 3 bpm of typical, else `MORE WATTS PER HEARTBEAT.` |
 | Instructor callouts you missed (bike resistance or cadence, rower or tread pace) | Amber | the share of the callout time spent under the range |
+| Your best bike callouts: the least resistance or cadence callout time missed of your last 20 bike classes (none older than 90 days, needs 8), strictly, in a class of 15 minutes or more, when the middle of those 20 is 10% or more (so only where there's a habit to change) | Green | `YOUR BEST RESISTANCE IN 20 RIDES`, `3% MISSED`, `USUALLY 14%.`, `LAST 20 RIDES`; bars `TOP RESISTANCE`, today against `USUAL`, `TIME MISSED` |
 | Strength weights, from that movement's history, else the weight category's | Green, or amber for missed targets | `GO UP A WEIGHT ON BENT OVER ROW`, `WENT HEAVIER`, `GO UP FROM 40LB ON HEAVY: 3 CLASSES IN A ROW OVER TARGET`, missed rep targets |
 | Effort by heart rate | Red hardest, green easiest | `HARDEST RIDE OF YOUR LAST 12 BY HEART RATE`, `STRIVE PER MIN` |
 | Instructor milestone: a first class with an instructor, or your 5th, 10th, 25th, 50th, 100th, then every 100th (any discipline, from your workout log) | Gold | `YOUR 200TH` / `CLASS WITH` / `JESS SIMS!` and `SINCE MAR 2019`; `YOUR FIRST` / `CLASS WITH` / `ZACHARIAS` / `NIEDZWIECKI!` and `WELCOME!` |

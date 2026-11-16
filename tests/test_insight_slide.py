@@ -228,6 +228,23 @@ def test_blocks_frames(height):
         assert not lit(frame, DIM, [top], [63])
 
 
+@pytest.mark.parametrize('height', [32, 64])
+def test_callout_best_bars_frame(height):
+    # Today's share (green) is the shorter bar; the usual fills the width. The whole headline is drawn.
+    best = with_views(demo_ride(), view('callout_best'))
+    matrix = render_detail(best, height, 'insight_bars')
+    row, usual_row, width = (35, 48, 60) if height == 64 else (11, 19, 41)
+    today = len(lit(matrix, GREEN, [row], range(0, 42 if height == 32 else 64)))
+    assert 0 < today < width // 2                                             # 6% against 14%
+    assert len(lit(matrix, USUAL_BAR, [usual_row], range(64))) == width
+    assert lit(matrix, WHITE, range(height - 8, height), range(64))           # TIME MISSED
+    headline = lit(matrix, GREEN, range(0, 7) if height == 32 else range(14, 23), range(64))
+    assert max(x for x, _ in headline) > 50                                   # TOP RESISTANCE, not TOP
+    words = [render_detail(best, height, 'insight_card' if height == 64 else 'insight_words', page=p)
+             for p in ((None,) if height == 64 else (0, 1))]
+    assert all(lit(frame, GREEN, range(10, height), range(64)) for frame in words)  # 20, the shares
+
+
 def test_a_headline_too_wide_for_32_rows_keeps_its_first_word():
     bootcamp = with_views(demo_ride(), view('output_up', noun='bootcamp'))
     assert bootcamp['insights'][0]['headline'] == 'STRONG BOOTCAMP'
