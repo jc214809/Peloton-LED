@@ -13,7 +13,7 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 6 Workout compare: Cardio classes ── unlikely (measured 2026-11-12: too rare to say much); independent
 7-18, 20, 21, 24 Ideas (not yet sized) ── 10 trend charts share windows with item 1; 11 yearly goal and 14 weekly recap use `frame_stats`; 9 goes with 3; 24 builds on the challenges page (#114)
 25 Coasting between efforts, 26 Sprints under the callout ── after the "missed callout" rule (branch cadence-missed-rule); independent of each other
-27 Similar-class figure beside a callout flag, 28 "Best in 20 rides" callout insight ── after cadence-missed-rule; 29 Re-measure the callout bars ── from 2027-02-15
+27 Similar-class figure beside a callout flag ── after cadence-missed-rule; 29 Re-measure the callout bars ── from 2027-02-15
 22 Icon touch-ups (by hand) ── independent
 ```
 
@@ -264,12 +264,6 @@ Why context and not the trigger (Fable 5.2, 2026-11-15, past year, the output in
 - A per-rider bar (the rider's worst 10% of their last 20 rides) was also tried and rejected: it changed 7 rides in a year, mostly for the worse (it drifted up after bad stretches; Jen's 21% on 2026-11-13 would have been silent).
 
 To decide when building: show it only with 5+ scored peers; where it goes on the card and bars (the share figure today is one bar; a second "usual" bar like the output insight's), both heights; the Mac text. Needs `target_missed` on the peers, which every row built since branch `cadence-missed-rule` has (the boards' seeded rows don't until a re-push). Depends on: `cadence-missed-rule`.
-
-### 28. Callout insight: "best in your last 20 rides" (bike)
-The positive side of the callout flags, as a habit-change lever: a scold alone can't say "you're getting better". Fable 5.2's rule (2026-11-15): today's missed share (resistance or cadence) is strictly lower than every one of the rider's previous 20 bike classes (none older than 90 days, at least 8 of them), the class is 15 minutes or longer, and the rider's median over that window is 10% or more, so it only speaks where there's a habit to change.
-- Past year: Jen resistance 7 of 67 (11 of 141 over two years), cadence 0; Joel 0 for both. Without the median condition it praises 0-1% cadence rides (Jen 4, Joel 2).
-- Jen's resistance missed, by quarter over two years (oldest first): 13, 13.5, 11.5, 13, 9, 14, 15.5, 14. Flat apart from one good quarter (about Nov 2025 to Feb 2026), so the target is a level she has already ridden.
-To decide: headline and wording (e.g. `RESISTANCE: BEST IN 20 RIDES`), colour (green, like the tough class), the bars (today against the usual), its place among the two board slots, both heights; a new code in `insight_lines`. Depends on: `cadence-missed-rule`.
 
 ### 29. Re-measure the callout bars (from 2027-02-15)
 The bars were set on 2026-11-15 from the past year (cadence 12, resistance 20: the 90th percentile of both riders). About 90 days on, re-run the measurement (fires per rider; Jen's resistance median, 14 at the time): step resistance down to 17 by hand when her median is near 10 (in her good quarter, 17 fired on 3 of 13 rides; today it would fire on 10 of her last 36). The scripts were scratch (Fable's `sim.py` / `trend.py`); rebuild them from the private README's 2026-11-15 log entries. Depends on: nothing.

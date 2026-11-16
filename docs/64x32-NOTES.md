@@ -298,6 +298,11 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   With no output insight behind it the bars are the two ratings on a 0-10 scale (the figure's `top`: a 7.8
   fills 31 of the 64x32 bar's 40 px, not all of it) and the reason line is plain `CLASS RATING`, no arrow;
   the 64x64 bars label the usual `USUAL` (the figure's `usual_label`), with or without output.
+- Best callouts (green, `callout_best`): the headline is `TOP RESISTANCE` / `TOP CADENCE`, 14 characters at
+  most, so 64x32 keeps it whole (`BEST RESISTANCE` would have kept only `BEST`); the bars are today's missed
+  share against the usual (`3%`, `14%`), reason `TIME MISSED`; the sentence takes two pages,
+  `YOUR BEST` / `RESISTANCE IN` / `20 RIDES`, then `3% MISSED` / `USUALLY 14%.` 64x64 shows the same five
+  lines on one card, footer `LAST 20 RIDES`, and labels the usual `USUAL`.
 - A reason wider than 60 px (only a movement name) scrolls like the name page's highlights (hold, glide,
   hold; `UsernameScreen.scroll_offset`), the 2-px margins blanked.
 - Spacing (Joel, 2026-11-11): weights are one word, `40LB`, in the sentence, the reason and the 64x64 bars

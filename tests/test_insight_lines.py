@@ -25,6 +25,7 @@ SHOWN = {
     'missed_targets': {'missed': 3, 'sets': 9, 'movement': 'Bent Over Row'},
     'effort_high': {'n': 12, 'value': 29.4, 'noun': 'ride', 'rate': 0.98, 'usual_rate': 0.76},
     'effort_low': {'n': 5, 'value': 9.0, 'noun': 'ride', 'rate': 0.45, 'usual_rate': 0.76},
+    'callout_best': {'metric': 'resistance', 'pct': 6, 'usual': 14, 'n': 20},
 }
 # (headline, sentence, reason line, footer) from the plan's wording table.
 EXPECTED = {
@@ -51,6 +52,8 @@ EXPECTED = {
                     'VS 12 SIMILAR'),
     'effort_low': ('EASIEST BY HR', 'EASIEST RIDE OF YOUR LAST 5 BY HEART RATE.', 'STRIVE PER MIN',
                    '5 SIMILAR RIDES'),
+    'callout_best': ('TOP RESISTANCE', 'YOUR BEST RESISTANCE IN 20 RIDES: 6% MISSED. USUALLY 14%.', 'TIME MISSED',
+                     'LAST 20 RIDES'),
 }
 MOVEMENT_REASON = ('go_up_lighter', 'went_heavier')
 
@@ -65,6 +68,8 @@ def test_every_code_gives_a_view_with_the_planned_wording(code):
                'go_up_lighter': '20LB VS 30LB', 'went_heavier': '50LB VS 40LB'}
     if code in figures:
         assert figures[code] in view['lines64']
+    elif code == 'callout_best':  # each part starts a line
+        assert view['lines64'] == ['YOUR BEST', 'RESISTANCE IN', '20 RIDES', '6% MISSED', 'USUALLY 14%.']
     else:
         assert view['lines64'] == wrap(view['sentence'])
     assert sum(view['pages32'], []) == view['lines64']
@@ -76,7 +81,7 @@ def test_colours_follow_the_direction():
     assert {c for c, rgb in colour.items() if rgb == amber} == {
         'output_down', 'missed_targets', 'resistance_low', 'cadence_low', 'pace_low'}
     assert {c for c, rgb in colour.items() if rgb == green} == {
-        'output_up', 'go_up_lighter', 'go_up_streak', 'went_heavier', 'effort_low'}
+        'output_up', 'go_up_lighter', 'go_up_streak', 'went_heavier', 'effort_low', 'callout_best'}
     assert colour['effort_high'] == red and colour['in_line'] == (200, 205, 215)
 
 
@@ -195,6 +200,8 @@ WORST = [
     ('missed_targets', {'missed': 99, 'sets': 99, 'movement': 'Wide Grip Bent Over Row'}),
     ('effort_high', {'n': 99, 'noun': 'bootcamp', 'rate': 9.99, 'usual_rate': 9.99}),
     ('effort_low', {'n': 99, 'noun': 'class', 'rate': 0.01, 'usual_rate': 9.99}),
+    ('callout_best', {'metric': 'resistance', 'pct': 99, 'usual': 99.5, 'n': 20}),
+    ('callout_best', {'metric': 'cadence', 'pct': 0, 'usual': 100, 'n': 20}),
 ]
 
 
@@ -231,6 +238,27 @@ def test_hidden_unknown_and_missing_facts_give_none():
     assert board_view('pace_low', {'pct': 'many'}) is None
 
 
+def test_callout_best_view():
+    view = board_view('callout_best', {'metric': 'cadence', 'pct': 3, 'usual': 12.5, 'n': 8})
+    assert view['headline'] == 'TOP CADENCE' and view['footer'] == 'LAST 8 RIDES'
+    assert view['figure'] == {'kind': 'bars', 'today': 3, 'usual': 12.5, 'today_text': '3%', 'usual_text': '12%',
+                              'unit': '', 'usual_label': 'USUAL'}
+    assert view['pages32'] == [['YOUR BEST', 'CADENCE IN 8', 'RIDES'], ['3% MISSED', 'USUALLY 12%.']]
+    # The 64x32 bars frame keeps a headline's first word past 56 px (14 characters): both stay whole.
+    initialize_fonts(32)
+    for metric in ('resistance', 'cadence'):
+        headline = board_view('callout_best', {'metric': metric, 'pct': 3, 'usual': 12, 'n': 8})['headline']
+        assert get_text_width(loaded_fonts['stats'], headline) <= 56, headline
+
+
+@pytest.mark.parametrize('facts', [
+    {}, {'metric': 'power', 'pct': 3, 'usual': 12, 'n': 8}, {'metric': 'cadence', 'pct': 'x', 'usual': 12, 'n': 8},
+    {'metric': 'cadence', 'pct': 3, 'usual': 12, 'n': 0}, {'metric': 'cadence', 'pct': 3, 'usual': 12, 'n': True},
+    {'metric': 'cadence', 'pct': 3, 'usual': 12, 'n': '8'}, {'metric': None, 'pct': 3, 'usual': 12, 'n': 8}])
+def test_bad_callout_best_facts_give_no_view(facts):
+    assert board_view('callout_best', facts) is None
+
+
 def test_board_insights_keeps_order_and_stops_at_two():
     messages = [('freestyle', 'x', {}), ('too_few', 'y', {'n': 1}), ('cadence_low', 'z', {'pct': 40}),
                 ('output_down', 'a', {}), ('resistance_low', 'w', {'pct': 30}), ('pace_low', 'v', {'pct': 50})]
@@ -257,6 +285,11 @@ def test_real_insights_make_views_from_their_own_facts():
     assert board_insights(insights(t, [t]))[0]['figure'] == {'kind': 'share', 'pct': 28}
     t = ride(0, 100)
     assert board_insights(insights(t, [t])) == []
+    t = ride(0, 100, target_missed={'resistance': 4})
+    history = [ride(1 + i, 100, target_missed={'resistance': 15 + i}) for i in range(10)]
+    in_line, best = board_insights(insights(t, [t] + history))
+    assert best['headline'] == 'TOP RESISTANCE' and best['footer'] == 'LAST 10 RIDES'
+    assert (best['figure']['today_text'], best['figure']['usual_text']) == ('4%', '20%')
 
 
 # --- Instructor milestones: words only, gold ---
