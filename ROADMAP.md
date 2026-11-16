@@ -304,7 +304,11 @@ Why context and not the trigger (Fable 5.2, 2026-11-15, past year, the output in
 To decide when building: show it only with 5+ scored peers; where it goes on the card and bars (the share figure today is one bar; a second "usual" bar like the output insight's), both heights; the Mac text. Needs `target_missed` on the peers, which every row built since branch `cadence-missed-rule` has (the boards' seeded rows don't until a re-push). Depends on: `cadence-missed-rule`.
 
 ### 32. Judge the bike on output against the class plan, not cadence and resistance
-Joel's idea, 2026-11-16: what matters is the power, not how the rider made it. A rider who runs a heavier gear at a lower cadence, or the reverse, and still makes the output the callouts ask for, did the class. So judge a bike class on output against what the class planned, and let cadence and resistance speak only when the output fell short.
+Joel's words, 2026-11-16, as he said them:
+
+> I just want to add something to the roadmap while I'm thinking about it, but maybe how we should be judging people. Is around are you excelling at increasing your output? And projected output based on the class details versus whatever your getting out of the ride. So do cadence and resistance really matter if the combination of those two things is equal to or greater than the output that Peloton thinks you should be at? Does that make sense on how to add that in as a roadmap item?
+
+In short: what matters is the power, not how the rider made it. A rider who runs a heavier gear at a lower cadence, or the reverse, and still makes the output the callouts ask for, did the class. So judge a bike class on output against what the class planned, and let cadence and resistance speak only when the output fell short.
 
 Two parts:
 - **Output against the plan, per class.** The row already has the plan: `bike_plan` turns each callout's cadence and resistance into `planned_watts` through `BIKE_CURVE` (Peloton's power from cadence and resistance), with `planned_watts` (mean) and `planned_watts_high` in `row['plan']`. Compare the rider's actual watts over the same callout seconds (work segments only, as `_callouts` counts them) with the planned watts: "you made 112% of the class's plan". When it's at or over the plan, drop CADENCE LOW / RESISTANCE LOW for that class (or turn them into praise for the trade: "heavy gear, same power"); when it's under, the callout flags explain where the power went.
