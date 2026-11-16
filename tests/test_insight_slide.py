@@ -72,9 +72,24 @@ def test_the_frames_come_after_the_chart_slides_in_order():
     assert [d.get('kind') for d in rotating_details(strength, 64)][-3:] == ['muscles', 'insight_card', 'insight_bars']
 
 
-def test_at_most_two_views_are_kept():
-    ride = with_views(demo_ride(), view('resistance_low'), view('cadence_low'), view('pace_low'))
-    assert [v['code'] for v in insight_views(ride)] == ['resistance_low', 'cadence_low']
+def test_every_view_is_kept_up_to_four():
+    codes = ['resistance_low', 'cadence_low', 'pace_low', 'effort_high', 'effort_low']
+    ride = with_views(demo_ride(), *(view(code) for code in codes))
+    assert [v['code'] for v in insight_views(ride)] == codes[:4]
+
+
+def test_three_insights_each_get_their_frames_and_numbered_headers():
+    ride = with_views(demo_ride(), view('output_down', reason='easier'), view('effort_high'), view('callout_best'))
+    tall = rotating_details(ride, 64)
+    assert [(d.get('kind'), d.get('index')) for d in tall][-6:] == [
+        ('insight_card', 0), ('insight_bars', 0), ('insight_card', 1), ('insight_bars', 1),
+        ('insight_card', 2), ('insight_bars', 2)]
+    short = rotating_details(ride, 32)
+    assert [d.get('index') for d in short if d.get('kind') == 'insight_bars'] == [0, 1, 2]
+    third = render_detail(ride, 64, 'insight_bars', index=2)
+    assert lit(third, GREEN, range(14, 23), range(64))                        # TOP RESISTANCE
+    assert lit(third, GREY, range(3, 10), range(50, 63))                      # 3/3
+    assert third.image.tobytes() != render_detail(ride, 64, 'insight_bars', index=1).image.tobytes()
 
 
 def _damaged():

@@ -1484,7 +1484,7 @@ def insights_card(display, history=None, zone=None):
     None leaves it off). display: the config's display over DEFAULTS."""
     on = display.get('workout_insights') is True
     body = _switch('workout_insights', 'Show workout insights', on,
-                   "After the latest workout's charts, up to two comparisons with your similar earlier "
+                   "After the latest workout's charts, comparisons with your similar earlier "
                    'workouts, such as "Output down: 124 W vs your typical 188".')
     if history is not None:
         waiting = [rider['name'] for rider in history if rider['state'] != 'ready']

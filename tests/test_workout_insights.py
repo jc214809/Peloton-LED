@@ -988,9 +988,9 @@ def test_the_milestone_follows_a_tough_class_too():
     assert [v['code'] for v in board_insights(with_milestone(tough, milestone))] == ['tough_class', 'instructor_milestone']
 
 
-def test_the_milestone_counts_toward_the_two_the_board_shows():
+def test_the_milestone_is_shown_beside_every_other_insight():
     from peloton.insight_lines import board_insights
     from peloton.workout_insights import with_milestone
     milestone = ('instructor_milestone', '', {'n': 100, 'name': 'Jess Sims', 'since': '2019-03-02'})
     messages = with_milestone([('resistance_low', '', {'pct': 30}), ('cadence_low', '', {'pct': 40})], milestone)
-    assert [v['code'] for v in board_insights(messages)] == ['instructor_milestone', 'resistance_low']
+    assert [v['code'] for v in board_insights(messages)] == ['instructor_milestone', 'resistance_low', 'cadence_low']

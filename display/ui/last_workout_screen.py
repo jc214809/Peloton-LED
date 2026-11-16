@@ -347,7 +347,7 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
 
 # Workout compare frames (peloton/insight_lines.board_view), after the chart slides.
 INSIGHT_KINDS = ('insight_card', 'insight_bars', 'insight_words')
-MAX_INSIGHT_VIEWS = 2
+MAX_INSIGHT_VIEWS = 4   # insight_lines.MAX_BOARD_INSIGHTS: every insight a workout has
 # In a view's `reason_parts`: the part drawn as a 5x5 arrow (the font has none), in pixels ('#' lit).
 ARROW_PART = 'arrow'
 _ARROW_ROWS = ('..#..', '...#.', '#####', '...#.', '..#..')
@@ -436,7 +436,7 @@ def _good_view(view) -> bool:
 
 
 def insight_views(summary: dict) -> List[dict]:
-    """The workout's insight views (workout compare), at most two, skipping damaged ones: the cache could
+    """The workout's insight views (workout compare), at most MAX_INSIGHT_VIEWS, skipping damaged ones: the cache could
     hold anything. A version 2 `insight` (one dict) is never drawn."""
     views = summary.get('insights')
     if not isinstance(views, list):
@@ -718,7 +718,7 @@ def _disc_rgb(discipline: str):
 
 
 def _insight_header(matrix, discipline: str, index: int, count: int) -> None:
-    """64 rows: the bulb, INSIGHT in gold, 1/2 on the right when there are two, a discipline-colour rule."""
+    """64 rows: the bulb, INSIGHT in gold, 1/3 on the right when there are several, a discipline-colour rule."""
     stats = loaded_fonts['stats']
     _draw_bulb(matrix, 3, 2)
     _write(matrix, loaded_fonts.get('titles') or stats, 11, 9, _INSIGHT_GOLD, 'INSIGHT')

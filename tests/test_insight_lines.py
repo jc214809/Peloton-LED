@@ -4,7 +4,7 @@ import pytest
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from peloton.insight_lines import (EDGE_MAX, HIDDEN_CODES, LINE_MAX, LINES_32, LINES_64, MAX_BLOCKS, MAX_BOARD_INSIGHTS,
                                    board_insights, board_view, wrap)
-from peloton.workout_insights import insights
+from peloton.workout_insights import MAX_MESSAGES, insights
 from tests.test_workout_insights import effort, foot, heavier, lighter, ride, run_bike
 
 BIKE = {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 9, 'real': 9, 'reason': None}
@@ -259,12 +259,16 @@ def test_bad_callout_best_facts_give_no_view(facts):
     assert board_view('callout_best', facts) is None
 
 
-def test_board_insights_keeps_order_and_stops_at_two():
+def test_board_insights_keeps_order_and_stops_at_the_limit():
     messages = [('freestyle', 'x', {}), ('too_few', 'y', {'n': 1}), ('cadence_low', 'z', {'pct': 40}),
                 ('output_down', 'a', {}), ('resistance_low', 'w', {'pct': 30}), ('pace_low', 'v', {'pct': 50})]
-    assert MAX_BOARD_INSIGHTS == 2
-    assert [v['code'] for v in board_insights(messages)] == ['cadence_low', 'resistance_low']
-    assert [v['code'] for v in board_insights(messages, limit=3)] == ['cadence_low', 'resistance_low', 'pace_low']
+    # Every insight: the rules' three plus an instructor milestone.
+    assert MAX_BOARD_INSIGHTS == MAX_MESSAGES + 1 == 4
+    assert [v['code'] for v in board_insights(messages)] == ['cadence_low', 'resistance_low', 'pace_low']
+    assert [v['code'] for v in board_insights(messages, limit=2)] == ['cadence_low', 'resistance_low']
+    four = messages + [('effort_high', 'e', {'n': 12, 'value': 29.4, 'noun': 'ride', 'rate': 0.98, 'usual_rate': 0.76}),
+                       ('effort_low', 'f', {'n': 5, 'value': 9.0, 'noun': 'ride', 'rate': 0.45, 'usual_rate': 0.76})]
+    assert [v['code'] for v in board_insights(four)] == ['cadence_low', 'resistance_low', 'pace_low', 'effort_high']
     assert board_insights([('nothing', 'x', {'n': 5}), ('no_tracker', 'y', {})]) == []
     assert board_insights([]) == []
 

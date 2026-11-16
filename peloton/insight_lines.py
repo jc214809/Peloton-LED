@@ -11,7 +11,9 @@ LINE_MAX = 15
 LINES_64 = 5               # sentence lines on the 64x64 card
 LINES_32 = 3               # sentence lines on one 64x32 page
 PAGES_32 = 2
-MAX_BOARD_INSIGHTS = 2
+# The board shows every insight (Joel, 2026-11-15: a third was dropped on only 6 workouts in a year): the rules'
+# workout_insights.MAX_MESSAGES (3) plus an instructor milestone. Kept as a cap since the cache can hold anything.
+MAX_BOARD_INSIGHTS = 4
 MAX_BLOCKS = 30            # more counted sets than this are drawn as this many blocks, scaled
 # The words standing in for "usual" (swap them here). IN_LINE_WORD heads and leads an insight within the
 # usual range; TYPICAL_WORD names the usual figure (the median of the similar workouts) in sentences. The bars frame's
