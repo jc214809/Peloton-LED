@@ -811,7 +811,7 @@ def test_a_cached_version_2_insight_is_dropped_whether_the_switch_is_on_or_off(t
         assert 'insight' not in summary and summary['workout_id'] == 'w1'
 
 
-def test_the_board_keeps_the_first_two_shown_insights_in_order(tmp_path):
+def test_the_board_keeps_every_shown_insight_in_order(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path)
     messages = [('too_few', '', {'n': 1, 'noun': 'ride'}), ('resistance_low', '', {'pct': 30}),
                 ('cadence_low', '', {'pct': 40}), ('effort_high', '', {'n': 5})]  # effort: no rate, skipped
@@ -819,7 +819,7 @@ def test_the_board_keeps_the_first_two_shown_insights_in_order(tmp_path):
             patch('peloton.dashboard.insights', return_value=messages + [('pace_low', '', {'pct': 50})]):
         dashboard.refresh()
     views = dashboard.snapshot()['summaries'][0]['insights']
-    assert [view['code'] for view in views] == ['resistance_low', 'cadence_low']
+    assert [view['code'] for view in views] == ['resistance_low', 'cadence_low', 'pace_low']
 
 
 def test_the_board_store_drops_rows_past_the_window_when_it_loads(tmp_path):

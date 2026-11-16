@@ -82,7 +82,7 @@ Default order:
 
 | Section | What it shows | Shown when | Time on screen |
 |---|---|---|---|
-| [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one; optionally up to two insights comparing it with your similar workouts | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats), plus 1 s each for the graph, zone bar and each insight frame, per workout; then the PR card when there is one |
+| [`latest_workouts`](#latest_workouts--last-active-days-workouts) | Every workout from your most recent active day, then a PR celebration after a record-setting one; optionally insights comparing it with your similar workouts | Always (a status screen stands in when there's no workout data) | `last_workout_detail_interval` × (1 + number of stats), plus 1 s each for the graph, zone bar and each insight frame, per workout; then the PR card when there is one |
 | [`username`](#username--rider-name-and-highlights) | Your name over rotating highlights: total workouts, the two most interesting facts right now, then an instructor top 3 | Always | `duration`, shared by the highlights (at least 5 s each) |
 | [`streaks`](#streaks--weekly-and-daily-streaks) | Current weekly streak and your best, or your daily streak on alternate passes; or a weekend reminder when this week has no workout yet | Weekly streak above 0 or daily streak of 2+ days | `overview_duration` |
 | [`versus`](#versus--household-head-to-head) | Two riders side by side for this week | 2+ riders configured under `users` | `overview_duration` (64×32: shared by its 3 stats, at least 12 s) |
@@ -177,7 +177,7 @@ Every discipline then adds the graph and zone bar if they're available. Strength
 
 ![PR workout followed by the PR celebration](docs/screenshots/rotation/pr-celebration.png)
 
-**Workout insights** (off by default). After a workout's stats and charts, the board can say how it compared with your similar earlier workouts, in up to two insights. The comparisons work for Cycling, Bike Bootcamp, Rowing, Row Bootcamp, Running, Walking, Tread Bootcamp and Strength; instructor milestones work for every discipline. Every insight comes from fixed rules over your own numbers (no AI model), and a workout with nothing worth saying shows none.
+**Workout insights** (off by default). After a workout's stats and charts, the board can say how it compared with your similar earlier workouts, in up to four insights (usually none, one or two). The comparisons work for Cycling, Bike Bootcamp, Rowing, Row Bootcamp, Running, Walking, Tread Bootcamp and Strength; instructor milestones work for every discipline. Every insight comes from fixed rules over your own numbers (no AI model), and a workout with nothing worth saying shows none.
 
 ![Cycling insights: output down, then hardest ride by heart rate](docs/screenshots/rotation/insights-bike.png)
 
@@ -203,7 +203,7 @@ Every discipline then adds the graph and zone bar if they're available. Strength
 | Effort by heart rate | Red hardest, green easiest | `HARDEST RIDE OF YOUR LAST 12 BY HEART RATE`, `STRIVE PER MIN` |
 | Instructor milestone: a first class with an instructor, or your 5th, 10th, 25th, 50th, 100th, then every 100th (any discipline, from your workout log) | Gold | `YOUR 200TH` / `CLASS WITH` / `JESS SIMS!` and `SINCE MAR 2019`; `YOUR FIRST` / `CLASS WITH` / `ZACHARIAS` / `NIEDZWIECKI!` and `WELCOME!` |
 
-An instructor milestone is words only: one card on 64×64 and one page on 64×32 (`YOUR 200TH CLASS` / `WITH JESS SIMS!`), no bars. It comes after the output insight (or a tough class) and counts toward the two, and it needs your complete workout log (a class taught by two instructors counts for each). On 64×64 each other insight is a card (the sentence, and what it was compared with along the bottom: `9 SIMILAR RIDES`) and then bars (today against your typical, a share, or blocks for classes in a row). On 64×32 the bars come first, then the sentence on one or two pages of three lines. Each frame holds like a chart, `last_workout_detail_interval` plus one second, and adds to the workout page's time.
+An instructor milestone is words only: one card on 64×64 and one page on 64×32 (`YOUR 200TH CLASS` / `WITH JESS SIMS!`), no bars. It comes after the output insight (or a tough class), and it needs your complete workout log (a class taught by two instructors counts for each). On 64×64 each other insight is a card (the sentence, and what it was compared with along the bottom: `9 SIMILAR RIDES`) and then bars (today against your typical, a share, or blocks for classes in a row). On 64×32 the bars come first, then the sentence on one or two pages of three lines. Each frame holds like a chart, `last_workout_detail_interval` plus one second, and adds to the workout page's time.
 
 Turn it on with `"workout_insights": true` under `display`, or the settings page's **Workout insights** card. The board needs your workout history to compare with: copy it once from a Mac that has it with `scripts/push_workout_rows.sh user@board`. After that the board adds each new workout itself, with one extra Peloton request per new workout. The card shows how many workouts each rider has on the board, and warns when the switch is on and a rider has none (that rider just gets no insights). With the switch off the board makes no extra requests and doesn't load the history. Preview them with `python scripts/render_rotation.py --height 64 --demo --insights`.
 
@@ -435,7 +435,7 @@ Settings live under `display` in `config.json`. Invalid values produce a startup
 | `milestone_pages` | `3` | At most this many `next_milestone` pages, closest first (at least 1) |
 | `journey` | Columbus → Disney World, 880 mi, every workout with a distance | Lifetime miles shown as a trip: `{"from": "Columbus", "to": "Disney World", "miles": 880}`. Any places and distance; optional `"disciplines"` list narrows which workouts count (see [`journey`](#journey--lifetime-miles-as-a-trip)); also settable per rider under `users[]`. Optional `"start_date": "YYYY-MM-DD"` counts only miles from that day on (display timezone); changing it recounts the full history once on the next refresh |
 | `pr_max_age_days` | `null` | Skip PR celebrations for workouts older than this many days; `null` celebrates any PR not yet shown |
-| `workout_insights` | `false` | After the latest workout, up to two comparisons with your similar earlier workouts. See [Workout insights](#latest_workouts--last-active-days-workouts) |
+| `workout_insights` | `false` | After the latest workout, comparisons with your similar earlier workouts. See [Workout insights](#latest_workouts--last-active-days-workouts) |
 | `brightness_schedule` | `null` | Optional day/night brightness schedule. See [Phase 6 customization](#phase-6-customization) |
 | `refresh_schedule` | `null` | Optional overnight quiet-hours polling schedule. See [Phase 6 customization](#phase-6-customization) |
 

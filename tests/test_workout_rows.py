@@ -715,4 +715,5 @@ def test_script_describe_shows_the_board_slide(script):
         '2026-11-10 30 min Ride (abcdef12)', '  [too_few] Not enough.',
         '  [resistance_low] Turn the resistance up.', '  [cadence_low] Pick the cadence up.', '  [pace_low] Push.',
         '  board: RESISTANCE LOW | RESISTANCE UNDER THE CALLOUT 28% OF THE WORK: TURN IT UP.',
-        '  board: CADENCE LOW | CADENCE UNDER THE CALLOUT 40% OF THE WORK: PICK IT UP.']
+        '  board: CADENCE LOW | CADENCE UNDER THE CALLOUT 40% OF THE WORK: PICK IT UP.',
+        '  board: UNDER PACE | UNDER THE PACE TARGET 50% OF THE TIME: PUSH, OR DROP A LEVEL.']

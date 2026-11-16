@@ -261,7 +261,7 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
 - Every other page is unchanged on both boards (no cache had tracker data before this).
 
 ### Insight frames (both boards, `display.workout_insights`, card + bars 2026-11-11)
-- Replace version 2's two-line insight slide. At most 2 insights a workout (`MAX_BOARD_INSIGHTS`), after
+- Replace version 2's two-line insight slide. Every insight a workout has, at most 4 (`MAX_BOARD_INSIGHTS`; it was 2 until 2026-11-15), after
   the graph / zones / muscles slides; every frame holds 1 s longer, like those. 64x64 shows each as a card
   (the sentence) then bars; 64x32 as bars, then the sentence on 1-2 pages. Content from
   `peloton/insight_lines.board_view`.
@@ -272,7 +272,7 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   (145, 165, 190); an empty share bar or unlit block (70, 80, 95); the header gold (255, 200, 0). Sentence
   words with a digit take the discipline colour, the rest white.
 - 64x64 header: the 5x7 lightbulb at (3, 2), `INSIGHT` in `titles` at x 11 on baseline 9, `1/2` / `2/2`
-  right-aligned in `stats` grey when there are two, a 1-px discipline-colour rule on row 12 (columns 2-61)
+  (`1/3` ...) right-aligned in `stats` grey when there are several, a 1-px discipline-colour rule on row 12 (columns 2-61)
   in place of the title. Card: the sentence in up to 5 centred lines from baseline 21, 7 apart (vertically
   centred in 21-49 when shorter); the footer (`9 SIMILAR RIDES`, `VS 12 SIMILAR`, `5 CLOSEST RIDES`,
   `VS THE CALLOUTS`, `VS PAST CLASSES`) grey on baseline 61. Bars: the headline centred on baseline 22
