@@ -7,7 +7,7 @@ import pytest
 import requests
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.challenge_screen import (BLUE, GOLD, INTRO_SECONDS, RING_TRACK, SWEEP_SECONDS, TIER_COLORS, ChallengeScreen,
+from display.ui.challenge_screen import (GOLD, INTRO_SECONDS, RING_TRACK, SWEEP_SECONDS, TIER_COLORS, ChallengeScreen,
                                          compact_number, counted_shown, fitted_title, ring_pixels, tier_color)
 from peloton import dashboard as dashboard_module
 from peloton.cache import load_snapshot, save_snapshot
@@ -382,7 +382,19 @@ def test_the_32_row_bottom_line_puts_the_tier_left_when_both_fit():
     assert lit(annual, GOLD, range(25, 32)), '5K in gold on the left'
     rep = draw(slim_challenge(LARGEST[1]), 32)
     assert not lit(rep, TIER_COLORS['BRONZE'], range(25, 32)), '1,360 TO SILVER alone, centred'
-    assert len(lit(rep, BLUE, range(21, 24))) == 5 * 3, '140 of the 1,500 to 3,000: 5 of 58 columns'
+    assert len(lit(rep, TIER_COLORS['SILVER'], range(21, 24))) == 5 * 3, '140 of the 1,500 to 3,000: 5 of 58 columns'
+
+
+def test_the_32_row_bar_is_in_the_next_tiers_colour_like_the_ring():
+    initialize_fonts(32)
+    rows = range(21, 24)
+    to_silver = draw(slim_challenge(LARGEST[1]), 32)
+    assert lit(to_silver, TIER_COLORS['SILVER'], rows) and not lit(to_silver, TIER_COLORS['BRONZE'], rows)
+    to_bronze = draw(slim_challenge(LARGEST[4]), 32)
+    assert not lit(to_bronze, TIER_COLORS['SILVER'], rows) and lit(to_bronze, TIER_COLORS['BRONZE'], rows)
+    to_numbered = draw(slim_challenge(entry()), 32)  # 5K to 6K
+    assert lit(to_numbered, GOLD, rows)
+    assert lit(to_numbered, (0, 120, 255), rows) == set(), 'never the old blue'
 
 
 def test_the_ring_fills_clockwise_from_twelve_in_the_next_tiers_colour():
@@ -563,16 +575,17 @@ def test_the_biggest_values_count_up_inside_the_ring_and_the_bar(raw):
 
 def test_the_32_row_bar_fills_from_the_left_in_step_with_the_number():
     state = INTRO_CASES[3]  # 18,000 of 15,000-18,000: full
-    full = {x for x, _ in lit(draw(state, 32), BLUE, range(21, 24))}
+    colour = tier_color(state['next']['title'])
+    full = {x for x, _ in lit(draw(state, 32), colour, range(21, 24))}
     previous = -1
     for t in FRAMES:
         matrix = draw(state, 32, t)
-        bar = {x for x, _ in lit(matrix, BLUE, range(21, 24))}
+        bar = {x for x, _ in lit(matrix, colour, range(21, 24))}
         assert bar == set(range(3, 3 + len(bar))), 'filled from the left, no gaps'
         assert len(bar) >= previous and bar <= full
         previous = len(bar)
     assert previous == len(full) == 58
-    assert not lit(draw(state, 32, 0), BLUE, range(21, 24)), 'empty to begin with'
+    assert not lit(draw(state, 32, 0), colour, range(21, 24)), 'empty to begin with'
     assert lit(draw(state, 32, 0), (255, 255, 255), range(8, 19)), '0 before it counts'
 
 

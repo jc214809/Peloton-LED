@@ -16,6 +16,7 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 27 Similar-class figure beside a callout flag ── after cadence-missed-rule; 29 Re-measure the callout bars ── from 2027-02-15
 22 Icon touch-ups (by hand) ── independent
 30 Weekly goals from Peloton's Activity Goals ── independent; targets only (Peloton's week turns at UTC midnight)
+31 Redraw the 64x32 contact sheets ── independent
 ```
 
 Suggested order: 1, then the remaining items. Item 1 adds frames to a screen that shares its page time across frames (`peloton/screen_times.py`), so more stats mean a longer minimum page. Icon touch-ups (22) whenever Joel has time.
@@ -303,6 +304,9 @@ To decide when building: show it only with 5+ scored peers; where it goes on the
 
 ### 29. Re-measure the callout bars (from 2027-02-15)
 The bars were set on 2026-11-15 from the past year (cadence 12, resistance 20: the 90th percentile of both riders). About 90 days on, re-run the measurement (fires per rider; Jen's resistance median, 14 at the time): step resistance down to 17 by hand when her median is near 10 (in her good quarter, 17 fired on 3 of 13 rides; today it would fire on 10 of her last 36). The scripts were scratch (Fable's `sim.py` / `trend.py`); rebuild them from the private README's 2026-11-15 log entries. Depends on: nothing.
+
+### 31. Redraw the 64x32 contact sheets
+`docs/screenshots/64x32/` (`joel-rotation.png`, `jen-rotation.png`, `demo-rotation.png`; `docs/64x32-NOTES.md` points readers to them) was last drawn on 2026-10-18, before the challenges, next-class and Club Peloton pages and the workout insights, so it no longer shows the whole 32-row rotation. Redraw all three with `scripts/render_rotation.py --height 32` (the demo one with `--demo --insights`; Joel's and Jen's from their caches with `--config config.local.json`, never committing the caches), check every page against the 64x64 sheets, and fix anything that looks wrong as its own item. Found 2026-11-15 while redrawing the challenges screenshot. Depends on: nothing.
 
 ## Joel, by hand
 
