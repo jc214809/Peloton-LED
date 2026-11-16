@@ -24,7 +24,6 @@ from .screen import Screen
 WHITE = (255, 255, 255)
 GOLD = (255, 215, 0)
 GREY = (145, 165, 190)
-BLUE = (0, 120, 255)
 BAR_TRACK = (35, 35, 35)
 RING_TRACK = (28, 28, 34)
 # Named tiers in their own colour; numbered ones (`6K`) and any other name in gold.
@@ -280,9 +279,10 @@ class ChallengeScreen(Screen):
         number = counted_shown(state['shown'], grown)
         _centre(matrix, large, 18, WHITE, compact_number(number) if compact else number)
         left, right, top = 3, 60, 21
+        bar = tier_color(state['next']['title'])
         filled = round((right - left + 1) * tier_progress(state) * grown)
         for x in range(left, right + 1):
-            color = BLUE if x < left + filled else BAR_TRACK
+            color = bar if x < left + filled else BAR_TRACK
             for y in range(top, top + 3):
                 matrix.SetPixel(x, y, *color)
         line = remaining_line(state, small, 60)
