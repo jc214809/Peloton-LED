@@ -8,6 +8,7 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .booked_classes import TAKEOVER_MAX_MINUTES
 from .journey import DEFAULT_JOURNEY, DISTANCE_DISCIPLINES
 from .screen_times import retire_zero_times
 from .selection import normalize_discipline
@@ -32,6 +33,9 @@ DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration
             'milestone_pages': 3,
             # A PR older than this many days isn't celebrated; None celebrates any not yet shown.
             'pr_max_age_days': None,
+            # The Next class page takes over the panel this many minutes before a booked class starts
+            # (0 is off, up to TAKEOVER_MAX_MINUTES); only with next_class in rotation.
+            'next_class_takeover_minutes': 5,
             # Workout compare: the latest-workout page ends with one insight against similar earlier workouts.
             'workout_insights': False,
             'streak_reminder_day': 5,
@@ -346,6 +350,10 @@ def validate_config(config, path='config.json'):
         value = display.get(key)
         if isinstance(value, bool) or not isinstance(value, int) or value < lowest:
             raise ValueError(f'{path}: display.{key} must be a whole number of at least {lowest}')
+    takeover = display.get('next_class_takeover_minutes')
+    if isinstance(takeover, bool) or not isinstance(takeover, int) or not 0 <= takeover <= TAKEOVER_MAX_MINUTES:
+        raise ValueError(f'{path}: display.next_class_takeover_minutes must be a whole number of minutes '
+                         f'from 0 (off) to {TAKEOVER_MAX_MINUTES}')
     schedule = display.get('brightness_schedule')
     if schedule is not None:
         required = {'day', 'night', 'day_start', 'night_start'}

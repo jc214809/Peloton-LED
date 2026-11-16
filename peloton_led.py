@@ -7,10 +7,10 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from peloton.activity import daily_streak_start
-from peloton.booked_classes import next_booking
+from peloton.booked_classes import SHOWN_AFTER_START, next_booking, takeover_booking
 from peloton.challenges import shown_challenges
 from peloton.club import club_page
-from peloton.config import load_config, load_dotenv, user_cache_path, user_token_path
+from peloton.config import DEFAULTS, load_config, load_dotenv, user_cache_path, user_token_path
 from peloton.dashboard import Dashboard
 from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
                            week_start)
@@ -256,12 +256,22 @@ def _tick_seconds(manager):
     return TICK_SECONDS
 
 
-def show_and_wait(manager, name, state, duration, dashboard=None):
+# How often a long page checks for a next-class takeover (a page cut short is fine), and the pages that finish
+# first: a celebration is somebody's moment (Joel, 2026-11-15).
+TAKEOVER_CHECK_SECONDS = 1.0
+UNINTERRUPTED_PAGES = frozenset({'celebration', 'pr'})
+
+
+def show_and_wait(manager, name, state, duration, dashboard=None, interrupt=None):
+    """Show a page for `duration` seconds. `interrupt`, when given, is asked every TAKEOVER_CHECK_SECONDS and
+    cuts the page short when it returns true; returns whether it did."""
     manager.show(name, state)
     manager.tick(state)
     deadline = time.monotonic() + duration
+    next_check = time.monotonic() + TAKEOVER_CHECK_SECONDS
     previous = _overlays(dashboard)
     step = _tick_seconds(manager)
+    cut = False
     while time.monotonic() < deadline:
         time.sleep(min(step, max(0, deadline - time.monotonic())))
         current = _overlays(dashboard)
@@ -272,11 +282,115 @@ def show_and_wait(manager, name, state, duration, dashboard=None):
             manager.tick(state)
         elif getattr(getattr(manager, 'current', None), 'animated', False) is True:
             manager.tick(state)
+        if interrupt is not None and time.monotonic() >= next_check:
+            next_check = time.monotonic() + TAKEOVER_CHECK_SECONDS
+            if interrupt():
+                cut = True
+                break
     heartbeat.beat()  # for the updater's health check (self_update)
+    return cut
+
+
+class NextClassTakeover:
+    """From `display.next_class_takeover_minutes` before a booked class starts until TAKEOVER_END_AFTER_START
+    after, the next-class page holds the panel, whoever's rotation is showing.
+
+    Reads each rider's bookings from their dashboard's snapshot (no network). A rider counts only with
+    `next_class` in their rotation (bookings aren't fetched otherwise) and the setting above 0. The sooner start
+    wins; a tie goes to the first configured rider."""
+
+    def __init__(self, profiles, display, active=None):
+        self.profiles, self.display, self.active = profiles, display, active
+
+    def _display(self, profile):
+        return profile.get('display', self.display)
+
+    def due(self, now=None):
+        """(rider's index, booking) taking over now, or None."""
+        now = time.time() if now is None else now
+        best = None
+        for index, profile in enumerate(self.profiles):
+            display = self._display(profile)
+            minutes = display.get('next_class_takeover_minutes', DEFAULTS['next_class_takeover_minutes'])
+            if 'next_class' not in display.get('rotation', DEFAULT_ROTATION):
+                continue
+            booking = takeover_booking(profile['dashboard'].booked_classes(), now, minutes)
+            if booking is not None and (best is None or booking['start'] < best[1]['start']):
+                best = (index, booking)
+        return best
+
+    def pending(self):
+        return self.due() is not None
+
+    def _state(self, index, booking, now):
+        profile = self.profiles[index]
+        zone = self._display(profile).get('timezone')
+        if not zone:
+            zone = (profile['dashboard'].snapshot().get('me') or {}).get('timezone')
+        return {'booking': booking, 'now': now, 'timezone': zone}
+
+    def _label(self, index):
+        profile = self.profiles[index]
+        return profile.get('name') or profile.get('username') or f'rider {index + 1}'
+
+    def hold(self, manager):
+        """Hold the next-class page while a takeover is due, re-rendered with the time now so the countdown is
+        live. Shown once per takeover (the tag's pulse starts there and isn't reset again), checked every
+        TAKEOVER_CHECK_SECONDS: a booking that's gone ends it, a sooner one replaces it. Returns whether it
+        held. The padlock follows the rider whose class it is."""
+        found = self.due()
+        if found is None:
+            return False
+        restore = self.active['dashboard'] if self.active is not None else None
+        shown = step = state = previous = next_check = None
+        try:
+            while found is not None:
+                index, booking = found
+                key = (index, booking['id'], booking['start'])
+                if key != shown:
+                    if shown is not None:
+                        self._ended(shown)
+                    shown = key
+                    logger.info('Next-class takeover: %s, class at %s.', self._label(index), booking['start'])
+                    if self.active is not None:
+                        self.active['dashboard'] = self.profiles[index]['dashboard']
+                    state = self._state(index, booking, time.time())
+                    manager.show('next_class', state)
+                    manager.tick(state)
+                    step = _tick_seconds(manager)
+                    previous = _overlays(self.profiles[index]['dashboard'])
+                    next_check = time.monotonic() + TAKEOVER_CHECK_SECONDS
+                time.sleep(step)
+                state = {**state, 'booking': booking, 'now': time.time()}
+                current = _overlays(self.profiles[index]['dashboard'])
+                checking = time.monotonic() >= next_check
+                if current != previous:
+                    previous = current
+                    manager.matrix.Clear()
+                    manager.tick(state)
+                elif checking or getattr(getattr(manager, 'current', None), 'animated', False) is True:
+                    manager.tick(state)  # a still page redraws once a check; the pulse every frame
+                if checking:
+                    next_check = time.monotonic() + TAKEOVER_CHECK_SECONDS
+                    heartbeat.beat()
+                    found = self.due()
+        finally:
+            self._ended(shown)
+            if restore is not None:
+                self.active['dashboard'] = restore
+        heartbeat.beat()
+        return True
+
+    def _ended(self, key):
+        logger.info('Next-class takeover ended for %s (class at %s).', self._label(key[0]), key[2])
 
 
 def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None,
-                     first_pass=0):
+                     first_pass=0, takeover=None):
+    """Play `cycles` rotations (0 forever). `takeover`, a NextClassTakeover, is checked before every page and
+    every TAKEOVER_CHECK_SECONDS during one (not a celebration or PR page, which finish first). A page it cut
+    short plays again from its start once the takeover ends, except the next-class page, which the takeover
+    just showed (its time is refreshed when it plays, so it never counts down from a stale `now`)."""
     completed = 0
     while not cycles or completed < cycles:
         snapshot = dashboard.snapshot()
@@ -289,14 +403,30 @@ def run_display_loop(manager, dashboard, display, username_override=None, cycles
                                    timezone_name=profile.get('timezone'))
         pages = build_rotation_pages(snapshot, dashboard, display, username, matrix_height,
                                      rivals=rivals, pass_index=first_pass + completed)
-        for name, state, duration in pages:
-            show_and_wait(manager, name, state, duration, dashboard)
+        position = 0
+        while position < len(pages):
+            name, state, duration = pages[position]
+            if takeover is not None and takeover.hold(manager) and name == 'next_class':
+                position += 1
+                continue
+            if name == 'next_class':
+                now = time.time()
+                if state['booking']['start'] + SHOWN_AFTER_START <= now:
+                    position += 1  # it has been going long enough since this rotation was built
+                    continue
+                state = {**state, 'now': now}
+            extra = {}
+            if takeover is not None and name not in UNINTERRUPTED_PAGES:
+                extra['interrupt'] = takeover.pending
+            if show_and_wait(manager, name, state, duration, dashboard, **extra) is True:
+                continue  # cut short by a takeover: held at the top, then this page again
             if name == 'pr':
                 dashboard.acknowledge_pr(state.get('workout_id'))
             elif name == 'username':
                 dashboard.acknowledge_name_facts(state['fact_keys'])
             elif name == 'celebration' and state.get('milestone'):
                 dashboard.acknowledge_milestone(state['milestone'])
+            position += 1
         completed += 1
         if not any(page[2] for page in pages):
             time.sleep(0.05)  # Avoid a busy loop when all durations are zero.
@@ -323,6 +453,7 @@ def run_multi_user_loop(manager, profiles, display, active, cycles=0):
     (and between cycles). The first rotation goes without, since main() has just shown it."""
     completed = 0
     logo_duration = display.get('logo_duration', 0) if display.get('show_logo', True) else 0
+    takeover = NextClassTakeover(profiles, display, active)
     while not cycles or completed < cycles:
         show_wifi_setup_while_needed(manager)
         rivals = weekly_rivals(profiles)
@@ -334,7 +465,8 @@ def run_multi_user_loop(manager, profiles, display, active, cycles=0):
             # rotation uses their own display settings (weekly goals, milestones, journey).
             run_display_loop(manager, profile['dashboard'], profile.get('display', display),
                              profile.get('username'), cycles=1,
-                             rivals=rivals if index == 0 else None, first_pass=completed)
+                             rivals=rivals if index == 0 else None, first_pass=completed,
+                             takeover=takeover)
         completed += 1
 
 

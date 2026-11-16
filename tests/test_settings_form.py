@@ -295,6 +295,33 @@ def test_milestone_countdown_settings_save_blank_to_default_and_reject_bad_value
         assert problems and field in problems[0]
 
 
+def test_class_takeover_minutes_save_blank_to_default_zero_to_off_and_reject_bad_values():
+    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, next_class_takeover_minutes='7'))
+    assert problems == [] and new['display']['next_class_takeover_minutes'] == 7
+    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, next_class_takeover_minutes='0'))
+    assert problems == [] and new['display']['next_class_takeover_minutes'] == 0, 'off is saved, not dropped'
+    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, next_class_takeover_minutes=''))
+    assert problems == [] and 'next_class_takeover_minutes' not in new['display']
+    for value in ('11', '-1', '2.5'):
+        _, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, next_class_takeover_minutes=value))
+        assert problems and 'next_class_takeover_minutes' in problems[0], value
+
+
+def test_class_takeover_minutes_round_trip_through_the_timing_card():
+    for saved, shown in ((None, 'value=""'), (0, 'value="0"'), (8, 'value="8"')):
+        display = {k: v for k, v in TWO_RIDERS['display'].items() if k != 'next_class_takeover_minutes'}
+        if saved is not None:
+            display['next_class_takeover_minutes'] = saved
+        card = _card(page.settings_page({**TWO_RIDERS, 'display': display}), 'timing')
+        assert 'name="next_class_takeover_minutes"' in card and shown in card and 'placeholder="5"' in card
+        assert 'max="10"' in card
+        assert 'Class takeover' in card and '2 minutes after' in card
+    fields = posted(TWO_RIDERS)
+    assert fields['next_class_takeover_minutes'] == ['']
+    new, problems = apply_form(TWO_RIDERS, fields)
+    assert problems == [] and 'next_class_takeover_minutes' not in new['display']
+
+
 def test_each_rider_has_own_goals_or_everyones():
     form = posted(TWO_RIDERS, rider_0_workouts='', rider_0_minutes='', rider_0_milestones='',
                   rider_1_workouts='4', rider_1_milestones='50 100', rider_1_username='JenRides')
@@ -405,7 +432,7 @@ def test_number_fields_show_their_units():
     expected = {'duration_goals': 's', 'overview_duration': 's', 'refresh_interval': 's', 'logo_duration': 's',
                 'last_workout_detail_interval': 's', 'quiet_interval': 's', 'goal_minutes': 'min',
                 'goal_workouts': 'workouts', 'milestone_step': 'workouts', 'milestone_within': 'to go',
-                'milestone_pages': 'pages', 'rider_0_minutes': 'min', 'goal_active_days': 'days',
+                'milestone_pages': 'pages', 'next_class_takeover_minutes': 'min', 'rider_0_minutes': 'min', 'goal_active_days': 'days',
                 'rider_1_active_days': 'days',
                 'rider_1_workouts': 'workouts', 'bright_day': '%', 'bright_night': '%', 'matrix_brightness': '%',
                 'matrix_pwm_lsb_nanoseconds': 'ns', 'matrix_limit_refresh': 'Hz'}
