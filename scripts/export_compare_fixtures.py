@@ -42,7 +42,15 @@ EXPECTED = (
     ('joel', 'a9ad33b7', ['tough_class', 'effort_high']),
     ('joel', 'e9a1055b', ['in_line']),
     ('jen', 'f4c69f0d', ['in_line', 'effort_high']),
-    ('jen', '96bf6669', ['in_line', 'resistance_low', 'effort_low']),
+    # resistance_low until 2026-11-15: 26% under the range, but only 20% missed (under and short of the
+    # callout's floor watts), so the effort insight takes the second place.
+    ('jen', '96bf6669', ['in_line', 'effort_low']),
+    # cadence_low as well until 2026-11-15: 41% under the cadence range, mostly a heavier gear at the
+    # callout's power; 7% missed.
+    ('joel', '26749e7c', ['output_up']),
+    # 29% under, too few for the old 35% bar; 15% missed, over the new 12%.
+    ('joel', '9dabb98d', ['cadence_low']),
+    ('jen', 'cc9481a7', ['output_up', 'cadence_low']),
     # resistance_low until 2026-11-13: 25% under counted the break before the floor block; 24% in the riding.
     ('jen', '823e0327', ['output_down']),
     ('jen', '587c1988', ['in_line']),

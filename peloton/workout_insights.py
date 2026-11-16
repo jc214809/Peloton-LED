@@ -28,8 +28,11 @@ MIN_RATED = 5              # rated classes in the usual before its median means 
 USUAL_MIN_SECS = 600       # shorter classes (rated 3-4) are left out on both sides, as are ...
 USUAL_SKIP_TYPES = ('Warm Up', 'Cool Down')  # ... class types containing these
 # Callouts
-RESISTANCE_UNDER_PCT = 25  # share of callout time under the resistance range
-CADENCE_UNDER_PCT = 35
+# Bike: share of callout time missed (row['target_missed']: under the range and short of the callout's
+# floor watts). 12 for cadence from both riders' past year (Fable's rule, Joel 2026-11-15): about 1
+# ride in 8 each; at 10 several of Joel's rides sat right on the line.
+RESISTANCE_UNDER_PCT = 25
+CADENCE_UNDER_PCT = 12
 PACE_UNDER_PCT = 35        # Peloton's own below_target share (row, run)
 # Strength
 GO_UP_SESSIONS = 3         # classes in a row at this weight or lighter, every target beaten
@@ -198,16 +201,16 @@ def tough_class(target, rows, main):
 def callout_insights(target):
     """Single-workout messages about following the instructor's callouts. No peers needed."""
     out = []
-    under = target.get('target_under') or {}
+    missed = target.get('target_missed') or {}
     if target['disc'] in compare.BIKE:
-        if under.get('resistance', 0) >= RESISTANCE_UNDER_PCT:
+        if missed.get('resistance', 0) >= RESISTANCE_UNDER_PCT:
             out.append(('resistance_low', 'Turn the resistance up in the work segments: you were under the '
-                                          f"callout range {under['resistance']}% of the time.",
-                    {'pct': under['resistance']}))
-        if under.get('cadence', 0) >= CADENCE_UNDER_PCT:
+                                          f"callout range and short of its power {missed['resistance']}% of the time.",
+                    {'pct': missed['resistance']}))
+        if missed.get('cadence', 0) >= CADENCE_UNDER_PCT:
             out.append(('cadence_low', 'Pick the cadence up in the work segments: you were under the '
-                                       f"callout range {under['cadence']}% of the time.",
-                    {'pct': under['cadence']}))
+                                       f"callout range and short of its power {missed['cadence']}% of the time.",
+                    {'pct': missed['cadence']}))
     fit = target.get('pace_fit')
     if target['disc'] in ('rowing', 'row_bootcamp', 'running') and fit and (fit[0] or 0) >= PACE_UNDER_PCT:
         out.append(('pace_low', f'You were under the pace target {fit[0]}% of the time: push the pace, '
