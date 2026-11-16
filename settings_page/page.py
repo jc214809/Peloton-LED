@@ -12,6 +12,7 @@ from datetime import date as calendar_date
 from html import escape
 from zoneinfo import available_timezones
 
+from peloton.booked_classes import TAKEOVER_END_AFTER_START, TAKEOVER_MAX_MINUTES
 from peloton.config import DEFAULTS, GPIO_MAPPINGS, MATRIX_DEFAULTS, ROTATION_SECTIONS
 from self_update.github import FAILED, PASSED, REPO, RUNNING
 from self_update.state import ROLLBACK_FAILED, UNFINISHED
@@ -1556,7 +1557,14 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
 
     timing = _section('timing', 'Timing', 'How long pages last, and how often the board checks Peloton.', ''.join(
         timing_field(key, label, hint) for key, label, hint in TIMING
-    ), 'clock')
+    ) + _field('next_class_takeover_minutes', 'Class takeover',
+               _number('next_class_takeover_minutes', display.get('next_class_takeover_minutes'),
+                       DEFAULTS['next_class_takeover_minutes'],
+                       f' step="1" max="{TAKEOVER_MAX_MINUTES}" inputmode="numeric"', 'min'),
+               'The Next booked class page takes over the whole panel this many minutes before a booked '
+               'class starts (either rider\'s), until '
+               f'{TAKEOVER_END_AFTER_START // 60} minutes after. 0 for never. Only with that screen on.'),
+               'clock')
 
     shared_goals = section(display, 'weekly_goals')
     reminder = display.get('streak_reminder_day', STREAK_REMINDER_DEFAULT)

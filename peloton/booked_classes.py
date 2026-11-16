@@ -22,6 +22,10 @@ SHARED_FIRST_NAMES = frozenset({'ALEX', 'HANNAH', 'JESS', 'MARCEL'})
 LIVE, ENCORE = 'LIVE', 'ENCORE'
 # The page stays up this long after the start (`NOW` / `STARTING`), then the next booking takes its place.
 SHOWN_AFTER_START = 600
+# The next-class page takes over the panel from `display.next_class_takeover_minutes` (0 to TAKEOVER_MAX_MINUTES;
+# 0 is off) before a booked class starts until this long after the start: it must stay within SHOWN_AFTER_START.
+TAKEOVER_END_AFTER_START = 120
+TAKEOVER_MAX_MINUTES = 10
 # Within this long of the start the page counts down in minutes (`45 MIN` / `AT 2:15 PM`).
 MINUTES_WITHIN = 3600
 # Longest text kept from a response; anything longer is cut, never trusted to fit.
@@ -90,6 +94,16 @@ def next_booking(bookings, now):
         return None
     upcoming = [b for b in bookings if valid_booking(b) and b['start'] + SHOWN_AFTER_START > now]
     return min(upcoming, key=lambda b: b['start']) if upcoming else None
+
+
+def takeover_booking(bookings, now, minutes):
+    """The booking that takes over the panel now, or None: one starting within `minutes` (exactly: at `minutes`
+    to go, not a second earlier) that hasn't been going TAKEOVER_END_AFTER_START yet. The soonest start wins;
+    a tie goes to the first in the list. `minutes` 0 is off."""
+    if not minutes or not isinstance(bookings, list):
+        return None
+    due = [b for b in bookings if valid_booking(b) and -TAKEOVER_END_AFTER_START < b['start'] - now <= minutes * 60]
+    return min(due, key=lambda b: b['start']) if due else None
 
 
 def class_lines(booking):

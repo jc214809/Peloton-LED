@@ -39,7 +39,7 @@ SCREENS = (
      'progress and a tier still to reach.'),
     ('next_class', 'Next booked class',
      'The next live or encore class you booked in the Peloton app: when, the class and the instructor. '
-     'Only when one is booked.'),
+     'Only when one is booked. It takes over the whole panel just before the class starts (see Timing).'),
     ('club', 'Club Peloton',
      'Your Club Peloton level and points, and how many points to the next level.'),
 )
@@ -246,6 +246,7 @@ def apply_form(config, form):
     set_or_drop(display, 'milestone_step', 'milestone_step')
     for key in MILESTONE_KEYS:
         set_or_drop(display, key, key)
+    set_or_drop(display, 'next_class_takeover_minutes', 'next_class_takeover_minutes')  # 0 is off, blank is 5
     for key in RETIRED_DISPLAY_KEYS:
         display.pop(key, None)
     for index, user in riders(new):

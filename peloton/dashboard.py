@@ -200,6 +200,12 @@ class Dashboard:
         with self._lock:
             return deepcopy(self._data)
 
+    def booked_classes(self):
+        """Just the booked classes (a copy), for the takeover check the display loop makes every second: cheaper
+        than a whole snapshot. Never touches the network."""
+        with self._lock:
+            return deepcopy(self._data.get('booked_classes') or [])
+
     @property
     def login_required(self):
         with self._lock:
