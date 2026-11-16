@@ -320,6 +320,9 @@ def test_main_reads_the_keys_and_serves(tmp_path, monkeypatch):
     env.write_text('PUSHOVER_APP_TOKEN=tok\nPUSHOVER_USER_KEY=usr\nPELOTON_PASSWORD_RIDER_ONE=hunter2\n')
     environ = {}  # the process's own is shared with other tests (and may hold a .env's logins)
     monkeypatch.setattr(server.os, 'environ', environ)
+    # Not this checkout itself: it's no checkout inside a git worktree (.git a file) or under PELOTON_CHECKOUT.
+    checkout = str(tmp_path / 'Peloton-LED')
+    monkeypatch.setattr(server, 'default_checkout', lambda: checkout)
     served = []
 
     class FakeServer:
@@ -332,7 +335,7 @@ def test_main_reads_the_keys_and_serves(tmp_path, monkeypatch):
     settings, host, port = served[0]
     assert port == 9999 and settings.gate.pin_file == str(tmp_path / 'pin') and served[1] is True
     assert environ == {'PUSHOVER_APP_TOKEN': 'tok', 'PUSHOVER_USER_KEY': 'usr'}
-    assert settings.updates.app_dir == server.CODE_DIR, 'run from this checkout: it updates it'
+    assert settings.updates.app_dir == checkout, '--checkout defaults to default_checkout()'
     server.main(['--config', str(tmp_path / 'config.json'), '--checkout', '', '--port', '9999'])
     assert served[2][0].updates is None, 'no checkout: no Updates card'
 
@@ -431,6 +434,10 @@ def test_the_checkout_is_the_installers_or_this_codes_own(tmp_path):
     assert server.default_checkout({}, str(checkout)) == str(checkout), 'run from a checkout'
     assert server.default_checkout({}, str(plain)) is None, '/opt/peloton-led: no git, no card'
     assert server.default_checkout({'PELOTON_CHECKOUT': str(plain)}, str(plain)) is None, 'not a checkout'
+    worktree = tmp_path / 'worktree'
+    worktree.mkdir()
+    (worktree / '.git').write_text('gitdir: elsewhere\n')
+    assert server.default_checkout({}, str(worktree)) is None, 'a git worktree: its .git is a file, no card'
 
 
 def test_the_page_shows_each_riders_workout_history(board, tmp_path):
