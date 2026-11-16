@@ -88,16 +88,19 @@ class Tagger:
 
     def tag(self, kind, sha):
         """Tag sha and push the tag, retrying with the next number when another run took this one."""
+        why = ""
         for _ in range(PUSH_ATTEMPTS):
             self.git("fetch", "--force", "--tags", "origin")
             tag = tag_for(kind, self.tags(), self.git("tag", "--points-at", sha).stdout.split())
             self.git("tag", "--force", tag, sha)
-            if self.git("push", "origin", f"refs/tags/{tag}", check=False).returncode == 0:
+            pushed = self.git("push", "origin", f"refs/tags/{tag}", check=False)
+            if pushed.returncode == 0:
                 logging.info("Tagged %s %s", sha[:7], tag)
                 return tag
-            logging.warning("Couldn't push %s (another merge took it?): trying again", tag)
+            why = f"git exited {pushed.returncode}: {(pushed.stderr or '').strip()}"
+            logging.warning("Couldn't push %s (%s): trying again", tag, why)
             self.git("tag", "--delete", tag)
-        raise RuntimeError(f"couldn't push a {kind} tag for {sha[:7]} in {PUSH_ATTEMPTS} tries")
+        raise RuntimeError(f"couldn't push a {kind} tag for {sha[:7]} in {PUSH_ATTEMPTS} tries ({why})")
 
     def notes(self, tag, sha):
         """The release notes for tag on sha: what came in since the release before it, else since

@@ -91,12 +91,25 @@ def test_a_rerun_pushes_the_tag_the_commit_has(tmp_path):
     assert Tagger(str(tmp_path), git).tag("beta", "abc1234") == "v2.0.2-beta"
 
 
-def test_it_gives_up_after_a_few_tries(tmp_path):
+@pytest.mark.parametrize("stderr", ["", None])
+def test_it_gives_up_after_a_few_tries(tmp_path, stderr):
     def always_taken(args, **kwargs):
         code = 1 if args[1] == "push" else 0
-        return subprocess.CompletedProcess(args, code, "", "")
-    with pytest.raises(RuntimeError, match="couldn't push"):
+        return subprocess.CompletedProcess(args, code, "", stderr)
+    with pytest.raises(RuntimeError, match=r"couldn't push.*\(git exited 1: \)"):
         Tagger(str(tmp_path), always_taken).tag("beta", "abc1234")
+
+
+def test_a_push_failure_says_why_in_the_warning_and_the_final_error(tmp_path, caplog):
+    def denied(args, **kwargs):
+        if args[1] == "push":
+            return subprocess.CompletedProcess(args, 1, "", f"  remote: denied for {args[-1]}\n")
+        return subprocess.CompletedProcess(args, 0, "", "")
+    with caplog.at_level("WARNING"), pytest.raises(RuntimeError) as err:
+        Tagger(str(tmp_path), denied).tag("beta", "abc1234")
+    assert "(git exited 1: remote: denied for refs/tags/" in caplog.text
+    assert len(caplog.records) == auto_tag.PUSH_ATTEMPTS
+    assert str(err.value).endswith("in 5 tries (git exited 1: remote: denied for refs/tags/v0.0.1-beta)")
 
 
 def test_a_failing_git_command_is_an_error(tmp_path):
