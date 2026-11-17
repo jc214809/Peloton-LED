@@ -74,6 +74,14 @@ What's different from 64x64, and why:
    clock is showing, so it doesn't run under the icons. A two-line instructor
    name is not: it is drawn the same every time (2026-11-09, Joel) and an icon
    may cover its ends, since the icon says the board isn't fully working.
+7. **The class title runs edge to edge** (2026-11-16, Joel, on both heights):
+   it wraps at the full 64 px and a line may start at column 0. With a 2 px
+   margin, "Arms & Shoulders Strength" (64 px for its first two words) showed
+   as "Arms &" / "Shoulders Stren"; across both riders' logs that cut 231
+   workouts, now 94 (titles like "HiLit+: Low Impact Cardio W1 D1" still don't
+   fit in two lines). The icon clearance on the second line is unchanged, and
+   the first line's descenders never reach the icons' rows (checked over all
+   1,202 logged titles; `tests/test_64x32.py` `LONG_TITLES`).
 
 The old two-page 32-row layout (`display.compact_workout_pages`) was removed
 on 2026-11-08 at Joel's request; an old config's setting is ignored.
