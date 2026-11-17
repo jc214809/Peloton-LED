@@ -918,18 +918,19 @@ def _draw_short_lines(matrix, font, lines: List[str], top_y: int, summary: dict,
                       clear_icons: bool = True) -> None:
     """Up to two centered 4x6 lines, 7px apart, for the 32-row layout.
 
-    The second line sits on the bottom rows, so a workout title narrows it to clear the
-    login padlock (bottom right) and stale-data clock (bottom left) when shown. An instructor
-    name passes clear_icons=False: it is drawn the same every time and an icon may cover its
-    ends, which is the point of the icon.
+    Lines may run the panel's full width (a workout title is wrapped to it). The second line
+    sits on the bottom rows, so a workout title narrows it to clear the login padlock (bottom
+    right) and stale-data clock (bottom left) when shown. An instructor name passes
+    clear_icons=False: it is drawn the same every time and an icon may cover its ends, which
+    is the point of the icon.
     """
     w = matrix.width
     for i, line in enumerate(lines[:2]):
         if i == 1 and clear_icons:
-            left = 9 if summary.get('data_stale') else 2
-            right = 9 if summary.get('login_required') else 2
+            left = 9 if summary.get('data_stale') else 0
+            right = 9 if summary.get('login_required') else 0
             line = _truncate(font, line, w - 2 * max(left, right))
-        tx = max((w - _text_width(font, line)) // 2, 2)
+        tx = max((w - _text_width(font, line)) // 2, 0)
         _draw_text(matrix, font, tx, top_y + i * 7, _WHITE, line)
 
 
@@ -1054,7 +1055,9 @@ class LastWorkoutScreen(Screen):
             if summary.get("is_pr"):
                 _draw_trophy(matrix, w - _TROPHY_W - 2, 9)
             title = title_without_length(summary.get("title"))
-            title_lines = _wrap_two_lines(text_font, title, w - 4)
+            # The full width, edge to edge: a 2 px margin cut titles like "Arms & Shoulders Strength"
+            # mid-word (Joel, 2026-11-16).
+            title_lines = _wrap_two_lines(text_font, title, w)
             _draw_short_lines(matrix, text_font, title_lines, 22, summary)
             if len(title_lines) < 2:
                 # A one-line title leaves rows 24-31 free for the bar. A two-line one ends on
@@ -1138,6 +1141,7 @@ class LastWorkoutScreen(Screen):
         stat_details = rotating_details(summary, matrix.height)
         instructor_detail = next((d for d in all_details if d['label'] == 'instructor'), None)
         in_intro = self.elapsed < self.detail_interval
+        intro_without_hr = False  # set below when the instructor block needs the heart-rate row's rows
         if not in_intro and self._insight_frame(matrix, summary, discipline):
             return True
 
@@ -1178,9 +1182,10 @@ class LastWorkoutScreen(Screen):
 
             # ── Lines 3–4: title below the duration with a visible gap ──────
             title_stripped = title_without_length(summary.get("title"))
-            title_lines = _wrap_two_lines(text_font, title_stripped, w - 4)
+            # Edge to edge, as on 32 rows (Joel, 2026-11-16).
+            title_lines = _wrap_two_lines(text_font, title_stripped, w)
             for i, line in enumerate(title_lines[:2]):
-                tx = max((w - _text_width(text_font, line)) // 2, 2)
+                tx = max((w - _text_width(text_font, line)) // 2, 0)
                 _draw_text(matrix, text_font, tx, dur_y + 7 + i * 7, _WHITE, line)
             header_bottom = dur_y + 7 + max(len(title_lines[:2]) - 1, 0) * 7
 
@@ -1196,9 +1201,16 @@ class LastWorkoutScreen(Screen):
                 value_font = text_font
                 value_lines = _wrap_two_lines(value_font, instructor_detail['value'].upper(), w - 4)[:2]
                 mid_y = available_top + (available_bottom - available_top) // 2 - 3
-                show_label = len(value_lines) == 1
-                block_lines = (1 if show_label else 0) + len(value_lines)
+                show_label = True
+                block_lines = 1 + len(value_lines)
                 y = max(mid_y - 3 * (block_lines - 1), min_top) + two_line_extra
+                if len(value_lines) > 1:
+                    # Top to bottom: discipline, duration, title, the whole instructor block (caption
+                    # 2 blank rows under the title), then the heart-rate row, which is the first to go:
+                    # when the name's last line doesn't clear it (rows 56 on) by 2, the intro drops the
+                    # row, as 64x32 does under a two-line title; the stat frames keep it (Joel, 2026-11-17).
+                    y = max(y, header_bottom + 8)
+                    intro_without_hr = y + 8 + 7 > _BOTTOM_Y - 8
                 if show_label:
                     label_text = _truncate(stat_font, "INSTRUCTOR", w - 4)
                     lx = max((w - _text_width(stat_font, label_text)) // 2, 2)
@@ -1247,7 +1259,8 @@ class LastWorkoutScreen(Screen):
                     star_x = vx + get_text_width(value_font, value_text) + 2
                     _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)
 
-        _draw_hr_calories(matrix, summary, stat_font, _BOTTOM_Y)
+        if not intro_without_hr:
+            _draw_hr_calories(matrix, summary, stat_font, _BOTTOM_Y)
 
         # ── PR trophy, where the "PR" letters used to sit ─────────────────
         # Intro only: in the stats phase it would touch wide labels, and the

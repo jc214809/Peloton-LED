@@ -276,3 +276,103 @@ def test_pr_is_marked_with_a_trophy_on_both_boards(height):
 def test_titles_lose_the_length_the_page_shows(title, expected):
     from display.ui.last_workout_screen import title_without_length
     assert title_without_length(title) == expected
+
+
+# ---- the workout title runs edge to edge (Joel, 2026-11-16) ------------------------------------------------
+class EdgeMatrix(ImageMatrix):
+    """Counts lit pixels drawn off the panel (ImageMatrix drops them silently)."""
+    def Clear(self):
+        super().Clear()
+        self.off_panel = 0
+
+    def SetPixel(self, x, y, r, g, b):
+        if not (0 <= x < self.width and 0 <= y < self.height) and (r or g or b):
+            self.off_panel += 1
+        super().SetPixel(x, y, r, g, b)
+
+
+def white_text(monkeypatch, summary, height, elapsed=0.5):
+    """The (x, text) of every white string the page draws, checking nothing lands off the panel."""
+    import display.ui.last_workout_screen as screen_module
+    drawn, draw = [], screen_module._draw_text
+
+    def spy(matrix, font, x, y, color, text):
+        if color is screen_module._WHITE:
+            drawn.append((x, text))
+        return draw(matrix, font, x, y, color, text)
+    monkeypatch.setattr(screen_module, '_draw_text', spy)
+    initialize_fonts(height)
+    matrix = EdgeMatrix(height=height)
+    screen = LastWorkoutScreen()
+    screen.on_enter(matrix, summary)
+    screen.update(elapsed)
+    assert screen.render(matrix, summary)
+    assert matrix.off_panel == 0
+    return drawn
+
+
+@pytest.mark.parametrize('height', [32, 64])
+def test_a_title_that_fills_the_width_is_not_cut(monkeypatch, height):
+    # "Arms & Shoulders" is 64 px of 4x6 text: with a 2 px margin the page showed "Arms &" / "Shoulders Stren".
+    summary = {**STRENGTH, 'title': '20 min Arms & Shoulders Strength', 'instructor': 'Jess Sims'}
+    drawn = white_text(monkeypatch, summary, height)
+    assert (0, 'Arms & Shoulders') in drawn
+    assert 'Strength' in [text for _, text in drawn]
+
+
+# The longest titles in the riders' logs, plus the widest discipline header.
+LONG_TITLES = ['45 min Advanced Power Zone Endurance Ride', '20 min Arms & Shoulders Strength',
+               '33 min Post-Ride Stretch: Imagine Dragons', '10 min HiLit+: Lower Body Strength W2 D5',
+               '30 min Spring Cross-Training Core: W1 D3', '10 min Foam Rolling: Quads & Hamstrings',
+               '20 min Best Case of the Mondays Meditation', '15 min Teacher Appreciation Bodyweight',
+               '20 min Bad Boy Entertainment Full Body']
+
+
+@pytest.mark.parametrize('height', [32, 64])
+@pytest.mark.parametrize('flags', [{}, {'login_required': True}, {'data_stale': True},
+                                   {'login_required': True, 'data_stale': True}])
+@pytest.mark.parametrize('title', LONG_TITLES)
+def test_long_titles_stay_on_the_panel_and_clear_the_icons(monkeypatch, height, flags, title):
+    summary = {**STRENGTH, 'discipline': 'Tread Bootcamp', 'title': title, **flags}
+    drawn = white_text(monkeypatch, summary, height)
+    assert drawn and all(x >= 0 for x, _ in drawn)
+    if height == 32:
+        matrix = frame(summary, 0.5)
+        if flags.get('login_required'):
+            assert [y for y in rows_of(matrix, WHITE, range(55, 64)) if y >= 23] == []
+        if flags.get('data_stale'):
+            assert [y for y in rows_of(matrix, WHITE, range(0, 9)) if y >= 23] == []
+
+
+# ---- 64x64 intro, top to bottom: the instructor caption goes first when room runs out (Joel, 2026-11-17) ----
+@pytest.mark.parametrize('discipline', ['Tread Bootcamp', 'Bike Bootcamp'])  # one- and two-line headers
+def test_64_row_two_line_instructor_keeps_its_caption_under_a_one_line_title(discipline):
+    summary = {**STRENGTH, 'discipline': discipline, 'title': '30 min Walking Bootcamp',
+               'instructor': 'Kirsten Ferguson'}
+    matrix = frame(summary, 0.5, 64)
+    caption = rows_of(matrix, GREY)
+    heart = rows_of(matrix, HEART)
+    assert caption, 'INSTRUCTOR caption missing'
+    names = [y for y in rows_of(matrix, WHITE) if caption[-1] < y < heart[0]]
+    assert sum(1 for a, b in zip([None] + names, names) if a is None or b > a + 1) == 2  # two name lines
+    assert names[-1] <= heart[0] - 3  # two blank rows above the heart-rate row
+    title_bottom = max(y for y in rows_of(matrix, WHITE) if y < caption[0])
+    assert caption[0] - title_bottom >= 3  # two blank rows under the title
+
+
+@pytest.mark.parametrize('discipline', ['Strength', 'Bike Bootcamp'])  # one- and two-line headers
+def test_64_row_two_line_title_and_instructor_keep_the_caption_and_drop_the_heart_rate_row(monkeypatch, discipline):
+    # Caption and name don't clear the heart-rate row under a two-line title: the intro goes without the row.
+    summary = {**STRENGTH, 'discipline': discipline, 'title': '20 min Full Body Strength',
+               'instructor': 'Matty Maggiacomo'}
+    matrix = frame(summary, 0.5, 64)
+    caption = rows_of(matrix, GREY)
+    assert caption, 'INSTRUCTOR caption missing'
+    assert rows_of(matrix, HEART) == []
+    names = [y for y in rows_of(matrix, WHITE) if y > caption[-1]]
+    assert sum(1 for a, b in zip([None] + names, names) if a is None or b > a + 1) == 2
+    assert names[-1] <= 62
+    title_bottom = max(y for y in rows_of(matrix, WHITE) if y < caption[0])
+    assert caption[0] - title_bottom >= 3
+    white_text(monkeypatch, summary, 64)  # nothing off the panel
+    assert rows_of(frame(summary, 4.5, 64), HEART), 'stat frames keep the heart-rate row'
