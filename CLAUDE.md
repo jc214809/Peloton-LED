@@ -83,7 +83,7 @@ Read the note before changing its area; update it in the same PR.
 
 - `peloton_led.py`: entry point, `build_rotation_pages`, `show_and_wait`, the loops
 - `peloton/`: config, API client, dashboard (`dashboard.py` plus `dashboard_*.py` mixins) and cache, workout log and everything derived from it, name-page facts, workout compare, screen times, Pushover
-- `display/ui/`: one file per screen, plus `manager.py` and the overlays (padlock, stale clock, settings PIN, Wi-Fi setup)
+- `display/ui/`: one file per screen, plus `manager.py` and the overlays (padlock, stale clock, settings PIN, Wi-Fi setup); the latest-workout page is the package `display/ui/last_workout/` (`screen.py`, `tall_layout.py`, `short_layout.py`, `stats.py`, `rotation.py`, `charts.py`, `insight_frames.py`: see `docs/dev/SCREENS.md`)
 - `settings_page/`: the board's settings page (its own service, port 8080)
 - `self_update/`: `peloton-update`
 - `driver/`: rgbmatrix or the emulator

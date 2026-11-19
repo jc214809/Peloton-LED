@@ -4,9 +4,11 @@ from unittest.mock import Mock
 import pytest
 
 from display.display import initialize_fonts
-import display.ui.last_workout_screen as screen_module
-from display.ui.last_workout_screen import (GRAPH_FRAME_EXTRA_SECONDS, HR_ZONE_COLORS, MUSCLE_BUCKET_COLORS,
-                                           LastWorkoutScreen, detail_at, detail_hold_seconds, rotating_details)
+import display.ui.last_workout.rotation as rotation_module
+from display.ui.last_workout.charts import MUSCLE_BUCKET_COLORS
+from display.ui.last_workout.colors import HR_ZONE_COLORS
+from display.ui.last_workout.rotation import GRAPH_FRAME_EXTRA_SECONDS, detail_at, detail_hold_seconds, rotating_details
+from display.ui.last_workout.screen import LastWorkoutScreen
 from peloton.demo import demo_data
 from peloton.summaries import heart_rate_zone_seconds, muscle_groups, performance_graph, summarize_workout
 from peloton_led import build_rotation_pages
@@ -241,7 +243,7 @@ def test_muscle_slide_draws_bucket_colored_bars_scaled_to_the_top_muscle(height)
 
 def test_muscle_slide_fits_a_two_line_discipline_above_the_heart_rate_row(monkeypatch):
     # Only Strength shows it today; a discipline added later may wrap its header.
-    monkeypatch.setattr(screen_module, 'MUSCLE_DISCIPLINES', {'strength', 'bike bootcamp'})
+    monkeypatch.setattr(rotation_module, 'MUSCLE_DISCIPLINES', {'strength', 'bike bootcamp'})
     workout = {**demo_strength(), 'discipline': 'Bike Bootcamp'}
     pixels = render_slide(workout, 64, 'muscles').image.load()
     bar_rows = [y for y in range(64) if pixels[2, y] in MUSCLE_BUCKET_COLORS.values()]

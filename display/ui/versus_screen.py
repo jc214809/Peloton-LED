@@ -2,7 +2,7 @@
 from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
-from .last_workout_screen import _TROPHY_W, _draw_trophy
+from .last_workout.sprites import _TROPHY_W, _draw_trophy
 from .screen import Screen
 
 DETAIL_INTERVAL_SECONDS = 4.0
