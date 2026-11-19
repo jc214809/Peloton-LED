@@ -717,3 +717,13 @@ def test_script_describe_shows_the_board_slide(script):
         '  board: RESISTANCE LOW | RESISTANCE UNDER THE CALLOUT 28% OF THE WORK: TURN IT UP.',
         '  board: CADENCE LOW | CADENCE UNDER THE CALLOUT 40% OF THE WORK: PICK IT UP.',
         '  board: UNDER PACE | UNDER THE PACE TARGET 50% OF THE TIME: PUSH, OR DROP A LEVEL.']
+
+
+def test_script_last_stdout_is_pinned(script, config, tmp_path, monkeypatch, capsys):
+    no_client(script, monkeypatch)
+    seed_raw(tmp_path, 'aaaaaaaa1', 'bbbbbbbb2', 'cccccccc3')
+    assert run(script, config, tmp_path, '--dry-run', '--last', '2') == 0
+    too_few = '  [too_few] Not enough rides like this one to compare yet (0 in the last two years, 5 needed).\n'
+    assert capsys.readouterr().out == (
+        '2023-11-14 cycling (bbbbbbbb)\n' + too_few + '  board: (no slide)\n'
+        '2023-11-15 cycling (cccccccc)\n' + too_few + '  board: (no slide)\n')

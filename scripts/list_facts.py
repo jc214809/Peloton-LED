@@ -108,8 +108,7 @@ def compare_totals(snapshot):
     return rows
 
 
-def show(snapshot, passes):  # noqa: C901, PLR0912
-    frames = snapshot.get('time_frames') or {}
+def _print_frame_figures(frames):
     if not frames:
         print('No time-frame figures: the log is empty or its backfill is not complete (try --assume-complete).')
     for key in FRAME_ORDER + ('week',):
@@ -119,6 +118,9 @@ def show(snapshot, passes):  # noqa: C901, PLR0912
                   f'  instructors {stats["instructors"]:>3}  active days {stats["active_days"]:>3}'
                   f'/{stats["days"] if stats["days"] is not None else "-"}')
     print()
+
+
+def _print_overview_vs_log(snapshot):
     rows = compare_totals(snapshot)
     if rows:
         print('overview vs log (all time):')
@@ -126,6 +128,9 @@ def show(snapshot, passes):  # noqa: C901, PLR0912
             note = '' if overview == logged else '   <-- differs'
             print(f'   {label:<16} overview {overview if overview is not None else "-":>5}  log {logged:>5}{note}')
         print()
+
+
+def _print_frame_highlights(snapshot):
     for key in FRAME_ORDER:
         if not (frame_facts(snapshot, key) or frame_rankings(snapshot, key) or frame_subjects(snapshot, key)):
             continue
@@ -140,16 +145,30 @@ def show(snapshot, passes):  # noqa: C901, PLR0912
             print(f'   {headline["label"]:<16} {" / ".join(headline["lines"])}   then   '
                   + '  |  '.join(f'{d["label"]}: {d["lines"][0]} ({d["lines"][1]})' for d in ranking))
     print()
+
+
+def _print_scores(snapshot):
     print('scores (base + bonuses, before any cool-down):')
     for score, fact, _ranking in scored_facts(snapshot):
         print(f'   {score:>5.0f}  {fact["key"]:<34} {fact["label"]}: {" / ".join(fact["lines"])}')
     print()
+
+
+def _print_passes(snapshot, passes):
     snapshot = dict(snapshot, name_facts_passes=0, name_facts_shown={})
     for index in range(passes):
         details = username_details(snapshot, index)
         print(f'pass {index}: ' + ' | '.join(d['label'] for d in details))
         snapshot['name_facts_passes'], snapshot['name_facts_shown'] = record_name_facts(
             snapshot['name_facts_passes'], snapshot['name_facts_shown'], shown_keys(details))
+
+
+def show(snapshot, passes):
+    _print_frame_figures(snapshot.get('time_frames') or {})
+    _print_overview_vs_log(snapshot)
+    _print_frame_highlights(snapshot)
+    _print_scores(snapshot)
+    _print_passes(snapshot, passes)
 
 
 def main(argv=None):

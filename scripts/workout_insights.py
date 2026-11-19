@@ -98,7 +98,40 @@ def fetch_new(client, store, raw, log_path, limit):
     return sync(client, store, raw, ids, limit=limit)
 
 
-def main(argv=None):  # noqa: C901, PLR0912
+def fetch_and_store(options, name, token, store, raw, log_path, rows_path):
+    """The run's API half: (IDs stored, exit status). A dry run makes no calls."""
+    if options.dry_run:
+        log.info('Dry run: no API calls, nothing written')
+        return [], 0
+    added, status = [], 0
+    client = PelotonClient(make_session(token))
+    try:
+        added = fetch_new(client, store, raw, log_path, options.limit)
+    except LoginRequired as exc:
+        log.error('%s: the token for %s needs renewing; rows saved so far are kept', exc, name)
+        status = EXIT_LOGIN
+    finally:
+        client.close()
+    log.info('%d new workout(s) stored in %s', len(added), rows_path)
+    return added, status
+
+
+def choose_rows(options, store, rows, added):
+    """The rows to print: --workout, else --last, else what this run stored, else the latest."""
+    if options.workout:
+        chosen = [r for r in rows if r['id'].startswith(options.workout)]
+        if not chosen:
+            raise SystemExit(f'No stored workout {options.workout!r}')
+        return chosen
+    if options.last:
+        usable = [r for r in rows if r['disc'] in DISCIPLINES]
+        return sorted(usable, key=lambda r: r['start'])[-options.last:]
+    if added:
+        return sorted((store.rows[i] for i in added), key=lambda r: r['start'])
+    return [r for r in [latest(rows)] if r]
+
+
+def main(argv=None):
     options = args(argv)
     logging.basicConfig(level=logging.DEBUG if options.verbose else logging.INFO,
                         format='%(levelname)s %(name)s: %(message)s', stream=sys.stderr)
@@ -112,33 +145,9 @@ def main(argv=None):  # noqa: C901, PLR0912
     if import_raw(store, raw) and not options.dry_run:
         store.save()
 
-    added = []
-    status = 0
-    if options.dry_run:
-        log.info('Dry run: no API calls, nothing written')
-    else:
-        client = PelotonClient(make_session(token))
-        try:
-            added = fetch_new(client, store, raw, log_path, options.limit)
-        except LoginRequired as exc:
-            log.error('%s: the token for %s needs renewing; rows saved so far are kept', exc, name)
-            status = EXIT_LOGIN
-        finally:
-            client.close()
-        log.info('%d new workout(s) stored in %s', len(added), rows_path)
-
+    added, status = fetch_and_store(options, name, token, store, raw, log_path, rows_path)
     rows = list(store.rows.values())
-    if options.workout:
-        chosen = [r for r in rows if r['id'].startswith(options.workout)]
-        if not chosen:
-            raise SystemExit(f'No stored workout {options.workout!r}')
-    elif options.last:
-        usable = [r for r in rows if r['disc'] in DISCIPLINES]
-        chosen = sorted(usable, key=lambda r: r['start'])[-options.last:]
-    elif added:
-        chosen = sorted((store.rows[i] for i in added), key=lambda r: r['start'])
-    else:
-        chosen = [r for r in [latest(rows)] if r]
+    chosen = choose_rows(options, store, rows, added)
     if not chosen:
         print(f'No in-scope workouts stored for {name}.')
     for row in chosen:

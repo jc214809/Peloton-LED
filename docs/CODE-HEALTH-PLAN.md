@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails), phase 2a–2e and 2f wave 1 (parts A–C) merged (2026-11-18); 2f wave 2, parts D (`_callouts`, `build_row`, `bike_plan`, `output_insight`), E (`extract_discipline_totals`, `summarize_workout`, `event_facts`, `_measure_facts`, `retire_zero_times`) and F (`main`, `run_display_loop`, `UsernameScreen.render`) and H (`Updater._update`), **done**, awaiting merge; the rest of 2f (`scripts/`) and phase 3 planned. Roadmap item 33. Structural `noqa`s after part H: `C901` 4, `PLR0912` 3, `PLR0913` 12, `PLR0915` 1.
+Status: phase 1 and phase 2 done (2026-11-18/19): guardrails, 2a–2e, and 2f in three waves (parts A–H). Every `C901`, `PLR0912` and `PLR0915` baseline entry is gone; what's left are the `PLR0913` (too many arguments) entries, signature changes kept on purpose. Phase 3 planned. Roadmap item 33. Structural `noqa`s now: `C901` 0, `PLR0912` 0, `PLR0913` 12, `PLR0915` 0.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So
