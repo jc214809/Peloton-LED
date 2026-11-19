@@ -14,6 +14,8 @@ import pytest
 
 import settings_page.server as server
 from settings_page import logins, page
+from settings_page.page.alerts_section import alerts_card
+from settings_page.page.logins_section import _login_status, logins_card
 from settings_page.logins import (alert_state, credential_changes, read_auth_env, rider_logins, rider_paths,
                                   token_mode, update_auth_env, when)
 from tests.test_settings_form import TWO_RIDERS
@@ -454,11 +456,11 @@ def test_seed_command_names_the_checkout_owner(tmp_path, monkeypatch):
 
 
 def test_the_card_on_a_fresh_board(tmp_path):
-    html = page.logins_card({'riders': [], 'mode': None, 'seed': 'x'})
+    html = logins_card({'riders': [], 'mode': None, 'seed': 'x'})
     assert 'Unknown (an older install)' in html and 'No run since the board started' in html and 'Renew now' in html
-    assert page.logins_card(None) == '' and page.alerts_card(None) == ''
-    assert 'Off: no keys' in page.alerts_card({'pushover': False}) and 'Send a test alert' not in page.alerts_card({})
-    assert 'sign in with the PIN' in page.alerts_card({'pushover': True}, signed_in=False)
+    assert logins_card(None) == '' and alerts_card(None) == ''
+    assert 'Off: no keys' in alerts_card({'pushover': False}) and 'Send a test alert' not in alerts_card({})
+    assert 'sign in with the PIN' in alerts_card({'pushover': True}, signed_in=False)
 
 
 @pytest.mark.parametrize('value, expected', [('@1762264800', 1762264800.0), ('', None), (None, None), ('n/a', None),
@@ -511,11 +513,11 @@ def test_a_token_problem_says_what_it_means_and_keeps_its_capitals():
     login = RiderLogin(**{**fields, 'key': '0', 'name': 'Joel', 'token': {'ok': False, 'reason': 'JWT payload has no usable exp claim'},
                           'chain': None, 'padlock': None, 'browser_attempt': None, 'email_set': True,
                           'password_set': True})
-    html = page._login_status(login, {'mode': 'browser'}, None)
+    html = _login_status(login, {'mode': 'browser'}, None)
     assert '<span class="k">Token</span><span>The token file can&#x27;t be used (JWT payload has no usable exp claim)</span>' in html, 'JWT, not Jwt'
     assert html.startswith('<details class="rider-card" open>'), 'no working token: it opens by itself'
     missing = dataclasses.replace(login, token={'ok': False, 'reason': 'file does not exist'})
-    assert '<span>No token on this board yet</span>' in page._login_status(missing, {'mode': 'browser'}, None)
+    assert '<span>No token on this board yet</span>' in _login_status(missing, {'mode': 'browser'}, None)
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -555,7 +557,7 @@ def test_the_card_shows_the_interval_and_when_each_token_renews():
     next_check = 1762400000.0
     view = {'mode': 'no-browser', 'timer_next': next_check, 'display_running': True, 'seed': 'x',
             'riders': [_rider('Joel', next_check + 30 * 3600), _rider('Jen', next_check + 14 * 3600)]}
-    html = page.logins_card(view, zone=ZONE)
+    html = logins_card(view, zone=ZONE)
     assert '<dt>Interval</dt><dd>Every hour <span class="hint">&middot; each check renews only tokens within 12 hours' in html
     assert f'<dt>Next check</dt><dd>{logins.when(next_check, ZONE)}</dd>' in html
     jen = logins.when(next_check + 2 * 3600, ZONE)  # due 2 hours after the next check, on a check
@@ -569,7 +571,7 @@ def test_the_card_shows_the_interval_and_when_each_token_renews():
 def test_with_no_check_scheduled_it_renews_at_the_first_check_after_its_due():
     view = {'mode': 'no-browser', 'timer_next': None, 'display_running': False, 'seed': 'x',
             'riders': [_rider('Joel', 1762400000.0 + 13 * 3600)]}
-    html = page.logins_card(view, zone=ZONE)
+    html = logins_card(view, zone=ZONE)
     due = logins.when(1762400000.0 + 3600, ZONE)
     assert '<dt>Interval</dt><dd>Every hour while the display is on' in html
     assert f'<dt>Next renewal</dt><dd>At the first check after {due}' in html
@@ -578,11 +580,11 @@ def test_with_no_check_scheduled_it_renews_at_the_first_check_after_its_due():
 def test_no_renewal_time_without_a_way_to_renew():
     no_refresh = {'mode': 'no-browser', 'timer_next': 1762400000.0, 'seed': 'x',
                   'riders': [_rider('Joel', 1762400000.0 + 5 * 3600, chain=None)]}
-    assert 'Next renewal' not in page.logins_card(no_refresh) and 'Renews ' not in page.logins_card(no_refresh)
+    assert 'Next renewal' not in logins_card(no_refresh) and 'Renews ' not in logins_card(no_refresh)
     browser = {**no_refresh, 'mode': 'browser'}
-    assert 'Next renewal' in page.logins_card(browser), 'a browser board signs in without a refresh token'
+    assert 'Next renewal' in logins_card(browser), 'a browser board signs in without a refresh token'
     off = {**no_refresh, 'mode': 'none'}
-    assert 'Next renewal' not in page.logins_card(off) and '<dt>Interval</dt>' not in page.logins_card(off)
+    assert 'Next renewal' not in logins_card(off) and '<dt>Interval</dt>' not in logins_card(off)
 
 
 def test_the_remove_keys_button_removes_both_and_says_so(board):
@@ -598,5 +600,5 @@ def test_the_remove_keys_button_removes_both_and_says_so(board):
 
 
 def test_without_a_pin_session_there_is_no_remove_button():
-    html = page.alerts_card({'pushover': True}, signed_in=False)
+    html = alerts_card({'pushover': True}, signed_in=False)
     assert 'Send a test alert' in html and 'Remove keys' not in html

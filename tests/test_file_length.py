@@ -13,7 +13,6 @@ MAX_LINES = 600
 ALLOWED_OVER = {
     'peloton_led.py': 617,
     'scripts/refresh_cookies.py': 704,
-    'settings_page/page.py': 1748,
     'settings_page/server.py': 670,
 }
 
