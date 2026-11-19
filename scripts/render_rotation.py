@@ -96,7 +96,7 @@ def load_snapshot_for(options):
         from peloton.summaries import summarize_workout
         from peloton.totals import extract_discipline_totals, parse_streaks
         data = demo_data()
-        from peloton.dashboard import with_demo_insight
+        from peloton.dashboard_state import with_demo_insight
         switch = {'workout_insights': insights_enabled(options)}
         return {'me': data['me'], 'totals': extract_discipline_totals(data['overview']),
                 'summaries': [with_demo_insight(summarize_workout(w, data['performance'][w['id']]), data, switch)

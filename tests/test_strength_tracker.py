@@ -217,7 +217,7 @@ def test_the_insights_reuse_the_fetched_detail(tmp_path):
     from unittest.mock import patch
     dashboard, client, _ = strength_setup(tmp_path, {'workout_insights': True})
     client.get_ride_details.return_value = None
-    with patch('peloton.dashboard.build_row', side_effect=ValueError('no row')) as build:
+    with patch('peloton.dashboard_insight.build_row', side_effect=ValueError('no row')) as build:
         dashboard.refresh()
     assert client.get_workout_detail.call_count == 1
     assert build.call_args.args[0]['movement_tracker_data']   # the same detail went to the row

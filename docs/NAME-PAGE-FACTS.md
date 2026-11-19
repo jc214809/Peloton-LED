@@ -63,7 +63,7 @@ No idea below needs a new API call.
 |---|---|
 | Workout log (`<cache>.workouts.json`, `peloton/workout_log.py`) | Per workout: start time (date, weekday, hour), discipline, class ID (`ride_id`), title, class length, output (kJ), distance, calories, instructor (or group), output and splits PR flags, Strive score (`effort_points`), seconds in each heart-rate zone, streak eligibility |
 | Dashboard cache | Discipline totals, streaks (`best_weekly`, `current_weekly`, `current_daily`), personal records by discipline and length (`cycling\|30 min: 289.9 kJ`), weekly progress |
-| Profile (fetched daily) | Only `id`, `username`, `timezone`, `height_unit`, `created_at` are kept (`PROFILE_KEYS` in `peloton/dashboard.py`; `created_at` since step 5). Adding a key costs nothing: `total_followers`, `cycling_workout_ftp`, `estimated_cycling_ftp`, `badge_level` |
+| Profile (fetched daily) | Only `id`, `username`, `timezone`, `height_unit`, `created_at` are kept (`PROFILE_KEYS` in `peloton/dashboard_state.py`; `created_at` since step 5). Adding a key costs nothing: `total_followers`, `cycling_workout_ftp`, `estimated_cycling_ftp`, `badge_level` |
 
 ## Built
 
@@ -450,7 +450,7 @@ Planned:
 
 
 - Since, last time, on this day, firsts and comebacks, all from the log.
-- Anniversary: keep `created_at` in `PROFILE_KEYS` (`peloton/dashboard.py`); a test checks the
+- Anniversary: keep `created_at` in `PROFILE_KEYS` (`peloton/dashboard_state.py`); a test checks the
   slimmed profile still holds no personal fields beyond it.
 
 ### Step 6: choosing what's interesting: done (branch `facts-step-6-scoring`)
