@@ -8,7 +8,7 @@ from PIL import Image
 
 from display import display as display_module
 from display.display import initialize_fonts
-from display.ui.last_workout_screen import HR_ZONE_COLORS
+from display.ui.last_workout.colors import HR_ZONE_COLORS
 from display.ui.logo_art import LABEL_GREY, MARK_HEIGHT, MARK_WIDTH, PELOTON_RED, ZONE_COLORS, mark_pixels, zone_color
 from display.ui.logo_mask_screen import WHITE, LogoMaskScreen
 from scripts import render_logo

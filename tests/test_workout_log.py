@@ -16,6 +16,7 @@ from peloton.instructors import merge_instructor_counts
 from peloton.journey import merge_distance_totals
 from peloton.workout_log import LOG_VERSION, WorkoutLog, default_log_path, trim
 import peloton.dashboard as dashboard_module
+import peloton.dashboard_history as dashboard_history
 from tests.test_dashboard import recent_fetches, setup_dashboard
 
 NOW = time.time()
@@ -365,12 +366,12 @@ def test_rewalk_waits_for_quiet_hours_when_a_schedule_is_set(tmp_path):
     dashboard, client, _ = _dashboard(tmp_path, _history(30), refresh_schedule=schedule)
     _refresh(dashboard)
     client.history.pop()
-    with patch.object(dashboard_module, 'in_quiet_hours', return_value=False), \
+    with patch.object(dashboard_history, 'in_quiet_hours', return_value=False), \
          patch.object(dashboard_module.Dashboard, '_start_history_walk') as start:
         for _ in range(4):
             dashboard.refresh()
         start.assert_not_called()
-    with patch.object(dashboard_module, 'in_quiet_hours', return_value=True):
+    with patch.object(dashboard_history, 'in_quiet_hours', return_value=True):
         _refresh(dashboard)
     assert len(WorkoutLog.load(dashboard.log_path).workouts) == 29
 

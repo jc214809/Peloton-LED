@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails) **done** on branch `code-health-guardrails`, awaiting merge (2026-11-18); phase 2d (split `settings_page/page.py`) **done** on branch `split-settings-page`, awaiting merge (2026-11-18); the rest of phase 2 and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2d: `C901` 34, `PLR0912` 25, `PLR0913` 12, `PLR0915` 16.
+Status: phase 1 (guardrails), 2a (split `last_workout_screen.py`), 2b (split `peloton/dashboard.py`) and 2c (`validate_config` table-driven) merged (2026-11-18); phase 2d (split `settings_page/page.py`) **done** on branch `split-settings-page`, awaiting merge (2026-11-18); the rest of phase 2 and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2d: `C901` 27, `PLR0912` 20, `PLR0913` 12, `PLR0915` 9.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So

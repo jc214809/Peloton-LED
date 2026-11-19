@@ -96,7 +96,7 @@ def load_snapshot_for(options):
         from peloton.summaries import summarize_workout
         from peloton.totals import extract_discipline_totals, parse_streaks
         data = demo_data()
-        from peloton.dashboard import with_demo_insight
+        from peloton.dashboard_state import with_demo_insight
         switch = {'workout_insights': insights_enabled(options)}
         return {'me': data['me'], 'totals': extract_discipline_totals(data['overview']),
                 'summaries': [with_demo_insight(summarize_workout(w, data['performance'][w['id']]), data, switch)
@@ -125,7 +125,7 @@ def frame_times(name, state, duration, detail_interval, height=64):  # noqa: C90
     """Seconds into the page at which to capture a frame."""
     if name == 'last_workout':
         # One frame per intro/stat, at each one's own start: graph frames hold longer.
-        from display.ui.last_workout_screen import detail_hold_seconds, rotating_details
+        from display.ui.last_workout.rotation import detail_hold_seconds, rotating_details
         starts, start = [0.0], detail_interval
         for detail in rotating_details(state, height):
             starts.append(start)
@@ -163,7 +163,8 @@ def render(options):  # noqa: C901, PLR0912, PLR0915
     from display.display import initialize_fonts
     from display.ui.discipline_page import DisciplinePageScreen
     from display.ui.goal_screen import GoalScreen
-    from display.ui.last_workout_screen import LastWorkoutScreen, LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+    from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+    from display.ui.last_workout.screen import LastWorkoutScreen
     from display.ui.lifetime_overview import LifetimeOverviewScreen
     from display.ui.logo_mask_screen import LogoMaskScreen
     from display.ui.pr_celebration import PrCelebrationScreen

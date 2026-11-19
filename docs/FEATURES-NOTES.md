@@ -60,8 +60,8 @@ heart-rate and zone data from it.
   series so demo mode and the tests show the graph.
 
 Code: `performance_graph` / `heart_rate_zone_seconds` in `peloton/summaries.py`;
-`_draw_graph` / `_draw_zones` / `rotating_details` in
-`display/ui/last_workout_screen.py`; tests in `tests/test_workout_graph.py`.
+`_draw_graph` / `_draw_zones` in `display/ui/last_workout/charts.py`, `rotating_details` in
+`display/ui/last_workout/rotation.py`; tests in `tests/test_workout_graph.py`.
 
 ## #1 Streak screen
 

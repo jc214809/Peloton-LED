@@ -11,6 +11,7 @@ from display.ui.club_screen import (BAR_LEFT, BAR_RIGHT, BAR_TRACK, BOOST, FACET
                                     GEM_COLORS, GEM_ROWS, SHAPE_OF, TEXT_COLORS, ClubScreen, gem_pixels, next_line,
                                     points_line)
 from peloton import dashboard as dashboard_module
+from peloton import dashboard_fetch
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.club import (LEVELS, NOT_A_MEMBER, club_page, gem_kind, level_from_me, parse_score, tier_fraction,
                           valid_club)
@@ -221,7 +222,7 @@ def test_the_score_is_fetched_every_6_hours_and_cached(tmp_path, monkeypatch):
     clock['now'] += 300
     dashboard.refresh()
     assert client.get_club_score.call_count == 1, 'not again within 6 hours'
-    clock['now'] += dashboard_module.CLUB_REFRESH_SECONDS
+    clock['now'] += dashboard_fetch.CLUB_REFRESH_SECONDS
     client.get_club_score.return_value = score(points=13700)
     dashboard.refresh()
     assert client.get_club_score.call_count == 2
@@ -252,14 +253,14 @@ def test_a_failed_fetch_keeps_the_last_figures_and_retries_sooner(tmp_path, monk
         client.get_club_score.return_value = {'progress_bar': 'nope'}  # malformed
     else:
         client.get_club_score.side_effect = failure
-    clock['now'] += dashboard_module.CLUB_REFRESH_SECONDS
+    clock['now'] += dashboard_fetch.CLUB_REFRESH_SECONDS
     dashboard.refresh()
     snapshot = dashboard.snapshot()
     assert snapshot['club'] == before and snapshot['status'] == 'ready', 'the refresh still succeeds'
     assert not dashboard.login_required, 'the undocumented host never asks for a login'
     client.get_club_score.side_effect = None
     client.get_club_score.return_value = CHAMPION
-    clock['now'] += dashboard_module.CLUB_RETRY_SECONDS - 1
+    clock['now'] += dashboard_fetch.CLUB_RETRY_SECONDS - 1
     dashboard.refresh()
     assert client.get_club_score.call_count == 2
     clock['now'] += 1

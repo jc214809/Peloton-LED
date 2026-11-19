@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import unittest  # noqa: F401  side effect: selects the emulator graphics
 from PIL import Image, ImageDraw
 from display.display import initialize_fonts
-from display.ui.last_workout_screen import LastWorkoutScreen
+from display.ui.last_workout.screen import LastWorkoutScreen
 from display.ui.discipline_page import DisciplinePageScreen
 from display.ui.lifetime_overview import LifetimeOverviewScreen
 from display.ui.username import UsernameScreen

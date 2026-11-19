@@ -607,7 +607,7 @@ def _seed_peers(dashboard, outputs):
 def test_new_workout_fetches_detail_and_ride_once_and_gets_an_insight(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
-    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)) as build:
+    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)) as build:
         dashboard.refresh()
         summary = dashboard.snapshot()['summaries'][0]
         assert summary['insights'][0]['code'] == 'in_line'
@@ -631,8 +631,8 @@ def test_new_workout_fetches_detail_and_ride_once_and_gets_an_insight(tmp_path):
 def test_a_detail_without_a_class_makes_no_ride_call(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path)
     client.get_workout_detail.return_value = {'id': 'w1', 'status': 'COMPLETE', 'start_time': 1}
-    with patch('peloton.dashboard.build_row', return_value=_fake_row()), \
-            patch('peloton.dashboard.insights', return_value=[('nothing', '', {})]):
+    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row()), \
+            patch('peloton.dashboard_insight.insights', return_value=[('nothing', '', {})]):
         dashboard.refresh()
     client.get_ride_details.assert_not_called()
     assert 'insights' not in dashboard.snapshot()['summaries'][0]
@@ -669,7 +669,7 @@ def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_the
     from peloton.workout_rows import RowStore
     saves = []
     real_save = RowStore.save
-    with patch('peloton.dashboard.build_row', side_effect=lambda *_: next(rows)) as build, \
+    with patch('peloton.dashboard_insight.build_row', side_effect=lambda *_: next(rows)) as build, \
             patch.object(RowStore, 'save', autospec=True, side_effect=lambda store: saves.append(1) or real_save(store)):
         dashboard.refresh()
         assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'  # no hour's wait
@@ -700,8 +700,8 @@ def test_insights_are_recomputed_only_when_the_row_store_changes(tmp_path):
     from peloton.workout_insights import insights as real_insights
     dashboard, client, token = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
-    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)), \
-            patch('peloton.dashboard.insights', side_effect=real_insights) as computed:
+    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)), \
+            patch('peloton.dashboard_insight.insights', side_effect=real_insights) as computed:
         for _ in range(3):
             dashboard.refresh()
         assert computed.call_count == 1
@@ -770,7 +770,7 @@ def test_other_http_errors_in_the_insight_are_swallowed(tmp_path):
 def test_a_failing_row_save_is_logged_and_the_insight_still_shows(tmp_path, caplog):
     dashboard, client, _ = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
-    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)), \
+    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)), \
             patch('peloton.workout_rows.RowStore.save', side_effect=OSError('read-only')):
         dashboard.refresh()
     assert 'Could not save the workout rows' in caplog.text
@@ -789,7 +789,7 @@ def test_switch_off_makes_no_extra_calls_and_loads_no_store(tmp_path):
 def test_the_cache_keeps_the_insight_and_a_switched_off_board_strips_it(tmp_path):
     dashboard, client, token = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
-    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)):
+    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)):
         dashboard.refresh()
     on = Dashboard(token, {'workout_insights': True}, client_factory=lambda _: client)
     assert on.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'
@@ -815,8 +815,8 @@ def test_the_board_keeps_every_shown_insight_in_order(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path)
     messages = [('too_few', '', {'n': 1, 'noun': 'ride'}), ('resistance_low', '', {'pct': 30}),
                 ('cadence_low', '', {'pct': 40}), ('effort_high', '', {'n': 5})]  # effort: no rate, skipped
-    with patch('peloton.dashboard.build_row', return_value=_fake_row()), \
-            patch('peloton.dashboard.insights', return_value=messages + [('pace_low', '', {'pct': 50})]):
+    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row()), \
+            patch('peloton.dashboard_insight.insights', return_value=messages + [('pace_low', '', {'pct': 50})]):
         dashboard.refresh()
     views = dashboard.snapshot()['summaries'][0]['insights']
     assert [view['code'] for view in views] == ['resistance_low', 'cadence_low', 'pace_low']
@@ -831,7 +831,7 @@ def test_the_board_store_drops_rows_past_the_window_when_it_loads(tmp_path):
     old['start'] = time.time() - 800 * 86400
     store.upsert(old)
     store.save()
-    with patch('peloton.dashboard.build_row', return_value=_fake_row('w1', 112)):
+    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)):
         dashboard.refresh()
     saved = RowStore.load(default_rows_path(dashboard.cache_path))
     assert 'old' not in saved.rows and {'p0', 'w1'} <= set(saved.rows)
@@ -926,7 +926,7 @@ def test_the_milestone_is_off_with_the_switch(tmp_path):
 
 def test_a_failing_milestone_never_fails_the_refresh(tmp_path, caplog):
     dashboard, client, _ = _milestone_setup(tmp_path, 49)
-    with patch('peloton.dashboard.class_numbers', side_effect=ValueError('boom')):
+    with patch('peloton.dashboard_insight.class_numbers', side_effect=ValueError('boom')):
         dashboard.refresh()
     assert dashboard.snapshot()['status'] == 'ready' and 'instructor_milestone' not in _codes(dashboard)
     assert 'Instructor milestone failed (ValueError)' in caplog.text
