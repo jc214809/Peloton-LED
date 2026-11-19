@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails) **done** on branch `code-health-guardrails`, awaiting merge (2026-11-18); phase 2a (split `last_workout_screen.py`) **done** on branch `split-last-workout-screen`, awaiting merge (2026-11-18); the rest of phases 2 and 3 planned. Roadmap item 33.
+Status: phase 1 (guardrails) and phase 2a (split `last_workout_screen.py`) merged (2026-11-18); phase 2b (split `peloton/dashboard.py`) **done** on branch `split-dashboard`, awaiting merge (2026-11-18); the rest of phases 2 and 3 planned. Roadmap item 33.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So

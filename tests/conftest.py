@@ -23,7 +23,7 @@ def parse_each_font_once():
 @pytest.fixture(autouse=True)
 def no_history_batch_pause(monkeypatch):
     """History walks pause a second between batches on a board; not in tests."""
-    monkeypatch.setattr('peloton.dashboard.HISTORY_BATCH_PAUSE_SECONDS', 0)
+    monkeypatch.setattr('peloton.dashboard_history.HISTORY_BATCH_PAUSE_SECONDS', 0)
 
 
 @pytest.fixture(autouse=True)
