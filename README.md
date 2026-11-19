@@ -536,7 +536,7 @@ Live mode cycles through every completed workout on the latest active day. Every
 ## Code map
 
 - `peloton_led.py`: startup and screen rotation
-- `peloton/config.py`: loading and validating `config.json`, per-rider settings
+- `peloton/config.py`, `peloton/config_rules.py`: loading and validating `config.json` (a table of checks), per-rider settings
 - `peloton/dashboard.py`, `peloton/cache.py`: background refresh, token reload, snapshots, and recovery
 - `peloton/api.py`: authenticated requests and bounded history pagination
 - `peloton/workout_log.py`: every workout as a slim row, the source of everything derived
