@@ -2,9 +2,10 @@
 import pytest
 
 from display.display import initialize_fonts
-from display.ui.last_workout_screen import (GRAPH_FRAME_EXTRA_SECONDS, INSIGHT_KINDS, LastWorkoutScreen,
-                                           _draw_insight_frame, detail_hold_seconds, insight_views,
-                                           rotating_details)
+from display.ui.last_workout.insight_data import INSIGHT_KINDS, insight_views
+from display.ui.last_workout.insight_frames import _draw_insight_frame
+from display.ui.last_workout.rotation import GRAPH_FRAME_EXTRA_SECONDS, detail_hold_seconds, rotating_details
+from display.ui.last_workout.screen import LastWorkoutScreen
 from peloton.demo import demo_data
 from peloton.insight_lines import board_view
 from peloton_led import build_rotation_pages
@@ -336,7 +337,7 @@ def test_the_demo_shows_the_frames_only_with_the_switch_on():
 def test_the_word_after_a_colon_sits_closer(height):
     from display.display import loaded_fonts
     from display.display import get_text_width
-    from display.ui.last_workout_screen import COLON_GAP_TRIM, _centred, _words_width
+    from display.ui.last_workout.text import COLON_GAP_TRIM, _centred, _words_width
     initialize_fonts(height)
     font = loaded_fonts['stats']
     assert _words_width(font, 'GO UP: HEAVY') == get_text_width(font, 'GO UP: HEAVY') - COLON_GAP_TRIM

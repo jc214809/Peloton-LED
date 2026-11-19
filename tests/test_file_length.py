@@ -11,9 +11,7 @@ MAX_LINES = 600
 
 # path: current maximum. Remove an entry once the file is at most MAX_LINES.
 ALLOWED_OVER = {
-    'display/ui/last_workout_screen.py': 1271,
-    'peloton/dashboard.py': 973,
-    'peloton_led.py': 618,
+    'peloton_led.py': 617,
     'scripts/refresh_cookies.py': 704,
     'settings_page/page.py': 1748,
     'settings_page/server.py': 670,

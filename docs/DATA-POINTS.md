@@ -160,5 +160,5 @@ The board writes each stat the way Peloton sends it:
   working Peloton login.
 - 91 workouts is a sample. A stat marked blank was in none of them; a rare
   workout type could still carry it.
-- To refresh the "board shows" side, read `_stat_details` and the bottom row in
-  `display/ui/last_workout_screen.py`.
+- To refresh the "board shows" side, read `_stat_details` in `display/ui/last_workout/stats.py` and the bottom row
+  (`_draw_hr_calories`) in `display/ui/last_workout/stat_rows.py`.

@@ -8,7 +8,7 @@ from peloton_led import (build_rotation_pages, configured_profiles, main,
                          run_display_loop, run_multi_user_loop, scheduled_brightness)
 from peloton.dashboard import Dashboard
 from display.ui.manager import ScreenManager
-from display.ui.last_workout_screen import LastWorkoutScreen
+from display.ui.last_workout.screen import LastWorkoutScreen
 from display.ui.username import UsernameScreen
 from display.ui.discipline_page import DisciplinePageScreen
 from display.ui.lifetime_overview import LifetimeOverviewScreen
@@ -167,7 +167,7 @@ def test_long_discipline_name_with_max_stat_rows_does_not_collide():
 
 
 def test_last_workout_screen_keeps_discipline_title_through_stats_phase():
-    from display.ui.last_workout_screen import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+    from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
 
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
@@ -220,7 +220,8 @@ def test_two_line_title_leaves_extra_gap_above_instructor(discipline):
 
 
 def test_last_workout_screen_shows_instructor_in_intro_then_rotates_stats():
-    from display.ui.last_workout_screen import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, _stat_details
+    from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+    from display.ui.last_workout.stats import _stat_details
 
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
@@ -501,7 +502,7 @@ def test_configured_rotation_order_and_disabled_sections():
 
 
 def test_last_workout_duration_stretches_to_fit_every_stat():
-    from display.ui.last_workout_screen import _stat_details
+    from display.ui.last_workout.stats import _stat_details
 
     dashboard = Mock()
 

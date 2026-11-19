@@ -10,6 +10,7 @@ from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.challenge_screen import (GOLD, INTRO_SECONDS, RING_TRACK, SWEEP_SECONDS, TIER_COLORS, ChallengeScreen,
                                          compact_number, counted_shown, fitted_title, ring_pixels, tier_color)
 from peloton import dashboard as dashboard_module
+from peloton import dashboard_fetch
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.challenges import (UNEARNED, format_number, parse_challenges, short_title, shown_challenges,
                                 slim_challenge, tier_progress, valid_challenge)
@@ -175,7 +176,7 @@ def test_challenges_are_fetched_hourly_and_cached(tmp_path, monkeypatch):
     clock['now'] += 300
     dashboard.refresh()
     assert client.get_current_challenges.call_count == 1, 'not again within the hour'
-    clock['now'] += dashboard_module.CHALLENGES_REFRESH_SECONDS
+    clock['now'] += dashboard_fetch.CHALLENGES_REFRESH_SECONDS
     client.get_current_challenges.return_value = response(entry(value=5600, shown='5,600', to_next='400'))
     dashboard.refresh()
     assert client.get_current_challenges.call_count == 2
@@ -195,13 +196,13 @@ def test_a_failed_fetch_keeps_the_last_list_and_retries_sooner(tmp_path, monkeyp
         client.get_current_challenges.return_value = {'challenges': 'nope'}  # malformed
     else:
         client.get_current_challenges.side_effect = failure
-    clock['now'] += dashboard_module.CHALLENGES_REFRESH_SECONDS
+    clock['now'] += dashboard_fetch.CHALLENGES_REFRESH_SECONDS
     dashboard.refresh()
     snapshot = dashboard.snapshot()
     assert snapshot['challenges'] == before and snapshot['status'] == 'ready', 'the refresh still succeeds'
     client.get_current_challenges.side_effect = None
     client.get_current_challenges.return_value = response()
-    clock['now'] += dashboard_module.CHALLENGES_RETRY_SECONDS - 1
+    clock['now'] += dashboard_fetch.CHALLENGES_RETRY_SECONDS - 1
     dashboard.refresh()
     assert client.get_current_challenges.call_count == 2
     clock['now'] += 1

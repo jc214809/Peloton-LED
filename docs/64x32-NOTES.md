@@ -86,8 +86,8 @@ What's different from 64x64, and why:
 The old two-page 32-row layout (`display.compact_workout_pages`) was removed
 on 2026-11-08 at Joel's request; an old config's setting is ignored.
 
-Code: `LastWorkoutScreen._render_short` and `rotating_details` in
-`display/ui/last_workout_screen.py`; tests in `tests/test_64x32.py`.
+Code: `render_short` in `display/ui/last_workout/short_layout.py` and `rotating_details` in
+`display/ui/last_workout/rotation.py`; tests in `tests/test_64x32.py`.
 
 ### Username details (done)
 The two white value lines (e.g. `2 WORKOUTS` / `35 MINUTES`) were 5px apart
