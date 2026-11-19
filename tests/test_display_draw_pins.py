@@ -264,3 +264,72 @@ def test_pr_celebration_frame_unchanged(case):
 @pytest.mark.parametrize('case', sorted(STAR_PINS))
 def test_pr_star_pixels_unchanged(case):
     assert star_hash(*case) == STAR_PINS[case]
+
+
+# The fallbacks below never run in the rotation, so they're checked directly.
+
+def test_pr_card_too_wide_value_drops_to_the_headline_font(monkeypatch):
+    initialize_fonts(64)
+    import display.ui.pr_celebration as pr
+    drawn = []
+    monkeypatch.setattr(pr, '_centered', lambda matrix, font, y, color, text: drawn.append((y, font)))
+    monkeypatch.setattr(pr, 'get_text_width', lambda font, text: 999 if text.endswith('KJ') else 10)
+    screen = PrCelebrationScreen()
+    screen.update(3.0)
+    screen.render(ImageMatrix(64, 64), {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412})
+    fonts = dict(drawn)
+    assert fonts[44] is fonts[29]  # the value is drawn in the headline's font
+
+
+class _Canvas:
+    width = height = 8
+
+
+class _Graphics:
+    """driver.graphics stand-in: records pixels, and can fail lines or pixels like a bare canvas."""
+
+    def __init__(self, line_fails=False, pixel_fails_at=()):
+        self.line_fails, self.pixel_fails_at = line_fails, set(pixel_fails_at)
+        self.lines, self.pixels = [], []
+
+    def DrawLine(self, matrix, x0, y0, x1, y1, color):
+        if self.line_fails:
+            raise RuntimeError('no DrawLine')
+        self.lines.append((x0, y0, x1, y1))
+
+    def DrawPixel(self, matrix, x, y, color):
+        if (x, y) in self.pixel_fails_at:
+            raise RuntimeError('no pixel')
+        self.pixels.append((x, y))
+
+
+SQUARE = [(1, 1), (5, 1), (5, 5), (1, 5)]  # two horizontal edges, which add no crossings
+
+
+def _fill(monkeypatch, poly, fake):
+    import display.ui.pr_star as pr_star
+    monkeypatch.setattr(pr_star, 'graphics', fake)
+    PrStarScreen()._scanline_fill_polygon(_Canvas(), poly, 'gold')
+    return fake
+
+
+def test_star_fill_draws_one_span_per_row(monkeypatch):
+    fake = _fill(monkeypatch, SQUARE, _Graphics())
+    assert fake.lines == [(1, y, 5, y) for y in range(1, 5)]
+
+
+def test_star_fill_falls_back_to_pixels_and_skips_ones_that_fail(monkeypatch):
+    fake = _fill(monkeypatch, SQUARE, _Graphics(line_fails=True, pixel_fails_at={(3, 2)}))
+    assert fake.pixels == [(x, y) for y in range(1, 5) for x in range(1, 6) if (x, y) != (3, 2)]
+
+
+@pytest.mark.parametrize('poly', [[], [(0, 2), (6, 2), (3, 2)]])
+def test_star_fill_draws_nothing_without_a_shape(monkeypatch, poly):
+    fake = _fill(monkeypatch, poly, _Graphics())
+    assert fake.lines == [] and fake.pixels == []
+
+
+def test_star_fill_stops_a_row_on_an_unpaired_crossing(monkeypatch):
+    monkeypatch.setattr(PrStarScreen, '_crossings', staticmethod(lambda edges, y: [1.0, 4.0, 6.0]))
+    fake = _fill(monkeypatch, SQUARE, _Graphics())
+    assert fake.lines == [(1, y, 4, y) for y in range(8)]
