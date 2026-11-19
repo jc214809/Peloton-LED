@@ -89,5 +89,5 @@ Read the note before changing its area; update it in the same PR.
 - `self_update/`: `peloton-update`
 - `driver/`: rgbmatrix or the emulator
 - `utils/`: matrix settings, health heartbeat, Wi-Fi setup state
-- `scripts/`: token login/renewal (`refresh_cookies.py`), board seeding, previews (`render_rotation.py`), fact and insight checks, release tagging
+- `scripts/`: token login/renewal (`refresh_cookies.py`; its token-file helpers are in `token_files.py`), board seeding, previews (`render_rotation.py`), fact and insight checks, release tagging
 - `packaging/`: systemd units and the Pi config template; `peloton-install.sh` is the installer

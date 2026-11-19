@@ -22,15 +22,12 @@ Usage:
     python scripts/refresh_cookies.py --seed-dir ~/peloton-seed-pelotonpi
 """
 import argparse
-import base64
-import binascii
 import getpass
 import importlib.util
 import json
 import logging
 import math
 import os
-import re
 import socket
 import sys
 import tempfile
@@ -46,6 +43,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from peloton.api import make_session
 from peloton.config import default_token_path, load_dotenv, renewal_failed_path
 from peloton.notify import report_outcome
+from scripts.token_files import (AUTH0_CLIENT_ID, browser_attempt_path, describe_chain,
+                                 load_refresh_chain, load_refresh_token, profile_env_names,
+                                 refresh_token_path, resolve_token_paths, save_refresh_token,
+                                 token_expiration, token_status)
 
 LOGIN_URL = "https://www.onepeloton.com/login"
 # Generous limits: a Pi Zero 2 W takes minutes to load the members app.
@@ -53,7 +54,6 @@ FORM_TIMEOUT_MS = 120_000
 TOKEN_TIMEOUT_MS = 180_000
 # Peloton's web app (Auth0 SPA) client; the token endpoint renews its sessions.
 AUTH0_TOKEN_URL = "https://auth.onepeloton.com/oauth/token"
-AUTH0_CLIENT_ID = "WVoJxVDdPoFx4RNewvvg6ch2mZ7bwnsM"
 REFRESH_TIMEOUT_SECONDS = 30
 # Beside the token files; remembers an ongoing failure so alerts aren't hourly.
 ALERT_STATE_NAME = 'token-alert-state.json'
@@ -167,101 +167,6 @@ def browser_login(email: str, password: str, token_path: Path, headless: bool = 
     return save_verified_token(credentials['access_token'], token_path)
 
 
-def refresh_token_path(token_path: Path) -> Path:
-    """cookies-joel.txt -> cookies-joel.refresh.json, beside the access token."""
-    return token_path.with_name(f'{token_path.stem}.refresh.json')
-
-
-def save_refresh_token(path: Path, refresh_token: str, client_id: str,
-                       chain: dict | None = None) -> None:
-    """Atomically replace the refresh file, fsynced, owner-only. Auth0 rotates
-    refresh tokens on every use, so a lost write would strand the board.
-
-    `chain` carries the login's history forward through rotations (see
-    load_refresh_chain); without it, this token starts a new chain."""
-    now = datetime.now(timezone.utc).isoformat()
-    chain = chain or {'chain_started_at': now, 'chain_start_exact': True, 'renewals': 0}
-    payload = json.dumps({'client_id': client_id, 'refresh_token': refresh_token,
-                          'saved_at': now, **chain})
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
-                dir=path.parent, prefix=".peloton-refresh-", delete=False) as handle:
-            temporary = Path(handle.name)
-            os.chmod(temporary, 0o600)
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        temporary = None
-        directory = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
-
-
-def load_refresh_token(path: Path) -> tuple[str, str]:
-    """Return (refresh_token, client_id) from a refresh file, or raise RuntimeError."""
-    try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, ValueError) as exc:
-        raise RuntimeError(f"Cannot read refresh token file {path}: {exc}") from exc
-    refresh_token = data.get('refresh_token') if isinstance(data, dict) else None
-    if not isinstance(refresh_token, str) or not refresh_token:
-        raise RuntimeError(f"Refresh token file {path} has no refresh_token.")
-    client_id = data.get('client_id')
-    return refresh_token, client_id if isinstance(client_id, str) and client_id else AUTH0_CLIENT_ID
-
-
-def load_refresh_chain(path: Path) -> dict:
-    """How long this login's refresh chain has lived, to learn Auth0's real
-    lifetime: {'chain_started_at', 'chain_start_exact', 'renewals'}. Files written
-    before chains were tracked fall back to their last save time, an upper bound
-    on the start (so the age is "at least"). Never raises."""
-    try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        data = None
-    if not isinstance(data, dict):
-        data = {}
-    started = data.get('chain_started_at')
-    renewals = data.get('renewals')
-    renewals = renewals if isinstance(renewals, int) and not isinstance(renewals, bool) and renewals >= 0 else None
-    if isinstance(started, str) and _parse_time(started) is not None:
-        return {'chain_started_at': started, 'chain_start_exact': data.get('chain_start_exact') is True,
-                'renewals': renewals}
-    saved = data.get('saved_at')
-    return {'chain_started_at': saved if isinstance(saved, str) and _parse_time(saved) is not None else None,
-            'chain_start_exact': False, 'renewals': renewals}
-
-
-def _parse_time(value: str) -> datetime | None:
-    try:
-        parsed = datetime.fromisoformat(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-
-
-def describe_chain(chain: dict, now: datetime | None = None) -> str:
-    """'refresh chain 3.2 days old, 14 renewals' (or 'at least ...' / 'age unknown')."""
-    started = _parse_time(chain.get('chain_started_at') or '')
-    if started is None:
-        age = 'refresh chain age unknown'
-    else:
-        days = max(0.0, ((now or datetime.now(timezone.utc)) - started).total_seconds() / 86400)
-        age = f"refresh chain {'' if chain.get('chain_start_exact') else 'at least '}{days:.1f} days old"
-    renewals = chain.get('renewals')
-    if renewals is None:
-        return age
-    more = '' if chain.get('chain_start_exact') else '+'
-    return f"{age}, {renewals}{more} renewal{'' if renewals == 1 and not more else 's'}"
-
-
 def renew_with_refresh_token(token_path: Path) -> str:
     """Trade the saved refresh token for a new access token without a browser.
 
@@ -354,71 +259,6 @@ def load_auth(config_path: Path, interactive: bool = True) -> tuple[str, str]:
     return email, password
 
 
-def token_expiration(token_path: Path) -> float | None:
-    """Read a JWT expiry as a scheduling hint without treating it as verification."""
-    try:
-        encoded = token_path.read_text(encoding='utf-8').strip().split('.')[1]
-        payload = json.loads(base64.urlsafe_b64decode(encoded + '=' * (-len(encoded) % 4)))
-        expiry = payload.get('exp')
-        if isinstance(expiry, bool) or not isinstance(expiry, (int, float)) or not math.isfinite(expiry):
-            return None
-        return float(expiry)
-    except (OSError, IndexError, UnicodeError, ValueError, TypeError, binascii.Error):
-        return None
-
-
-def token_status(token_path: Path) -> dict:
-    """Diagnose why a token's expiry can't be read, instead of collapsing every
-    failure (missing file, no read permission, malformed JWT, no exp claim) into
-    one unexplained 'unknown' the way token_expiration() does for schedulers."""
-    if not token_path.exists():
-        return {'path': str(token_path), 'ok': False, 'reason': 'file does not exist'}
-    try:
-        raw = token_path.read_text(encoding='utf-8')
-    except OSError as exc:
-        return {'path': str(token_path), 'ok': False, 'reason': f'cannot read file: {exc}'}
-    text = raw.strip()
-    if not text:
-        return {'path': str(token_path), 'ok': False, 'reason': 'file is empty'}
-    parts = text.split('.')
-    if len(parts) != 3:
-        return {'path': str(token_path), 'ok': False,
-                'reason': f'not a 3-part JWT ({len(parts)} dot-separated part(s))'}
-    try:
-        payload = json.loads(base64.urlsafe_b64decode(parts[1] + '=' * (-len(parts[1]) % 4)))
-    except (UnicodeError, ValueError, TypeError, binascii.Error) as exc:
-        return {'path': str(token_path), 'ok': False, 'reason': f'JWT payload did not decode: {exc}'}
-    expiry = payload.get('exp')
-    if isinstance(expiry, bool) or not isinstance(expiry, (int, float)) or not math.isfinite(expiry):
-        return {'path': str(token_path), 'ok': False, 'reason': 'JWT payload has no usable exp claim'}
-    expiry = float(expiry)
-    return {'path': str(token_path), 'ok': True, 'expires_at': expiry,
-            'expired': expiry <= time.time()}
-
-
-def resolve_token_paths(config_path: Path, fallback_token: Path) -> list[tuple[str, Path]]:
-    """Map each configured profile name to its token path, the way ensure_all_tokens does,
-    so callers don't have to hand-reconstruct default_token_path() to find a file."""
-    if not config_path.exists():
-        return [('default', fallback_token)]
-    config = json.loads(config_path.read_text(encoding='utf-8'))
-    users = config.get('users')
-    if not isinstance(users, list) or not users:
-        return [('default', fallback_token)]
-    resolved = []
-    for user in users:
-        token_path = Path(user.get('token_path') or default_token_path(user['name'])).expanduser()
-        if not token_path.is_absolute():
-            token_path = config_path.parent / token_path
-        resolved.append((user['name'], token_path))
-    return resolved
-
-
-def browser_attempt_path(token_path: Path) -> Path:
-    """cookies-joel.txt -> cookies-joel.browser-attempt: when the last fallback login started."""
-    return token_path.with_name(f'{token_path.stem}.browser-attempt')
-
-
 def browser_fallback_due(token_path: Path, now: float | None = None) -> bool:
     try:
         last = float(browser_attempt_path(token_path).read_text(encoding='utf-8').strip())
@@ -453,7 +293,65 @@ def _write_renewal_failed(marker: Path, reason: str) -> None:
         print(f"Warning: could not write {marker}: {exc}", file=sys.stderr)
 
 
-def _ensure_token(token_path: Path, config_path: Path, headless: bool = True,  # noqa: C901, PLR0912
+def _token_still_good(token_path: Path, renew_before_seconds: float) -> tuple[str, bool] | None:
+    """(username, False) when the saved token verifies and is not near expiry; None when it needs renewing."""
+    try:
+        username = verify_token(token_path)
+    except requests.HTTPError as exc:
+        if exc.response is None or exc.response.status_code != 401:
+            raise
+        return None
+    except (FileNotFoundError, ValueError):
+        # No token file yet (first run) or an empty one: treat like a
+        # rejected token and log in fresh, rather than crashing.
+        return None
+    expiry = token_expiration(token_path)
+    if expiry is None or expiry - time.time() > renew_before_seconds:
+        return username, False
+    return None
+
+
+def _renew_or_browser_fallback(token_path: Path, config_path: Path, headless: bool,
+                               email: str | None, password: str | None,
+                               load_credentials: bool) -> tuple[str, bool]:
+    """Renew over HTTPS; when Auth0 rejects the refresh token, try a browser login at most once a day."""
+    try:
+        return renew_with_refresh_token(token_path), True
+    except RefreshTokenRejected as rejected:
+        if load_credentials and (not email or not password):
+            email, password = load_auth(config_path, interactive=False)
+        if not (email and password and browser_login_available()):
+            raise
+        if not browser_fallback_due(token_path):
+            raise RefreshTokenRejected(f"{rejected} A browser login was already tried in "
+                                       "the last day; the next try is after that.") from rejected
+        # Record the try before starting: a hung or killed login still counts.
+        browser_attempt_path(token_path).write_text(str(time.time()), encoding='utf-8')
+        print(f"{rejected} Trying a browser login instead.", file=sys.stderr)
+        try:
+            return browser_login(email, password, token_path, headless=headless), True
+        except Exception as exc:
+            raise RefreshTokenRejected(f"{rejected} The browser login fallback also "
+                                       f"failed: {exc}") from exc
+
+
+def _login_without_refresh_token(token_path: Path, config_path: Path, headless: bool,
+                                 email: str | None, password: str | None,
+                                 load_credentials: bool) -> tuple[str, bool]:
+    """The way in for a token with no refresh file: a browser login, or a request to seed the board."""
+    if not browser_login_available():
+        raise LoginRequired(
+            f"Token needs renewal, but there is no refresh token at {refresh_token_path(token_path)} and no "
+            "browser login on this machine. Seed this board from another computer: "
+            "refresh_cookies.py --seed-dir.")
+    if load_credentials and (not email or not password):
+        email, password = load_auth(config_path, interactive=False)
+    if not email or not password:
+        raise LoginRequired("Token needs renewal, but unattended Peloton credentials are not configured.")
+    return browser_login(email, password, token_path, headless=headless), True
+
+
+def _ensure_token(token_path: Path, config_path: Path, headless: bool = True,
                   renew_before_seconds: float = 12 * 60 * 60,
                   email: str | None = None, password: str | None = None,
                   load_credentials: bool = True) -> tuple[str, bool]:
@@ -465,55 +363,14 @@ def _ensure_token(token_path: Path, config_path: Path, headless: bool = True,  #
     never retry Chromium hourly. Boards without a browser keep the old token and
     ask to be seeded again. The browser is also the way in for tokens that have
     no refresh file yet."""
-    try:
-        username = verify_token(token_path)
-    except requests.HTTPError as exc:
-        if exc.response is None or exc.response.status_code != 401:
-            raise
-    except (FileNotFoundError, ValueError):
-        # No token file yet (first run) or an empty one: treat like a
-        # rejected token and log in fresh, rather than crashing.
-        pass
-    else:
-        expiry = token_expiration(token_path)
-        if expiry is None or expiry - time.time() > renew_before_seconds:
-            return username, False
-    refresh_path = refresh_token_path(token_path)
-    if refresh_path.exists():
-        try:
-            return renew_with_refresh_token(token_path), True
-        except RefreshTokenRejected as rejected:
-            if load_credentials and (not email or not password):
-                email, password = load_auth(config_path, interactive=False)
-            if not (email and password and browser_login_available()):
-                raise
-            if not browser_fallback_due(token_path):
-                raise RefreshTokenRejected(f"{rejected} A browser login was already tried in "
-                                           "the last day; the next try is after that.") from rejected
-            # Record the try before starting: a hung or killed login still counts.
-            browser_attempt_path(token_path).write_text(str(time.time()), encoding='utf-8')
-            print(f"{rejected} Trying a browser login instead.", file=sys.stderr)
-            try:
-                return browser_login(email, password, token_path, headless=headless), True
-            except Exception as exc:
-                raise RefreshTokenRejected(f"{rejected} The browser login fallback also "
-                                           f"failed: {exc}") from exc
-    if not browser_login_available():
-        raise LoginRequired(
-            f"Token needs renewal, but there is no refresh token at {refresh_path} and no "
-            "browser login on this machine. Seed this board from another computer: "
-            "refresh_cookies.py --seed-dir.")
-    if load_credentials and (not email or not password):
-        email, password = load_auth(config_path, interactive=False)
-    if not email or not password:
-        raise LoginRequired("Token needs renewal, but unattended Peloton credentials are not configured.")
-    return browser_login(email, password, token_path, headless=headless), True
-
-
-def profile_env_names(user: dict) -> tuple[str, str]:
-    suffix = re.sub(r'[^A-Z0-9]+', '_', user['name'].upper()).strip('_') or 'USER'
-    return (user.get('email_env') or f'PELOTON_EMAIL_{suffix}',
-            user.get('password_env') or f'PELOTON_PASSWORD_{suffix}')
+    good = _token_still_good(token_path, renew_before_seconds)
+    if good is not None:
+        return good
+    if refresh_token_path(token_path).exists():
+        return _renew_or_browser_fallback(token_path, config_path, headless, email, password,
+                                          load_credentials)
+    return _login_without_refresh_token(token_path, config_path, headless, email, password,
+                                        load_credentials)
 
 
 def ensure_all_tokens(config_path: Path, renew_before_seconds: float = 12 * 60 * 60,
@@ -579,9 +436,7 @@ def seed_tokens(seed_dir: Path, config_path: Path, headless: bool = True) -> lis
     return seeded
 
 
-def main() -> None:  # noqa: C901, PLR0912, PLR0915
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
-    load_dotenv()
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Refresh Peloton access token via browser login.")
     parser.add_argument("--cookies", default="cookies.txt", help="Output token file path (default: cookies.txt)")
     parser.add_argument("--config", default="config.json", help="Config file path (default: config.json)")
@@ -610,80 +465,81 @@ def main() -> None:  # noqa: C901, PLR0912, PLR0915
         parser.error("--all-users requires --ensure or --status")
     if not math.isfinite(parsed.renew_before_hours) or parsed.renew_before_hours < 0:
         parser.error("--renew-before-hours must be a non-negative number")
+    return parsed
 
-    token_path = Path(parsed.cookies)
 
-    if parsed.status:
-        config_path = Path(parsed.config)
-        profiles = (resolve_token_paths(config_path, token_path) if parsed.all_users
-                    else [('default', token_path)])
-        for name, path in profiles:
-            status = token_status(path)
-            if not status['ok']:
-                print(f"{name}: {status['path']} — {status['reason']}")
-                continue
-            expires_at = datetime.fromtimestamp(status['expires_at'], tz=timezone.utc)
-            state = 'EXPIRED' if status['expired'] else 'valid'
-            refresh_path = refresh_token_path(path)
-            renewal = (f'refresh token saved ({describe_chain(load_refresh_chain(refresh_path))})'
-                       if refresh_path.exists()
-                       else 'no refresh token (renewal needs a browser login)')
-            print(f"{name}: {status['path']} — {state}, expires {expires_at.isoformat()}; {renewal}")
+def _print_status(parsed: argparse.Namespace, token_path: Path) -> None:
+    config_path = Path(parsed.config)
+    profiles = (resolve_token_paths(config_path, token_path) if parsed.all_users
+                else [('default', token_path)])
+    for name, path in profiles:
+        status = token_status(path)
+        if not status['ok']:
+            print(f"{name}: {status['path']} — {status['reason']}")
+            continue
+        expires_at = datetime.fromtimestamp(status['expires_at'], tz=timezone.utc)
+        state = 'EXPIRED' if status['expired'] else 'valid'
+        refresh_path = refresh_token_path(path)
+        renewal = (f'refresh token saved ({describe_chain(load_refresh_chain(refresh_path))})'
+                   if refresh_path.exists()
+                   else 'no refresh token (renewal needs a browser login)')
+        print(f"{name}: {status['path']} — {state}, expires {expires_at.isoformat()}; {renewal}")
+
+
+def _seed(parsed: argparse.Namespace) -> None:
+    seed_dir = Path(parsed.seed_dir).expanduser()
+    try:
+        seeded = seed_tokens(seed_dir, Path(parsed.config), headless=not parsed.no_headless)
+    except Exception as exc:
+        sys.exit(f"Seeding failed: {exc}")
+    if parsed.no_install_hint:  # scripts/seed_board.sh installs them itself.
         return
-
-    if parsed.seed_dir:
-        seed_dir = Path(parsed.seed_dir).expanduser()
-        try:
-            seeded = seed_tokens(seed_dir, Path(parsed.config), headless=not parsed.no_headless)
-        except Exception as exc:
-            sys.exit(f"Seeding failed: {exc}")
-        if parsed.no_install_hint:  # scripts/seed_board.sh installs them itself.
-            return
-        names = ' '.join(name for _, token in seeded
-                         for name in (token.name, refresh_token_path(token).name))
-        print(f"""
+    names = ' '.join(name for _, token in seeded
+                     for name in (token.name, refresh_token_path(token).name))
+    print(f"""
 Seeded {seed_dir}. These files work on ONE board only: refresh tokens rotate, so
 a second machine using the same files breaks both. Install them, then delete {seed_dir}:
 
   cd {seed_dir} && scp {names} <board>:/tmp/
   ssh <board> 'cd /tmp && sudo install -m 0600 -o peloton-led -g peloton-led {names} /var/lib/peloton-led/ && rm -f {names}'
 """)
-        return
 
-    if parsed.verify_only:
-        print(f"Verifying existing token in {token_path}...")
-        try:
-            username = verify_token(token_path)
-        except Exception as exc:
-            sys.exit(f"Token verification failed: {exc}")
-        print(f"Token is valid — logged in as: {username}")
-        return
 
+def _verify_only(token_path: Path) -> None:
+    print(f"Verifying existing token in {token_path}...")
+    try:
+        username = verify_token(token_path)
+    except Exception as exc:
+        sys.exit(f"Token verification failed: {exc}")
+    print(f"Token is valid — logged in as: {username}")
+
+
+def _ensure(parsed: argparse.Namespace, token_path: Path) -> None:
     config_path = Path(parsed.config)
-    if parsed.ensure:
-        alert_state = token_path.parent / ALERT_STATE_NAME
-        source = socket.gethostname()
-        try:
-            if parsed.all_users:
-                results = ensure_all_tokens(config_path,
-                    renew_before_seconds=parsed.renew_before_hours * 60 * 60,
-                    fallback_token=token_path)
-                report_outcome(alert_state, None, time.time(), source)
-                for profile, username, refreshed in results:
-                    action = "refreshed" if refreshed else "already valid"
-                    print(f"{profile}: token {action} — logged in as: {username}")
-                return
-            username, refreshed = ensure_token(token_path, config_path, headless=True,
-                renew_before_seconds=parsed.renew_before_hours * 60 * 60)
-        except Exception as exc:
-            report_outcome(alert_state, str(exc), time.time(), source)
-            sys.exit(f"Token maintenance failed: {exc}")
-        report_outcome(alert_state, None, time.time(), source)
-        action = "refreshed" if refreshed else "already valid"
-        print(f"Token {action} — logged in as: {username}")
-        return
+    alert_state = token_path.parent / ALERT_STATE_NAME
+    source = socket.gethostname()
+    try:
+        if parsed.all_users:
+            results = ensure_all_tokens(config_path,
+                renew_before_seconds=parsed.renew_before_hours * 60 * 60,
+                fallback_token=token_path)
+            report_outcome(alert_state, None, time.time(), source)
+            for profile, username, refreshed in results:
+                action = "refreshed" if refreshed else "already valid"
+                print(f"{profile}: token {action} — logged in as: {username}")
+            return
+        username, refreshed = ensure_token(token_path, config_path, headless=True,
+            renew_before_seconds=parsed.renew_before_hours * 60 * 60)
+    except Exception as exc:
+        report_outcome(alert_state, str(exc), time.time(), source)
+        sys.exit(f"Token maintenance failed: {exc}")
+    report_outcome(alert_state, None, time.time(), source)
+    action = "refreshed" if refreshed else "already valid"
+    print(f"Token {action} — logged in as: {username}")
 
-    email, password = load_auth(config_path)
+
+def _interactive_login(parsed: argparse.Namespace, token_path: Path) -> None:
+    email, password = load_auth(Path(parsed.config))
     if not email:
         sys.exit("Error: no email provided.")
     if not password:
@@ -698,6 +554,23 @@ a second machine using the same files breaks both. Install them, then delete {se
     print(f"Token saved to {token_path}")
 
     print(f"Token verified — logged in as: {username}")
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
+    load_dotenv()
+    parsed = _parse_args()
+    token_path = Path(parsed.cookies)
+    if parsed.status:
+        _print_status(parsed, token_path)
+    elif parsed.seed_dir:
+        _seed(parsed)
+    elif parsed.verify_only:
+        _verify_only(token_path)
+    elif parsed.ensure:
+        _ensure(parsed, token_path)
+    else:
+        _interactive_login(parsed, token_path)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,97 @@ PERSISTED_KEYS = (
 )
 
 
-def load_snapshot(path):  # noqa: C901, PLR0912
+def _is_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_int(value):
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _usable(snapshot):
+    """Whether the fields every screen relies on have the right shape. If not, the whole cache goes."""
+    if not isinstance(snapshot, dict):
+        return False
+    if not isinstance(snapshot.get('summaries'), list) or not isinstance(snapshot.get('totals'), dict):
+        return False
+    if snapshot.get('me') is not None and not isinstance(snapshot.get('me'), dict):
+        return False
+    celebrated = snapshot.get('celebrated_pr_ids', [])
+    if not isinstance(celebrated, list) or not all(isinstance(value, str) for value in celebrated):
+        return False
+    milestones = snapshot.get('celebrated_milestones', [])
+    if not isinstance(milestones, list) or not all(isinstance(value, int) for value in milestones):
+        return False
+    if not isinstance(snapshot.get('weekly_progress', {}), dict):
+        return False
+    return _is_number(snapshot.get('last_updated'))
+
+
+def _unless_none(valid):
+    return lambda value: value is None or valid(value)
+
+
+def _valid_records(records):
+    return isinstance(records, dict) and all(
+        isinstance(r, dict) and isinstance(r.get('workout_id'), str) for r in records.values())
+
+
+def _valid_streaks(streaks):
+    return isinstance(streaks, dict) and all(_is_int(v) for v in streaks.values())
+
+
+def _valid_milestone_clock(shown):
+    return isinstance(shown, dict) and all(
+        key.isdigit() and _is_number(at) for key, at in shown.items())
+
+
+def _valid_pr_clock(shown):
+    return isinstance(shown, dict) and all(
+        isinstance(key, str) and _is_number(at) for key, at in shown.items())
+
+
+def _valid_discipline_milestones(celebrated):
+    return isinstance(celebrated, list) and all(parse_milestone_key(key) for key in celebrated)
+
+
+def _valid_discipline_clock(shown):
+    return isinstance(shown, dict) and all(
+        parse_milestone_key(key) and _is_number(at) for key, at in shown.items())
+
+
+def _valid_challenges(challenges):
+    return isinstance(challenges, list) and all(valid_challenge(c) for c in challenges)
+
+
+# A damaged entry is dropped on its own (the cache is kept); the comment says what the loss costs.
+_REPAIRS = (
+    # A damaged records table only loses PR gains.
+    ('personal_records', _unless_none(_valid_records)),
+    # A damaged streaks entry only hides the streak screen.
+    ('streaks', _unless_none(_valid_streaks)),
+    # A damaged celebration clock only restarts a milestone's day of celebrating.
+    ('milestone_shown_at', _unless_none(_valid_milestone_clock)),
+    # Likewise the PR celebration clock: damage only restarts a PR's day of celebrating.
+    ('pr_shown_at', _unless_none(_valid_pr_clock)),
+    # Per-discipline milestones ('strength:500'): damage only means one may celebrate again.
+    ('celebrated_discipline_milestones', _unless_none(_valid_discipline_milestones)),
+    ('discipline_milestone_shown_at', _unless_none(_valid_discipline_clock)),
+    # Challenges: a damaged list only hides the page until the next hourly fetch.
+    ('challenges', _unless_none(_valid_challenges)),
+    # Booked classes: a damaged list only hides the page until the next refresh asks again.
+    ('booked_classes', valid_bookings),
+    # Club Peloton: a damaged record falls back to the level from the profile until the next fetch.
+    ('club', _unless_none(valid_club)),
+)
+
+
+def _valid_name_facts(passes, facts):
+    return (_is_int(passes) and passes >= 0 and isinstance(facts, dict)
+            and all(_is_int(at) for at in facts.values()))
+
+
+def load_snapshot(path):
     """Return a validated cached snapshot, or None when it cannot be used."""
     path = Path(path)
     try:
@@ -29,75 +119,17 @@ def load_snapshot(path):  # noqa: C901, PLR0912
     if not isinstance(payload, dict) or payload.get('version') != CACHE_VERSION:
         return None
     snapshot = payload.get('snapshot')
-    if not isinstance(snapshot, dict):
-        return None
-    if not isinstance(snapshot.get('summaries'), list) or not isinstance(snapshot.get('totals'), dict):
-        return None
-    if snapshot.get('me') is not None and not isinstance(snapshot.get('me'), dict):
-        return None
-    celebrated = snapshot.get('celebrated_pr_ids', [])
-    if not isinstance(celebrated, list) or not all(isinstance(value, str) for value in celebrated):
-        return None
-    milestones = snapshot.get('celebrated_milestones', [])
-    if not isinstance(milestones, list) or not all(isinstance(value, int) for value in milestones):
-        return None
-    progress = snapshot.get('weekly_progress', {})
-    if not isinstance(progress, dict):
-        return None
-    last_updated = snapshot.get('last_updated')
-    if isinstance(last_updated, bool) or not isinstance(last_updated, (int, float)):
+    if not _usable(snapshot):
         return None
     restored = {key: snapshot[key] for key in PERSISTED_KEYS if key in snapshot}
-    # A damaged records table only loses PR gains, so drop it, not the cache.
-    records = restored.get('personal_records')
-    if records is not None and (not isinstance(records, dict) or not all(
-            isinstance(r, dict) and isinstance(r.get('workout_id'), str) for r in records.values())):
-        del restored['personal_records']
-    # Likewise a damaged streaks entry only hides the streak screen.
-    streaks = restored.get('streaks')
-    if streaks is not None and (not isinstance(streaks, dict) or not all(
-            isinstance(v, int) and not isinstance(v, bool) for v in streaks.values())):
-        del restored['streaks']
-    # A damaged celebration clock only restarts a milestone's day of celebrating.
-    shown = restored.get('milestone_shown_at')
-    if shown is not None and (not isinstance(shown, dict) or not all(
-            key.isdigit() and isinstance(at, (int, float)) and not isinstance(at, bool)
-            for key, at in shown.items())):
-        del restored['milestone_shown_at']
-    # Likewise the PR celebration clock: damage only restarts a PR's day of celebrating.
-    shown = restored.get('pr_shown_at')
-    if shown is not None and (not isinstance(shown, dict) or not all(
-            isinstance(key, str) and isinstance(at, (int, float)) and not isinstance(at, bool)
-            for key, at in shown.items())):
-        del restored['pr_shown_at']
-    # Per-discipline milestones ('strength:500'): damage only means one may celebrate again.
-    celebrated = restored.get('celebrated_discipline_milestones')
-    if celebrated is not None and (not isinstance(celebrated, list) or not all(
-            parse_milestone_key(key) for key in celebrated)):
-        del restored['celebrated_discipline_milestones']
-    shown = restored.get('discipline_milestone_shown_at')
-    if shown is not None and (not isinstance(shown, dict) or not all(
-            parse_milestone_key(key) and isinstance(at, (int, float)) and not isinstance(at, bool)
-            for key, at in shown.items())):
-        del restored['discipline_milestone_shown_at']
+    for key, valid in _REPAIRS:
+        if key in restored and not valid(restored[key]):
+            del restored[key]
     # The name page's cool-down: damage only means facts may repeat sooner.
-    passes, facts = restored.get('name_facts_passes'), restored.get('name_facts_shown')
     if 'name_facts_passes' in restored or 'name_facts_shown' in restored:
-        if (isinstance(passes, bool) or not isinstance(passes, int) or passes < 0 or not isinstance(facts, dict)
-                or not all(isinstance(at, int) and not isinstance(at, bool) for at in facts.values())):
+        if not _valid_name_facts(restored.get('name_facts_passes'), restored.get('name_facts_shown')):
             restored.pop('name_facts_passes', None)
             restored.pop('name_facts_shown', None)
-    # Challenges: a damaged list only hides the page until the next hourly fetch.
-    challenges = restored.get('challenges')
-    if challenges is not None and (not isinstance(challenges, list)
-                                   or not all(valid_challenge(c) for c in challenges)):
-        del restored['challenges']
-    # Booked classes: a damaged list only hides the page until the next refresh asks again.
-    if 'booked_classes' in restored and not valid_bookings(restored['booked_classes']):
-        del restored['booked_classes']
-    # Club Peloton: a damaged record falls back to the level from the profile until the next fetch.
-    if restored.get('club') is not None and not valid_club(restored['club']):
-        del restored['club']
     return restored
 
 

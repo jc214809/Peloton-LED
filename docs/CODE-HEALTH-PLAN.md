@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails) and phase 2a–2e merged (2026-11-18); 2f part A (`draw_icon`, `PrCelebrationScreen.render`, `_scanline_fill_polygon`) and part B (`do_POST`, `credential_changes`) **done** on branch `settings-server-complexity`, awaiting merge; the rest of 2f and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2f-B: `C901` 20, `PLR0912` 13, `PLR0913` 12, `PLR0915` 6.
+Status: phase 1 (guardrails) and phase 2a–2e merged (2026-11-18); 2f wave 1, parts A (`draw_icon`, `PrCelebrationScreen.render`, `_scanline_fill_polygon`), B (`do_POST`, `credential_changes`) and C (`refresh_cookies.main`, `_ensure_token`, `load_snapshot`), **done**, awaiting merge; the rest of 2f and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2f wave 1: `C901` 17, `PLR0912` 10, `PLR0913` 12, `PLR0915` 5.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So
@@ -93,6 +93,9 @@ Paste this block into every brief.
   for h in 64 32; do python scripts/render_rotation.py --height $h --demo --insights --out /tmp/after-$h.png; done
   cmp /tmp/before-64.png /tmp/after-64.png && cmp /tmp/before-32.png /tmp/after-32.png
   ```
+  The `--demo` rotation depends on the clock, so render before and after at the same
+  moment (two checkouts side by side) or a minute apart can differ on unchanged code. A
+  real cache (`--cache ... --config config.local.json`) doesn't drift; compare that too.
 - Update in the same commit: the topic note for the area, the `CLAUDE.md` file map if
   a file moves or a new one appears, and this plan's status line for your step.
 - Your report has: the branch, a one-paragraph summary, files changed, the check
@@ -224,6 +227,11 @@ branch `config-validation-table`)
 > (21), then whatever `grep -rn "noqa: C901\|noqa: PLR09" --include=*.py .` still
 > shows, worst first. Same rules: no behavior change, a test that pins today's
 > output first if none does.
+>
+> Part C is done: `refresh_cookies.main` and `_ensure_token` (split into per-mode and
+> per-step helpers; the token-file helpers moved to `scripts/token_files.py`, which
+> `refresh_cookies` re-exports, taking the file to 578 lines and off the length
+> allowlist) and `load_snapshot` (a table of repairs in `peloton/cache.py`).
 
 ## Phase 3: reorganize `peloton/` into subpackages (alone, after phase 2 merges)
 

@@ -2,7 +2,7 @@
 
 <!-- Moved from CLAUDE.md on 2026-11-12 so it loads only when needed. Keep it current with the code it describes. -->
 
-Read before changing `peloton-install.sh`, `packaging/`, `scripts/refresh_cookies.py`, `scripts/seed_board.sh`, `peloton/notify.py` or the systemd units.
+Read before changing `peloton-install.sh`, `packaging/`, `scripts/refresh_cookies.py` (its refresh-file, token-expiry and token-path helpers live in `scripts/token_files.py` and are re-exported from it; `main` dispatches to `_print_status`, `_seed`, `_verify_only`, `_ensure` and `_interactive_login`, and `_ensure_token` to `_token_still_good`, `_renew_or_browser_fallback` and `_login_without_refresh_token`), `scripts/token_files.py`, `scripts/seed_board.sh`, `peloton/notify.py` or the systemd units.
 
 On the Pi, the checkout's `config.json` is the live config: the installer writes `project-config.conf` drop-ins (`BindReadOnlyPaths=-<checkout>/config.json:/etc/peloton-led/config.json`) for `peloton-led.service` and `peloton-token-refresh.service`, because `ProtectHome=true` hides `/home`. The file must use `/var/lib/peloton-led/...` token/cache paths. `config.json` is untracked; `config.json-example` is the template.
 
