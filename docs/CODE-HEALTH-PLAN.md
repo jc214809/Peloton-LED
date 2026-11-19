@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails) and phase 2a–2e merged (2026-11-18); 2f wave 1, parts A (`draw_icon`, `PrCelebrationScreen.render`, `_scanline_fill_polygon`), B (`do_POST`, `credential_changes`) and C (`refresh_cookies.main`, `_ensure_token`, `load_snapshot`), **done**, awaiting merge; the rest of 2f and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2f wave 1: `C901` 17, `PLR0912` 10, `PLR0913` 12, `PLR0915` 5.
+Status: phase 1 (guardrails) and phase 2a–2e merged (2026-11-18); 2f wave 1, parts A (`draw_icon`, `PrCelebrationScreen.render`, `_scanline_fill_polygon`), B (`do_POST`, `credential_changes`) and C (`refresh_cookies.main`, `_ensure_token`, `load_snapshot`) and D (`_callouts`, `build_row`, `bike_plan`, `output_insight`), **done**, D awaiting merge; the rest of 2f and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2f part D: `C901` 13, `PLR0912` 7, `PLR0913` 12, `PLR0915` 4.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So
@@ -232,6 +232,10 @@ branch `config-validation-table`)
 > per-step helpers; the token-file helpers moved to `scripts/token_files.py`, which
 > `refresh_cookies` re-exports, taking the file to 578 lines and off the length
 > allowlist) and `load_snapshot` (a table of repairs in `peloton/cache.py`).
+>
+> Part D is done: `_callouts` (tally per callout, then write the fields), `build_row` (one helper per
+> field group) and `bike_plan` (segment kinds, samples, effort runs) in `peloton/workout_features.py`,
+> and `output_insight` (direction check and one builder per verdict) in `peloton/workout_insights.py`.
 
 ## Phase 3: reorganize `peloton/` into subpackages (alone, after phase 2 merges)
 

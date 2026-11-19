@@ -125,19 +125,8 @@ def planned_watts(cadence, resistance, curve=BIKE_CURVE):
     return math.exp(a + b * math.log(max(cadence, 20)) + c * math.log(max(resistance, 5)))
 
 
-def bike_plan(graph, ride_meta=None):  # noqa: C901
-    """The nine plan descriptors of a bike class (PLAN_KEYS), or None without callout lines.
-
-    Built from the 5-second cadence and resistance callout lines over riding segments only.
-    """
-    ride_meta = ride_meta or {}
-    lines = {m.get('type'): m.get('graph_data') or {} for m in
-             (graph.get('target_performance_metrics') or {}).get('target_graph_metrics') or []}
-    if 'cadence' not in lines or 'resistance' not in lines:
-        return None
-    segments = graph.get('segment_list') or []
-    if any(s.get('metrics_type') == 'floor' for s in segments):
-        return None
+def _plan_segment_kinds(segments):
+    """({5-second index: ride | rest | arms}, seconds of arms) for a bike class's segment list."""
     kind_at = {}
     arms_secs = 0
     for s in segments:
@@ -147,6 +136,11 @@ def bike_plan(graph, ride_meta=None):  # noqa: C901
             arms_secs += s['length']
         for t in range(s['start_time_offset'], s['start_time_offset'] + s['length'], 5):
             kind_at[t // 5] = kind
+    return kind_at, arms_secs
+
+
+def _plan_samples(lines, kind_at, segments):
+    """The (cadence, resistance, planned watts) lists over the riding samples of the callout lines."""
     cadence, resistance = lines['cadence'], lines['resistance']
     cad, res, watts = [], [], []
     count = min(len(cadence.get('upper') or []), len(cadence.get('lower') or []),
@@ -161,8 +155,11 @@ def bike_plan(graph, ride_meta=None):  # noqa: C901
         cad.append((c_hi + c_lo) / 2)
         res.append((r_hi + r_lo) / 2)
         watts.append(planned_watts(cad[-1], res[-1]))
-    if len(watts) < MIN_PLAN_SAMPLES:
-        return None
+    return cad, res, watts
+
+
+def _effort_runs(watts):
+    """Seconds of each run of samples at EFFORT_RATIO times the median planned watts, long enough to count."""
     median = statistics.median(watts)
     high = [w >= EFFORT_RATIO * median for w in watts]
     runs, i = [], 0
@@ -173,6 +170,27 @@ def bike_plan(graph, ride_meta=None):  # noqa: C901
         if high[i] and (j - i) * 5 >= MIN_EFFORT_SECS:
             runs.append((j - i) * 5)
         i = j
+    return runs
+
+
+def bike_plan(graph, ride_meta=None):
+    """The nine plan descriptors of a bike class (PLAN_KEYS), or None without callout lines.
+
+    Built from the 5-second cadence and resistance callout lines over riding segments only.
+    """
+    ride_meta = ride_meta or {}
+    lines = {m.get('type'): m.get('graph_data') or {} for m in
+             (graph.get('target_performance_metrics') or {}).get('target_graph_metrics') or []}
+    if 'cadence' not in lines or 'resistance' not in lines:
+        return None
+    segments = graph.get('segment_list') or []
+    if any(s.get('metrics_type') == 'floor' for s in segments):
+        return None
+    kind_at, arms_secs = _plan_segment_kinds(segments)
+    cad, res, watts = _plan_samples(lines, kind_at, segments)
+    if len(watts) < MIN_PLAN_SAMPLES:
+        return None
+    runs = _effort_runs(watts)
     ride_secs = len(watts) * 5
     plan = {
         'ride_min': ride_secs / 60,
@@ -246,23 +264,20 @@ def strength_asks(ride):
     }
 
 
-def build_row(detail, graph=None, ride=None):  # noqa: C901, PLR0912, PLR0915
-    """One row (spec section 3). Raises ValueError when the detail lacks an id or start time."""
-    if not isinstance(detail, dict) or not detail.get('id') or detail.get('start_time') is None:
-        raise ValueError('workout detail without id or start_time')
-    graph = graph if isinstance(graph, dict) else {}
-    ride = ride if isinstance(ride, dict) else {}
-    ride_meta = detail.get('ride') or {}
-    times, series = _series(graph)
-    duration = graph.get('duration') or ride_meta.get('duration') or 0
-    elapsed = (detail.get('end_time') or detail['start_time']) - detail['start_time']
+def _local_date(detail):
+    """The workout's local calendar day (YYYY-MM-DD) in its own zone, UTC when the zone name is unknown."""
     tz = detail.get('timezone') or 'UTC'
     try:
         local = datetime.fromtimestamp(detail['start_time'], ZoneInfo(tz))
     except Exception:  # unknown zone name: fall back rather than lose the row
         log.warning('workout %s: unknown timezone %r, using UTC', detail['id'], tz)
         local = datetime.fromtimestamp(detail['start_time'], timezone.utc)
+    return local.strftime('%Y-%m-%d')
 
+
+def _segment_layout(graph):
+    """(segments, mix, windows, mode): the class's segments, seconds per kind, the (a, b) windows per kind
+    (the whole class counts as work when it has no work, floor or arms segment) and plain | arms | floor."""
     segments = [{'kind': segment_kind(s), 'a': s['start_time_offset'],
                  'b': s['start_time_offset'] + s['length']} for s in graph.get('segment_list') or []]
     mix = {}
@@ -279,34 +294,22 @@ def build_row(detail, graph=None, ride=None):  # noqa: C901, PLR0912, PLR0915
     if not segments or not ({'work', 'floor', 'arms'} & set(windows)):
         # Freestyle, or a class that is one warm-up / cool-down block: the whole thing is the work.
         windows['work'] = [(0, 10 ** 9)]
-    work_windows = windows.get('work') or []
+    return segments, mix, windows, mode
 
-    disc = discipline(detail.get('fitness_discipline'))
-    row = {
-        'v': ROW_VERSION, 'id': detail['id'], 'disc': disc,
-        'start': detail['start_time'], 'date': local.strftime('%Y-%m-%d'),
-        'ride_id': ride_meta.get('id'), 'title': ride_meta.get('title'),
-        'dur': duration, 'elapsed': elapsed,
-        'complete': bool(detail.get('status') == 'COMPLETE' and duration and elapsed >= 0.8 * duration),
-        'wtype': detail.get('workout_type'), 'outdoor': bool(detail.get('is_outdoor')),
-        'device': detail.get('device_type_display_name'),
-        'instructor': (ride_meta.get('instructor') or {}).get('name'),
-        'ctype': '/'.join(c.get('name') or '' for c in ride.get('class_types') or []) or None,
-        'difficulty': _round(ride_meta.get('difficulty_estimate')),
-        'mode': mode, 'mix': mix,
-        'arms_sections': sum(1 for seg in segments if seg['kind'] == 'arms'),
-        'has_graph': bool(graph),
-    }
 
-    # Heart rate: effort, the same for every discipline.
-    heart = series.get('heart_rate') or []
+def _heart_fields(row, detail, graph, heart):
+    """Heart rate: effort, the same for every discipline."""
     zones = (graph.get('effort_zones') or {}).get('heart_rate_zone_durations') or {}
     row['hr_avg'] = _round(_mean(heart), 1)
     row['hr_max'] = max((v for v in heart if v), default=None)
     row['strive'] = _round(detail.get('hr_total_points'), 1) or None
     row['hr_zone'] = [zones.get(f'heart_rate_z{i}_duration') or 0 for i in range(1, 6)] if zones else None
 
-    # What the rider produced, in the work segments only (warm-up, cool-down, arms, floor excluded).
+
+def _work_fields(row, detail, graph, times, series, windows, duration):
+    """What the rider produced, in the work segments only (warm-up, cool-down, arms, floor excluded)."""
+    work_windows = windows.get('work') or []
+    heart = series.get('heart_rate') or []
     work = {name: _round(_window_mean(times, series[name], work_windows))
             for name in SERIES if name in series and work_windows}
     row['work'] = {k: v for k, v in work.items() if v is not None}
@@ -320,8 +323,11 @@ def build_row(detail, graph=None, ride=None):  # noqa: C901, PLR0912, PLR0915
     rank, field = detail.get('leaderboard_rank'), detail.get('total_leaderboard_users')
     row['lb_pct'] = round(100 * (1 - rank / field), 1) if rank and field else None
 
-    # Output (or speed) per heartbeat over the work samples.
-    order = ('speed', 'output') if disc in FOOT else ('output', 'speed')
+
+def _efficiency_fields(row, times, series, work_windows):
+    """Output (or speed) per heartbeat over the work samples."""
+    heart = series.get('heart_rate') or []
+    order = ('speed', 'output') if row['disc'] in FOOT else ('output', 'speed')
     main = next((name for name in order if name in series), None)
     row['main'] = main
     if main and heart:
@@ -330,24 +336,60 @@ def build_row(detail, graph=None, ride=None):  # noqa: C901, PLR0912, PLR0915
         if len(pairs) >= MIN_EFF_SAMPLES:
             row['eff'] = _round(_mean([a for a, _ in pairs]) / _mean([b for _, b in pairs]), 3)
 
+
+def _strength_fields(row, detail, graph, ride, ride_meta):
+    """Strength: what the class works, and what the tracker saw."""
+    muscles = graph.get('muscle_group_score') or ride_meta.get('muscle_group_score') or []
+    row['muscles'] = {m['muscle_group']: m['percentage'] for m in muscles if m.get('percentage')}
+    patterns = (ride.get('segments') or {}).get('movement_patterns') or []
+    row['patterns'] = {p['slug']: p['percentage'] for p in patterns}
+    asks = strength_asks(ride)
+    if asks:
+        row['asks'] = asks
+    tracker, sets = _strength(detail)
+    if tracker:
+        row['tracker'], row['sets'] = tracker, sets
+
+
+def build_row(detail, graph=None, ride=None):
+    """One row (spec section 3). Raises ValueError when the detail lacks an id or start time."""
+    if not isinstance(detail, dict) or not detail.get('id') or detail.get('start_time') is None:
+        raise ValueError('workout detail without id or start_time')
+    graph = graph if isinstance(graph, dict) else {}
+    ride = ride if isinstance(ride, dict) else {}
+    ride_meta = detail.get('ride') or {}
+    times, series = _series(graph)
+    duration = graph.get('duration') or ride_meta.get('duration') or 0
+    elapsed = (detail.get('end_time') or detail['start_time']) - detail['start_time']
+    segments, mix, windows, mode = _segment_layout(graph)
+    work_windows = windows.get('work') or []
+
+    disc = discipline(detail.get('fitness_discipline'))
+    row = {
+        'v': ROW_VERSION, 'id': detail['id'], 'disc': disc,
+        'start': detail['start_time'], 'date': _local_date(detail),
+        'ride_id': ride_meta.get('id'), 'title': ride_meta.get('title'),
+        'dur': duration, 'elapsed': elapsed,
+        'complete': bool(detail.get('status') == 'COMPLETE' and duration and elapsed >= 0.8 * duration),
+        'wtype': detail.get('workout_type'), 'outdoor': bool(detail.get('is_outdoor')),
+        'device': detail.get('device_type_display_name'),
+        'instructor': (ride_meta.get('instructor') or {}).get('name'),
+        'ctype': '/'.join(c.get('name') or '' for c in ride.get('class_types') or []) or None,
+        'difficulty': _round(ride_meta.get('difficulty_estimate')),
+        'mode': mode, 'mix': mix,
+        'arms_sections': sum(1 for seg in segments if seg['kind'] == 'arms'),
+        'has_graph': bool(graph),
+    }
+    _heart_fields(row, detail, graph, series.get('heart_rate') or [])
+    _work_fields(row, detail, graph, times, series, windows, duration)
+    _efficiency_fields(row, times, series, work_windows)
     _callouts(row, graph, times, series, work_windows)
     if disc in BIKE and graph:
         plan = bike_plan(graph, ride_meta)
         if plan:
             row['plan'] = plan
-
-    # Strength: what the class works, and what the tracker saw.
     if disc == 'strength':
-        muscles = graph.get('muscle_group_score') or ride_meta.get('muscle_group_score') or []
-        row['muscles'] = {m['muscle_group']: m['percentage'] for m in muscles if m.get('percentage')}
-        patterns = (ride.get('segments') or {}).get('movement_patterns') or []
-        row['patterns'] = {p['slug']: p['percentage'] for p in patterns}
-        asks = strength_asks(ride)
-        if asks:
-            row['asks'] = asks
-        tracker, sets = _strength(detail)
-        if tracker:
-            row['tracker'], row['sets'] = tracker, sets
+        _strength_fields(row, detail, graph, ride, ride_meta)
     return row
 
 
@@ -374,7 +416,7 @@ def _reading_watts(series, i):
     return planned_watts(cadence[i], resistance[i])
 
 
-def _callouts(row, graph, times, series, work_windows):  # noqa: C901, PLR0912
+def _callouts(row, graph, times, series, work_windows):
     """The instructor's callouts inside work segments: their level, and where the rider sat in them.
 
     Only the seconds inside work segments count: a callout that runs on into an arms section (pedalling
@@ -387,42 +429,77 @@ def _callouts(row, graph, times, series, work_windows):  # noqa: C901, PLR0912
     resistance range count toward it.
     """
     callouts = (graph.get('target_metrics_performance_data') or {}).get('target_metrics') or []
-    level, position, inside, under, missed, pace = {}, {}, {}, {}, {}, {}
+    acc = {key: {} for key in ('level', 'position', 'inside', 'under', 'missed', 'pace')}
     for callout in callouts:
-        a, b = callout['offsets']['start'], callout['offsets']['end'] + 1
-        seconds = _overlap(a, b, work_windows)
-        if not seconds:
+        _tally_callout(acc, row, callout, times, series, work_windows)
+    _write_target_fields(row, acc)
+    _write_compliance_fields(row, graph)
+
+
+def _tally_callout(acc, row, callout, times, series, work_windows):
+    """Add one callout's work seconds and the rider's readings inside it to the accumulators."""
+    a, b = callout['offsets']['start'], callout['offsets']['end'] + 1
+    seconds = _overlap(a, b, work_windows)
+    if not seconds:
+        return
+    floor_watts = _floor_watts(row, callout, series)
+    for metric in callout.get('metrics') or []:
+        name, lo, hi = metric['name'], metric['lower'], metric['upper']
+        if name == 'pace_intensity':
+            acc['pace'][str(int(lo))] = acc['pace'].get(str(int(lo)), 0) + seconds
             continue
-        floor_watts = _floor_watts(row, callout, series)
-        for metric in callout.get('metrics') or []:
-            name, lo, hi = metric['name'], metric['lower'], metric['upper']
-            if name == 'pace_intensity':
-                pace[str(int(lo))] = pace.get(str(int(lo)), 0) + seconds
-                continue
-            level.setdefault(name, []).append(((lo + hi) / 2, seconds))
-            source = TARGET_SERIES.get(name)
-            if source in series and hi > lo:
-                for i in range(min(len(times), len(series[source]))):
-                    value = series[source][i]
-                    if value is not None and a <= times[i] < b and _in_windows(times[i], work_windows):
-                        position.setdefault(name, []).append((value - lo) / (hi - lo))
-                        inside.setdefault(name, []).append(lo <= value <= hi)
-                        under.setdefault(name, []).append(value < lo)
-                        if floor_watts is not None and name in MISSED_METRICS:
-                            watts = _reading_watts(series, i)
-                            if watts is not None:
-                                missed.setdefault(name, []).append(value < lo and watts < floor_watts)
+        acc['level'].setdefault(name, []).append(((lo + hi) / 2, seconds))
+        source = TARGET_SERIES.get(name)
+        if source in series and hi > lo:
+            floor = floor_watts if name in MISSED_METRICS else None
+            for position, inside, under, missed in _callout_readings(
+                    (lo, hi, a, b), series, source, times, work_windows, floor):
+                acc['position'].setdefault(name, []).append(position)
+                acc['inside'].setdefault(name, []).append(inside)
+                acc['under'].setdefault(name, []).append(under)
+                if missed is not None:
+                    acc['missed'].setdefault(name, []).append(missed)
+
+
+def _callout_readings(bounds, series, source, times, work_windows, floor_watts):
+    """(position, inside, under, missed) for each work reading of `source` inside the callout's span.
+
+    `bounds` is the callout's (lower, upper, start, end). `missed` is None unless `floor_watts` is set
+    and the reading has a cadence and resistance pair.
+    """
+    lo, hi, a, b = bounds
+    out = []
+    for i in range(min(len(times), len(series[source]))):
+        value = series[source][i]
+        if value is not None and a <= times[i] < b and _in_windows(times[i], work_windows):
+            missed = None
+            if floor_watts is not None:
+                watts = _reading_watts(series, i)
+                if watts is not None:
+                    missed = value < lo and watts < floor_watts
+            out.append(((value - lo) / (hi - lo), lo <= value <= hi, value < lo, missed))
+    return out
+
+
+def _write_target_fields(row, acc):
+    """The callout fields of the row: level, position, share in and under, missed share, pace plan."""
+    level, missed = acc['level'], acc['missed']
     if level:
         row['target'] = {n: _round(sum(v * w for v, w in pairs) / sum(w for _, w in pairs))
                          for n, pairs in level.items()}
-        row['target_pos'] = {n: _round(_mean(v)) for n, v in position.items()}
-        row['target_in'] = {n: round(100 * sum(v) / len(v)) for n, v in inside.items()}
-        row['target_under'] = {n: round(100 * sum(v) / len(v)) for n, v in under.items()}
+        row['target_pos'] = {n: _round(_mean(v)) for n, v in acc['position'].items()}
+        row['target_in'] = {n: round(100 * sum(v) / len(v)) for n, v in acc['inside'].items()}
+        row['target_under'] = {n: round(100 * sum(v) / len(v)) for n, v in acc['under'].items()}
         if missed:
             row['target_missed'] = {n: round(100 * sum(v) / len(v)) for n, v in missed.items()}
+    pace = acc['pace']
     if pace:
         total = sum(pace.values())
         row['pace_plan'] = {k: round(100 * v / total) for k, v in sorted(pace.items())}
+
+
+def _write_compliance_fields(row, graph):
+    """Pace level and fit, and the form score, from the graph's compliance and caesar blocks."""
     compliance = graph.get('target_metrics_compliance') or {}
     if compliance:
         row['pace_level'] = compliance.get('workout_pace_level')
