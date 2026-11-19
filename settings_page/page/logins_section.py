@@ -27,15 +27,6 @@ MODE_TEXT = {
 }
 
 
-def _token_pill(login, zone):
-    token = login.token
-    if not token.get('ok'):
-        return _pill('bad', 'No working token')
-    if token.get('expired'):
-        return _pill('bad', f'Expired {when(token["expires_at"], zone)}')
-    return _pill('ok', f'Valid until {when(token["expires_at"], zone)}')
-
-
 def _rider_pill(login):
     """A rider's state in one pill: Working, or what needs a person."""
     if not login.token.get('ok'):
