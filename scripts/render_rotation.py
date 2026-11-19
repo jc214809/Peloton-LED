@@ -121,49 +121,74 @@ def load_snapshot_for(options):
     return snapshot
 
 
-def frame_times(name, state, duration, detail_interval, height=64):  # noqa: C901
+def _last_workout_times(state, duration, detail_interval, height):
+    # One frame per intro/stat, at each one's own start: graph frames hold longer.
+    from display.ui.last_workout.rotation import detail_hold_seconds, rotating_details
+    starts, start = [0.0], detail_interval
+    for detail in rotating_details(state, height):
+        starts.append(start)
+        start += detail_hold_seconds(detail, detail_interval)
+    return [0.6 + s for s in starts if s < duration] or [0.6]
+
+
+def _versus_times(state, duration, detail_interval, height):
+    if not (state and 'riders' in state):
+        return [0.5]
+    share = state.get('stat_seconds')  # 32 rows: one frame per stat
+    return [0.6 + i * share for i in range(round(duration / share))] if share else [0.6]
+
+
+def _journey_times(state, duration, detail_interval, height):
+    # Once each step's opening animation has settled; 32 rows: the trip, then the miles by type.
+    from display.ui.journey_screen import INTRO_SECONDS
+    share = state.get('step_seconds')
+    return [INTRO_SECONDS, share + INTRO_SECONDS] if share else [INTRO_SECONDS]
+
+
+def _challenge_times(state, duration, detail_interval, height):
+    from display.ui.challenge_screen import INTRO_SECONDS  # settled, as in the README
+    return [INTRO_SECONDS]
+
+
+def _username_times(state, duration, detail_interval, height):
+    share = state.get('detail_seconds') or 4.0
+    return [0.6 + i * share for i in range(max(1, len(state.get('details', []))))]
+
+
+def _pr_times(state, duration, detail_interval, height):
+    from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS
+    return [0.5, BURST_SECONDS + SETTLE_SECONDS + 0.5]
+
+
+def _celebration_times(state, duration, detail_interval, height):
+    from display.ui.celebration_screen import INTRO_SECONDS
+    return [0.3, INTRO_SECONDS + 0.7]
+
+
+def _streak_times(state, duration, detail_interval, height):
+    from scripts.render_streaks import FLAME_SECONDS
+    return [FLAME_SECONDS]  # the README screenshots' flame
+
+
+def _next_class_times(state, duration, detail_interval, height):
+    return [0.0]  # the tag's full brightness, as in the README (it pulses in the last 10 minutes)
+
+
+FRAME_TIMES = {'last_workout': _last_workout_times, 'versus': _versus_times, 'journey': _journey_times,
+               'challenge': _challenge_times, 'username': _username_times, 'pr': _pr_times,
+               'celebration': _celebration_times, 'streak': _streak_times, 'streak_risk': _streak_times,
+               'next_class': _next_class_times}
+
+
+def frame_times(name, state, duration, detail_interval, height=64):
     """Seconds into the page at which to capture a frame."""
-    if name == 'last_workout':
-        # One frame per intro/stat, at each one's own start: graph frames hold longer.
-        from display.ui.last_workout.rotation import detail_hold_seconds, rotating_details
-        starts, start = [0.0], detail_interval
-        for detail in rotating_details(state, height):
-            starts.append(start)
-            start += detail_hold_seconds(detail, detail_interval)
-        return [0.6 + s for s in starts if s < duration] or [0.6]
-    if name == 'versus' and state and 'riders' in state:
-        share = state.get('stat_seconds')  # 32 rows: one frame per stat
-        return [0.6 + i * share for i in range(round(duration / share))] if share else [0.6]
-    if name == 'journey':
-        # Once each step's opening animation has settled; 32 rows: the trip, then the miles by type.
-        from display.ui.journey_screen import INTRO_SECONDS
-        share = state.get('step_seconds')
-        return [INTRO_SECONDS, share + INTRO_SECONDS] if share else [INTRO_SECONDS]
-    if name == 'challenge':
-        from display.ui.challenge_screen import INTRO_SECONDS  # settled, as in the README
-        return [INTRO_SECONDS]
-    if name == 'username':
-        share = state.get('detail_seconds') or 4.0
-        return [0.6 + i * share for i in range(max(1, len(state.get('details', []))))]
-    if name == 'pr':
-        from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS
-        return [0.5, BURST_SECONDS + SETTLE_SECONDS + 0.5]
-    if name == 'celebration':
-        from display.ui.celebration_screen import INTRO_SECONDS
-        return [0.3, INTRO_SECONDS + 0.7]
-    if name in ('streak', 'streak_risk'):
-        from scripts.render_streaks import FLAME_SECONDS
-        return [FLAME_SECONDS]  # the README screenshots' flame
-    if name == 'next_class':
-        return [0.0]  # the tag's full brightness, as in the README (it pulses in the last 10 minutes)
-    return [0.5]
+    pick = FRAME_TIMES.get(name)
+    return pick(state, duration, detail_interval, height) if pick else [0.5]
 
 
-def render(options):  # noqa: C901, PLR0912, PLR0915
-    from display.display import initialize_fonts
+def _build_screens(display, detail_interval):
     from display.ui.discipline_page import DisciplinePageScreen
     from display.ui.goal_screen import GoalScreen
-    from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
     from display.ui.last_workout.screen import LastWorkoutScreen
     from display.ui.lifetime_overview import LifetimeOverviewScreen
     from display.ui.logo_mask_screen import LogoMaskScreen
@@ -180,39 +205,34 @@ def render(options):  # noqa: C901, PLR0912, PLR0915
     from display.ui.challenge_screen import ChallengeScreen
     from display.ui.next_class_screen import NextClassScreen
     from display.ui.club_screen import ClubScreen
-    from display.ui.login_indicator import draw_login_indicator
-    from display.ui.stale_indicator import draw_stale_indicator
-    from peloton.config import DEFAULTS
-    from peloton_led import build_rotation_pages
-    from scripts.render_demo import ImageMatrix
+    return {'username': UsernameScreen(font_key=display['font'], color_key=display['color']),
+            'discipline': DisciplinePageScreen(), 'lifetime': LifetimeOverviewScreen(),
+            'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
+            'pr': PrCelebrationScreen(), 'status': StatusScreen(), 'goal': GoalScreen(),
+            'logo': LogoMaskScreen(), 'streak': StreakScreen(), 'versus': VersusScreen(),
+            'countdown': CountdownScreen(),
+            'journey': JourneyScreen(),
+            'heatmap': HeatmapScreen(), 'streak_risk': StreakRiskScreen(),
+            'celebration': CelebrationScreen(), 'challenge': ChallengeScreen(),
+            'next_class': NextClassScreen(), 'club': ClubScreen()}
 
-    display = {**DEFAULTS, 'rotation': ALL_SECTIONS, 'color': 'white', 'journey': preview_journey(options),
-               'milestones': [100, 250, 500, 1000, 2000], 'weekly_goals': {'workouts': 5, 'minutes': 150}}
-    detail_interval = display['last_workout_detail_interval']
-    initialize_fonts(options.height)
-    screens = {'username': UsernameScreen(font_key=display['font'], color_key=display['color']),
-               'discipline': DisciplinePageScreen(), 'lifetime': LifetimeOverviewScreen(),
-               'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
-               'pr': PrCelebrationScreen(), 'status': StatusScreen(), 'goal': GoalScreen(),
-               'logo': LogoMaskScreen(), 'streak': StreakScreen(), 'versus': VersusScreen(),
-               'countdown': CountdownScreen(),
-               'journey': JourneyScreen(),
-               'heatmap': HeatmapScreen(), 'streak_risk': StreakRiskScreen(),
-               'celebration': CelebrationScreen(), 'challenge': ChallengeScreen(),
-               'next_class': NextClassScreen(), 'club': ClubScreen()}
-    snapshot = load_snapshot_for(options)
-    username = options.username or (snapshot.get('me') or {}).get('username') or 'Rider'
-    pages = [('logo', None, 1.0)]
-    rivals = None
+
+def _rival_standings(options, username, snapshot):
+    """The versus page's two riders: --rival's cache, else the demo pair, else none."""
     if options.rival:
         from peloton.cache import load_snapshot
         other = load_snapshot(options.rival) or {}
-        rivals = [{'name': name, **{k: (snap.get('weekly_progress') or {}).get(k, 0)
-                                    for k in ('workouts', 'minutes', 'output_kj')}}
-                  for name, snap in ((username, snapshot), (options.rival_name, other))]
-    elif options.demo:
-        rivals = [{'name': username, 'workouts': 3, 'minutes': 95, 'output_kj': 612},
-                  {'name': 'Rival', 'workouts': 4, 'minutes': 80, 'output_kj': 540}]
+        return [{'name': name, **{k: (snap.get('weekly_progress') or {}).get(k, 0)
+                                  for k in ('workouts', 'minutes', 'output_kj')}}
+                for name, snap in ((username, snapshot), (options.rival_name, other))]
+    if options.demo:
+        return [{'name': username, 'workouts': 3, 'minutes': 95, 'output_kj': 612},
+                {'name': 'Rival', 'workouts': 4, 'minutes': 80, 'output_kj': 540}]
+    return None
+
+
+def _rotation_pages(snapshot, display, username, options, rivals):
+    from peloton_led import build_rotation_pages
     dashboard = PreviewDashboard(display['milestones'])
     built = build_rotation_pages(snapshot, dashboard, display, username, options.height, rivals=rivals)
     # Total and discipline celebrations take turns pass by pass; show the next pass's too.
@@ -220,8 +240,11 @@ def render(options):  # noqa: C901, PLR0912, PLR0915
                                      rivals=rivals, pass_index=1)
     if following and following[0][0] == 'celebration' and following[0] != built[0]:
         built.insert(1, following[0])
-    pages += built
-    # The board alternates weekly and daily streaks across passes; show both.
+    return [('logo', None, 1.0)] + built
+
+
+def _expand_streak_views(pages):
+    """The board alternates weekly and daily streaks across passes; show both."""
     from display.ui.streak_screen import streak_views
     expanded = []
     for name, state, duration in pages:
@@ -229,16 +252,19 @@ def render(options):  # noqa: C901, PLR0912, PLR0915
             expanded += [(name, {**state, 'view': view}, duration) for view, _ in streak_views(state)]
         else:
             expanded.append((name, state, duration))
-    pages = expanded
-    if options.overlays and snapshot['summaries']:
-        pages.append(('last_workout', {**snapshot['summaries'][0], 'login_required': True,
-                                       'data_stale': True}, detail_interval))
+    return expanded
 
+
+def _render_tiles(pages, screens, detail_interval, height):
+    from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+    from display.ui.login_indicator import draw_login_indicator
+    from display.ui.stale_indicator import draw_stale_indicator
+    from scripts.render_demo import ImageMatrix
     tiles = []
     for name, state, duration in pages:
         for t in frame_times(name, state or {}, duration, detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS,
-                             options.height):
-            matrix = ImageMatrix(height=options.height)
+                             height):
+            matrix = ImageMatrix(height=height)
             screen = screens[name]
             screen.on_enter(matrix, state)
             screen.update(t)
@@ -251,17 +277,39 @@ def render(options):  # noqa: C901, PLR0912, PLR0915
             if isinstance(state, dict):
                 label += f": {state.get('discipline') or state.get('username') or state.get('title') or ''}"
             tiles.append((f'{label} @{t:.1f}s'[:40], matrix.image))
+    return tiles
 
-    tile_w, tile_h = 64 * SCALE + 12, options.height * SCALE + 28
-    columns = options.columns
+
+def _contact_sheet(tiles, height, columns):
+    tile_w, tile_h = 64 * SCALE + 12, height * SCALE + 28
     rows = (len(tiles) + columns - 1) // columns
     sheet = Image.new('RGB', (tile_w * columns, tile_h * rows), '#202020')
     draw = ImageDraw.Draw(sheet)
     for index, (label, image) in enumerate(tiles):
         x, y = (index % columns) * tile_w, (index // columns) * tile_h
-        sheet.paste(image.resize((64 * SCALE, options.height * SCALE), Image.Resampling.NEAREST), (x + 6, y + 22))
+        sheet.paste(image.resize((64 * SCALE, height * SCALE), Image.Resampling.NEAREST), (x + 6, y + 22))
         draw.text((x + 6, y + 6), label, fill='white')
-    sheet.save(options.out)
+    return sheet
+
+
+def render(options):
+    from display.display import initialize_fonts
+    from peloton.config import DEFAULTS
+
+    display = {**DEFAULTS, 'rotation': ALL_SECTIONS, 'color': 'white', 'journey': preview_journey(options),
+               'milestones': [100, 250, 500, 1000, 2000], 'weekly_goals': {'workouts': 5, 'minutes': 150}}
+    detail_interval = display['last_workout_detail_interval']
+    initialize_fonts(options.height)
+    screens = _build_screens(display, detail_interval)
+    snapshot = load_snapshot_for(options)
+    username = options.username or (snapshot.get('me') or {}).get('username') or 'Rider'
+    rivals = _rival_standings(options, username, snapshot)
+    pages = _expand_streak_views(_rotation_pages(snapshot, display, username, options, rivals))
+    if options.overlays and snapshot['summaries']:
+        pages.append(('last_workout', {**snapshot['summaries'][0], 'login_required': True,
+                                       'data_stale': True}, detail_interval))
+    tiles = _render_tiles(pages, screens, detail_interval, options.height)
+    _contact_sheet(tiles, options.height, options.columns).save(options.out)
     print(f'{len(tiles)} frames from {len(pages)} pages -> {options.out}')
 
 

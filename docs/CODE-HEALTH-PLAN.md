@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails), phase 2a–2e and 2f wave 1 (parts A–C) merged (2026-11-18); 2f wave 2, parts D (`_callouts`, `build_row`, `bike_plan`, `output_insight`), E (`extract_discipline_totals`, `summarize_workout`, `event_facts`, `_measure_facts`, `retire_zero_times`) and F (`main`, `run_display_loop`, `UsernameScreen.render`), **done**, awaiting merge; the rest of 2f (`scripts/`, `self_update`) and phase 3 planned. Roadmap item 33. Structural `noqa`s after wave 2: `C901` 5, `PLR0912` 3, `PLR0913` 12, `PLR0915` 1.
+Status: phase 1 (guardrails), phase 2a–2e and 2f wave 1 (parts A–C) merged (2026-11-18); 2f wave 2, parts D (`_callouts`, `build_row`, `bike_plan`, `output_insight`), E (`extract_discipline_totals`, `summarize_workout`, `event_facts`, `_measure_facts`, `retire_zero_times`) and F (`main`, `run_display_loop`, `UsernameScreen.render`), **done**, awaiting merge; 2f part G (`render` and `frame_times` in `scripts/render_rotation.py`, `show` in `scripts/list_facts.py`, `main` in `scripts/workout_insights.py`) **done**, awaiting merge; the rest of 2f (`self_update`) and phase 3 planned. Roadmap item 33. Structural `noqa`s after part G: `C901` 1, `PLR0912` 0, `PLR0913` 12, `PLR0915` 0.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So
