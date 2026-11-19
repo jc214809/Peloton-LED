@@ -117,7 +117,7 @@ def test_32_row_card_fits_panel_without_star_badge():
     screen.update(BURST_SECONDS + 1.0)
     assert screen.render(matrix, summary)
     pixels = matrix.image.load()
-    rows = lambda color: {y for y in range(32) for x in range(64) if pixels[x, y] == color}
+    rows = lambda color: {y for y in range(32) for x in range(64) if pixels[x, y] == color}  # noqa: E731  one-line test helper
     gold, white, blue = rows(GOLD), rows(WHITE), rows(BLUE)
     assert gold and white and blue
     assert max(gold) < min(white) and max(white) < min(blue) and max(blue) <= 31

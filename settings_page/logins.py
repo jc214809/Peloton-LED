@@ -204,7 +204,7 @@ def update_auth_env(path, changes):
         temp.unlink(missing_ok=True)
 
 
-def credential_changes(form, logins):
+def credential_changes(form, logins):  # noqa: C901, PLR0912
     """({variable: new value or None to remove}, [problems], [what changed, for the log and the
     page]) from the Logins form. Blank keeps what's saved. Values are checked only for what
     would break auth.env or can't be a login; they never appear in a problem."""

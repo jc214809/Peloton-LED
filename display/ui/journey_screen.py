@@ -204,7 +204,7 @@ class JourneyScreen(Screen):
             self._split(matrix, progress, small, since)
         return True
 
-    def _trip(self, matrix, progress, small, big_fonts, t, miles_y, status_y, bar_y, bar_h, trip_y):
+    def _trip(self, matrix, progress, small, big_fonts, t, miles_y, status_y, bar_y, bar_h, trip_y):  # noqa: PLR0913
         w = matrix.width
         # Where you're headed: the destination, or home on the way back.
         place = progress['from'] if progress['returning'] else progress['to']
@@ -256,7 +256,7 @@ class JourneyScreen(Screen):
             _rect(matrix, 2 + dx, 4 + dx, y - 4, 3, color)
             name = str(group.get('label', ''))
             # Two decimals unless the whole label then wouldn't fit beside them (WALK/RUN at 100+ miles).
-            value = group_figure(cents[row], lambda text: 7 + get_text_width(small, name) + 3
+            value = group_figure(cents[row], lambda text: 7 + get_text_width(small, name) + 3  # noqa: B023  called within the iteration: group_figure calls it at once
                                  <= w - 2 - get_text_width(small, text))
             label = _fit(small, name, w - 2 - get_text_width(small, value) - 3 - 7)
             graphics.DrawText(matrix, small, 7 + dx, y, graphics.Color(*color), label)
@@ -283,7 +283,7 @@ class JourneyScreen(Screen):
                 continue  # this colour hasn't landed: its row waits
             y = 17 + row * 7
             name = str(group.get('label', ''))
-            value = group_figure(cents[row], lambda text: 2 + get_text_width(small, name) + 3
+            value = group_figure(cents[row], lambda text: 2 + get_text_width(small, name) + 3  # noqa: B023  called within the iteration: group_figure calls it at once
                                  <= w - 2 - get_text_width(small, text))
             label = _fit(small, name, w - 4 - get_text_width(small, value) - 3)
             graphics.DrawText(matrix, small, 2, y, graphics.Color(*color), label)

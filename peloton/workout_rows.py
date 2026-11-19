@@ -171,7 +171,7 @@ class RawFiles:
             return None
         try:
             return build_row(detail, self.graph(workout_id), self.ride((detail.get('ride') or {}).get('id')))
-        except Exception:  # noqa: BLE001 - one bad file must not stop the rest
+        except Exception:  # one bad file must not stop the rest
             log.exception('Workout %s: could not build a row from saved files', workout_id)
             return None
 

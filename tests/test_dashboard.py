@@ -807,7 +807,7 @@ def test_a_cached_version_2_insight_is_dropped_whether_the_switch_is_on_or_off(t
         old = {'code': 'output_up', 'lines': ['STRONG RIDE', '205 VS 180 W'], 'facts': {}}
         save_snapshot(dashboard.cache_path, {'summaries': [{'workout_id': 'w1', 'insight': old}, 'junk'],
                                              'totals': {}, 'last_updated': 1.0})
-        summary = Dashboard(token, config, client_factory=lambda _: client).snapshot()['summaries'][0]
+        summary = Dashboard(token, config, client_factory=lambda _: client).snapshot()['summaries'][0]  # noqa: B023  called within the iteration: snapshot() runs synchronously
         assert 'insight' not in summary and summary['workout_id'] == 'w1'
 
 

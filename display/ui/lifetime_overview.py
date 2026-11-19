@@ -22,7 +22,7 @@ def discipline_color(key):
     return COLORS.get(_COLOR_FAMILY.get(key, key), (200, 200, 235))
 
 
-def draw_icon(matrix, key, left, top, color):
+def draw_icon(matrix, key, left, top, color):  # noqa: C901, PLR0912, PLR0915
     """Draw a Peloton-inspired silhouette in a 26×24 pixel canvas."""
     def pixel(x, y):
         if 0 <= x < 26 and 0 <= y < 24:
@@ -97,27 +97,40 @@ def draw_icon(matrix, key, left, top, color):
     # cover the rest.
     if key in ('hiking', 'outdoor'):
         circle(8, 2, 2, thickness=2)
-        thick_line(8, 5, 7, 12); thick_line(7, 7, 2, 11)
-        thick_line(8, 7, 14, 10); thick_line(7, 12, 4, 20)
-        thick_line(7, 12, 13, 19); thick_line(13, 19, 18, 19)
+        thick_line(8, 5, 7, 12)
+        thick_line(7, 7, 2, 11)
+        thick_line(8, 7, 14, 10)
+        thick_line(7, 12, 4, 20)
+        thick_line(7, 12, 13, 19)
+        thick_line(13, 19, 18, 19)
         thick_line(17, 7, 21, 0)
     elif key == 'boxing':
         circle(9, 3, 2, thickness=2)
-        thick_line(9, 6, 8, 13); thick_line(8, 8, 14, 12)
-        thick_line(8, 13, 3, 19); thick_line(3, 19, 10, 19)
-        thick_line(8, 13, 16, 17); thick_line(16, 17, 21, 17)
+        thick_line(9, 6, 8, 13)
+        thick_line(8, 8, 14, 12)
+        thick_line(8, 13, 3, 19)
+        thick_line(3, 19, 10, 19)
+        thick_line(8, 13, 16, 17)
+        thick_line(16, 17, 21, 17)
         thick_line(14, 12, 19, 8)
-        fill_rect(17, 6, 21, 8); fill_rect(16, 5, 17, 9); fill_rect(21, 5, 22, 9)
+        fill_rect(17, 6, 21, 8)
+        fill_rect(16, 5, 17, 9)
+        fill_rect(21, 5, 22, 9)
     elif key == 'mobility':
         circle(16, 4, 2, thickness=2)
-        thick_line(15, 7, 11, 13); thick_line(11, 13, 4, 18)
-        thick_line(11, 13, 19, 18); thick_line(15, 8, 8, 5)
+        thick_line(15, 7, 11, 13)
+        thick_line(11, 13, 4, 18)
+        thick_line(11, 13, 19, 18)
+        thick_line(15, 8, 8, 5)
         thick_line(8, 5, 3, 1)
-        line(3, 1, 10, 0); line(10, 0, 18, 2); line(18, 2, 22, 7)
+        line(3, 1, 10, 0)
+        line(10, 0, 18, 2)
+        line(18, 2, 22, 7)
         line(1, 20, 23, 20)
     elif key in ('pilates', 'barre'):
         circle(13, 3, 2, thickness=2)
-        thick_line(13, 6, 10, 14); thick_line(10, 14, 3, 19)
+        thick_line(13, 6, 10, 14)
+        thick_line(10, 14, 3, 19)
         thick_line(10, 14, 22, 19)
     else:
         for x in (2, 10, 18):

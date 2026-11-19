@@ -138,7 +138,7 @@ def test_every_frame_holds_like_the_chart_slides_and_sizes_the_page():
 
     class Dash:
         pending_milestones = pending_discipline_milestones = lambda self, *_: []
-        should_celebrate_pr = lambda self, *_: False
+        should_celebrate_pr = lambda self, *_: False  # noqa: E731  one-line test helper
 
     display = {'rotation': ['latest_workouts'], 'last_workout_detail_interval': 4.0, 'screen_durations': {}}
     for height, frames in ((64, 4), (32, 5)):
@@ -396,7 +396,7 @@ def test_the_milestone_page_adds_one_frame_of_hold_time():
 
     class Dash:
         pending_milestones = pending_discipline_milestones = lambda self, *_: []
-        should_celebrate_pr = lambda self, *_: False
+        should_celebrate_pr = lambda self, *_: False  # noqa: E731  one-line test helper
 
     display = {'rotation': ['latest_workouts'], 'last_workout_detail_interval': 4.0, 'screen_durations': {}}
     for height in (64, 32):

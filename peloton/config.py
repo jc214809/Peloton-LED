@@ -145,7 +145,7 @@ def _validate_milestones(path, milestones, prefix):
     return sorted(set(milestones))
 
 
-def _validate_journey(path, journey, prefix):
+def _validate_journey(path, journey, prefix):  # noqa: C901
     """Route for the distance journey: from/to names, miles, disciplines."""
     where = f'{path}: {prefix}journey'
     if not isinstance(journey, dict) or not {'from', 'to', 'miles'} <= set(journey):
@@ -181,7 +181,7 @@ def _int_in(value, low, high=None):
             and (high is None or value <= high))
 
 
-def _validate_matrix(path, matrix):
+def _validate_matrix(path, matrix):  # noqa: C901
     """Optional top-level "matrix" section: LED panel and driver settings."""
     if matrix is None:
         matrix = {}
@@ -230,7 +230,7 @@ def load_config(path='config', allow_missing=False):
     return validate_config(config, path)
 
 
-def validate_config(config, path='config.json'):
+def validate_config(config, path='config.json'):  # noqa: C901, PLR0912, PLR0915
     """Check a parsed config and fill in display defaults; raises ValueError naming
     the first problem (prefixed with path). Changes config in place and returns it,
     so pass a copy to check one without changing it (the settings page does)."""

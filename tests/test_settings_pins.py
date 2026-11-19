@@ -151,7 +151,7 @@ def test_a_bad_pin_file_shows_nothing_and_is_logged_once(tmp_path, fresh_cache, 
     path = tmp_path / 'pin'
     path.write_text(content)
     for tick in (0, 2):
-        assert settings_pin.shown_pin(str(path), clock=lambda: 1000, monotonic=lambda: tick) is None
+        assert settings_pin.shown_pin(str(path), clock=lambda: 1000, monotonic=lambda: tick) is None  # noqa: B023  called within the iteration
     if content != '12ab 2000':
         assert caplog.text.count("Can't read the settings PIN") == 1
 

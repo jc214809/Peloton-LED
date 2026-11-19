@@ -86,7 +86,7 @@ def _truncate(font, text: str, max_px: int) -> str:
     return text.rstrip()
 
 
-def _draw_stat(matrix, font, x: int, y: int, color, text: str, max_px: int, right_align: bool = False, star: bool = False) -> None:
+def _draw_stat(matrix, font, x: int, y: int, color, text: str, max_px: int, right_align: bool = False, star: bool = False) -> None:  # noqa: PLR0913
     """Draw 'value label' with tight gap between parts, truncating label if needed."""
     parts = text.split(' ', 1)
     val = parts[0]
@@ -229,7 +229,7 @@ def top_lift_text(top: dict, unit: str) -> str:
     return weight or f"{top['reps']} REPS"
 
 
-def _stat_details(summary: dict) -> List[dict]:
+def _stat_details(summary: dict) -> List[dict]:  # noqa: PLR0915
     """Discipline-specific stat values with spelled-out labels, one detail per
     stat, for the rotating single-item display (e.g. "output", not "kj")."""
     disc = (summary.get("discipline") or "").strip().lower()
@@ -489,7 +489,7 @@ def _draw_graph(matrix, summary: dict, font, label_y: int, top: int, bottom: int
             matrix.SetPixel(x, bottom - bar, 255, 215, 0)
 
 
-def _draw_zones(matrix, seconds: List[float], font, big_font, label_y: int,
+def _draw_zones(matrix, seconds: List[float], font, big_font, label_y: int,  # noqa: PLR0913
                 bar_top: int, bar_bottom: int, text_y: int) -> None:
     """Stacked zone bar across the panel, then the zone you spent longest in."""
     w = matrix.width
@@ -1009,7 +1009,7 @@ class LastWorkoutScreen(Screen):
             return False
         return _draw_insight_frame(matrix, summary, discipline, detail, phase, detail_hold_seconds(detail, interval))
 
-    def _render_short(self, matrix, summary: dict, discipline: str, title_font, text_font, stat_font) -> bool:
+    def _render_short(self, matrix, summary: dict, discipline: str, title_font, text_font, stat_font) -> bool:  # noqa: C901, PLR0912, PLR0915
         """64x32 version of the two-phase layout.
 
         Same order as 64x64 with the room redistributed:
@@ -1113,7 +1113,7 @@ class LastWorkoutScreen(Screen):
         _draw_hr_calories(matrix, summary, stat_font, bottom_y)
         return True
 
-    def render(self, matrix, state: Optional[Any] = None) -> bool:
+    def render(self, matrix, state: Optional[Any] = None) -> bool:  # noqa: C901, PLR0912, PLR0915
         summary = state or {}
         if not summary:
             return False

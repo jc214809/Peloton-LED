@@ -125,7 +125,7 @@ def planned_watts(cadence, resistance, curve=BIKE_CURVE):
     return math.exp(a + b * math.log(max(cadence, 20)) + c * math.log(max(resistance, 5)))
 
 
-def bike_plan(graph, ride_meta=None):
+def bike_plan(graph, ride_meta=None):  # noqa: C901
     """The nine plan descriptors of a bike class (PLAN_KEYS), or None without callout lines.
 
     Built from the 5-second cadence and resistance callout lines over riding segments only.
@@ -246,7 +246,7 @@ def strength_asks(ride):
     }
 
 
-def build_row(detail, graph=None, ride=None):
+def build_row(detail, graph=None, ride=None):  # noqa: C901, PLR0912, PLR0915
     """One row (spec section 3). Raises ValueError when the detail lacks an id or start time."""
     if not isinstance(detail, dict) or not detail.get('id') or detail.get('start_time') is None:
         raise ValueError('workout detail without id or start_time')
@@ -374,7 +374,7 @@ def _reading_watts(series, i):
     return planned_watts(cadence[i], resistance[i])
 
 
-def _callouts(row, graph, times, series, work_windows):
+def _callouts(row, graph, times, series, work_windows):  # noqa: C901, PLR0912
     """The instructor's callouts inside work segments: their level, and where the rider sat in them.
 
     Only the seconds inside work segments count: a callout that runs on into an arms section (pedalling

@@ -80,7 +80,7 @@ def test_the_zone_bar_is_five_equal_bands_in_the_workout_pages_colours():
 def test_the_settings_icon_svg_has_every_pixel_once():
     svg = logo.svg()
     lit = set()
-    for x, y, w, fill in re.findall(r'<rect x="(\d+)" y="(\d+)" width="(\d+)" height="1" fill="(#\w+)"/>', svg):
+    for x, y, w, _fill in re.findall(r'<rect x="(\d+)" y="(\d+)" width="(\d+)" height="1" fill="(#\w+)"/>', svg):
         for i in range(int(w)):
             xy = (int(x) + i, int(y))
             assert xy not in lit

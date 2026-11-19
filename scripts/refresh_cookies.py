@@ -453,7 +453,7 @@ def _write_renewal_failed(marker: Path, reason: str) -> None:
         print(f"Warning: could not write {marker}: {exc}", file=sys.stderr)
 
 
-def _ensure_token(token_path: Path, config_path: Path, headless: bool = True,
+def _ensure_token(token_path: Path, config_path: Path, headless: bool = True,  # noqa: C901, PLR0912
                   renew_before_seconds: float = 12 * 60 * 60,
                   email: str | None = None, password: str | None = None,
                   load_credentials: bool = True) -> tuple[str, bool]:
@@ -579,7 +579,7 @@ def seed_tokens(seed_dir: Path, config_path: Path, headless: bool = True) -> lis
     return seeded
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901, PLR0912, PLR0915
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
     load_dotenv()
     parser = argparse.ArgumentParser(description="Refresh Peloton access token via browser login.")

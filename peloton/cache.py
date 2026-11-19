@@ -19,7 +19,7 @@ PERSISTED_KEYS = (
 )
 
 
-def load_snapshot(path):
+def load_snapshot(path):  # noqa: C901, PLR0912
     """Return a validated cached snapshot, or None when it cannot be used."""
     path = Path(path)
     try:

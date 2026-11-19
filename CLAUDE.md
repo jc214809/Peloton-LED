@@ -39,6 +39,8 @@ python -m pytest tests/ --cov --cov-report=term-missing         # coverage
 
 CI (`.github/workflows/tests.yml`) runs the suite on Python 3.11 and 3.13 for every PR and every push to `main` and `develop-beta`. The local venv is newer (3.14), so before pushing also run `TZ=UTC uv run --no-project --python 3.11 --with-requirements requirements-dev.txt python -m pytest tests/ -q`: 3.11 is the boards' Python (no PEP 701 f-strings: no line breaks or reused quotes inside `{}`), and CI runs in UTC (page times use the board's zone, never the machine's). Install test deps with `pip install -r requirements-dev.txt` (it pulls in `requirements-auth.txt`: the browser-login tests import Playwright; Chromium itself is mocked).
 
+Lint and structure checks (CI's `lint` job, Python 3.11; config in `pyproject.toml`, plan and baseline in `docs/CODE-HEALTH-PLAN.md`): `ruff check .` and `lint-imports` (import layers; run from the repo root). Ratchet: today's over-complex functions carry an inline structural `# noqa` (`C901`, `PLR0912`, `PLR0913`, `PLR0915`); remove a function's when you touch it, never add one to new code, and `RUF100` fails on a stale one. A source file stays at most 600 lines: `tests/test_file_length.py` holds today's longer ones at their current length (shrink one, then lower its cap).
+
 Coverage: sources and omits in `.coveragerc`, branch coverage on, `fail_under = 90`; new code needs tests, not omits. CI uploads the 3.11 run's `coverage.xml` to Codecov (`CODECOV_TOKEN` secret), whose patch check also gates a PR.
 
 ## Branches and releases

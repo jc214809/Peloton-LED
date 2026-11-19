@@ -96,7 +96,7 @@ class UsernameScreen(Screen):
             for x in list(range(0, MARGIN)) + list(range(matrix.width - MARGIN, matrix.width)):
                 matrix.SetPixel(x, y, 0, 0, 0)
 
-    def render(self, matrix, state=None):
+    def render(self, matrix, state=None):  # noqa: C901, PLR0912, PLR0915
         username = (state or {}).get("username") if isinstance(state, dict) else state
         text = (username or "").strip() or "Peloton Member"
         title_font = self._username_font(text, matrix.width - 4)

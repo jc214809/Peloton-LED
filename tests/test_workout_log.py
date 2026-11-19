@@ -28,7 +28,7 @@ def _age_of(moment):
     return (NOW - moment.timestamp()) / DAY
 
 
-def _w(identity, age_days=0.0, status='COMPLETE', discipline='cycling', distance=None, instructor=('cody', 'Cody Rigsby'),
+def _w(identity, age_days=0.0, status='COMPLETE', discipline='cycling', distance=None, instructor=('cody', 'Cody Rigsby'),  # noqa: PLR0913
        total_work=None, duration=1200, **extra):
     ride = {'fitness_discipline': discipline, 'duration': duration, 'title': f'{duration // 60} min ride',
             'id': f'class-{identity}'}

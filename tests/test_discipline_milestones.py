@@ -482,7 +482,7 @@ def test_bootcamp_names_are_centred_by_their_lit_pixels(title, discipline, lit):
 
 def test_countdown_ink_table_matches_the_fonts():
     """NAME_INK is a measurement, so re-measure it: the first lit column and lit width when drawn from x = 0."""
-    from display.display import loaded_fonts, get_text_width
+    from display.display import loaded_fonts
     import display.ui.countdown_screen as screen
     initialize_fonts(64)
     for name, expected in screen.NAME_INK.items():

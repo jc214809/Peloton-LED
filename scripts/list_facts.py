@@ -108,7 +108,7 @@ def compare_totals(snapshot):
     return rows
 
 
-def show(snapshot, passes):
+def show(snapshot, passes):  # noqa: C901, PLR0912
     frames = snapshot.get('time_frames') or {}
     if not frames:
         print('No time-frame figures: the log is empty or its backfill is not complete (try --assume-complete).')
@@ -141,7 +141,7 @@ def show(snapshot, passes):
                   + '  |  '.join(f'{d["label"]}: {d["lines"][0]} ({d["lines"][1]})' for d in ranking))
     print()
     print('scores (base + bonuses, before any cool-down):')
-    for score, fact, ranking in scored_facts(snapshot):
+    for score, fact, _ranking in scored_facts(snapshot):
         print(f'   {score:>5.0f}  {fact["key"]:<34} {fact["label"]}: {" / ".join(fact["lines"])}')
     print()
     snapshot = dict(snapshot, name_facts_passes=0, name_facts_shown={})

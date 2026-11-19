@@ -22,7 +22,7 @@ from settings_page import logo
 from settings_page.history import RECENT_DAYS
 from settings_page.logins import RENEW_BEFORE_S, renews_at, when
 from settings_page.updates import BUSY, START_FAILED, STARTED, STEPS
-from peloton.screen_times import (FRAME_SECONDS, HIGHLIGHT_SECONDS, VERSUS_STATS, least_seconds, page_seconds,
+from peloton.screen_times import (HIGHLIGHT_SECONDS, VERSUS_STATS, least_seconds, page_seconds,
                                   retire_zero_times)
 from settings_page.form import (COLORS, FORM_FIELD, PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SCREENS,
                                 SHARED_DURATION, STREAK_REMINDER_DEFAULT, SWITCH_KEYS, TIMING, TIMING_LEAST, WEEKDAYS,
@@ -800,7 +800,7 @@ def _secs(value):
 RIDE_STATS, RIDE_CHARTS = 6, 2
 
 
-def shows_for(name, display, rows):
+def shows_for(name, display, rows):  # noqa: C901, PLR0912
     """What a screen's time means on this board, worked out as the board works it out
     (peloton.screen_times). display: the config's display over DEFAULTS."""
     t = page_seconds(display, name, rows)
@@ -849,7 +849,7 @@ def _screen_row(name, label, hint, on, display, rows=64):
         # Each page lasts every stat once: no time of its own to set.
         time = '<span class="time shared" title="Every stat once, at the stat time under Timing">Every stat</span>'
     elif name in SHARED_DURATION:
-        other = dict((n, l) for n, l, _ in SCREENS)[SHARED_DURATION[name]]
+        other = dict((n, lbl) for n, lbl, _ in SCREENS)[SHARED_DURATION[name]]
         # The column is narrow: the label's first word ("Lifetime"), the full name in the tooltip.
         time = (f'<span class="time shared" title="Shown as long as each {_attr(other)} page">'
                 f'Same as {escape(other.split()[0])}</span>')
@@ -1064,7 +1064,7 @@ def _at(value, zone):
     return when(value, zone) if isinstance(value, (int, float)) else str(value)
 
 
-def renewal_status(view, zone=None):
+def renewal_status(view, zone=None):  # noqa: C901
     """Token renewal as labelled rows: whether it's running or how its last run went, when it next
     checks, failures in a row, and the board's mode. data-running makes the page's script follow a
     run (/renew/status answers with this block again)."""
@@ -1220,7 +1220,7 @@ def _short(sha):
     return escape(str(sha)[:7]) if sha else '?'
 
 
-def _post(action, label, glyph, busy, kind='secondary', fields='', confirm=None, disabled=False):
+def _post(action, label, glyph, busy, kind='secondary', fields='', confirm=None, disabled=False):  # noqa: PLR0913
     """A one-button form of the Updates card. busy: the button's text while it works."""
     extra = f' data-confirm="{_attr(confirm)}"' if confirm else ''
     return (f'<form method="post" action="{action}" data-busy="{_attr(busy)}"{extra}>{fields}'
@@ -1293,7 +1293,7 @@ def _changes(view, found):
             + f'{packages}</div>')
 
 
-def updates_card(view, started=None, zone=None):
+def updates_card(view, started=None, zone=None):  # noqa: C901
     """The Updates card, from updates.Updates.view(): what's installed, how the last update went, a
     channel to check, and Update now (after a check found one) and Roll back. started: how starting
     an update or rollback went, one of updates.STARTS."""
@@ -1502,7 +1502,7 @@ def insights_card(display, history=None, zone=None):
                     'Comparisons with your similar earlier workouts, after your latest workout.', body, 'bulb')
 
 
-def settings_page(config, hotspot=None, problems=(), saved=None, board=None, note=None, logins=None,
+def settings_page(config, hotspot=None, problems=(), saved=None, board=None, note=None, logins=None,  # noqa: PLR0913
                   signed_in=True, login_outcome=None, login_problems=(), updates=None, started=None,
                   alert_outcome=None, alert_problems=(), editing_rider=None, history=None, power_outcome=None,
                   display_running=None):
@@ -1537,7 +1537,7 @@ def settings_page(config, hotspot=None, problems=(), saved=None, board=None, not
                'For your name and the per-discipline pages.')
     ), 'type')
 
-    screen_rows = ''.join(_screen_row(name, *dict((n, (l, h)) for n, l, h in SCREENS)[name], on, merged,
+    screen_rows = ''.join(_screen_row(name, *dict((n, (lbl, h)) for n, lbl, h in SCREENS)[name], on, merged,
                                       _rows(matrix))
                           for name, on in rotation_rows(display))
     rotation = _section('rotation', 'Rotation', 'Which screens the board shows, in this order, and for how long.', (

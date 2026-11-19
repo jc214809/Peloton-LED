@@ -99,7 +99,7 @@ def _all_hit(sets):
 
 # 5.1 Output or pace against peers
 
-def output_insight(target, group, real):
+def output_insight(target, group, real):  # noqa: C901, PLR0912
     """down / up / in line, for every discipline with an output or speed series.
 
     `real` is how many of `group` are real peers; the rest are bike fill-ins (section 4.1), which

@@ -167,7 +167,7 @@ def _seconds(value):
     return f'{value:g} second{"" if value == 1 else "s"}'
 
 
-def apply_form(config, form):
+def apply_form(config, form):  # noqa: C901, PLR0912, PLR0915
     """(the config to save, [problems]) from the posted form: {field: [values]}, as
     urllib.parse.parse_qs(..., keep_blank_values=True) gives it. With any problem, nothing
     should be saved."""

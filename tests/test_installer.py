@@ -271,7 +271,7 @@ def test_installer_rider_snippets_resolve_default_token_paths_like_the_app(tmp_p
     config.write_text(json.dumps({'users': [
         {'name': 'Joel'}, {'name': 'Jen', 'token_path': '/var/lib/peloton-led/cookies-jen.txt'}]}))
     tokens, summary = _installer_snippets()
-    run = lambda code: subprocess.run([sys.executable, '-', str(config), str(ROOT), '/etc/peloton-led'],
+    run = lambda code: subprocess.run([sys.executable, '-', str(config), str(ROOT), '/etc/peloton-led'],  # noqa: E731  one-line test helper
                                       input=code, text=True, capture_output=True, check=True).stdout
     assert run(tokens).split() == ['/etc/peloton-led/cookies-joel.txt', '/var/lib/peloton-led/cookies-jen.txt']
     assert run(summary).strip() == ('2 riders: Joel (/etc/peloton-led/cookies-joel.txt), '
@@ -296,7 +296,7 @@ def _fake_bin(tmp_path, **scripts):
     return {**os.environ, 'PATH': f'{bin_dir}:{os.environ["PATH"]}'}
 
 
-def _token_mode(tmp_path, flag='', saved=None, installed=False, venv_only=False, timer_enabled=False,
+def _token_mode(tmp_path, flag='', saved=None, installed=False, venv_only=False, timer_enabled=False,  # noqa: PLR0913
                 manual_conf=False, playwright=False, long_bit=64, mem_kb=3884000):
     """Run resolve_token_mode then save_token_mode against a fake board.
 

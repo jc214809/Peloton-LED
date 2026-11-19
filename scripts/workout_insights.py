@@ -98,7 +98,7 @@ def fetch_new(client, store, raw, log_path, limit):
     return sync(client, store, raw, ids, limit=limit)
 
 
-def main(argv=None):
+def main(argv=None):  # noqa: C901, PLR0912
     options = args(argv)
     logging.basicConfig(level=logging.DEBUG if options.verbose else logging.INFO,
                         format='%(levelname)s %(name)s: %(message)s', stream=sys.stderr)
