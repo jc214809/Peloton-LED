@@ -96,7 +96,7 @@ class UsernameScreen(Screen):
             for x in list(range(0, MARGIN)) + list(range(matrix.width - MARGIN, matrix.width)):
                 matrix.SetPixel(x, y, 0, 0, 0)
 
-    def render(self, matrix, state=None):  # noqa: C901, PLR0912, PLR0915
+    def render(self, matrix, state=None):
         username = (state or {}).get("username") if isinstance(state, dict) else state
         text = (username or "").strip() or "Peloton Member"
         title_font = self._username_font(text, matrix.width - 4)
@@ -110,10 +110,14 @@ class UsernameScreen(Screen):
         text = self._fit(title_font, text, matrix.width - 4)
         details = (state or {}).get('details', []) if isinstance(state, dict) else []
         compact = matrix.height < 64
-        title_y = 8 if compact else 17
-        self._center(matrix, title_font, text, title_y, color)
+        self._center(matrix, title_font, text, 8 if compact else 17, color)
+        self._draw_accent(matrix, compact)
+        if details:
+            self._draw_detail(matrix, state, details, small_font, value_font)
+        return True
 
-        # The accent arrives immediately, then remains fixed under the username.
+    def _draw_accent(self, matrix, compact):
+        """The accent arrives immediately, then remains fixed under the username."""
         blue = graphics.Color(0, 120, 255)
         line_width = min(matrix.width - 12, max(8, round((matrix.width - 12) * min(1, self.elapsed / 0.35))))
         line_left = (matrix.width - line_width) // 2
@@ -121,55 +125,65 @@ class UsernameScreen(Screen):
         for x in range(line_left, line_left + line_width):
             matrix.SetPixel(x, line_y, blue.red, blue.green, blue.blue)
 
-        if details:
-            # build_rotation_pages shares the page's time out (detail_seconds), each highlight once;
-            # without it, each gets the standard 4 s and the list repeats.
-            interval = state.get('detail_seconds') or DETAIL_INTERVAL_SECONDS
-            index = int(self.elapsed / interval)
-            index = min(index, len(details) - 1) if state.get('detail_seconds') else index % len(details)
-            phase_seconds = self.elapsed % interval
-            detail = details[index]
-            # Each new detail rises into place during its first 0.3 seconds.
-            # 32-row panels rise 2px so the second line never drops off the bottom.
-            rise = 2 if compact else 3
-            offset = max(0, round(rise * (1 - min(1, phase_seconds / 0.3))))
-            # The small fonts' accented capitals don't read (Ó looks like 6): highlights draw them plain.
-            label = plain_letters(str(detail.get('label', '')).upper())
-            if get_text_width(small_font, label) > matrix.width - 4 and detail.get('short_label'):
-                label = plain_letters(str(detail['short_label']).upper())
-            label = self._fit(small_font, label, matrix.width - 4)
-            lines = [plain_letters(str(line)) for line in detail.get('lines') or [detail.get('value', '')]]
-            room = matrix.width - 2 * MARGIN
-            wrapped = None
-            if not compact and len(lines) == 2:
-                first = str(lines[0]).upper().strip()
-                if get_text_width(value_font, first) > room:
-                    wrapped = self.wrap_two_lines(value_font, first, room)
-            label_y = (17 if compact else 38 - (WRAP_LABEL_RISE if wrapped else 0)) + offset
-            self._center(matrix, small_font, label, label_y, graphics.Color(145, 165, 190))
-            line_color = color_dict.get(detail.get('color_key'), graphics.Color(255, 255, 255))
-            big_font = loaded_fonts.get(detail.get('font_key'))
-            if big_font and len(lines) == 1 and get_text_width(big_font, str(lines[0])) <= matrix.width - 4:
-                # A single headline number (e.g. total workouts) fills the space below the label.
-                self._center(matrix, big_font, str(lines[0]), (30 if compact else 58) + offset, line_color)
-                return True
-            if wrapped:
-                # 64 rows: the long name on two lines, the count (or minutes) still under it.
-                rows = wrapped + [str(lines[1]).upper().strip()]
-                for line, baseline in zip(rows, WRAPPED_BASELINES):
-                    self._center(matrix, value_font, line, baseline + offset, line_color)
-                return True
-            # 32 rows: 7px line pitch leaves a blank row between the two 4x6 lines.
-            baselines = (24, 31) if compact else (50, 59)
-            for line, baseline in zip(lines[:2], baselines):
-                line = str(line).upper().strip()
-                width = get_text_width(value_font, line)
-                if compact and room < width <= matrix.width:
-                    # Only a little too wide for the margins: edge to edge, no scrolling.
-                    graphics.DrawText(matrix, value_font, (matrix.width - width) // 2, baseline + offset,
-                                      line_color, line)
-                elif width > room:
-                    self._scrolling(matrix, value_font, line, baseline + offset, line_color, phase_seconds, interval)
-                else:
-                    self._center(matrix, value_font, line, baseline + offset, line_color)
-        return True
+    def _current_detail(self, state, details):
+        """(the highlight showing now, seconds into it, seconds each lasts)."""
+        # build_rotation_pages shares the page's time out (detail_seconds), each highlight once;
+        # without it, each gets the standard 4 s and the list repeats.
+        interval = state.get('detail_seconds') or DETAIL_INTERVAL_SECONDS
+        index = int(self.elapsed / interval)
+        index = min(index, len(details) - 1) if state.get('detail_seconds') else index % len(details)
+        return details[index], self.elapsed % interval, interval
+
+    def _detail_label(self, small_font, detail, width):
+        # The small fonts' accented capitals don't read (Ó looks like 6): highlights draw them plain.
+        label = plain_letters(str(detail.get('label', '')).upper())
+        if get_text_width(small_font, label) > width - 4 and detail.get('short_label'):
+            label = plain_letters(str(detail['short_label']).upper())
+        return self._fit(small_font, label, width - 4)
+
+    def _draw_detail(self, matrix, state, details, small_font, value_font):
+        compact = matrix.height < 64
+        detail, phase_seconds, interval = self._current_detail(state, details)
+        # Each new detail rises into place during its first 0.3 seconds.
+        # 32-row panels rise 2px so the second line never drops off the bottom.
+        rise = 2 if compact else 3
+        offset = max(0, round(rise * (1 - min(1, phase_seconds / 0.3))))
+        label = self._detail_label(small_font, detail, matrix.width)
+        lines = [plain_letters(str(line)) for line in detail.get('lines') or [detail.get('value', '')]]
+        room = matrix.width - 2 * MARGIN
+        wrapped = None
+        if not compact and len(lines) == 2:
+            first = str(lines[0]).upper().strip()
+            if get_text_width(value_font, first) > room:
+                wrapped = self.wrap_two_lines(value_font, first, room)
+        label_y = (17 if compact else 38 - (WRAP_LABEL_RISE if wrapped else 0)) + offset
+        self._center(matrix, small_font, label, label_y, graphics.Color(145, 165, 190))
+        line_color = color_dict.get(detail.get('color_key'), graphics.Color(255, 255, 255))
+        big_font = loaded_fonts.get(detail.get('font_key'))
+        if big_font and len(lines) == 1 and get_text_width(big_font, str(lines[0])) <= matrix.width - 4:
+            # A single headline number (e.g. total workouts) fills the space below the label.
+            self._center(matrix, big_font, str(lines[0]), (30 if compact else 58) + offset, line_color)
+        elif wrapped:
+            # 64 rows: the long name on two lines, the count (or minutes) still under it.
+            rows = wrapped + [str(lines[1]).upper().strip()]
+            for line, baseline in zip(rows, WRAPPED_BASELINES):
+                self._center(matrix, value_font, line, baseline + offset, line_color)
+        else:
+            self._draw_value_lines(matrix, value_font, lines, offset, line_color, phase_seconds, interval)
+
+    def _draw_value_lines(self, matrix, value_font, lines, offset, line_color, phase_seconds, interval):
+        compact = matrix.height < 64
+        room = matrix.width - 2 * MARGIN
+        # 32 rows: 7px line pitch leaves a blank row between the two 4x6 lines.
+        baselines = (24, 31) if compact else (50, 59)
+        for line, baseline in zip(lines[:2], baselines):
+            line = str(line).upper().strip()
+            width = get_text_width(value_font, line)
+            if compact and room < width <= matrix.width:
+                # Only a little too wide for the margins: edge to edge, no scrolling.
+                graphics.DrawText(matrix, value_font, (matrix.width - width) // 2, baseline + offset,
+                                  line_color, line)
+            elif width > room:
+                self._scrolling(matrix, value_font, line, baseline + offset, line_color, phase_seconds, interval)
+            else:
+                self._center(matrix, value_font, line, baseline + offset, line_color)

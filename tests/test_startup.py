@@ -822,9 +822,12 @@ def test_app_refuses_to_stay_root_after_a_failed_drop(monkeypatch, run_as, euid,
 def test_privileges_are_checked_right_after_the_matrix_is_created():
     from pathlib import Path
     text = (Path(__file__).resolve().parents[1] / 'peloton_led.py').read_text()
-    create = text.index("matrix = RGBMatrix(options=led_matrix_options(options, config['matrix']))")
+    create = text.index("matrix = ui.RGBMatrix(options=led_matrix_options(options, config['matrix']))")
     check = text.index('    ensure_privileges_dropped()\n')
-    assert create < check < text.index('profiles = configured_profiles(config, options)')
+    # Nothing sits between the two (main() calls _build_matrix before anything else that touches the board).
+    assert text[create:check].count('\n') == 1
+    assert text.index('matrix = _build_matrix(options, config, ui)') < text.index(
+        'profiles = configured_profiles(config, options)')
 
 
 def test_each_rider_rotation_uses_their_own_goals_milestones_and_journey(tmp_path):
