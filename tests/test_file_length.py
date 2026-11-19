@@ -11,7 +11,7 @@ MAX_LINES = 600
 
 # path: current maximum. Remove an entry once the file is at most MAX_LINES.
 ALLOWED_OVER = {
-    'settings_page/server.py': 670,
+    'settings_page/server.py': 660,
 }
 
 

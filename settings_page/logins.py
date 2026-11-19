@@ -204,49 +204,61 @@ def update_auth_env(path, changes):
         temp.unlink(missing_ok=True)
 
 
-def credential_changes(form, logins):  # noqa: C901, PLR0912
+def _form_value(form, name):
+    return (form.get(name) or [''])[0]
+
+
+def _has_control_char(value):
+    return any(ord(ch) < 32 or ord(ch) == 127 for ch in value)
+
+
+def _login_changes(form, login, changes, problems, changed):
+    """One rider's email and password fields into changes, problems and changed."""
+    email = _form_value(form, f'cred_{login.key}_email').strip()
+    password = _form_value(form, f'cred_{login.key}_password')
+    if email:
+        if not _EMAIL.fullmatch(email):
+            problems.append(f"{login.name}'s email doesn't look like an email address.")
+        else:
+            changes[login.email_env] = email
+            changed.append(f"{login.name}'s email")
+    if password:
+        if _has_control_char(password):
+            problems.append(f"{login.name}'s password can't contain line breaks or control characters.")
+        else:
+            changes[login.password_env] = password
+            changed.append(f"{login.name}'s password")
+
+
+def _pushover_changes(form, changes, problems, changed):
+    """The Pushover keys (cleared, or each one set) into changes, problems and changed."""
+    if _form_value(form, 'pushover_clear') == 'on':
+        changes.update({name: None for name in PUSHOVER_KEYS})
+        changed.append('Pushover keys removed')
+        return
+    for name, field, label in ((PUSHOVER_KEYS[0], 'pushover_app_token', 'Pushover app token'),
+                               (PUSHOVER_KEYS[1], 'pushover_user_key', 'Pushover user key')):
+        value = _form_value(form, field).strip()
+        if not value:
+            continue
+        if not _PUSHOVER.fullmatch(value):
+            problems.append(f'The {label} should be letters and numbers only, as pushover.net shows it.')
+        else:
+            changes[name] = value
+            changed.append(label)
+
+
+def credential_changes(form, logins):
     """({variable: new value or None to remove}, [problems], [what changed, for the log and the
     page]) from the Logins form. Blank keeps what's saved. Values are checked only for what
     would break auth.env or can't be a login; they never appear in a problem."""
     changes, problems, changed = {}, [], []
-
-    def one(name):
-        return (form.get(name) or [''])[0]
-
-    def bad(value):
-        return any(ord(ch) < 32 or ord(ch) == 127 for ch in value)
-
     for login in logins:
-        if f'cred_{login.key}_name' in form and one(f'cred_{login.key}_name') != login.name:
+        if f'cred_{login.key}_name' in form and _form_value(form, f'cred_{login.key}_name') != login.name:
             problems.append('The riders in config.json changed since this page loaded: reload it and try again.')
             return {}, problems, []
-        email, password = one(f'cred_{login.key}_email').strip(), one(f'cred_{login.key}_password')
-        if email:
-            if not _EMAIL.fullmatch(email):
-                problems.append(f"{login.name}'s email doesn't look like an email address.")
-            else:
-                changes[login.email_env] = email
-                changed.append(f"{login.name}'s email")
-        if password:
-            if bad(password):
-                problems.append(f"{login.name}'s password can't contain line breaks or control characters.")
-            else:
-                changes[login.password_env] = password
-                changed.append(f"{login.name}'s password")
-    if one('pushover_clear') == 'on':
-        changes.update({name: None for name in PUSHOVER_KEYS})
-        changed.append('Pushover keys removed')
-    else:
-        for name, field, label in ((PUSHOVER_KEYS[0], 'pushover_app_token', 'Pushover app token'),
-                                   (PUSHOVER_KEYS[1], 'pushover_user_key', 'Pushover user key')):
-            value = one(field).strip()
-            if not value:
-                continue
-            if not _PUSHOVER.fullmatch(value):
-                problems.append(f'The {label} should be letters and numbers only, as pushover.net shows it.')
-            else:
-                changes[name] = value
-                changed.append(label)
+        _login_changes(form, login, changes, problems, changed)
+    _pushover_changes(form, changes, problems, changed)
     return (changes, problems, changed) if not problems else ({}, problems, [])
 
 

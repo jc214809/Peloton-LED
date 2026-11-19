@@ -18,7 +18,6 @@ import argparse
 import json
 import logging
 import os
-import re
 import shutil
 import socket
 import subprocess
@@ -33,6 +32,7 @@ from peloton import notify
 from settings_page import history, logins, logo, page
 from settings_page.form import apply_form
 from settings_page.pins import PIN_FILE, PIN_SHOWN_S, SESSION_S, PinGate
+from settings_page.systemd_text import timespan_seconds, unix_time
 from settings_page.updates import STARTS, Updates
 from utils import wifi_setup
 
@@ -483,59 +483,72 @@ class Handler(BaseHTTPRequestHandler):
                                    started=started if started in STARTS else None,
                                    alert_outcome=alert if alert in page.ALERT_OUTCOMES else None))
 
-    def do_POST(self):  # noqa: C901, PLR0912
+    def do_POST(self):
         path = urlsplit(self.path).path
         if not self._same_origin():
             return self._send(403, page.message_page('Not allowed', 'That form came from another site.'))
         form = self._form()
         if form is None:
             return self._send(413, page.message_page('Too big', "That's too much to save."))
-        if path == '/pin/show':
-            self.settings.gate.show_pin()
-            return self._redirect('/signin?shown')
-        if path == '/pin/send':
-            outcome = self.settings.send_pin()
-            return self._redirect('/signin' if outcome == 'off' else f'/signin?sent={outcome}')
-        if path == '/pin':
-            token = self.settings.gate.try_pin((form.get('pin') or [''])[0])
-            if not token:
-                return self._redirect('/signin?wrong')
-            return self._redirect('/', [('Set-Cookie', f'{COOKIE}={token}; Max-Age={SESSION_S}; Path=/; '
-                                                       f'HttpOnly; SameSite=Strict')])
-        if path == '/signout':
-            self.settings.gate.sign_out(self._token())
-            return self._redirect('/signin?signedout', [('Set-Cookie', f'{COOKIE}=; Max-Age=0; Path=/; '
-                                                                       f'HttpOnly; SameSite=Strict')])
+        if path in PIN_POSTS:
+            return getattr(self, PIN_POSTS[path])(form)
         updating = ('/update/check', '/update/start', '/update/rollback') if self.settings.updates else ()
-        if path not in ('/save', '/credentials', '/renew', '/alert/test', '/power', *updating):
+        if path not in SETTINGS_POSTS and path not in updating:
             return self._send(404, page.message_page('Not found', "There's nothing at this address."))
         if not self._allowed():
             return self._redirect('/')
-        if path == '/power':
-            return self._power((form.get('action') or [''])[0])
         if path in updating:
             return self._update(path, (form.get('channel') or [''])[0])
-        if path == '/renew':
-            return self._redirect(f'/?logins={self.settings.renew()}#logins')
-        if path == '/alert/test':
-            return self._redirect(f'/?alerts={self.settings.test_alert()}#alerts')
-        if path == '/credentials':
-            if not self._signed_in():  # the hotspot alone isn't enough to change logins
-                return self._redirect('/signin')
-            outcome, problems = self.settings.save_credentials(form)
-            alerts = (form.get('card') or [''])[0] == 'alerts'  # the Pushover alerts card's form
-            if problems:
-                logger.info('Settings page: %s not saved: %s', 'alert keys' if alerts else 'logins', '; '.join(problems))
-                # A rider's form names its rider (cred_<key>_name): their card and form reopen with the problems.
-                rider = next((name[len('cred_'):-len('_name')] for name in form
-                              if name.startswith('cred_') and name.endswith('_name')), None)
-                return self._send(400, self._page(**({'alert_problems': problems} if alerts
-                                                     else {'login_problems': problems, 'editing_rider': rider})))
-            if alerts:
-                removed = (form.get('pushover_clear') or [''])[0] == 'on' and outcome == 'logins_saved'
-                return self._redirect(f'/?alerts={"alerts_removed" if removed else outcome.replace("logins_", "alerts_")}'
-                                      '#alerts')
-            return self._redirect(f'/?logins={outcome}#logins')
+        return getattr(self, SETTINGS_POSTS[path])(form)
+
+    def _post_pin_show(self, form):
+        self.settings.gate.show_pin()
+        return self._redirect('/signin?shown')
+
+    def _post_pin_send(self, form):
+        outcome = self.settings.send_pin()
+        return self._redirect('/signin' if outcome == 'off' else f'/signin?sent={outcome}')
+
+    def _post_pin(self, form):
+        token = self.settings.gate.try_pin((form.get('pin') or [''])[0])
+        if not token:
+            return self._redirect('/signin?wrong')
+        return self._redirect('/', [('Set-Cookie', f'{COOKIE}={token}; Max-Age={SESSION_S}; Path=/; '
+                                                   f'HttpOnly; SameSite=Strict')])
+
+    def _post_signout(self, form):
+        self.settings.gate.sign_out(self._token())
+        return self._redirect('/signin?signedout', [('Set-Cookie', f'{COOKIE}=; Max-Age=0; Path=/; '
+                                                                   f'HttpOnly; SameSite=Strict')])
+
+    def _post_power(self, form):
+        return self._power((form.get('action') or [''])[0])
+
+    def _post_renew(self, form):
+        return self._redirect(f'/?logins={self.settings.renew()}#logins')
+
+    def _post_alert_test(self, form):
+        return self._redirect(f'/?alerts={self.settings.test_alert()}#alerts')
+
+    def _post_credentials(self, form):
+        if not self._signed_in():  # the hotspot alone isn't enough to change logins
+            return self._redirect('/signin')
+        outcome, problems = self.settings.save_credentials(form)
+        alerts = (form.get('card') or [''])[0] == 'alerts'  # the Pushover alerts card's form
+        if problems:
+            logger.info('Settings page: %s not saved: %s', 'alert keys' if alerts else 'logins', '; '.join(problems))
+            # A rider's form names its rider (cred_<key>_name): their card and form reopen with the problems.
+            rider = next((name[len('cred_'):-len('_name')] for name in form
+                          if name.startswith('cred_') and name.endswith('_name')), None)
+            return self._send(400, self._page(**({'alert_problems': problems} if alerts
+                                                 else {'login_problems': problems, 'editing_rider': rider})))
+        if alerts:
+            removed = (form.get('pushover_clear') or [''])[0] == 'on' and outcome == 'logins_saved'
+            return self._redirect(f'/?alerts={"alerts_removed" if removed else outcome.replace("logins_", "alerts_")}'
+                                  '#alerts')
+        return self._redirect(f'/?logins={outcome}#logins')
+
+    def _post_save(self, form):
         if self.settings.updates and self.settings.updates.running():
             # A rollback would put back config.json as it was, losing the save.
             loaded, _ = self.settings.load()
@@ -597,35 +610,12 @@ class Handler(BaseHTTPRequestHandler):
         self._redirect(f'/?update={started}#updates')
 
 
-def unix_time(value):
-    """systemctl show's time ("@1762390801", with --timestamp=unix) as epoch seconds; None when
-    blank or "n/a"; any other text as it is (an older systemd ignores the flag's format)."""
-    value = (value or '').strip()
-    if not value or value == 'n/a':
-        return None
-    if value.startswith('@'):
-        try:
-            return float(value[1:])
-        except ValueError:
-            return value
-    return value
-
-
-# systemd's timespan units ("1d 2h 3min 4.5s"), in seconds.
-TIMESPAN_UNITS = {'y': 31557600, 'M': 2629800, 'w': 604800, 'd': 86400, 'h': 3600, 'min': 60, 's': 1,
-                  'ms': 1e-3, 'us': 1e-6, '\u03bcs': 1e-6}
-TIMESPAN_PART = re.compile(r'(\d+(?:\.\d+)?)\s*(min|ms|us|\u03bcs|[yMwdhs])(?![a-z])')
-
-
-def timespan_seconds(value):
-    """systemctl show's timespan ("2h 5min 3.5s") in seconds, or None when blank, 0, "infinity" or
-    not a timespan."""
-    text = (value or '').strip()
-    parts = TIMESPAN_PART.findall(text)
-    if not parts or TIMESPAN_PART.sub('', text).strip():
-        return None
-    total = sum(float(number) * TIMESPAN_UNITS[unit] for number, unit in parts)
-    return total if total > 0 else None
+# POST paths to the Handler method that serves them. PIN_POSTS need no PIN session (they are how you get
+# one); SETTINGS_POSTS pass _allowed() first. The /update/* paths are served by _update, only with updates.
+PIN_POSTS = {'/pin/show': '_post_pin_show', '/pin/send': '_post_pin_send', '/pin': '_post_pin',
+             '/signout': '_post_signout'}
+SETTINGS_POSTS = {'/save': '_post_save', '/credentials': '_post_credentials', '/renew': '_post_renew',
+                  '/alert/test': '_post_alert_test', '/power': '_post_power'}
 
 
 def board_name():
