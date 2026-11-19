@@ -4,6 +4,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from peloton.booked_classes import SHOWN_AFTER_START, takeover_booking
@@ -195,7 +196,51 @@ class NextClassTakeover:
         logger.info('Next-class takeover ended for %s (class at %s).', self._label(key[0]), key[2])
 
 
-def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None,  # noqa: C901, PLR0913
+def _rotation_pages(manager, dashboard, display, username_override, rivals, pass_index):
+    """This pass's pages, built from the dashboard's snapshot (no network)."""
+    snapshot = dashboard.snapshot()
+    username = resolve_display_username(username_override, snapshot['me'], display)
+    matrix_height = getattr(getattr(manager, 'matrix', None), 'height', 64)
+    if not isinstance(matrix_height, (int, float)):
+        matrix_height = 64
+    profile = snapshot.get('me') or {}
+    apply_scheduled_brightness(manager.matrix, display,
+                               timezone_name=profile.get('timezone'))
+    return build_rotation_pages(snapshot, dashboard, display, username, matrix_height,
+                                rivals=rivals, pass_index=pass_index)
+
+
+def _acknowledge_page(dashboard, name, state):
+    """Tell the dashboard a page that celebrates something has been shown."""
+    if name == 'pr':
+        dashboard.acknowledge_pr(state.get('workout_id'))
+    elif name == 'username':
+        dashboard.acknowledge_name_facts(state['fact_keys'])
+    elif name == 'celebration' and state.get('milestone'):
+        dashboard.acknowledge_milestone(state['milestone'])
+
+
+def _play_page(manager, dashboard, takeover, page):
+    """Show one rotation page; returns whether the rotation moves on (False: a takeover cut it short, so it
+    plays again from its start once the takeover ends)."""
+    name, state, duration = page
+    if takeover is not None and takeover.hold(manager) and name == 'next_class':
+        return True
+    if name == 'next_class':
+        now = time.time()
+        if state['booking']['start'] + SHOWN_AFTER_START <= now:
+            return True  # it has been going long enough since this rotation was built
+        state = {**state, 'now': now}
+    extra = {}
+    if takeover is not None and name not in UNINTERRUPTED_PAGES:
+        extra['interrupt'] = takeover.pending
+    if show_and_wait(manager, name, state, duration, dashboard, **extra) is True:
+        return False  # cut short by a takeover: held at the top, then this page again
+    _acknowledge_page(dashboard, name, state)
+    return True
+
+
+def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None,  # noqa: PLR0913
                      first_pass=0, takeover=None):
     """Play `cycles` rotations (0 forever). `takeover`, a NextClassTakeover, is checked before every page and
     every TAKEOVER_CHECK_SECONDS during one (not a celebration or PR page, which finish first). A page it cut
@@ -203,40 +248,11 @@ def run_display_loop(manager, dashboard, display, username_override=None, cycles
     just showed (its time is refreshed when it plays, so it never counts down from a stale `now`)."""
     completed = 0
     while not cycles or completed < cycles:
-        snapshot = dashboard.snapshot()
-        username = resolve_display_username(username_override, snapshot['me'], display)
-        matrix_height = getattr(getattr(manager, 'matrix', None), 'height', 64)
-        if not isinstance(matrix_height, (int, float)):
-            matrix_height = 64
-        profile = snapshot.get('me') or {}
-        apply_scheduled_brightness(manager.matrix, display,
-                                   timezone_name=profile.get('timezone'))
-        pages = build_rotation_pages(snapshot, dashboard, display, username, matrix_height,
-                                     rivals=rivals, pass_index=first_pass + completed)
+        pages = _rotation_pages(manager, dashboard, display, username_override, rivals, first_pass + completed)
         position = 0
         while position < len(pages):
-            name, state, duration = pages[position]
-            if takeover is not None and takeover.hold(manager) and name == 'next_class':
+            if _play_page(manager, dashboard, takeover, pages[position]):
                 position += 1
-                continue
-            if name == 'next_class':
-                now = time.time()
-                if state['booking']['start'] + SHOWN_AFTER_START <= now:
-                    position += 1  # it has been going long enough since this rotation was built
-                    continue
-                state = {**state, 'now': now}
-            extra = {}
-            if takeover is not None and name not in UNINTERRUPTED_PAGES:
-                extra['interrupt'] = takeover.pending
-            if show_and_wait(manager, name, state, duration, dashboard, **extra) is True:
-                continue  # cut short by a takeover: held at the top, then this page again
-            if name == 'pr':
-                dashboard.acknowledge_pr(state.get('workout_id'))
-            elif name == 'username':
-                dashboard.acknowledge_name_facts(state['fact_keys'])
-            elif name == 'celebration' and state.get('milestone'):
-                dashboard.acknowledge_milestone(state['milestone'])
-            position += 1
         completed += 1
         if not any(page[2] for page in pages):
             time.sleep(0.05)  # Avoid a busy loop when all durations are zero.
@@ -322,9 +338,9 @@ def configured_profiles(config, options):
     return profiles
 
 
-def main():  # noqa: C901, PLR0912, PLR0915
-    load_dotenv()
-    options = args()
+def _load_checked_config(options):
+    """The config, checked (a bad one exits with its message), with the command-line overrides applied and
+    the log level set."""
     try:
         config = load_config(options.config, allow_missing=options.demo)
     except ValueError as exc:
@@ -335,8 +351,11 @@ def main():  # noqa: C901, PLR0912, PLR0915
     if options.refresh_interval is not None:
         display['refresh_interval'] = options.refresh_interval
     logger.setLevel(logging.DEBUG if config.get('debug') else logging.INFO)
+    return config
 
-    # Delay driver imports until configuration has been checked.
+
+def _import_display():
+    """The driver and screen classes, imported only once the configuration has been checked."""
     from driver import RGBMatrix
     from display.display import initialize_fonts
     from display.ui.manager import ScreenManager
@@ -360,38 +379,91 @@ def main():  # noqa: C901, PLR0912, PLR0915
     from display.ui.challenge_screen import ChallengeScreen
     from display.ui.next_class_screen import NextClassScreen
     from display.ui.club_screen import ClubScreen
+    return SimpleNamespace(
+        RGBMatrix=RGBMatrix,
+        initialize_fonts=initialize_fonts,
+        ScreenManager=ScreenManager,
+        UsernameScreen=UsernameScreen,
+        DisciplinePageScreen=DisciplinePageScreen,
+        LifetimeOverviewScreen=LifetimeOverviewScreen,
+        LogoScreen=LogoScreen,
+        LogoMaskScreen=LogoMaskScreen,
+        LastWorkoutScreen=LastWorkoutScreen,
+        PrCelebrationScreen=PrCelebrationScreen,
+        CelebrationScreen=CelebrationScreen,
+        StatusScreen=StatusScreen,
+        GoalScreen=GoalScreen,
+        StreakScreen=StreakScreen,
+        VersusScreen=VersusScreen,
+        CountdownScreen=CountdownScreen,
+        JourneyScreen=JourneyScreen,
+        HeatmapScreen=HeatmapScreen,
+        StreakRiskScreen=StreakRiskScreen,
+        WifiSetupScreen=WifiSetupScreen,
+        ChallengeScreen=ChallengeScreen,
+        NextClassScreen=NextClassScreen,
+        ClubScreen=ClubScreen)
 
-    matrix = RGBMatrix(options=led_matrix_options(options, config['matrix']))
+
+def _build_matrix(options, config, ui):
+    """The matrix, then the drop from root (right after RGBMatrix(...), nothing in between), then a clear."""
+    matrix = ui.RGBMatrix(options=led_matrix_options(options, config['matrix']))
     ensure_privileges_dropped()
     try:
         matrix.Clear()
     except Exception as exc:
         raise SystemExit(f'Could not initialize the matrix: {exc}') from exc
-    initialize_fonts(matrix.height)
-    profiles = configured_profiles(config, options)
-    active = {'dashboard': profiles[0]['dashboard']}
-    manager = ScreenManager(matrix,
+    return matrix
+
+
+def _build_manager(matrix, display, active, ui):
+    """The ScreenManager with every rotation screen registered (the logo is registered in main)."""
+    manager = ui.ScreenManager(matrix,
         login_required=lambda: active['dashboard'].login_indicator_required,
         stale_data=lambda: active['dashboard'].stale_indicator_required)
-    manager.register('username', UsernameScreen(font_key=display['font'], color_key=display['color']))
-    manager.register('discipline', DisciplinePageScreen())
-    manager.register('lifetime', LifetimeOverviewScreen())
-    manager.register('last_workout', LastWorkoutScreen(
+    manager.register('username', ui.UsernameScreen(font_key=display['font'], color_key=display['color']))
+    manager.register('discipline', ui.DisciplinePageScreen())
+    manager.register('lifetime', ui.LifetimeOverviewScreen())
+    manager.register('last_workout', ui.LastWorkoutScreen(
         detail_interval=display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)))
-    manager.register('pr', PrCelebrationScreen())
-    manager.register('celebration', CelebrationScreen())
-    manager.register('status', StatusScreen())
-    manager.register('goal', GoalScreen())
-    manager.register('streak', StreakScreen())
-    manager.register('versus', VersusScreen())
-    manager.register('countdown', CountdownScreen())
-    manager.register('journey', JourneyScreen())
-    manager.register('heatmap', HeatmapScreen())
-    manager.register('streak_risk', StreakRiskScreen())
-    manager.register('wifi_setup', WifiSetupScreen())
-    manager.register('challenge', ChallengeScreen())
-    manager.register('next_class', NextClassScreen())
-    manager.register('club', ClubScreen())
+    manager.register('pr', ui.PrCelebrationScreen())
+    manager.register('celebration', ui.CelebrationScreen())
+    manager.register('status', ui.StatusScreen())
+    manager.register('goal', ui.GoalScreen())
+    manager.register('streak', ui.StreakScreen())
+    manager.register('versus', ui.VersusScreen())
+    manager.register('countdown', ui.CountdownScreen())
+    manager.register('journey', ui.JourneyScreen())
+    manager.register('heatmap', ui.HeatmapScreen())
+    manager.register('streak_risk', ui.StreakRiskScreen())
+    manager.register('wifi_setup', ui.WifiSetupScreen())
+    manager.register('challenge', ui.ChallengeScreen())
+    manager.register('next_class', ui.NextClassScreen())
+    manager.register('club', ui.ClubScreen())
+    return manager
+
+
+def _wait_for_first_refresh(manager, profiles, active):
+    """A finite real-data smoke run waits (up to 60 s) for each rider's initial request."""
+    deadline = time.monotonic() + 60
+    for profile in profiles:
+        active['dashboard'] = profile['dashboard']
+        while (profile['dashboard'].snapshot()['status'] == 'loading'
+               and time.monotonic() < deadline):
+            show_and_wait(manager, 'status', 'loading', 0.2, profile['dashboard'])
+
+
+def main():
+    load_dotenv()
+    options = args()
+    config = _load_checked_config(options)
+    display = config['display']
+    ui = _import_display()
+    matrix = _build_matrix(options, config, ui)
+    ui.initialize_fonts(matrix.height)
+    profiles = configured_profiles(config, options)
+    active = {'dashboard': profiles[0]['dashboard']}
+    manager = _build_manager(matrix, display, active, ui)
     configured_logo = display.get('logo_path')
     logo = Path(configured_logo) if configured_logo else None
     for profile in profiles:
@@ -400,19 +472,13 @@ def main():  # noqa: C901, PLR0912, PLR0915
         # The built-in pixel mask needs no image decoding; display.logo_path
         # still overrides it with an image file when one is configured.
         if logo is not None and logo.exists():
-            manager.register('logo', LogoScreen(str(logo)))
+            manager.register('logo', ui.LogoScreen(str(logo)))
         else:
-            manager.register('logo', LogoMaskScreen())
+            manager.register('logo', ui.LogoMaskScreen())
         if display['show_logo']:
             show_and_wait(manager, 'logo', None, display['logo_duration'], active['dashboard'])
         if options.cycles and not options.demo:
-            # A finite real-data smoke run should wait for the initial request.
-            deadline = time.monotonic() + 60
-            for profile in profiles:
-                active['dashboard'] = profile['dashboard']
-                while (profile['dashboard'].snapshot()['status'] == 'loading'
-                       and time.monotonic() < deadline):
-                    show_and_wait(manager, 'status', 'loading', 0.2, profile['dashboard'])
+            _wait_for_first_refresh(manager, profiles, active)
         run_multi_user_loop(manager, profiles, display, active, options.cycles)
     except KeyboardInterrupt:
         logger.info('Stopping Peloton display')

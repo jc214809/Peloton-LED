@@ -33,3 +33,13 @@ def test_logs_when_using_api_me(caplog):
     assert username == "api_user"
     # Verify a log record was emitted mentioning the username
     assert any("Using Peloton username api_user from /api/me" in rec.getMessage() for rec in caplog.records)
+
+
+def test_render_reports_a_missing_font_and_draws_nothing(monkeypatch):
+    from display.ui import username
+    from display.ui.username import UsernameScreen
+    from scripts.render_demo import ImageMatrix
+    monkeypatch.setattr(username, 'loaded_fonts', {})
+    matrix = ImageMatrix()
+    assert UsernameScreen().render(matrix, {'username': 'Rider'}) is False
+    assert matrix.image.getbbox() is None
