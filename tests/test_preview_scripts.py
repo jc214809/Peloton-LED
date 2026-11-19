@@ -280,3 +280,41 @@ def test_insight_slides_show_with_the_flag_or_the_config_switch_and_never_from_a
     for flag in (False, True):
         summaries = load_snapshot_for(SimpleNamespace(demo=False, cache=str(cache), insights=flag))['summaries']
         assert not any('insight' in s for s in summaries)
+
+
+# render_rotation: pins written before the complexity refactor (2f-G); they pass unchanged after it.
+
+def test_frame_times_pinned_for_every_page_kind():
+    summary = load_snapshot_for(SimpleNamespace(demo=True, insights=True))['summaries'][0]
+    for height in (64, 32):
+        assert frame_times('last_workout', summary, 30, 4, height) == [0.6, 4.6, 8.6, 12.6, 16.6, 20.6, 24.6, 28.6]
+        assert frame_times('last_workout', summary, 3, 4, height) == [0.6]
+    assert frame_times('versus', {'riders': [], 'stat_seconds': 5}, 30, 4) == [0.6, 5.6, 10.6, 15.6, 20.6, 25.6]
+    assert frame_times('versus', {'riders': []}, 30, 4) == [0.6]
+    assert frame_times('versus', {}, 30, 4) == [0.5]
+    assert frame_times('journey', {}, 8, 4) == [1.0]
+    assert frame_times('challenge', {}, 8, 4) == [1.0]
+    assert frame_times('celebration', {}, 8, 4) == [0.3, 1.5]
+    assert frame_times('next_class', {}, 8, 4) == [0.0]
+    assert frame_times('anything else', {}, 8, 4) == [0.5]
+    assert frame_times('username', {}, 8, 4) == [0.6]
+    assert frame_times('username', {'detail_seconds': 2, 'details': [1, 2]}, 8, 4) == [0.6, 2.6]
+    assert frame_times('pr', {}, 8, 4) == [0.5, 2.0]
+
+
+def test_the_next_pass_celebration_is_shown_when_it_differs(tmp_path, capsys):
+    import peloton_led
+    real = peloton_led.build_rotation_pages
+    render_rotation.main(['--demo', '--height', '32', '--out', str(tmp_path / 'a.png')])
+    baseline = int(capsys.readouterr().out.split()[3])
+
+    def next_pass_differs(*args, **kwargs):
+        pages = real(*args, **kwargs)
+        if kwargs.get('pass_index') == 1:
+            name, state, duration = pages[0]
+            return [(name, {**state, 'title': 'next pass'}, duration)] + pages[1:]
+        return pages
+
+    with patch.object(peloton_led, 'build_rotation_pages', next_pass_differs):
+        render_rotation.main(['--demo', '--height', '32', '--out', str(tmp_path / 'b.png')])
+    assert int(capsys.readouterr().out.split()[3]) == baseline + 1

@@ -104,3 +104,19 @@ def test_compare_totals_lines_overview_up_against_the_log_and_flags_differences(
     # Nothing to compare without the overview totals or the log's figures.
     assert list_facts.compare_totals(dict(snapshot, totals={})) == []
     assert list_facts.compare_totals(dict(snapshot, time_frames={})) == []
+
+
+def test_show_output_is_pinned(capsys):
+    """A fixed log and clock give the same listing, byte for byte (guards the 2f-G refactor of show)."""
+    import hashlib
+    list_facts.show(snapshot_for(demo_log(NOW), 'America/New_York', NOW, None, True), 3)
+    out = capsys.readouterr().out
+    assert len(out) == 15206
+    assert hashlib.sha256(out.encode()).hexdigest() == 'b54ce37cc1de006caa9e2099a3c356d87db33226959acf54e19aacf322c87906'
+
+
+def test_show_with_nothing_to_show_prints_the_empty_notice(capsys):
+    list_facts.show({}, 1)
+    assert capsys.readouterr().out == (
+        'No time-frame figures: the log is empty or its backfill is not complete (try --assume-complete).\n'
+        '\n\nscores (base + bonuses, before any cool-down):\n\npass 0: \n')
