@@ -5,7 +5,7 @@ from typing import Any, List, Optional, Tuple
 
 from driver import graphics
 from display.display import get_text_width, loaded_fonts
-from .last_workout_screen import _fmt_split, _whole
+from .last_workout.stats import _fmt_split, _whole
 from .screen import Screen
 
 _GOLD = graphics.Color(255, 215, 0)
