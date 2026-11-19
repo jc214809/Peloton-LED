@@ -228,7 +228,7 @@ class Updater:
         except states.Busy as e:
             return Outcome(BLOCKED, str(e))
 
-    def _update(self, channel, dry_run=False):  # noqa: C901
+    def _update(self, channel, dry_run=False):
         record = self.state.load()
         if record["phase"] in states.UNFINISHED:
             return Outcome(BLOCKED, f"an earlier update didn't finish (it stopped at {record['phase']}): "
@@ -256,6 +256,18 @@ class Updater:
         except (CommandFailed, OSError) as e:
             return Outcome(BLOCKED, f"couldn't take a rollback point, so nothing changed: {e}")
         logger.info("Updating from %s to %s (%s).", record["from"]["sha"][:7], target.ref, target.sha[:7])
+        problem = self._switch_and_check(record, target)
+        if problem is None:
+            states.remember_good(record, target.sha)
+            self.state.set_phase(record, states.UPDATED, reason=None)
+            logger.info("Updated to %s (%s); it passed its health check.", target.ref, target.sha[:7])
+            return Outcome(UPDATED, f"updated to {target.ref} ({target.sha[:7]})")
+        logger.error("The update to %s (%s) failed: %s. Rolling back.", target.ref, target.sha[:7], problem)
+        undone = self._roll_back(record, problem)
+        return Outcome(undone.result, undone.message, ok=False)  # back where it was, but not updated
+
+    def _switch_and_check(self, record, target):
+        """Switch to the target, install it, restart and check health. Returns the problem, or None."""
         try:
             self.board.checkout(target.sha)
             self.state.set_phase(record, states.SWITCHED)
@@ -268,14 +280,7 @@ class Updater:
         except Exception as e:  # anything at all: the board mustn't be left half-updated
             logger.exception("The update failed unexpectedly.")
             problem = f"the update failed unexpectedly: {e}"
-        if problem is None:
-            states.remember_good(record, target.sha)
-            self.state.set_phase(record, states.UPDATED, reason=None)
-            logger.info("Updated to %s (%s); it passed its health check.", target.ref, target.sha[:7])
-            return Outcome(UPDATED, f"updated to {target.ref} ({target.sha[:7]})")
-        logger.error("The update to %s (%s) failed: %s. Rolling back.", target.ref, target.sha[:7], problem)
-        undone = self._roll_back(record, problem)
-        return Outcome(undone.result, undone.message, ok=False)  # back where it was, but not updated
+        return problem
 
     def _take_rollback_point(self, record, target):
         head = self.board.head()
