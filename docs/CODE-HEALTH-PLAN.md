@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails) and phase 2a–2d merged (2026-11-18); 2e (`build_rotation_pages`, `apply_form`) **done** on branch `rotation-and-form-complexity`, awaiting merge; 2f and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2e: `C901` 25, `PLR0912` 18, `PLR0913` 12, `PLR0915` 7.
+Status: phase 1 (guardrails) and phase 2a–2d merged (2026-11-18); 2e (`build_rotation_pages`, `apply_form`) **done** on branch `rotation-and-form-complexity`, awaiting merge; 2f part C (`refresh_cookies.main`, `_ensure_token`, `load_snapshot`) **done** on branch `renewal-and-cache-complexity`, awaiting merge; the rest of 2f and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2f-C: `C901` 22, `PLR0912` 15, `PLR0913` 12, `PLR0915` 6.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So
@@ -224,6 +224,11 @@ branch `config-validation-table`)
 > (21), then whatever `grep -rn "noqa: C901\|noqa: PLR09" --include=*.py .` still
 > shows, worst first. Same rules: no behavior change, a test that pins today's
 > output first if none does.
+>
+> Part C is done: `refresh_cookies.main` and `_ensure_token` (split into per-mode and
+> per-step helpers; the token-file helpers moved to `scripts/token_files.py`, which
+> `refresh_cookies` re-exports, taking the file to 578 lines and off the length
+> allowlist) and `load_snapshot` (a table of repairs in `peloton/cache.py`).
 
 ## Phase 3: reorganize `peloton/` into subpackages (alone, after phase 2 merges)
 
