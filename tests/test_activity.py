@@ -84,7 +84,7 @@ def _display(**extra):
     (6, 0, None, 'streak'),         # disabled
 ])
 def test_streak_page_becomes_the_reminder_late_in_an_empty_week(monkeypatch, weekday, workouts, reminder_day, expected):
-    monkeypatch.setattr('peloton_led.week_day', lambda zone: weekday)
+    monkeypatch.setattr('display.rotation_pages.week_day', lambda zone: weekday)
     pages = build_rotation_pages(_snapshot(workouts), Mock(), _display(streak_reminder_day=reminder_day), 'R', 64)
     assert [p[0] for p in pages] == [expected]
     if expected == 'streak_risk':
@@ -93,7 +93,7 @@ def test_streak_page_becomes_the_reminder_late_in_an_empty_week(monkeypatch, wee
 
 
 def test_heatmap_page_needs_activity(monkeypatch):
-    monkeypatch.setattr('peloton_led.week_day', lambda zone: 1)
+    monkeypatch.setattr('display.rotation_pages.week_day', lambda zone: 1)
     days = {'2026-10-30': 45}
     pages = build_rotation_pages(_snapshot(1, days=days), Mock(), _display(), 'R', 32)
     assert [p[0] for p in pages] == ['streak', 'heatmap']

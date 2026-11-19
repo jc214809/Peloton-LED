@@ -2,9 +2,11 @@
 
 <!-- Moved from CLAUDE.md on 2026-11-12 so it loads only when needed. Keep it current with the code it describes. -->
 
-Read before changing `peloton_led.py`, `peloton/screen_times.py`, `peloton/goals.py`, the celebration, countdown or PR screens, or the workout page's stats.
+Read before changing `peloton_led.py`, `display/rotation_pages.py`, `peloton/screen_times.py`, `peloton/goals.py`, the celebration, countdown or PR screens, or the workout page's stats.
 
 The loop is intentionally network-free after startup — all data is prefetched before `run_display_loop()` is called.
+
+The page list is built in `display/rotation_pages.py` (split from `peloton_led.py` on 2026-11-18; `peloton_led` re-exports `build_rotation_pages` and `DEFAULT_ROTATION`): `build_rotation_pages` runs one small builder per screen, `PAGE_BUILDERS` (an ordered tuple of `(screen name, builder)`, run only for screens in `display.rotation`, in that fixed order because the PR and milestone builders ask the dashboard and the next-class and club ones read the clock), each returning that screen's `(name, state, seconds)` pages from a `RotationInputs` (snapshot, dashboard, display, username, panel height, rivals, pass index, display zone). The milestone celebration is not in the tuple: `_celebration_pages` leads the rotation, wherever `milestones` sits. A new screen is one builder plus a `PAGE_BUILDERS` entry. Tests that pin the clock or the week patch `display.rotation_pages` (`time`, `week_day`, `week_start`); `tests/test_rotation_pages_pin.py` compares every page for a spread of inputs with `tests/fixtures/rotation_pages_pin.json` (each distinct state stored once by hash, one case per line, helpers in `tests/pin_fixture.py`; regenerate only for a deliberate page change: `PIN_REGEN=1`).
 
 On a multi-rider board, `configured_profiles` gives each profile its own `display` (the shared section with the rider's `weekly_goals`, `milestones` and `journey` over it), and `run_multi_user_loop` must pass that, not the shared one, to each rider's `run_display_loop`: until 2026-11-04 it passed the shared one, so per-rider goal pages never showed. `render_rotation.py` hard-codes its own goals, so it can't catch this; `test_each_rider_rotation_uses_their_own_goals_milestones_and_journey` does.
 

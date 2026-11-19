@@ -6,35 +6,20 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from peloton.activity import daily_streak_start
-from peloton.booked_classes import SHOWN_AFTER_START, next_booking, takeover_booking
-from peloton.challenges import shown_challenges
-from peloton.club import club_page
+from peloton.booked_classes import SHOWN_AFTER_START, takeover_booking
 from peloton.config import DEFAULTS, load_config, load_dotenv, user_cache_path, user_token_path
 from peloton.dashboard import Dashboard
-from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
-                           week_start)
-from peloton.journey import journey_progress
-from peloton.screen_times import page_seconds
-from peloton.selection import normalize_discipline
-from peloton.username_facts import shown_keys, username_details
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # noqa: F401  re-export kept for callers
 from utils import heartbeat
 from utils.utils import args, ensure_privileges_dropped, led_matrix_options
 from utils.username import resolve_display_username
 from utils.wifi_setup import hotspot_name
-from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details, stats_phase_seconds
+from display.rotation_pages import DEFAULT_ROTATION, build_rotation_pages
+from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
 from display.ui.settings_pin import shown_pin
-from display.ui.pr_celebration import (BURST_SECONDS as PR_BURST_SECONDS, CARD_HOLD_SECONDS as PR_CARD_HOLD_SECONDS,
-                                       SETTLE_SECONDS as PR_SETTLE_SECONDS)
-from display.ui.celebration_screen import discipline_noun, milestone_noun
-from display.ui.streak_screen import streak_views
 
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
-DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                    'next_milestone', 'lifetime', 'journey', 'heatmap',
-                    'milestones', 'goals', 'challenges', 'next_class', 'club')
 # Seconds per Wi-Fi setup page; the hotspot is rechecked between pages.
 WIFI_SETUP_PAGE_SECONDS = 5
 
@@ -63,180 +48,6 @@ def apply_scheduled_brightness(matrix, display, now=None, timezone_name=None):
     brightness = scheduled_brightness(display, now, timezone_name)
     if brightness is not None and getattr(matrix, 'brightness', None) != brightness:
         matrix.brightness = brightness
-
-
-# The "loading" / "no workouts yet" page that stands in for Latest workouts.
-STATUS_SECONDS = 2
-
-
-def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, rivals=None,  # noqa: C901, PLR0912, PLR0915
-                         pass_index=0):
-    """Build one rotation from configured named sections.
-
-    rivals: every configured rider's weekly progress, passed for only one
-    rider per multi-user cycle so the head-to-head page shows once.
-    pass_index: which rotation pass this is; the streak page shows the
-    weekly streak on even passes and the daily one on odd passes, and the
-    name page picks its varied highlights by it (peloton.username_facts).
-    """
-    rotation = display.get('rotation', DEFAULT_ROTATION)
-    groups = {name: [] for name in rotation}
-    # Each screen's page time comes from peloton.screen_times, as the settings page shows it. None is 0:
-    # a screen that's off isn't in rotation (old configs' 0s are switched off by load_config).
-    detail_interval = display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)
-    if 'latest_workouts' in groups:
-        if snapshot['summaries']:
-            for summary in snapshot['summaries']:
-                # The screen intros, then cycles one stat at a time; size the page to exactly
-                # one pass so every stat shows once: no cut-offs and no wrap-around repeats.
-                page_duration = detail_interval + stats_phase_seconds(
-                    rotating_details(summary, matrix_height), detail_interval)
-                groups['latest_workouts'].append(('last_workout', summary, page_duration))
-                if dashboard.should_celebrate_pr(summary):
-                    # Burst + settle animation, then the card holds one interval plus a little more.
-                    pr_duration = PR_BURST_SECONDS + PR_SETTLE_SECONDS + detail_interval + PR_CARD_HOLD_SECONDS
-                    groups['latest_workouts'].append(('pr', summary, pr_duration))
-        else:
-            status = snapshot['status'] if snapshot['status'] != 'ready' else 'empty'
-            groups['latest_workouts'].append(
-                ('status', status, STATUS_SECONDS))
-    if 'username' in groups:
-        details = username_details(snapshot, pass_index)
-        # The page's time is shared by its highlights (at least 4 s each), so more time means each
-        # stays up longer rather than the list starting over.
-        username_duration = page_seconds(display, 'username', matrix_height, frames=len(details))
-        state = {'username': username, 'details': details,
-                 'fact_keys': shown_keys(details)}
-        if details:
-            state['detail_seconds'] = username_duration / len(details)
-        groups['username'].append(('username', state, username_duration))
-
-    # 64 rows fit a 2x2 grid of icon tiles per page; 32 rows fit one row of two.
-    zone = display.get('timezone') or (snapshot.get('me') or {}).get('timezone')
-    if 'streaks' in groups and streak_views(snapshot.get('streaks')):
-        streaks = snapshot['streaks']
-        streak_duration = page_seconds(display, 'streaks', matrix_height)
-        weekday = week_day(zone)
-        reminder_day = display.get('streak_reminder_day', 5)
-        if (reminder_day is not None and weekday >= reminder_day
-                and snapshot.get('streak_week_workouts') == 0 and streaks.get('current_weekly', 0) > 0):
-            # Late in the week with nothing that counts yet: one workout keeps the streak.
-            groups['streaks'].append(('streak_risk', {
-                'current': streaks['current_weekly'], 'days_left': 7 - weekday},
-                streak_duration))
-        else:
-            state = dict(streaks)
-            if streaks.get('current_daily', 0) > 0:
-                today = week_start(zone)[1].date()
-                state.update(today=today.isoformat(), daily_start=daily_streak_start(
-                    streaks['current_daily'], today, snapshot.get('activity_days'),
-                    streaks.get('start_date_of_current_daily'), zone).isoformat())
-            # One streak per pass: weekly, then daily on the next pass.
-            views = streak_views(state)
-            state['view'] = views[pass_index % len(views)][0]
-            groups['streaks'].append(('streak', state, streak_duration))
-
-    if 'versus' in groups and rivals and len(rivals) >= 2:
-        from display.ui.versus_screen import STATS
-        versus_duration = page_seconds(display, 'versus', matrix_height)
-        state = {'riders': rivals, 'weekday': week_day(zone)}
-        if matrix_height < 64:
-            # 32 rows show one stat at a time: the page's time shared by the stats, each shown once.
-            state['stat_seconds'] = versus_duration / len(STATS)
-        groups['versus'].append(('versus', state, versus_duration))
-
-    overview_pages = lifetime_overview_pages(snapshot['totals'],
-                                             page_size=4 if matrix_height >= 64 else 2)
-    discipline_duration = page_seconds(display, 'lifetime', matrix_height)
-    total = total_workout_count(snapshot['totals'])
-    if 'total_workouts' in groups and total is not None:
-        groups['total_workouts'].append(('discipline', {
-            'discipline': 'Total Workouts', 'count': total,
-            'color_key': display['color'], 'number_font_key': 'big',
-            'number_color_key': 'gold'}, discipline_duration))
-    if 'next_milestone' in groups:
-        # Usually empty: only the total or a discipline a few workouts from its next target.
-        for upcoming in upcoming_milestones(
-                total, display.get('milestones', []), display.get('milestone_step', 0), snapshot.get('totals'),
-                within=display.get('milestone_within', UPCOMING_WITHIN),
-                limit=display.get('milestone_pages', MAX_UPCOMING)):
-            # 2,200TH WORKOUT on 64 rows; TO 2,200 / WORKOUTS on 32.
-            title = upcoming['label'] if upcoming['discipline'] or matrix_height < 64 else 'Workout'
-            groups['next_milestone'].append(('countdown', {
-                'total': upcoming['count'], 'target': upcoming['target'],
-                'previous': upcoming['previous'], 'title': title, 'discipline': upcoming['discipline']},
-                page_seconds(display, 'next_milestone', matrix_height)))
-    if 'lifetime' in groups:
-        for index, items in enumerate(overview_pages):
-            groups['lifetime'].append(('lifetime', {
-                'items': items, 'page': index + 1, 'pages': len(overview_pages)},
-                discipline_duration))
-
-    if 'journey' in groups:
-        progress = journey_progress(snapshot.get('distance_totals'), display.get('journey'))
-        # Skip until the distance tally has something (e.g. before the backfill).
-        if progress and progress['miles'] > 0:
-            from display.ui.journey_screen import journey_steps
-            # 32 rows show the trip, then the miles by type: the page's time shared, each once.
-            steps = journey_steps(progress, matrix_height)
-            journey_duration = page_seconds(display, 'journey', matrix_height, steps)
-            if steps > 1:
-                progress['step_seconds'] = journey_duration / steps
-            groups['journey'].append(('journey', progress, journey_duration))
-
-    if 'heatmap' in groups and snapshot.get('activity_days'):
-        from peloton.activity import HEATMAP_WEEKS
-        today = week_start(zone)[1].date().isoformat()
-        groups['heatmap'].append(('heatmap', {'days': snapshot['activity_days'], 'today': today,
-                                              'weeks': HEATMAP_WEEKS},
-                                  page_seconds(display, 'heatmap', matrix_height)))
-
-    goal_duration = page_seconds(display, 'goals', matrix_height)
-    if 'goals' in groups:
-        progress = snapshot.get('weekly_progress', {})
-        for key, target in display.get('weekly_goals', {}).items():
-            if target > 0:
-                groups['goals'].append(('goal', {
-                    'title': 'Weekly Goal', 'current': progress.get(key, 0),
-                    'target': target, 'unit': key.replace('_', ' ')}, goal_duration))
-    if 'challenges' in groups:
-        # One page per running challenge with progress and a tier still to reach (the cache is validated).
-        challenge_duration = page_seconds(display, 'challenges', matrix_height)
-        for challenge in shown_challenges(snapshot.get('challenges'), time.time()):
-            groups['challenges'].append(('challenge', challenge, challenge_duration))
-    if 'next_class' in groups:
-        # The soonest booked live or encore class, until it has been going a few minutes (the cache is validated).
-        now = time.time()
-        booking = next_booking(snapshot.get('booked_classes'), now)
-        if booking is not None:
-            groups['next_class'].append(('next_class', {'booking': booking, 'now': now, 'timezone': zone},
-                                         page_seconds(display, 'next_class', matrix_height)))
-    if 'club' in groups:
-        # Club Peloton: the score's level and points, else the level from the profile (the cache is validated).
-        club = club_page(snapshot.get('club'), snapshot.get('me'), time.time())
-        if club is not None:
-            groups['club'].append(('club', club, page_seconds(display, 'club', matrix_height)))
-    # A celebration leads the rotation (after the logo), wherever 'milestones' sits in it. One per
-    # rotation: the newest total-workouts milestone (acknowledging it retires any older ones), and any
-    # discipline's taking turns with it pass by pass, so each shows during its day.
-    celebrations = []
-    if 'milestones' in groups:
-        candidates = []
-        if display.get('milestones') or display.get('milestone_step'):
-            pending = dashboard.pending_milestones(snapshot)
-            if pending:
-                candidates.append({'number': pending[-1], 'noun': milestone_noun(None),
-                                   'subtitle': username, 'milestone': pending[-1]})
-        labels = {normalize_discipline(label): label for label in snapshot.get('totals', {})}
-        for key in dashboard.pending_discipline_milestones(snapshot):
-            discipline, target = parse_milestone_key(key)
-            candidates.append({'number': target, 'noun': discipline_noun(discipline, labels.get(discipline)),
-                               'subtitle': username, 'milestone': key})
-        if candidates:
-            celebration_duration = page_seconds(display, 'milestones', matrix_height)
-            celebrations.append(('celebration', candidates[pass_index % len(candidates)],
-                                 celebration_duration))
-    return celebrations + [page for section in rotation for page in groups[section]]
 
 
 def _overlays(dashboard):

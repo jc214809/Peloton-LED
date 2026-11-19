@@ -167,7 +167,173 @@ def _seconds(value):
     return f'{value:g} second{"" if value == 1 else "s"}'
 
 
-def apply_form(config, form):  # noqa: C901, PLR0912, PLR0915
+def _one(form, name, default=''):
+    """The first posted value of a field, stripped; `default` when it wasn't posted or is empty."""
+    return (form.get(name) or [default])[0].strip()
+
+
+def _checked(form, name):
+    """Whether a switch was posted on (an unticked one posts nothing)."""
+    return _one(form, name) == 'on'
+
+
+def _part(owner, key):
+    """owner[key] as an object, making it one when it's missing or something else."""
+    if not isinstance(owner.get(key), dict):
+        owner[key] = {}
+    return owner[key]
+
+
+def _set_or_drop(form, owner, key, field, parse=_number):
+    """owner[key] from a posted field, parsed; the key goes when the field is blank."""
+    text = _one(form, field)
+    if text:
+        owner[key] = parse(text)
+    else:
+        owner.pop(key, None)
+
+
+def _apply_display_basics(form, new, display, problems):
+    """Display card: name, font, colour and the streak reminder day."""
+    _set_or_drop(form, display, 'username', 'username', str)
+    display['font'] = _one(form, 'font', display.get('font', DEFAULTS['font']))
+    display['color'] = _one(form, 'color', display.get('color', DEFAULTS['color']))
+    reminder = _one(form, 'streak_reminder_day', str(STREAK_REMINDER_DEFAULT))
+    display['streak_reminder_day'] = None if reminder == 'off' else _number(reminder)
+
+
+def _apply_rotation(form, new, display, problems):
+    """Rotation and Timing cards: the screens in page order, the ones switched on; each one's own time, blank
+    for the fallback; the Timing seconds and the logo and insights switches."""
+    order = [name for name in form.get('rotation_order', []) if name in SCREEN_NAMES]
+    display['rotation'] = [name for name in dict.fromkeys(order) if _checked(form, f'rotation_on_{name}')]
+    durations = display.get('screen_durations')
+    durations = dict(durations) if isinstance(durations, dict) else {}
+    for name in SCREEN_NAMES:
+        if name in SHARED_DURATION or f'duration_{name}' not in form:
+            continue
+        _set_or_drop(form, durations, name, f'duration_{name}')
+    durations.pop('latest_workouts', None)  # each workout page lasts every stat once: no time of its own
+    display['screen_durations'] = durations
+    for key, _, _ in TIMING:
+        _set_or_drop(form, display, key, key)
+    display['show_logo'] = _checked(form, 'show_logo')
+    display['workout_insights'] = _checked(form, 'workout_insights')
+
+
+def _apply_schedules(form, new, display, problems):
+    """Schedules card: the time zone, the day and night brightness and the quiet-hours refresh."""
+    _set_or_drop(form, display, 'timezone', 'timezone', str)
+    if _checked(form, 'brightness_schedule'):
+        display['brightness_schedule'] = {
+            'day': _number(_one(form, 'bright_day')), 'night': _number(_one(form, 'bright_night')),
+            'day_start': _one(form, 'day_start'), 'night_start': _one(form, 'night_start')}
+    else:
+        display['brightness_schedule'] = None
+    if _checked(form, 'refresh_schedule'):
+        old = display.get('refresh_schedule') if isinstance(display.get('refresh_schedule'), dict) else {}
+        display['refresh_schedule'] = {
+            **{k: v for k, v in old.items() if k == 'timezone'},  # its own zone, set by hand, stays
+            'quiet_start': _one(form, 'quiet_start'), 'quiet_end': _one(form, 'quiet_end'),
+            'quiet_interval': _number(_one(form, 'quiet_interval'))}
+    else:
+        display['refresh_schedule'] = None
+
+
+def _apply_goals_and_milestones(form, new, display, problems):
+    """Goals and Milestones cards: everyone's weekly goals and milestones, the countdown settings, the
+    next-class takeover; old settings that are gone are tidied out."""
+    display['weekly_goals'] = {key: _number(_one(form, f'goal_{key}') or '0') for key in WEEKLY_GOAL_KEYS}
+    display['milestones'] = _milestones(_one(form, 'milestones'))
+    _set_or_drop(form, display, 'milestone_step', 'milestone_step')
+    for key in MILESTONE_KEYS:
+        _set_or_drop(form, display, key, key)
+    _set_or_drop(form, display, 'next_class_takeover_minutes', 'next_class_takeover_minutes')  # 0 is off, blank is 5
+    for key in RETIRED_DISPLAY_KEYS:
+        display.pop(key, None)
+
+
+def _apply_riders(form, new, display, problems):
+    """Each rider's own username, weekly goals and milestones (blank for everyone's); a rider list that no
+    longer matches the page is a problem."""
+    for index, user in riders(new):
+        if f'rider_{index}_name' not in form:
+            continue
+        if _one(form, f'rider_{index}_name') != user['name']:
+            problems.append('The riders in config.json changed since this page loaded: reload it and try again.')
+            break
+        _set_or_drop(form, user, 'username', f'rider_{index}_username', str)
+        goals = {key: _one(form, f'rider_{index}_{key}') for key in WEEKLY_GOAL_KEYS}
+        if any(goals.values()):
+            user['weekly_goals'] = {key: _number(text or '0') for key, text in goals.items()}
+        else:
+            user.pop('weekly_goals', None)
+        _set_or_drop(form, user, 'milestones', f'rider_{index}_milestones', _milestones)
+
+
+def _apply_matrix_field(form, matrix, key):
+    """One matrix setting from its posted field, when posted: blank is the app's default."""
+    field = f'matrix_{key}'
+    if field not in form:
+        return
+    text = _one(form, field)
+    if text == '':
+        matrix.pop(key, None)
+    elif key in SWITCH_KEYS:
+        matrix[key] = text == 'true'
+    elif key in ('gpio_mapping', 'pixel_mapper', 'rgb_sequence'):
+        matrix[key] = text
+    else:
+        matrix[key] = _number(text)
+
+
+def _apply_panel(form, new, display, problems):
+    """Panel and Advanced cards: the size and the matrix settings."""
+    matrix = _part(new, 'matrix')
+    if 'panel_size' in form:
+        found = re.fullmatch(r'(\d+)x(\d+)', _one(form, 'panel_size'))
+        if found:
+            matrix['cols'], matrix['rows'] = int(found.group(1)), int(found.group(2))
+        else:
+            problems.append(f"Panel size should be like 64x32, not {_one(form, 'panel_size')!r}.")
+    for key in [k for k, _, _ in PANEL_FIELDS] + advanced_keys():
+        _apply_matrix_field(form, matrix, key)
+
+
+# The form's sections in the order they apply (each reads the config the ones before it left).
+FORM_SECTIONS = (_apply_display_basics, _apply_rotation, _apply_schedules, _apply_goals_and_milestones,
+                 _apply_riders, _apply_panel)
+
+
+def _is_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _screen_time_problems(new, display):
+    """A saved screen time under what its screen needs on this panel; 0 is never one (switch a screen off)."""
+    labels = {name: label for name, label, _ in SCREENS}
+    rows = board_rows(new.get('matrix'))
+    problems = []
+    for name in SCREEN_NAMES:  # switched off too: a saved time is never under its screen's need
+        least = least_seconds(name, rows)
+        value = display['screen_durations'].get(name)
+        if _is_number(value) and value < least:
+            problems.append(f'{labels[name]} needs at least {_seconds(least)}. To hide it, switch it off.')
+    return problems
+
+
+def _timing_problems(display):
+    """A Timing card seconds value under its least."""
+    problems = []
+    for key, label, _ in TIMING:
+        value, least = display.get(key), TIMING_LEAST.get(key)
+        if least and _is_number(value) and value < least:
+            problems.append(f'{label} needs at least {_seconds(least)}'
+                            + ('. To hide the logo, switch it off.' if key == 'logo_duration' else '.'))
+    return problems
+
+
+def apply_form(config, form):
     """(the config to save, [problems]) from the posted form: {field: [values]}, as
     urllib.parse.parse_qs(..., keep_blank_values=True) gives it. With any problem, nothing
     should be saved."""
@@ -177,129 +343,11 @@ def apply_form(config, form):  # noqa: C901, PLR0912, PLR0915
     problems = []
     # An older config's 0 seconds meant "off": save it as the switch it meant (peloton.screen_times).
     retire_zero_times(new.get('display'), ROTATION_SECTIONS, DEFAULTS['rotation'])
-
-    def one(name, default=''):
-        return (form.get(name) or [default])[0].strip()
-
-    def checked(name):
-        return one(name) == 'on'
-
-    def part(owner, key):
-        if not isinstance(owner.get(key), dict):
-            owner[key] = {}
-        return owner[key]
-
-    def set_or_drop(owner, key, field, parse=_number):
-        text = one(field)
-        if text:
-            owner[key] = parse(text)
-        else:
-            owner.pop(key, None)
-
-    new['debug'] = checked('debug')
-    display = part(new, 'display')
-
-    # Display
-    set_or_drop(display, 'username', 'username', str)
-    display['font'] = one('font', display.get('font', DEFAULTS['font']))
-    display['color'] = one('color', display.get('color', DEFAULTS['color']))
-    reminder = one('streak_reminder_day', str(STREAK_REMINDER_DEFAULT))
-    display['streak_reminder_day'] = None if reminder == 'off' else _number(reminder)
-
-    # Rotation: the screens in page order, the ones switched on; each one's own time, blank for
-    # the fallback.
-    order = [name for name in form.get('rotation_order', []) if name in SCREEN_NAMES]
-    display['rotation'] = [name for name in dict.fromkeys(order) if checked(f'rotation_on_{name}')]
-    durations = display.get('screen_durations')
-    durations = dict(durations) if isinstance(durations, dict) else {}
-    for name in SCREEN_NAMES:
-        if name in SHARED_DURATION or f'duration_{name}' not in form:
-            continue
-        set_or_drop(durations, name, f'duration_{name}')
-    durations.pop('latest_workouts', None)  # each workout page lasts every stat once: no time of its own
-    display['screen_durations'] = durations
-    for key, _, _ in TIMING:
-        set_or_drop(display, key, key)
-    display['show_logo'] = checked('show_logo')
-    display['workout_insights'] = checked('workout_insights')
-
-    # Schedules
-    set_or_drop(display, 'timezone', 'timezone', str)
-    if checked('brightness_schedule'):
-        display['brightness_schedule'] = {
-            'day': _number(one('bright_day')), 'night': _number(one('bright_night')),
-            'day_start': one('day_start'), 'night_start': one('night_start')}
-    else:
-        display['brightness_schedule'] = None
-    if checked('refresh_schedule'):
-        old = display.get('refresh_schedule') if isinstance(display.get('refresh_schedule'), dict) else {}
-        display['refresh_schedule'] = {
-            **{k: v for k, v in old.items() if k == 'timezone'},  # its own zone, set by hand, stays
-            'quiet_start': one('quiet_start'), 'quiet_end': one('quiet_end'),
-            'quiet_interval': _number(one('quiet_interval'))}
-    else:
-        display['refresh_schedule'] = None
-
-    # Goals and Milestones: everyone's, then each rider's own (blank for everyone's)
-    display['weekly_goals'] = {key: _number(one(f'goal_{key}') or '0') for key in WEEKLY_GOAL_KEYS}
-    display['milestones'] = _milestones(one('milestones'))
-    set_or_drop(display, 'milestone_step', 'milestone_step')
-    for key in MILESTONE_KEYS:
-        set_or_drop(display, key, key)
-    set_or_drop(display, 'next_class_takeover_minutes', 'next_class_takeover_minutes')  # 0 is off, blank is 5
-    for key in RETIRED_DISPLAY_KEYS:
-        display.pop(key, None)
-    for index, user in riders(new):
-        if f'rider_{index}_name' not in form:
-            continue
-        if one(f'rider_{index}_name') != user['name']:
-            problems.append('The riders in config.json changed since this page loaded: reload it and try again.')
-            break
-        set_or_drop(user, 'username', f'rider_{index}_username', str)
-        goals = {key: one(f'rider_{index}_{key}') for key in WEEKLY_GOAL_KEYS}
-        if any(goals.values()):
-            user['weekly_goals'] = {key: _number(text or '0') for key, text in goals.items()}
-        else:
-            user.pop('weekly_goals', None)
-        set_or_drop(user, 'milestones', f'rider_{index}_milestones', _milestones)
-
-    # Panel: size and the matrix settings. Blank is the app's default.
-    matrix = part(new, 'matrix')
-    if 'panel_size' in form:
-        found = re.fullmatch(r'(\d+)x(\d+)', one('panel_size'))
-        if found:
-            matrix['cols'], matrix['rows'] = int(found.group(1)), int(found.group(2))
-        else:
-            problems.append(f"Panel size should be like 64x32, not {one('panel_size')!r}.")
-    for key in [k for k, _, _ in PANEL_FIELDS] + advanced_keys():
-        field = f'matrix_{key}'
-        if field not in form:
-            continue
-        text = one(field)
-        if text == '':
-            matrix.pop(key, None)
-        elif key in SWITCH_KEYS:
-            matrix[key] = text == 'true'
-        elif key in ('gpio_mapping', 'pixel_mapper', 'rgb_sequence'):
-            matrix[key] = text
-        else:
-            matrix[key] = _number(text)
-
-    # Each time at least what its screen needs on this panel; 0 is never one (switch a screen off).
-    labels = {name: label for name, label, _ in SCREENS}
-    rows = board_rows(new.get('matrix'))
-    durations = display['screen_durations']
-    for name in SCREEN_NAMES:  # switched off too: a saved time is never under its screen's need
-        least = least_seconds(name, rows)
-        value = durations.get(name)
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and value < least:
-            problems.append(f'{labels[name]} needs at least {_seconds(least)}. To hide it, switch it off.')
-    for key, label, _ in TIMING:
-        value, least = display.get(key), TIMING_LEAST.get(key)
-        if least and isinstance(value, (int, float)) and not isinstance(value, bool) and value < least:
-            problems.append(f'{label} needs at least {_seconds(least)}'
-                            + ('. To hide the logo, switch it off.' if key == 'logo_duration' else '.'))
-
+    new['debug'] = _checked(form, 'debug')
+    display = _part(new, 'display')
+    for apply_section in FORM_SECTIONS:
+        apply_section(form, new, display, problems)
+    problems += _screen_time_problems(new, display) + _timing_problems(display)
     if not problems:
         try:
             validate_config(copy.deepcopy(new), 'config.json')
