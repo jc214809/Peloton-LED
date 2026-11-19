@@ -210,19 +210,22 @@ def _display_discipline(workout, ride=None):
         key, key.replace('_', ' ').title())
 
 
-def summarize_workout(workout, perf=None, detail=None):  # noqa: C901, PLR0912, PLR0915
-    """The workout page's figures. `detail` is the workout detail (GET /api/workout/<id>), fetched
-    only for strength classes, for what the movement tracker counted."""
-    perf = perf or {}
-    ride = workout.get('ride') or {}
-    discipline = _display_discipline(workout)
-    metrics = extract_summary_from_perf(perf, get_model_for_discipline(discipline).perf_slugs())
-    # Prefer recorded workout duration over the class's scheduled duration.
-    duration = next((v for v in (number(perf.get('duration')), number(workout.get('duration')),
-                               number(ride.get('duration'))) if v is not None and v > 0), None)
-    distance, distance_unit = metrics.get('distance'), metrics.get('distance__unit')
-    factor = {'m': 1, 'km': 1000, 'mi': 1609.344}.get(distance_unit)
-    metres = distance * factor if distance is not None and factor else None
+def _recorded_duration(workout, perf, ride):
+    """The recorded workout duration, else the workout's, else the class's scheduled one."""
+    return next((v for v in (number(perf.get('duration')), number(workout.get('duration')),
+                             number(ride.get('duration'))) if v is not None and v > 0), None)
+
+
+def _distance_metres(metrics):
+    factor = {'m': 1, 'km': 1000, 'mi': 1609.344}.get(metrics.get('distance__unit'))
+    distance = metrics.get('distance')
+    return distance * factor if distance is not None and factor else None
+
+
+def _speed_and_pace(metrics, duration, metres):
+    """(speed, speed_unit, pace, pace_unit): recorded, with pace in minutes, else worked out from the
+    distance and the duration."""
+    distance_unit = metrics.get('distance__unit')
     speed, speed_unit = metrics.get('avg_speed'), metrics.get('avg_speed__unit')
     pace, pace_unit = metrics.get('avg_pace'), metrics.get('avg_pace__unit')
     if pace is not None and pace_unit in ('sec/mi', 's/mi', 'sec/km', 's/km'):
@@ -237,6 +240,11 @@ def summarize_workout(workout, perf=None, detail=None):  # noqa: C901, PLR0912, 
         if pace is None:
             pace = duration / 60 / base_distance
             pace_unit = 'min/km' if metric else 'min/mi'
+    return speed, speed_unit, pace, pace_unit
+
+
+def _row_split(metrics, duration, metres):
+    """Seconds per 500 m: the recorded split, else worked out from the distance and the duration."""
     split = metrics.get('avg_split_pace')
     split_unit = metrics.get('avg_split_pace__unit')
     if split is not None and split_unit == 'min/500m':
@@ -245,6 +253,11 @@ def summarize_workout(workout, perf=None, detail=None):  # noqa: C901, PLR0912, 
         split = None
     if split is None and duration and metres and metres > 0:
         split = duration / (metres / 500)
+    return split
+
+
+def _output_figures(metrics, workout):
+    """(total_output_kj, total_work_kj): the graph's total output in kJ, else the raw work."""
     total_output = metrics.get('total_output')
     output_unit = metrics.get('total_output__unit')
     if output_unit == 'j' and total_output is not None:
@@ -256,30 +269,54 @@ def summarize_workout(workout, perf=None, detail=None):  # noqa: C901, PLR0912, 
     total_work_kj = round(joules / 1000, 1) if joules is not None and joules > 0 else None
     if total_output is None:
         total_output = joules / 1000 if joules is not None else None
+    return total_output, total_work_kj
+
+
+def _average_output_watts(metrics):
     avg_output = metrics.get('avg_output')
     avg_unit = metrics.get('avg_output__unit')
     if avg_output is not None and avg_unit == 'kw':
         avg_output *= 1000
     elif avg_unit not in ('w', None):
         avg_output = None
+    return avg_output
+
+
+def _instructor_name(ride):
+    # Class-free workouts (Just Walk, Just Ride, free outdoor) carry a placeholder instructor
+    # named after the workout and with no ID; it isn't anyone, so it isn't shown.
+    instructor = ride.get('instructor') or {}
+    return (instructor.get('name') or instructor.get('display_name') or '') if instructor.get('id') else ''
+
+
+def summarize_workout(workout, perf=None, detail=None):
+    """The workout page's figures. `detail` is the workout detail (GET /api/workout/<id>), fetched
+    only for strength classes, for what the movement tracker counted."""
+    perf = perf or {}
+    ride = workout.get('ride') or {}
+    discipline = _display_discipline(workout)
+    metrics = extract_summary_from_perf(perf, get_model_for_discipline(discipline).perf_slugs())
+    # Prefer recorded workout duration over the class's scheduled duration.
+    duration = _recorded_duration(workout, perf, ride)
+    metres = _distance_metres(metrics)
+    speed, speed_unit, pace, pace_unit = _speed_and_pace(metrics, duration, metres)
+    total_output, total_work_kj = _output_figures(metrics, workout)
     kinds = pr_types(workout)
     stamp = workout_timestamp(workout)
-    instructor = ride.get('instructor') or {}
     result = {
         'workout_id': workout.get('id'),
         'date_time': ts_to_local_str(stamp.timestamp(), workout.get('timezone')) if stamp else '',
         'tz': workout.get('timezone') or '', 'discipline': discipline,
         'workout_at': stamp.timestamp() if stamp else None,
         'title': ride.get('title') or workout.get('title') or workout.get('name') or 'Workout',
-        # Class-free workouts (Just Walk, Just Ride, free outdoor) carry a placeholder instructor
-        # named after the workout and with no ID; it isn't anyone, so it isn't shown.
-        'instructor': (instructor.get('name') or instructor.get('display_name') or '') if instructor.get('id') else '',
+        'instructor': _instructor_name(ride),
         'duration_min': round(duration / 60) if duration else None,
-        'distance': distance, 'distance_unit': distance_unit,
+        'distance': metrics.get('distance'), 'distance_unit': metrics.get('distance__unit'),
         'avg_speed': speed, 'avg_speed_unit': speed_unit,
         'avg_pace': pace, 'avg_pace_unit': pace_unit,
-        'row_split_sec_per_500m': split,
-        'total_output_kj': total_output, 'total_work_kj': total_work_kj, 'avg_output_w': avg_output,
+        'row_split_sec_per_500m': _row_split(metrics, duration, metres),
+        'total_output_kj': total_output, 'total_work_kj': total_work_kj,
+        'avg_output_w': _average_output_watts(metrics),
         'is_pr': bool(kinds), 'is_output_pr': 'output' in kinds, 'is_splits_pr': 'splits' in kinds,
         'strive_score': number((perf.get('effort_zones') or {}).get('total_effort_points')),
         'graph': performance_graph(perf),

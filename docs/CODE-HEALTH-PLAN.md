@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails), phase 2a–2e and 2f wave 1 (parts A–C) merged (2026-11-18); 2f wave 2: part D (`_callouts`, `build_row`, `bike_plan`, `output_insight`) and part F (`main`, `run_display_loop`, `UsernameScreen.render`) **done**, awaiting merge; part E and the rest of 2f, then phase 3, planned. Roadmap item 33. Structural `noqa`s after parts D and F: `C901` 10, `PLR0912` 5, `PLR0913` 12, `PLR0915` 2.
+Status: phase 1 (guardrails), phase 2a–2e and 2f wave 1 (parts A–C) merged (2026-11-18); 2f wave 2, parts D (`_callouts`, `build_row`, `bike_plan`, `output_insight`), E (`extract_discipline_totals`, `summarize_workout`, `event_facts`, `_measure_facts`, `retire_zero_times`) and F (`main`, `run_display_loop`, `UsernameScreen.render`), **done**, awaiting merge; the rest of 2f (`scripts/`, `self_update`) and phase 3 planned. Roadmap item 33. Structural `noqa`s after wave 2: `C901` 5, `PLR0912` 3, `PLR0913` 12, `PLR0915` 1.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So

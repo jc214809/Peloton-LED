@@ -211,33 +211,42 @@ def _share_line(count, workouts, slug):
     return f'{percent}% {name}' if len(f'{percent}% {name}') <= MAX_LABEL_CHARS else f'{percent}% {name.split()[-1]}'
 
 
-def _measure_facts(stats, title):  # noqa: C901
-    """The measures and bests a frame has enough data for: average class and week, the share of the
-    most-done discipline, the frame's rank among equal blocks of days, then the busiest day, week and
-    month, the longest workout, the highest bike output and the best Strive score. A fact with too
-    little behind it is left out (MIN_MEASURE_WORKOUTS and friends), so it never says 1 or 0."""
-    workouts = stats.get('workouts') or 0
-    if workouts < MIN_MEASURE_WORKOUTS:
-        return []
-    facts = []
+def _average_class_fact(stats, title, workouts):
     minutes = stats.get('minutes') or 0
-    if minutes:
-        facts.append({'kind': 'average_class', 'label': title, 'value': f'{round(minutes / workouts)} MIN AVERAGE',
-                      'lines': ['AVERAGE CLASS', _plural(round(minutes / workouts), 'MINUTE')]})
-    if (stats.get('days') or 0) >= MIN_AVERAGE_WEEK_DAYS:
-        average = workouts * 7 / stats['days']
-        facts.append({'kind': 'average_week', 'label': title, 'value': f'{average:.1f} PER WEEK',
-                      'lines': ['AVERAGE WEEK', f'{average:.1f} WORKOUTS']})
+    if not minutes:
+        return None
+    return {'kind': 'average_class', 'label': title, 'value': f'{round(minutes / workouts)} MIN AVERAGE',
+            'lines': ['AVERAGE CLASS', _plural(round(minutes / workouts), 'MINUTE')]}
+
+
+def _average_week_fact(stats, title, workouts):
+    if (stats.get('days') or 0) < MIN_AVERAGE_WEEK_DAYS:
+        return None
+    average = workouts * 7 / stats['days']
+    return {'kind': 'average_week', 'label': title, 'value': f'{average:.1f} PER WEEK',
+            'lines': ['AVERAGE WEEK', f'{average:.1f} WORKOUTS']}
+
+
+def _share_fact(stats, title, workouts):
     done = sorted((stats.get('disciplines') or {}).items(), key=lambda item: (-item[1], item[0]))
-    if workouts >= MIN_SHARE_WORKOUTS and done and done[0][1] >= MIN_COUNT:
-        facts.append({'kind': 'share', 'label': title, 'value': f'{done[0][0]} {done[0][1]} OF {workouts}',
-                      'lines': [_share_line(done[0][1], workouts, done[0][0]), 'OF WORKOUTS']})
+    if not (workouts >= MIN_SHARE_WORKOUTS and done and done[0][1] >= MIN_COUNT):
+        return None
+    return {'kind': 'share', 'label': title, 'value': f'{done[0][0]} {done[0][1]} OF {workouts}',
+            'lines': [_share_line(done[0][1], workouts, done[0][0]), 'OF WORKOUTS']}
+
+
+def _rank_fact(stats, title, workouts):
     rank = stats.get('rank')
-    if rank and rank['rank'] <= MAX_SHOWN_RANK:
-        words = 'BEST EVER' if rank['rank'] == 1 else f'{ORDINALS[rank["rank"]]} BEST EVER'
-        facts.append({'kind': 'rank', 'label': title, 'value': f'{words} / {workouts}',
-                      'lines': [words, _plural(workouts, 'WORKOUT')],
-                      'bonus': RANK_FIRST_BONUS if rank['rank'] == 1 else 0})
+    if not (rank and rank['rank'] <= MAX_SHOWN_RANK):
+        return None
+    words = 'BEST EVER' if rank['rank'] == 1 else f'{ORDINALS[rank["rank"]]} BEST EVER'
+    return {'kind': 'rank', 'label': title, 'value': f'{words} / {workouts}',
+            'lines': [words, _plural(workouts, 'WORKOUT')],
+            'bonus': RANK_FIRST_BONUS if rank['rank'] == 1 else 0}
+
+
+def _busiest_facts(stats):
+    facts = []
     for key, label, least, month in (('busiest_day', 'BUSIEST DAY', MIN_BEST_DAY, False),
                                      ('busiest_week', 'BUSIEST WEEK', MIN_BEST_PERIOD, False),
                                      ('busiest_month', 'BUSIEST MONTH', MIN_BEST_PERIOD, True)):
@@ -246,22 +255,48 @@ def _measure_facts(stats, title):  # noqa: C901
             when = _date_words(best['date'], month_only=month)
             facts.append({'kind': key, 'label': label, 'value': f'{best["count"]} / {when}', 'when': best['date'],
                           'lines': [_plural(best['count'], 'WORKOUT'), f'OF {when}' if key == 'busiest_week' else when]})
-    longest = stats.get('longest')
-    if longest and longest.get('minutes'):
-        facts.append({'kind': 'longest', 'label': 'LONGEST WORKOUT', 'value': f'{longest["minutes"]} MIN',
-                      'lines': [_plural(longest['minutes'], 'MINUTE'), discipline_name(longest.get('discipline') or '')]})
-    output = stats.get('best_output')
-    if output:
-        kind = discipline_name(output.get('discipline') or '')
-        facts.append({'kind': 'best_output', 'label': 'HIGHEST OUTPUT', 'value': f'{_round_half_up(output["kj"])} KJ',
-                      'lines': [f'{_round_half_up(output["kj"]):,} KJ',
-                                f'{output["minutes"]} MIN {kind}' if output.get('minutes') else kind]})
-    strive = stats.get('best_strive')
-    if strive:
-        facts.append({'kind': 'best_strive', 'label': 'BEST STRIVE', 'value': f'{_round_half_up(strive["points"])} POINTS',
-                      'lines': [f'{_round_half_up(strive["points"]):,} POINTS',
-                                discipline_name(strive.get('discipline') or '')]})
     return facts
+
+
+def _longest_fact(stats):
+    longest = stats.get('longest')
+    if not (longest and longest.get('minutes')):
+        return None
+    return {'kind': 'longest', 'label': 'LONGEST WORKOUT', 'value': f'{longest["minutes"]} MIN',
+            'lines': [_plural(longest['minutes'], 'MINUTE'), discipline_name(longest.get('discipline') or '')]}
+
+
+def _best_output_fact(stats):
+    output = stats.get('best_output')
+    if not output:
+        return None
+    kind = discipline_name(output.get('discipline') or '')
+    return {'kind': 'best_output', 'label': 'HIGHEST OUTPUT', 'value': f'{_round_half_up(output["kj"])} KJ',
+            'lines': [f'{_round_half_up(output["kj"]):,} KJ',
+                      f'{output["minutes"]} MIN {kind}' if output.get('minutes') else kind]}
+
+
+def _best_strive_fact(stats):
+    strive = stats.get('best_strive')
+    if not strive:
+        return None
+    return {'kind': 'best_strive', 'label': 'BEST STRIVE', 'value': f'{_round_half_up(strive["points"])} POINTS',
+            'lines': [f'{_round_half_up(strive["points"]):,} POINTS',
+                      discipline_name(strive.get('discipline') or '')]}
+
+
+def _measure_facts(stats, title):
+    """The measures and bests a frame has enough data for: average class and week, the share of the
+    most-done discipline, the frame's rank among equal blocks of days, then the busiest day, week and
+    month, the longest workout, the highest bike output and the best Strive score. A fact with too
+    little behind it is left out (MIN_MEASURE_WORKOUTS and friends), so it never says 1 or 0."""
+    workouts = stats.get('workouts') or 0
+    if workouts < MIN_MEASURE_WORKOUTS:
+        return []
+    facts = ([_average_class_fact(stats, title, workouts), _average_week_fact(stats, title, workouts),
+              _share_fact(stats, title, workouts), _rank_fact(stats, title, workouts)] + _busiest_facts(stats)
+             + [_longest_fact(stats), _best_output_fact(stats), _best_strive_fact(stats)])
+    return [fact for fact in facts if fact]
 
 
 def _comparison_fact(key, stats):
@@ -318,29 +353,20 @@ def anniversary_fact(snapshot):
     return {'kind': 'anniversary', 'label': 'ANNIVERSARY', 'value': f'{years} ON PELOTON', 'lines': [_plural(years, 'YEAR'), 'ON PELOTON']}
 
 
-def event_facts(snapshot):  # noqa: C901, PLR0912
-    """The facts measured from a date (frame_stats' neighbour, activity.event_stats), in the order
-    they're shown (the anniversary is pinned, not here: anniversary_fact): this day in an earlier year, a comeback, a first,
-    time since a discipline's last workout, the last class with a most-seen instructor. Every one has
-    a threshold above, so nothing shows a 1 or a 0 unless that's the point."""
-    events = snapshot.get('events') or {}
-    facts = []
-    today = date.fromisoformat(events['today']) if events.get('today') else None
-    if today is None:
-        return facts
+def _on_this_day_facts(events):
     for found in events.get('on_this_day') or []:
         years, then, now = found.get('years_ago'), found.get('workouts_then'), found.get('workouts_now')
-        if not all(isinstance(n, int) and not isinstance(n, bool) for n in (years, then, now)):
-            continue    # an older cache has no totals: nothing to say rather than half a sentence
-        if years < 1 or not 0 < then <= now:
+        # an older cache has no totals: nothing to say rather than half a sentence
+        if not all(isinstance(n, int) and not isinstance(n, bool) for n in (years, then, now)) or years < 1 or not 0 < then <= now:
             continue
         label = 'A YEAR AGO' if years == 1 else f'{years} YEARS AGO'
-        facts.append({'kind': 'on_this_day', 'label': label, 'value': f'{years} YEARS AGO / {then} TO {now}',
-                      'lines': [f'YOU HAD {then:,}', f'NOW {now:,}']})
-        break
-    disciplines = events.get('disciplines') or {}
-    ranked = sorted(disciplines, key=lambda slug: (-disciplines[slug]['workouts'], slug))
-    began = events.get('first_ever')
+        return [{'kind': 'on_this_day', 'label': label, 'value': f'{years} YEARS AGO / {then} TO {now}',
+                 'lines': [f'YOU HAD {then:,}', f'NOW {now:,}']}]
+    return []
+
+
+def _comeback_facts(disciplines, ranked, today):
+    facts = []
     for slug in ranked:
         found = disciplines[slug]
         if found['workouts'] < MIN_EVENT_WORKOUTS or not found.get('before_last'):
@@ -350,31 +376,59 @@ def event_facts(snapshot):  # noqa: C901, PLR0912
             after = f'1ST IN {gap} DAYS' if gap <= MAX_SINCE_DAYS else f'1ST IN {round(gap / 365)} YEARS'
             facts.append({'kind': f'comeback:{slug}', 'label': 'WELCOME BACK', 'value': f'{slug} {after}',
                           'lines': [discipline_name(slug), after]})
+    return facts
+
+
+def _new_discipline_facts(disciplines, began, today):
+    facts = []
     for slug in sorted(disciplines, key=lambda name: (disciplines[name]['first'], name)):
         found = disciplines[slug]
         if (began and _days_between(found['first'], today) <= EVENT_WINDOW_DAYS
                 and (date.fromisoformat(found['first']) - date.fromisoformat(began)).days >= MIN_HISTORY_DAYS):
             facts.append({'kind': f'new_discipline:{slug}', 'label': 'NEW DISCIPLINE', 'value': f'{slug} FIRST TIME',
                           'lines': [_short_noun(slug), 'FIRST TIME']})
-    since = 0
+    return facts
+
+
+def _since_facts(disciplines, ranked, today):
+    facts = []
     for slug in ranked:
         found = disciplines[slug]
         days = _days_between(found['last'], today)
-        if found['workouts'] >= MIN_EVENT_WORKOUTS and MIN_SINCE_DAYS <= days <= MAX_SINCE_DAYS and since < MAX_SINCE_FACTS:
-            since += 1
+        if found['workouts'] >= MIN_EVENT_WORKOUTS and MIN_SINCE_DAYS <= days <= MAX_SINCE_DAYS and len(facts) < MAX_SINCE_FACTS:
             facts.append(_since_fact(slug, days))
+    return facts
+
+
+def _last_class_facts(snapshot, instructors, today):
     names = snapshot.get('instructor_names') or {}
-    instructors = events.get('instructors') or {}
-    last_with = 0
+    facts = []
     for identity in sorted(instructors, key=lambda who: (-instructors[who]['workouts'], who)):
         found = instructors[identity]
         if (names.get(identity) and found['workouts'] >= MIN_EVENT_WORKOUTS
-                and _days_between(found['last'], today) >= MIN_LAST_WITH_DAYS and last_with < MAX_LAST_WITH_FACTS):
-            last_with += 1
+                and _days_between(found['last'], today) >= MIN_LAST_WITH_DAYS and len(facts) < MAX_LAST_WITH_FACTS):
             facts.append({'kind': f'last_class_with:{identity}', 'label': 'LAST CLASS WITH', 'value': f'{names[identity]} / {found["last"]}',
                           'lines': [names[identity].upper(),
                                     f'{_plural(_days_between(found["last"], today), "DAY")} AGO']})
     return facts
+
+
+def event_facts(snapshot):
+    """The facts measured from a date (frame_stats' neighbour, activity.event_stats), in the order
+    they're shown (the anniversary is pinned, not here: anniversary_fact): this day in an earlier year, a comeback, a first,
+    time since a discipline's last workout, the last class with a most-seen instructor. Every one has
+    a threshold above, so nothing shows a 1 or a 0 unless that's the point."""
+    events = snapshot.get('events') or {}
+    if not events.get('today'):
+        return []
+    today = date.fromisoformat(events['today'])
+    disciplines = events.get('disciplines') or {}
+    ranked = sorted(disciplines, key=lambda slug: (-disciplines[slug]['workouts'], slug))
+    return (_on_this_day_facts(events)
+            + _comeback_facts(disciplines, ranked, today)
+            + _new_discipline_facts(disciplines, events.get('first_ever'), today)
+            + _since_facts(disciplines, ranked, today)
+            + _last_class_facts(snapshot, events.get('instructors') or {}, today))
 
 
 def frame_facts(snapshot, key):
