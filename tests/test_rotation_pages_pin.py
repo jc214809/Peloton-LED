@@ -17,6 +17,8 @@ import pytest
 from peloton.config import DEFAULTS
 from peloton_led import build_rotation_pages
 from scripts.render_rotation import load_snapshot_for
+from tests import pin_fixture
+from tests.pin_fixture import Table
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'rotation_pages_pin.json'
 NOW = datetime(2026, 11, 18, 15, 0, tzinfo=timezone.utc)  # a Wednesday
@@ -202,14 +204,26 @@ def _all_outputs():
     return {name: _pages(make()) for name, make in _cases().items()}
 
 
+def _encode(table, pages):
+    """A case as [name, state id, seconds] per page: a state shared by many cases is stored once."""
+    return [[name, table.intern(state), seconds] for name, state, seconds in pages]
+
+
 def test_rotation_pages_match_the_pinned_output(frozen):
     got = _all_outputs()
     if os.environ.get('PIN_REGEN'):
-        FIXTURE.write_text(json.dumps(got, sort_keys=True, separators=(',', ':')) + '\n')
-    expected = json.loads(FIXTURE.read_text())
-    assert sorted(got) == sorted(expected)
-    for name in got:
-        assert got[name] == expected[name], name
+        table = Table()
+        pin_fixture.write(FIXTURE, table, {name: _encode(table, pages) for name, pages in got.items()})
+    table, cases = pin_fixture.read(FIXTURE)
+    assert sorted(got) == sorted(cases), 'the cases differ from the fixture: regenerate it for a deliberate change'
+    for name, pages in got.items():
+        expected = [[page_name, table.resolve(key), seconds] for page_name, key, seconds in cases[name]]
+        assert [p[0] for p in pages] == [p[0] for p in expected], (
+            f'{name}: the pages are not the pinned ones: got {[p[0] for p in pages]}, '
+            f'pinned {[p[0] for p in expected]}')
+        for index, (page, pinned) in enumerate(zip(pages, expected, strict=True)):
+            assert page == pinned, (f'{name}, page {index} ({page[0]}) differs:\n  got    {pin_fixture.show(page)}'
+                                    f'\n  pinned {pin_fixture.show(pinned)}')
 
 
 def test_the_pinned_cases_cover_every_page_kind(frozen):

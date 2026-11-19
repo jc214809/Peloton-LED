@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 
 from peloton.config import MATRIX_DEFAULTS, WEEKLY_GOAL_KEYS
+from tests import pin_fixture
+from tests.pin_fixture import Table
 from settings_page.form import FORM_FIELD, PANEL_FIELDS, SCREEN_NAMES, TIMING, advanced_keys, apply_form
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -180,14 +182,59 @@ def _apply(config_name, form_name):
     return {'config': json.loads(json.dumps(result, default=repr)), 'problems': problems}
 
 
+def _encode(table, outcome):
+    """A case as {problems, config}: each config key is a value id, and an object `display` is '~' + the id of
+    its sorted key list + one id per key's value (fixed width), so what many cases share is stored once."""
+    config = {}
+    for key, value in outcome['config'].items():
+        if key == 'display' and isinstance(value, dict):
+            keys = sorted(value)
+            config[key] = '~' + table.intern(keys) + ''.join(table.intern(value[k]) for k in keys)
+        else:
+            config[key] = table.intern(value)
+    return {'problems': [table.intern(p) for p in outcome['problems']], 'config': config}
+
+
+def _decode(table, config):
+    """The config a case pins, from its ids (the inverse of _encode)."""
+    width = table.id_length
+    decoded = {}
+    for key, ref in config.items():
+        if ref.startswith('~'):
+            keys = table.resolve(ref[1:1 + width])
+            ids = [ref[1 + width + i * width:1 + width + (i + 1) * width] for i in range(len(keys))]
+            decoded[key] = {k: table.resolve(i) for k, i in zip(keys, ids, strict=True)}
+        else:
+            decoded[key] = table.resolve(ref)
+    return decoded
+
+
 def test_apply_form_matches_the_pinned_output():
     got = {name: _apply(*pair) for name, pair in _cases().items()}
     if os.environ.get('PIN_REGEN'):
-        FIXTURE.write_text(json.dumps(got, sort_keys=True, separators=(',', ':')) + '\n')
-    expected = json.loads(FIXTURE.read_text())
-    assert sorted(got) == sorted(expected)
-    for name in got:
-        assert got[name] == expected[name], name
+        table = Table(id_length=4)
+        pin_fixture.write(FIXTURE, table, {name: _encode(table, outcome) for name, outcome in got.items()})
+    table, cases = pin_fixture.read(FIXTURE)
+    assert sorted(got) == sorted(cases), 'the cases differ from the fixture: regenerate it for a deliberate change'
+    for name, outcome in got.items():
+        pinned = {**cases[name], 'problems': [table.resolve(p) for p in cases[name]['problems']]}
+        assert outcome['problems'] == pinned['problems'], (
+            f'{name}: problems differ:\n  got    {outcome["problems"]}\n  pinned {pinned["problems"]}')
+        assert sorted(outcome['config']) == sorted(pinned['config']), (
+            f'{name}: the config keys differ: got {sorted(outcome["config"])}, pinned {sorted(pinned["config"])}')
+        pinned_config = _decode(table, pinned['config'])
+        for key, value in outcome['config'].items():
+            pinned_value = pinned_config[key]
+            assert value == pinned_value, f'{name}: config[{key!r}] differs: {_differences(value, pinned_value)}'
+
+
+def _differences(got, pinned):
+    """What differs between two config values, readably: the keys of an object, else both values."""
+    if not (isinstance(got, dict) and isinstance(pinned, dict)):
+        return f'\n  got    {pin_fixture.show(got)}\n  pinned {pin_fixture.show(pinned)}'
+    return ''.join(f'\n  {key}: got {pin_fixture.show(got.get(key, "<missing>"), 200)}, '
+                   f'pinned {pin_fixture.show(pinned.get(key, "<missing>"), 200)}'
+                   for key in sorted(set(got) | set(pinned)) if got.get(key, '<missing>') != pinned.get(key, '<missing>'))
 
 
 def test_the_pinned_forms_reach_every_kind_of_outcome():
