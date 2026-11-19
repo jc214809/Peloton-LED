@@ -32,7 +32,9 @@ Worst functions: `validate_config` (peloton/config.py, 60), `build_rotation_page
 (settings_page/server.py, 21), `refresh_cookies.main` (21), `load_snapshot`
 (peloton/cache.py, 21).
 
-The import layering already holds; nothing enforces it:
+The import layering already held before phase 1; phase 1's import-linter contracts now
+enforce it (`pyproject.toml`; the `driver` contract checks direct imports only, since
+`driver` reaches `peloton.config` through `utils.utils`):
 - `peloton/` imports only `models` and `requests` (plus itself).
 - `display/` imports from `peloton` only the pure helpers in `challenges`, `club` and
   `booked_classes`, never `api`, `dashboard` or `requests`. One cross-service import:
