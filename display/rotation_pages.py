@@ -20,7 +20,7 @@ from peloton.selection import normalize_discipline
 from peloton.totals import lifetime_overview_pages, total_workout_count
 from peloton.username_facts import shown_keys, username_details
 from display.ui.celebration_screen import discipline_noun, milestone_noun
-from display.ui.last_workout_screen import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details, stats_phase_seconds
+from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details, stats_phase_seconds
 from display.ui.pr_celebration import (BURST_SECONDS as PR_BURST_SECONDS, CARD_HOLD_SECONDS as PR_CARD_HOLD_SECONDS,
                                        SETTLE_SECONDS as PR_SETTLE_SECONDS)
 from display.ui.streak_screen import streak_views

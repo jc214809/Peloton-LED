@@ -11,6 +11,7 @@ from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.next_class_screen import (COLUMN_LEFT, LINE_WIDTH, PULSE_FLOOR, PULSE_FRAME_SECONDS, PULSE_PERIOD,
                                           PULSE_WINDOW, TAG_COLORS, NextClassScreen, fitted, pulse_level, pulses)
 from peloton import dashboard as dashboard_module
+from peloton import dashboard_fetch
 from peloton.booked_classes import (NOUNS, SHOWN_AFTER_START, class_lines, day_word, instructor_lines,
                                     next_booking, reservation_ids, slim_class, valid_booking, when)
 from peloton.cache import load_snapshot, save_snapshot
@@ -222,7 +223,7 @@ def test_a_class_without_details_is_asked_for_again_after_an_hour(tmp_path, monk
     client.get_scheduled_class.side_effect = details
     dashboard.refresh()
     assert dashboard.snapshot()['booked_classes'] == []
-    clock['now'] += dashboard_module.BOOKING_RETRY_SECONDS - 1
+    clock['now'] += dashboard_fetch.BOOKING_RETRY_SECONDS - 1
     dashboard.refresh()
     assert client.get_scheduled_class.call_count == 1
     client.get_scheduled_class.side_effect = lambda identity: scheduled(identity)

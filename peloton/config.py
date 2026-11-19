@@ -1,14 +1,14 @@
 """Validate user configuration before initializing hardware or making requests."""
 import json
 import logging
-import math
 import os
 import re
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .booked_classes import TAKEOVER_MAX_MINUTES
+from .config_rules import (Rule, int_in, is_bool, is_env_name, is_iso_date, is_nonblank_str, is_str, is_time_of_day,
+                           is_timezone, non_negative_number, or_none, positive_number, run, whole_number)
 from .journey import DEFAULT_JOURNEY, DISTANCE_DISCIPLINES
 from .screen_times import retire_zero_times
 from .selection import normalize_discipline
@@ -126,62 +126,340 @@ def load_dotenv(path='.env'):
 
 
 WEEKLY_GOAL_KEYS = ('workouts', 'minutes', 'active_days')
+FONTS = ('discipline', 'info', 'titles', 'stats', 'countdown')
+COLORS = ('red', 'disney_blue', 'white', 'down', 'gold')
+LEGACY_FONTS = ('ride', 'park')  # in the original example config; read as 'discipline'
+JOURNEY_REQUIRED_KEYS = {'from', 'to', 'miles'}
+BRIGHTNESS_SCHEDULE_KEYS = {'day', 'night', 'day_start', 'night_start'}
+REFRESH_SCHEDULE_KEYS = {'quiet_start', 'quiet_end', 'quiet_interval'}  # and an optional 'timezone'
+
+def _is_rotation(value):
+    return (isinstance(value, list) and all(isinstance(item, str) for item in value)
+            and len(value) == len(set(value)) and set(value) <= ROTATION_SECTIONS)
 
 
-def _validate_weekly_goals(path, goals, prefix):
-    if not isinstance(goals, dict) or not set(goals) <= set(WEEKLY_GOAL_KEYS):
-        raise ValueError(f'{path}: {prefix}weekly_goals must contain only workouts, minutes and active_days')
-    for value in goals.values():
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise ValueError(f'{path}: {prefix}weekly_goals values must be non-negative integers')
-    if goals.get('active_days', 0) > 7:
-        raise ValueError(f'{path}: {prefix}weekly_goals.active_days can be at most 7')
+def _names_only_screens(value):
+    return isinstance(value, dict) and set(value) <= DURATION_SECTIONS
 
 
-def _validate_milestones(path, milestones, prefix):
-    if (not isinstance(milestones, list) or any(isinstance(value, bool) or
-            not isinstance(value, int) or value <= 0 for value in milestones)):
-        raise ValueError(f'{path}: {prefix}milestones must contain positive integers')
-    return sorted(set(milestones))
+def _all_durations_positive(value):
+    return all(positive_number(seconds) for seconds in value.values())
 
 
-def _validate_journey(path, journey, prefix):  # noqa: C901
-    """Route for the distance journey: from/to names, miles, disciplines."""
-    where = f'{path}: {prefix}journey'
-    if not isinstance(journey, dict) or not {'from', 'to', 'miles'} <= set(journey):
-        raise ValueError(f'{where} needs from, to and miles')
-    for key in ('from', 'to'):
-        if not isinstance(journey[key], str) or not journey[key].strip():
-            raise ValueError(f'{where}.{key} must be a non-empty string')
-    miles = journey['miles']
-    if isinstance(miles, bool) or not isinstance(miles, (int, float)) or not math.isfinite(miles) or miles <= 0:
-        raise ValueError(f'{where}.miles must be a positive number')
-    disciplines = journey.get('disciplines')
-    if disciplines is not None and (not isinstance(disciplines, list) or not disciplines
-            or not all(isinstance(d, str) and normalize_discipline(d) for d in disciplines)):
-        raise ValueError(f'{where}.disciplines must be a non-empty list of discipline names')
-    if disciplines is not None:
-        known = {normalize_discipline(d) for d in DISTANCE_DISCIPLINES}
-        for name in disciplines:
-            if normalize_discipline(name) not in known:
-                logger.warning('%s.disciplines: %r has no distance and adds no miles; distance comes from %s',
-                               where, name, ', '.join(DISTANCE_DISCIPLINES))
+def _names_only_goal_keys(value):
+    return isinstance(value, dict) and set(value) <= set(WEEKLY_GOAL_KEYS)
+
+
+def _all_goals_whole(value):
+    return all(int_in(goal, 0) for goal in value.values())
+
+
+def _active_days_at_most_7(value):
+    return value.get('active_days', 0) <= 7
+
+
+def _all_positive_ints(value):
+    return isinstance(value, list) and all(int_in(item, 1) for item in value)
+
+
+def _has_journey_keys(value):
+    return isinstance(value, dict) and JOURNEY_REQUIRED_KEYS <= set(value)
+
+
+def _is_discipline_list(value):
+    return (isinstance(value, list) and bool(value)
+            and all(isinstance(name, str) and normalize_discipline(name) for name in value))
+
+
+def _is_brightness_schedule(value):
+    return isinstance(value, dict) and set(value) == BRIGHTNESS_SCHEDULE_KEYS
+
+
+def _is_refresh_schedule(value):
+    return isinstance(value, dict) and REFRESH_SCHEDULE_KEYS <= set(value)
+
+
+def _has_no_other_refresh_keys(value):
+    return not set(value) - REFRESH_SCHEDULE_KEYS - {'timezone'}
+
+
+def _is_rows(value):
+    return value in (32, 64) and not isinstance(value, bool)
+
+
+def _is_rgb_sequence(value):
+    return isinstance(value, str) and sorted(value.upper()) == ['B', 'G', 'R']
+
+
+# Row builders for the shapes the display table repeats.
+
+def _display_duration(key):
+    return Rule(key, positive_number, f'display.{key} must be a number above 0 (switch a screen off to hide it)')
+
+
+def _display_positive_int(key):
+    return Rule(key, whole_number(1), f'display.{key} must be a positive integer')
+
+
+def _display_at_least(key, low):
+    return Rule(key, whole_number(low), f'display.{key} must be a whole number of at least {low}')
+
+
+def _display_string(key):
+    return Rule(key, or_none(is_str), f'display.{key} must be a string')
+
+
+def _matrix_whole_number(key, low, high=None):
+    span = f'from {low} to {high}' if high is not None else f'at least {low}'
+    return Rule(key, whole_number(low, high), f'matrix.{key} must be a whole number {span}')
+
+
+# Steps that don't fit a row: cross-field rules, warnings, and values rewritten while checked.
+
+def _normalize_milestones(path, section, prefix):
+    section['milestones'] = sorted(set(section['milestones']))
+
+
+def _migrate_legacy_font(path, display, prefix):
+    if display['font'] in LEGACY_FONTS:
+        display['font'] = 'discipline'
+
+
+def _warn_retired_keys(path, display, prefix):
+    retired = [key for key in RETIRED_DISPLAY_KEYS if key in display]
+    if retired:
+        logger.warning('%s: display.%s no longer do anything (the workout log replaced them); '
+                       'they can be removed', path, ', display.'.join(retired))
+
+
+def _warn_unknown_disciplines(path, journey, prefix):
+    if journey.get('disciplines') is None:
+        return
+    known = {normalize_discipline(d) for d in DISTANCE_DISCIPLINES}
+    for name in journey['disciplines']:
+        if normalize_discipline(name) not in known:
+            logger.warning('%s: %sjourney.disciplines: %r has no distance and adds no miles; distance comes from %s',
+                           path, prefix, name, ', '.join(DISTANCE_DISCIPLINES))
+
+
+def _require_user_name(path, user, prefix):
+    if not is_nonblank_str(user.get('name')):
+        raise ValueError(f'{path}: {prefix.rstrip(".")} requires a name string')
+
+
+def _check_unique_identity(path, user, seen):
+    name = user['name'].strip()
+    token = user.get('token_path', '').strip() or default_token_path(name)
+    if name.casefold() in seen['names'] or token in seen['tokens']:
+        raise ValueError(f'{path}: user names and token paths must be unique')
+    seen['names'].add(name.casefold())
+    seen['tokens'].add(token)
+
+
+def _check_unique_files(path, user, seen):
+    for key in ('cache_path', 'log_path'):
+        # Two riders sharing a cache or log would overwrite each other.
+        value = user.get(key)
+        if value and value in seen['files']:
+            raise ValueError(f'{path}: user cache and log paths must be unique')
+        if value:
+            seen['files'].add(value)
+
+
+def _check_brightness_schedule(path, display, prefix):
+    run(_BRIGHTNESS_SCHEDULE_SHAPE, path, display, prefix)
+    if display['brightness_schedule'] is not None:
+        run(_BRIGHTNESS_SCHEDULE_RULES, path, display['brightness_schedule'])
+
+
+def _check_refresh_schedule(path, display, prefix):
+    run(_REFRESH_SCHEDULE_SHAPE, path, display, prefix)
+    if display['refresh_schedule'] is not None:
+        run(_REFRESH_SCHEDULE_RULES, path, display['refresh_schedule'])
+
+
+def _validate_journey(path, section, prefix):
+    """Route for the distance journey: from/to names, miles, disciplines. Rewrites section['journey']
+    with the names trimmed and every optional key present."""
+    run(_JOURNEY_SHAPE, path, section, prefix)
+    journey = section['journey']
+    run(_JOURNEY_RULES, path, journey, prefix)
     start = journey.get('start_date')
-    if start is not None:
-        try:
-            start = date.fromisoformat(start.strip()).isoformat()
-        except (AttributeError, ValueError):
-            raise ValueError(f'{where}.start_date must be a YYYY-MM-DD date') from None
-    return {**journey, 'from': journey['from'].strip(), 'to': journey['to'].strip(),
-            'disciplines': disciplines, 'start_date': start}
+    section['journey'] = {**journey, 'from': journey['from'].strip(), 'to': journey['to'].strip(),
+                          'disciplines': journey.get('disciplines'),
+                          'start_date': None if start is None else date.fromisoformat(start.strip()).isoformat()}
 
 
-def _int_in(value, low, high=None):
-    return (not isinstance(value, bool) and isinstance(value, int) and value >= low
-            and (high is None or value <= high))
+# Every check validate_config makes is a row in one of these tables, in the order its error is
+# reported (the first failing row wins). To validate a new config key, add one Rule row to its
+# section's table: _DISPLAY_RULES for display.*, _MATRIX_RULES for matrix.*, _USER_*_RULES for each
+# entry of users, and give it a default in DEFAULTS / MATRIX_DEFAULTS. Messages are word for word
+# what the settings page shows and tests/test_config_validation_messages.py pins them.
+
+_WEEKLY_GOALS_RULES = [
+    Rule('weekly_goals', _names_only_goal_keys,
+          '{prefix}weekly_goals must contain only workouts, minutes and active_days'),
+    Rule('weekly_goals', _all_goals_whole, '{prefix}weekly_goals values must be non-negative integers'),
+    Rule('weekly_goals', _active_days_at_most_7, '{prefix}weekly_goals.active_days can be at most 7'),
+]
+
+_MILESTONES_RULES = [
+    Rule('milestones', _all_positive_ints, '{prefix}milestones must contain positive integers'),
+    _normalize_milestones,
+]
+
+_JOURNEY_SHAPE = [Rule('journey', _has_journey_keys, '{prefix}journey needs from, to and miles')]
+
+_JOURNEY_RULES = [
+    Rule('from', is_nonblank_str, '{prefix}journey.from must be a non-empty string'),
+    Rule('to', is_nonblank_str, '{prefix}journey.to must be a non-empty string'),
+    Rule('miles', positive_number, '{prefix}journey.miles must be a positive number'),
+    Rule('disciplines', or_none(_is_discipline_list),
+          '{prefix}journey.disciplines must be a non-empty list of discipline names'),
+    _warn_unknown_disciplines,
+    Rule('start_date', or_none(is_iso_date), '{prefix}journey.start_date must be a YYYY-MM-DD date'),
+]
+
+_USER_IDENTITY_STEPS = [
+    _require_user_name,
+    Rule('token_path', or_none(is_nonblank_str), '{prefix}token_path must be a non-empty string'),
+]
+
+_USER_PATH_RULES = [
+    Rule('cache_path', or_none(is_str), '{prefix}cache_path must be a string'),
+    Rule('log_path', or_none(is_str), '{prefix}log_path must be a string'),
+    Rule('username', or_none(is_str), '{prefix}username must be a string'),
+]
+
+_USER_ENV_RULES = [
+    Rule('email_env', or_none(is_env_name), '{prefix}email_env must be an environment variable name'),
+    Rule('password_env', or_none(is_env_name), '{prefix}password_env must be an environment variable name'),
+]
+
+# A key listed here is read as `matrix` merged over MATRIX_DEFAULTS, so it is always present.
+_MATRIX_RULES = [
+    Rule('rows', _is_rows, 'matrix.rows must be 32 or 64'),
+    _matrix_whole_number('cols', 1),
+    _matrix_whole_number('chain', 1),
+    _matrix_whole_number('parallel', 1, 3),
+    _matrix_whole_number('pwm_bits', 1, 11),
+    _matrix_whole_number('brightness', 1, 100),
+    _matrix_whole_number('scan_mode', 0, 1),
+    _matrix_whole_number('pwm_lsb_nanoseconds', 1),
+    _matrix_whole_number('row_addr_type', 0, 3),
+    _matrix_whole_number('multiplexing', 0),
+    _matrix_whole_number('limit_refresh', 0),
+    _matrix_whole_number('pwm_dither_bits', 0),
+    Rule('slowdown_gpio', or_none(whole_number(0, 4)),
+          'matrix.slowdown_gpio must be a whole number from 0 to 4, or null'),
+    Rule('gpio_mapping', or_none(lambda value: value in GPIO_MAPPINGS),
+          f'matrix.gpio_mapping must be one of {", ".join(GPIO_MAPPINGS)}, or null'),
+    Rule('show_refresh', is_bool, 'matrix.show_refresh must be true or false'),
+    Rule('no_hardware_pulse', is_bool, 'matrix.no_hardware_pulse must be true or false'),
+    Rule('rgb_sequence', _is_rgb_sequence, 'matrix.rgb_sequence must be an ordering of R, G and B, e.g. "RBG"'),
+    Rule('pixel_mapper', is_str, 'matrix.pixel_mapper must be a string'),
+]
+
+_BRIGHTNESS_SCHEDULE_SHAPE = [
+    Rule('brightness_schedule', or_none(_is_brightness_schedule),
+          'display.brightness_schedule requires day, night, day_start, and night_start'),
+]
+
+# Rows for the schedule's own keys (the schedule is the section here, so no {prefix}).
+_BRIGHTNESS_SCHEDULE_RULES = [
+    Rule('day', whole_number(1, 100), 'brightness day must be from 1 to 100'),
+    Rule('night', whole_number(1, 100), 'brightness night must be from 1 to 100'),
+    Rule('day_start', is_time_of_day, 'brightness day_start must use HH:MM'),
+    Rule('night_start', is_time_of_day, 'brightness night_start must use HH:MM'),
+]
+
+_REFRESH_SCHEDULE_SHAPE = [
+    Rule('refresh_schedule', or_none(_is_refresh_schedule),
+          'display.refresh_schedule requires quiet_start, quiet_end, and quiet_interval'),
+    Rule('refresh_schedule', or_none(_has_no_other_refresh_keys),
+          'display.refresh_schedule has unsupported keys'),
+]
+
+_REFRESH_SCHEDULE_RULES = [
+    Rule('quiet_start', is_time_of_day, 'refresh_schedule quiet_start must use HH:MM'),
+    Rule('quiet_end', is_time_of_day, 'refresh_schedule quiet_end must use HH:MM'),
+    Rule('quiet_interval', whole_number(1), 'refresh_schedule.quiet_interval must be a positive integer'),
+    Rule('timezone', or_none(is_str), 'refresh_schedule.timezone must be a string'),
+    Rule('timezone', or_none(is_timezone), 'invalid refresh_schedule.timezone'),
+]
+
+# The display section, merged over DEFAULTS, so every key with a default is present. Warnings that
+# fire between two rows stay between them so the log reads as it always did.
+_DISPLAY_RULES = [
+    _display_duration('duration'),
+    _display_duration('overview_duration'),
+    _display_duration('last_workout_duration'),
+    _display_duration('logo_duration'),
+    _display_duration('last_workout_detail_interval'),
+    # per_workout_duration is no longer used; still accepted.
+    Rule('per_workout_duration', non_negative_number, 'display.per_workout_duration must be a non-negative number'),
+    Rule('show_logo', is_bool, 'display.show_logo must be true or false'),
+    _display_positive_int('refresh_interval'),
+    _display_positive_int('history_batch_size'),
+    _display_positive_int('recent_fetch_size'),
+    _display_positive_int('performance_cache_size'),
+    _warn_retired_keys,
+    _migrate_legacy_font,
+    Rule('font', lambda value: value in FONTS, 'unsupported display.font: {value}'),
+    Rule('color', lambda value: value in COLORS, 'unsupported display.color: {value}'),
+    Rule('timezone', lambda value: not value or is_timezone(value), 'invalid display.timezone'),
+    _display_string('username'),
+    _display_string('logo_path'),
+    _display_string('cache_path'),
+    _display_string('log_path'),
+    Rule('rotation', _is_rotation, 'display.rotation must contain unique supported screen names'),
+    Rule('screen_durations', _names_only_screens, 'display.screen_durations contains an unsupported screen name'),
+    Rule('screen_durations', _all_durations_positive,
+          'display.screen_durations values must be numbers above 0 (switch a screen off to hide it)'),
+    *_WEEKLY_GOALS_RULES,
+    *_MILESTONES_RULES,
+    _validate_journey,
+    Rule('streak_reminder_day', or_none(whole_number(0, 6)),
+          'display.streak_reminder_day must be 0 (Monday) to 6 (Sunday), or null'),
+    Rule('milestone_step', whole_number(0), 'display.milestone_step must be a non-negative integer'),
+    Rule('pr_max_age_days', or_none(whole_number(1)),
+          'display.pr_max_age_days must be a whole number of days of at least 1, or null'),
+    Rule('workout_insights', is_bool, 'display.workout_insights must be true or false'),
+    _display_at_least('milestone_within', 1),
+    _display_at_least('milestone_pages', 1),
+    Rule('next_class_takeover_minutes', whole_number(0, TAKEOVER_MAX_MINUTES),
+          'display.next_class_takeover_minutes must be a whole number of minutes '
+          f'from 0 (off) to {TAKEOVER_MAX_MINUTES}'),
+    _check_brightness_schedule,
+    _check_refresh_schedule,
+]
 
 
-def _validate_matrix(path, matrix):  # noqa: C901
+def _validate_user(path, user, prefix, seen):
+    run(_USER_IDENTITY_STEPS, path, user, prefix)
+    _check_unique_identity(path, user, seen)
+    run(_USER_PATH_RULES, path, user, prefix)
+    _check_unique_files(path, user, seen)
+    run(_USER_ENV_RULES, path, user, prefix)
+    if 'weekly_goals' in user:
+        run(_WEEKLY_GOALS_RULES, path, user, prefix)
+    if 'milestones' in user:
+        run(_MILESTONES_RULES, path, user, prefix)
+    if 'journey' in user:
+        _validate_journey(path, user, prefix)
+
+
+def _validate_users(path, users):
+    if not isinstance(users, list) or not users:
+        raise ValueError(f'{path}: users must be a non-empty list')
+    seen = {'names': set(), 'tokens': set(), 'files': set()}
+    for index, user in enumerate(users):
+        if not isinstance(user, dict):
+            raise ValueError(f'{path}: users[{index}] must be an object')
+        _validate_user(path, user, f'users[{index}].', seen)
+
+
+def _validate_matrix(path, matrix):
     """Optional top-level "matrix" section: LED panel and driver settings."""
     if matrix is None:
         matrix = {}
@@ -191,27 +469,7 @@ def _validate_matrix(path, matrix):  # noqa: C901
     if unknown:
         raise ValueError(f'{path}: matrix has unsupported keys: {", ".join(sorted(unknown))}')
     merged = {**MATRIX_DEFAULTS, **matrix}
-    ranges = {'cols': (1, None), 'chain': (1, None), 'parallel': (1, 3), 'pwm_bits': (1, 11),
-              'brightness': (1, 100), 'scan_mode': (0, 1), 'pwm_lsb_nanoseconds': (1, None),
-              'row_addr_type': (0, 3), 'multiplexing': (0, None), 'limit_refresh': (0, None),
-              'pwm_dither_bits': (0, None)}
-    if merged['rows'] not in (32, 64) or isinstance(merged['rows'], bool):
-        raise ValueError(f'{path}: matrix.rows must be 32 or 64')
-    for key, (low, high) in ranges.items():
-        if not _int_in(merged[key], low, high):
-            span = f'from {low} to {high}' if high is not None else f'at least {low}'
-            raise ValueError(f'{path}: matrix.{key} must be a whole number {span}')
-    if merged['slowdown_gpio'] is not None and not _int_in(merged['slowdown_gpio'], 0, 4):
-        raise ValueError(f'{path}: matrix.slowdown_gpio must be a whole number from 0 to 4, or null')
-    if merged['gpio_mapping'] is not None and merged['gpio_mapping'] not in GPIO_MAPPINGS:
-        raise ValueError(f'{path}: matrix.gpio_mapping must be one of {", ".join(GPIO_MAPPINGS)}, or null')
-    for key in ('show_refresh', 'no_hardware_pulse'):
-        if not isinstance(merged[key], bool):
-            raise ValueError(f'{path}: matrix.{key} must be true or false')
-    if not isinstance(merged['rgb_sequence'], str) or sorted(merged['rgb_sequence'].upper()) != ['B', 'G', 'R']:
-        raise ValueError(f'{path}: matrix.rgb_sequence must be an ordering of R, G and B, e.g. "RBG"')
-    if not isinstance(merged['pixel_mapper'], str):
-        raise ValueError(f'{path}: matrix.pixel_mapper must be a string')
+    run(_MATRIX_RULES, path, merged)
     merged['rgb_sequence'] = merged['rgb_sequence'].upper()
     return merged
 
@@ -230,54 +488,14 @@ def load_config(path='config', allow_missing=False):
     return validate_config(config, path)
 
 
-def validate_config(config, path='config.json'):  # noqa: C901, PLR0912, PLR0915
+def validate_config(config, path='config.json'):
     """Check a parsed config and fill in display defaults; raises ValueError naming
     the first problem (prefixed with path). Changes config in place and returns it,
     so pass a copy to check one without changing it (the settings page does)."""
     if not isinstance(config, dict) or not isinstance(config.get('display', {}), dict):
         raise ValueError(f'{path}: config and display must be JSON objects')
-    users = config.get('users')
-    if users is not None:
-        if not isinstance(users, list) or not users:
-            raise ValueError(f'{path}: users must be a non-empty list')
-        seen_names = set()
-        seen_tokens = set()
-        seen_caches = set()
-        for index, user in enumerate(users):
-            if not isinstance(user, dict):
-                raise ValueError(f'{path}: users[{index}] must be an object')
-            if not isinstance(user.get('name'), str) or not user['name'].strip():
-                raise ValueError(f'{path}: users[{index}] requires a name string')
-            if user.get('token_path') is not None and (
-                    not isinstance(user['token_path'], str) or not user['token_path'].strip()):
-                raise ValueError(f'{path}: users[{index}].token_path must be a non-empty string')
-            name = user['name'].strip()
-            token = user.get('token_path', '').strip() or default_token_path(name)
-            if name.casefold() in seen_names or token in seen_tokens:
-                raise ValueError(f'{path}: user names and token paths must be unique')
-            seen_names.add(name.casefold())
-            seen_tokens.add(token)
-            for key in ('cache_path', 'log_path', 'username'):
-                if user.get(key) is not None and not isinstance(user[key], str):
-                    raise ValueError(f'{path}: users[{index}].{key} must be a string')
-            for key in ('cache_path', 'log_path'):
-                # Two riders sharing a cache or log would overwrite each other.
-                value = user.get(key)
-                if value and value in seen_caches:
-                    raise ValueError(f'{path}: user cache and log paths must be unique')
-                if value:
-                    seen_caches.add(value)
-            for key in ('email_env', 'password_env'):
-                value = user.get(key)
-                if value is not None and (not isinstance(value, str) or
-                        re.fullmatch(r'[A-Z_][A-Z0-9_]*', value) is None):
-                    raise ValueError(f'{path}: users[{index}].{key} must be an environment variable name')
-            if 'weekly_goals' in user:
-                _validate_weekly_goals(path, user['weekly_goals'], f'users[{index}].')
-            if 'milestones' in user:
-                user['milestones'] = _validate_milestones(path, user['milestones'], f'users[{index}].')
-            if 'journey' in user:
-                user['journey'] = _validate_journey(path, user['journey'], f'users[{index}].')
+    if config.get('users') is not None:
+        _validate_users(path, config['users'])
     config['matrix'] = _validate_matrix(path, config.get('matrix'))
     # 0 seconds used to mean "don't show"; it's now the screen's switch (or show_logo).
     switched = retire_zero_times(config.get('display'), ROTATION_SECTIONS, DEFAULTS['rotation'])
@@ -285,109 +503,6 @@ def validate_config(config, path='config.json'):  # noqa: C901, PLR0912, PLR0915
         logger.warning('%s: a time of 0 now means switched off (%s); saving the settings page writes '
                        'it that way', path, '; '.join(switched))
     display = {**DEFAULTS, **config.get('display', {})}
-    for key in ('duration', 'overview_duration', 'last_workout_duration', 'logo_duration',
-                'last_workout_detail_interval'):
-        value = display[key]
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
-            raise ValueError(f'{path}: display.{key} must be a number above 0 (switch a screen off to hide it)')
-    value = display['per_workout_duration']  # no longer used; still accepted
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
-        raise ValueError(f'{path}: display.per_workout_duration must be a non-negative number')
-    if not isinstance(display['show_logo'], bool):
-        raise ValueError(f'{path}: display.show_logo must be true or false')
-    for key in ('refresh_interval', 'history_batch_size', 'recent_fetch_size', 'performance_cache_size'):
-        value = display[key]
-        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-            raise ValueError(f'{path}: display.{key} must be a positive integer')
-    retired = [key for key in RETIRED_DISPLAY_KEYS if key in display]
-    if retired:
-        logger.warning('%s: display.%s no longer do anything (the workout log replaced them); '
-                       'they can be removed', path, ', display.'.join(retired))
-    if display['font'] not in ('discipline', 'info', 'titles', 'stats', 'countdown'):
-        # Legacy names appeared in the original example config.
-        if display['font'] in ('ride', 'park'):
-            display['font'] = 'discipline'
-        else:
-            raise ValueError(f'{path}: unsupported display.font: {display["font"]}')
-    if display['color'] not in ('red', 'disney_blue', 'white', 'down', 'gold'):
-        raise ValueError(f'{path}: unsupported display.color: {display["color"]}')
-    tz = display.get('timezone')
-    if tz:
-        try:
-            ZoneInfo(tz)
-        except (ZoneInfoNotFoundError, TypeError, ValueError) as exc:
-            raise ValueError(f'{path}: invalid display.timezone') from exc
-    for key in ('username', 'logo_path', 'cache_path', 'log_path'):
-        if display.get(key) is not None and not isinstance(display[key], str):
-            raise ValueError(f'{path}: display.{key} must be a string')
-    rotation = display.get('rotation')
-    if (not isinstance(rotation, list) or not all(isinstance(item, str) for item in rotation)
-            or len(rotation) != len(set(rotation)) or not set(rotation) <= ROTATION_SECTIONS):
-        raise ValueError(f'{path}: display.rotation must contain unique supported screen names')
-    durations = display.get('screen_durations')
-    if not isinstance(durations, dict) or not set(durations) <= DURATION_SECTIONS:
-        raise ValueError(f'{path}: display.screen_durations contains an unsupported screen name')
-    for value in durations.values():
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
-            raise ValueError(f'{path}: display.screen_durations values must be numbers above 0 '
-                             '(switch a screen off to hide it)')
-    _validate_weekly_goals(path, display.get('weekly_goals'), 'display.')
-    display['milestones'] = _validate_milestones(path, display.get('milestones'), 'display.')
-    display['journey'] = _validate_journey(path, display.get('journey'), 'display.')
-    reminder = display.get('streak_reminder_day')
-    if reminder is not None and (isinstance(reminder, bool) or not isinstance(reminder, int)
-                                 or not 0 <= reminder <= 6):
-        raise ValueError(f'{path}: display.streak_reminder_day must be 0 (Monday) to 6 (Sunday), or null')
-    step = display.get('milestone_step')
-    if isinstance(step, bool) or not isinstance(step, int) or step < 0:
-        raise ValueError(f'{path}: display.milestone_step must be a non-negative integer')
-    max_age = display.get('pr_max_age_days')
-    if max_age is not None and (isinstance(max_age, bool) or not isinstance(max_age, int) or max_age < 1):
-        raise ValueError(f'{path}: display.pr_max_age_days must be a whole number of days of at least 1, or null')
-    if not isinstance(display.get('workout_insights'), bool):
-        raise ValueError(f'{path}: display.workout_insights must be true or false')
-    for key, lowest in (('milestone_within', 1), ('milestone_pages', 1)):
-        value = display.get(key)
-        if isinstance(value, bool) or not isinstance(value, int) or value < lowest:
-            raise ValueError(f'{path}: display.{key} must be a whole number of at least {lowest}')
-    takeover = display.get('next_class_takeover_minutes')
-    if isinstance(takeover, bool) or not isinstance(takeover, int) or not 0 <= takeover <= TAKEOVER_MAX_MINUTES:
-        raise ValueError(f'{path}: display.next_class_takeover_minutes must be a whole number of minutes '
-                         f'from 0 (off) to {TAKEOVER_MAX_MINUTES}')
-    schedule = display.get('brightness_schedule')
-    if schedule is not None:
-        required = {'day', 'night', 'day_start', 'night_start'}
-        if not isinstance(schedule, dict) or set(schedule) != required:
-            raise ValueError(f'{path}: display.brightness_schedule requires day, night, day_start, and night_start')
-        for key in ('day', 'night'):
-            if isinstance(schedule[key], bool) or not isinstance(schedule[key], int) or not 1 <= schedule[key] <= 100:
-                raise ValueError(f'{path}: brightness {key} must be from 1 to 100')
-        for key in ('day_start', 'night_start'):
-            try:
-                datetime.strptime(schedule[key], '%H:%M')
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f'{path}: brightness {key} must use HH:MM') from exc
-    refresh_schedule = display.get('refresh_schedule')
-    if refresh_schedule is not None:
-        required = {'quiet_start', 'quiet_end', 'quiet_interval'}
-        if not isinstance(refresh_schedule, dict) or not required <= set(refresh_schedule):
-            raise ValueError(f'{path}: display.refresh_schedule requires quiet_start, quiet_end, and quiet_interval')
-        if set(refresh_schedule) - required - {'timezone'}:
-            raise ValueError(f'{path}: display.refresh_schedule has unsupported keys')
-        for key in ('quiet_start', 'quiet_end'):
-            try:
-                datetime.strptime(refresh_schedule[key], '%H:%M')
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f'{path}: refresh_schedule {key} must use HH:MM') from exc
-        interval = refresh_schedule['quiet_interval']
-        if isinstance(interval, bool) or not isinstance(interval, int) or interval <= 0:
-            raise ValueError(f'{path}: refresh_schedule.quiet_interval must be a positive integer')
-        if refresh_schedule.get('timezone') is not None:
-            if not isinstance(refresh_schedule['timezone'], str):
-                raise ValueError(f'{path}: refresh_schedule.timezone must be a string')
-            try:
-                ZoneInfo(refresh_schedule['timezone'])
-            except (ZoneInfoNotFoundError, ValueError) as exc:
-                raise ValueError(f'{path}: invalid refresh_schedule.timezone') from exc
+    run(_DISPLAY_RULES, path, display, 'display.')
     config['display'] = display
     return config

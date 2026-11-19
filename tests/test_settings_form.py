@@ -9,6 +9,7 @@ import pytest
 
 from peloton.config import DEFAULTS, MATRIX_DEFAULTS, ROTATION_SECTIONS, load_config
 from settings_page import page
+from settings_page.page.script import SCRIPT
 from settings_page.form import (FORM_FIELD, RETIRED_DISPLAY_KEYS, SCREEN_NAMES, advanced_keys, apply_form, duration_fallback,
                                 number_text, panel_size, rotation_rows)
 
@@ -411,8 +412,8 @@ def test_rotation_rows_have_a_grip_and_arrow_for_the_script():
         # Hidden until the script runs: without it, rows keep their order and the switches still work.
         assert 'class="grip js-only" hidden aria-label="Drag to reorder' in row
         assert 'class="move js-only" hidden' in row
-    assert "screens.append(row)" in page.SCRIPT  # switched off: to the bottom
-    assert "addEventListener('pointerdown'" in page.SCRIPT  # mouse and touch dragging
+    assert "screens.append(row)" in SCRIPT  # switched off: to the bottom
+    assert "addEventListener('pointerdown'" in SCRIPT  # mouse and touch dragging
 
 
 def test_total_workouts_time_says_it_matches_lifetime():

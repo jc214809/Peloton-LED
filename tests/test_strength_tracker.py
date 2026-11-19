@@ -7,9 +7,9 @@ import pytest
 import requests
 
 from display.display import initialize_fonts
-from display.ui.last_workout_screen import (TRACKER_TIER_COLORS, LastWorkoutScreen, detail_hold_seconds,
-                                           rotating_details, stats_phase_seconds, strength_tracker as screen_tracker,
-                                           top_lift_text)
+from display.ui.last_workout.rotation import detail_hold_seconds, rotating_details, stats_phase_seconds
+from display.ui.last_workout.screen import LastWorkoutScreen
+from display.ui.last_workout.stats import TRACKER_TIER_COLORS, strength_tracker as screen_tracker, top_lift_text
 from peloton.dashboard import Dashboard
 from peloton.demo import demo_data
 from peloton.summaries import strength_tracker, summarize_workout
@@ -217,7 +217,7 @@ def test_the_insights_reuse_the_fetched_detail(tmp_path):
     from unittest.mock import patch
     dashboard, client, _ = strength_setup(tmp_path, {'workout_insights': True})
     client.get_ride_details.return_value = None
-    with patch('peloton.dashboard.build_row', side_effect=ValueError('no row')) as build:
+    with patch('peloton.dashboard_insight.build_row', side_effect=ValueError('no row')) as build:
         dashboard.refresh()
     assert client.get_workout_detail.call_count == 1
     assert build.call_args.args[0]['movement_tracker_data']   # the same detail went to the row

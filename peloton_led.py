@@ -15,7 +15,7 @@ from utils.utils import args, ensure_privileges_dropped, led_matrix_options
 from utils.username import resolve_display_username
 from utils.wifi_setup import hotspot_name
 from display.rotation_pages import DEFAULT_ROTATION, build_rotation_pages
-from display.ui.last_workout_screen import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
+from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
 from display.ui.settings_pin import shown_pin
 
 logger = logging.getLogger('peloton-led')
@@ -345,7 +345,7 @@ def main():  # noqa: C901, PLR0912, PLR0915
     from display.ui.lifetime_overview import LifetimeOverviewScreen
     from display.ui.logo_screen import LogoScreen
     from display.ui.logo_mask_screen import LogoMaskScreen
-    from display.ui.last_workout_screen import LastWorkoutScreen
+    from display.ui.last_workout.screen import LastWorkoutScreen
     from display.ui.pr_celebration import PrCelebrationScreen
     from display.ui.celebration_screen import CelebrationScreen
     from display.ui.status_screen import StatusScreen
