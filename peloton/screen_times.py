@@ -67,7 +67,37 @@ def _is_zero(value):
     return not isinstance(value, bool) and isinstance(value, (int, float)) and value == 0
 
 
-def retire_zero_times(display, sections, default_rotation):  # noqa: C901
+def _zero_screens(display, sections, durations):
+    """The sections whose configured time is 0: their own entry in screen_durations, else the fallback."""
+    off = set()
+    for section in sections:
+        value = durations.get(SHARED.get(section, section))
+        if value is None:
+            value = display.get(fallback_key(section))
+        if _is_zero(value):
+            off.add(section)
+    return off
+
+
+def _drop_zero_times(display, durations, off):
+    """Remove the 0s from the config (in place); returns what was removed and adds to `off` the screens
+    a 0 switched off."""
+    changed = []
+    if _is_zero(display.get('last_workout_detail_interval')):
+        off.add('latest_workouts')  # 0 s a stat gave the workout pages no time at all
+        display.pop('last_workout_detail_interval')
+        changed.append('last_workout_detail_interval 0 removed')
+    for key in [k for k, v in durations.items() if _is_zero(v)]:
+        del durations[key]
+        changed.append(f'screen_durations.{key} 0 removed')
+    for key in sorted(set(FALLBACKS.values()) | {DEFAULT_FALLBACK}):
+        if _is_zero(display.get(key)):
+            display.pop(key)
+            changed.append(f'{key} 0 removed')
+    return changed
+
+
+def retire_zero_times(display, sections, default_rotation):
     """Older configs used 0 seconds for "don't show". Turn each 0 into the switch it meant, in place:
     a screen whose time was 0 leaves display.rotation, logo_duration 0 becomes show_logo false, and
     the 0s go (so the defaults apply if the screen is switched back on). The board shows what it did
@@ -81,25 +111,8 @@ def retire_zero_times(display, sections, default_rotation):  # noqa: C901
         changed.append('logo_duration 0 is now show_logo false')
     durations = display.get('screen_durations')
     durations = durations if isinstance(durations, dict) else {}
-    off = set()
-    for section in sections:
-        own = SHARED.get(section, section)
-        value = durations.get(own)
-        if value is None:
-            value = display.get(fallback_key(section))
-        if _is_zero(value):
-            off.add(section)
-    if _is_zero(display.get('last_workout_detail_interval')):
-        off.add('latest_workouts')  # 0 s a stat gave the workout pages no time at all
-        display.pop('last_workout_detail_interval')
-        changed.append('last_workout_detail_interval 0 removed')
-    for key in [k for k, v in durations.items() if _is_zero(v)]:
-        del durations[key]
-        changed.append(f'screen_durations.{key} 0 removed')
-    for key in sorted(set(FALLBACKS.values()) | {DEFAULT_FALLBACK}):
-        if _is_zero(display.get(key)):
-            display.pop(key)
-            changed.append(f'{key} 0 removed')
+    off = _zero_screens(display, sections, durations)
+    changed += _drop_zero_times(display, durations, off)
     rotation = display.get('rotation')
     rotation = rotation if isinstance(rotation, list) else list(default_rotation)
     hidden = [name for name in rotation if name in off]

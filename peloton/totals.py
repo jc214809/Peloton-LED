@@ -7,46 +7,71 @@ RANGE_KEYS = ('discipline_totals', 'workouts', 'workouts_per_discipline', 'worko
 
 
 
-def extract_discipline_totals(overview):  # noqa: C901
+LABEL_KEYS = ('discipline_display_name', 'discipline_name', 'name', 'title', 'discipline')
+COUNT_KEYS = ('workout_count', 'total_workouts', 'count', 'workouts')
+NESTED_FIELDS = ('workouts', 'items', 'disciplines', 'workout_counts')
+
+
+def _whole_count(value):
+    """The value as a non-negative whole number, else None."""
+    if isinstance(value, bool):
+        return None
+    try:
+        count = float(value)
+        if not isfinite(count) or count < 0 or not count.is_integer():
+            return None
+    except (ValueError, TypeError):
+        return None
+    return int(count)
+
+
+def _add(totals, seen, label, value):
+    if not isinstance(label, str):
+        return
+    count = _whole_count(value)
+    if count is None:
+        return
+    key = normalize_discipline(label)
+    if key and key not in seen:
+        seen.add(key)
+        totals[key.replace('_', ' ').title()] = count
+
+
+def _count_of(entry):
+    return next((entry[k] for k in COUNT_KEYS
+                 if entry.get(k) is not None and not isinstance(entry[k], (dict, list))), None)
+
+
+def _visit_list(totals, seen, entries):
+    for entry in entries:
+        if isinstance(entry, dict):
+            label = next((entry[k] for k in LABEL_KEYS if entry.get(k)), '')
+            _add(totals, seen, label, _count_of(entry))
+
+
+def _visit_dict(totals, seen, data):
+    for key, value in data.items():
+        if isinstance(value, dict):
+            _add(totals, seen, key, _count_of(value))
+            for field in NESTED_FIELDS:
+                _visit(totals, seen, value.get(field))
+        elif isinstance(value, list):
+            _visit(totals, seen, value)
+        else:
+            _add(totals, seen, key, value)
+
+
+def _visit(totals, seen, data):
+    if isinstance(data, list):
+        _visit_list(totals, seen, data)
+    elif isinstance(data, dict):
+        _visit_dict(totals, seen, data)
+
+
+def extract_discipline_totals(overview):
     totals, seen = {}, set()
-
-    def add(label, value):
-        if not isinstance(label, str) or isinstance(value, bool):
-            return
-        try:
-            count = float(value)
-            if not isfinite(count) or count < 0 or not count.is_integer():
-                return
-        except (ValueError, TypeError):
-            return
-        key = normalize_discipline(label)
-        if key and key not in seen:
-            seen.add(key)
-            totals[key.replace('_', ' ').title()] = int(count)
-
-    def count_of(entry):
-        return next((entry[k] for k in ('workout_count', 'total_workouts', 'count', 'workouts')
-                     if entry.get(k) is not None and not isinstance(entry[k], (dict, list))), None)
-
-    def visit(data):
-        if isinstance(data, list):
-            for entry in data:
-                if isinstance(entry, dict):
-                    label = next((entry[k] for k in ('discipline_display_name', 'discipline_name',
-                        'name', 'title', 'discipline') if entry.get(k)), '')
-                    add(label, count_of(entry))
-        elif isinstance(data, dict):
-            for key, value in data.items():
-                if isinstance(value, dict):
-                    add(key, count_of(value))
-                    for field in ('workouts', 'items', 'disciplines', 'workout_counts'):
-                        visit(value.get(field))
-                elif isinstance(value, list):
-                    visit(value)
-                else:
-                    add(key, value)
     for key in RANGE_KEYS:
-        visit(overview.get(key))
+        _visit(totals, seen, overview.get(key))
     return totals
 
 
