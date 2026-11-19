@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails), phase 2a–2e and 2f wave 1 (parts A–C) merged (2026-11-18); 2f wave 2, parts D (`_callouts`, `build_row`, `bike_plan`, `output_insight`), E (`extract_discipline_totals`, `summarize_workout`, `event_facts`, `_measure_facts`, `retire_zero_times`) and F (`main`, `run_display_loop`, `UsernameScreen.render`), **done**, awaiting merge; 2f part G (`render` and `frame_times` in `scripts/render_rotation.py`, `show` in `scripts/list_facts.py`, `main` in `scripts/workout_insights.py`) **done**, awaiting merge; the rest of 2f (`self_update`) and phase 3 planned. Roadmap item 33. Structural `noqa`s after part G: `C901` 1, `PLR0912` 0, `PLR0913` 12, `PLR0915` 0.
+Status: phase 1 and phase 2 done (2026-11-18/19): guardrails, 2a–2e, and 2f in three waves (parts A–H). Every `C901`, `PLR0912` and `PLR0915` baseline entry is gone; what's left are the `PLR0913` (too many arguments) entries, signature changes kept on purpose. Phase 3 planned. Roadmap item 33. Structural `noqa`s now: `C901` 0, `PLR0912` 0, `PLR0913` 12, `PLR0915` 0.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So
@@ -236,6 +236,10 @@ branch `config-validation-table`)
 > Part D is done: `_callouts` (tally per callout, then write the fields), `build_row` (one helper per
 > field group) and `bike_plan` (segment kinds, samples, effort runs) in `peloton/workout_features.py`,
 > and `output_insight` (direction check and one builder per verdict) in `peloton/workout_insights.py`.
+
+> Part H is done: `Updater._update` in `self_update/update.py` (the switch, install, restart and
+> health-check try block is now `_switch_and_check`; `tests/test_updater_update_paths.py` pins
+> every path through `_update` call by call).
 
 ## Phase 3: reorganize `peloton/` into subpackages (alone, after phase 2 merges)
 

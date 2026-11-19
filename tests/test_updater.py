@@ -138,8 +138,7 @@ class FakeGitHub:
         return self.ci, self.runs
 
 
-@pytest.fixture
-def env(tmp_path):
+def make_env(tmp_path):
     clock = Clock()
     app = tmp_path / "app"
     app.mkdir()
@@ -152,6 +151,11 @@ def env(tmp_path):
                       notify=lambda title, message: notes.append((title, message)), clock=clock, sleep=clock.sleep)
     return type("Env", (), {"board": board, "gh": gh, "updater": updater, "notes": notes, "clock": clock,
                             "config": app / "board-config.json", "state": updater.state})
+
+
+@pytest.fixture
+def env(tmp_path):
+    return make_env(tmp_path)
 
 
 def test_versions():
