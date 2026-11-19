@@ -47,6 +47,7 @@ class Clock:
 def clock(monkeypatch):
     fake = Clock()
     monkeypatch.setattr(peloton_led, 'time', fake)
+    monkeypatch.setattr('display.rotation_pages.time', fake)  # the page builders read the clock too
     monkeypatch.setattr(peloton_led, 'shown_pin', lambda: None)
     return fake
 

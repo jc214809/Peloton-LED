@@ -85,7 +85,7 @@ def test_versus_page_gets_today_in_the_configured_timezone():
     display = {'rotation': ['versus'], 'last_workout_duration': 15, 'overview_duration': 5,
                'timezone': 'America/New_York'}
     snapshot = {'summaries': [], 'totals': {}, 'status': 'ready', 'me': {'timezone': 'UTC'}}
-    with patch('peloton_led.week_day', return_value=4) as day:
+    with patch('display.rotation_pages.week_day', return_value=4) as day:
         state = build_rotation_pages(snapshot, Mock(), display, 'R', 64, rivals=[JOEL, JEN])[0][1]
     day.assert_called_once_with('America/New_York')
     assert state['weekday'] == 4

@@ -116,7 +116,7 @@ def test_streak_screen_draws_the_view_it_is_given():
 
 
 def _pin_today(monkeypatch, day):
-    monkeypatch.setattr('peloton_led.week_start', lambda zone=None: (None, datetime(*day, 12)))
+    monkeypatch.setattr('display.rotation_pages.week_start', lambda zone=None: (None, datetime(*day, 12)))
 
 
 def test_rotation_alternates_weekly_and_daily_across_passes(monkeypatch):
@@ -140,7 +140,7 @@ def test_rotation_alternates_weekly_and_daily_across_passes(monkeypatch):
     # turns into the weekend reminder for a zero-week streak.
     snapshot['streaks'] = {'current_weekly': 0, 'best_weekly': 9, 'current_daily': 5}
     snapshot['streak_week_workouts'] = 0
-    monkeypatch.setattr('peloton_led.week_day', lambda zone: 6)
+    monkeypatch.setattr('display.rotation_pages.week_day', lambda zone: 6)
     pages = build_rotation_pages(snapshot, Mock(), display, 'R', 64)
     assert [(name, state['view'], state['daily_start']) for name, state, _ in pages] == [
         ('streak', 'daily', '2026-10-28')]
