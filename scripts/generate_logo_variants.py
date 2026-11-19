@@ -77,7 +77,7 @@ def parse_size(s: str):
         w, h = s.lower().split("x")
         return (int(w), int(h))
     except Exception:
-        raise argparse.ArgumentTypeError(f"Invalid size: {s}; expected WIDTHxHEIGHT")
+        raise argparse.ArgumentTypeError(f"Invalid size: {s}; expected WIDTHxHEIGHT") from None
 
 
 def main():

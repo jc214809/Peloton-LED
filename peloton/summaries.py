@@ -210,7 +210,7 @@ def _display_discipline(workout, ride=None):
         key, key.replace('_', ' ').title())
 
 
-def summarize_workout(workout, perf=None, detail=None):
+def summarize_workout(workout, perf=None, detail=None):  # noqa: C901, PLR0912, PLR0915
     """The workout page's figures. `detail` is the workout detail (GET /api/workout/<id>), fetched
     only for strength classes, for what the movement tracker counted."""
     perf = perf or {}

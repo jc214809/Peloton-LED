@@ -121,7 +121,7 @@ def load_snapshot_for(options):
     return snapshot
 
 
-def frame_times(name, state, duration, detail_interval, height=64):
+def frame_times(name, state, duration, detail_interval, height=64):  # noqa: C901
     """Seconds into the page at which to capture a frame."""
     if name == 'last_workout':
         # One frame per intro/stat, at each one's own start: graph frames hold longer.
@@ -159,7 +159,7 @@ def frame_times(name, state, duration, detail_interval, height=64):
     return [0.5]
 
 
-def render(options):
+def render(options):  # noqa: C901, PLR0912, PLR0915
     from display.display import initialize_fonts
     from display.ui.discipline_page import DisciplinePageScreen
     from display.ui.goal_screen import GoalScreen

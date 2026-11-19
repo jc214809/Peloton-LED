@@ -7,7 +7,7 @@ RANGE_KEYS = ('discipline_totals', 'workouts', 'workouts_per_discipline', 'worko
 
 
 
-def extract_discipline_totals(overview):
+def extract_discipline_totals(overview):  # noqa: C901
     totals, seen = {}, set()
 
     def add(label, value):

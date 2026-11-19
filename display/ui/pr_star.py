@@ -40,7 +40,7 @@ class PrStarScreen(Screen):
     def _round_points(self, points: List[Tuple[float, float]]) -> List[Tuple[int, int]]:
         return [(int(round(x)), int(round(y))) for x, y in points]
 
-    def _scanline_fill_polygon(self, matrix, poly: List[Tuple[float, float]], color) -> None:
+    def _scanline_fill_polygon(self, matrix, poly: List[Tuple[float, float]], color) -> None:  # noqa: C901, PLR0912
         height = matrix.height
         if not poly:
             return

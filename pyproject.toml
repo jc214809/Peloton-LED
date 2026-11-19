@@ -1,0 +1,50 @@
+# Tool config only, no packaging. Rationale for every choice: docs/CODE-HEALTH-PLAN.md.
+
+[tool.ruff]
+# Matches the boards' Python (3.11): see docs/CODE-HEALTH-PLAN.md.
+target-version = "py311"
+# Gitignored Python that exists only on a developer's machine; CI only sees tracked files.
+extend-exclude = ["training-data", "perf_graphs", "venv", ".venv"]
+
+[tool.ruff.lint]
+# Ratchet (docs/CODE-HEALTH-PLAN.md, "Decisions made"): the structural rules carry an inline
+# `# noqa` on today's offenders, and RUF100 fails on a stale one, so the baseline only shrinks.
+select = ["E", "F", "W", "B", "C901", "PLR0912", "PLR0913", "PLR0915", "RUF100"]
+# E501 (line length) and B905 (zip strict= changes behavior) are deliberately out of phase 1.
+ignore = ["E501", "B905"]
+
+[tool.ruff.lint.mccabe]
+# Ruff's default, stated so it is visible (docs/CODE-HEALTH-PLAN.md).
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+# Draw functions take x, y, colour, font, width...; the default of 5 flags fine signatures.
+max-args = 7
+
+# Import layering (docs/CODE-HEALTH-PLAN.md). Run from the repo root: `lint-imports`.
+[tool.importlinter]
+root_packages = ["peloton", "display", "settings_page", "self_update", "utils", "driver", "models"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "peloton is the data layer: it never reaches into the services or the panel"
+type = "forbidden"
+source_modules = ["peloton"]
+forbidden_modules = ["display", "settings_page", "self_update", "driver", "utils"]
+
+[[tool.importlinter.contracts]]
+name = "the display loop never touches the network"
+type = "forbidden"
+source_modules = ["display"]
+forbidden_modules = ["requests", "peloton.api", "peloton.dashboard", "settings_page"]
+# The one cross-service import: the panel's PIN overlay reads the PIN file path the settings service writes.
+ignore_imports = ["display.ui.settings_pin -> settings_page.pins"]
+
+[[tool.importlinter.contracts]]
+name = "driver wraps the matrix and knows nothing of the app"
+type = "forbidden"
+source_modules = ["driver"]
+forbidden_modules = ["peloton", "display", "settings_page"]
+# driver.__init__ imports utils.utils, which imports peloton.config (the matrix settings come from the
+# config). So the plan's rule holds for direct imports only; a transitive chain through utils is allowed.
+allow_indirect_imports = true

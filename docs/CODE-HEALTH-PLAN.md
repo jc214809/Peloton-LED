@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: **planned** (2026-11-18). Roadmap item 33.
+Status: phase 1 (guardrails) **done** on branch `code-health-guardrails`, awaiting merge (2026-11-18); phases 2 and 3 planned. Roadmap item 33.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So
@@ -24,6 +24,7 @@ starts them, reviews each diff, reruns the checks and opens the PRs.
 | `E501` at 88 / 100 / 110 / 120 / 140 columns | 6,198 / 3,010 / 1,025 / 153 / 19 |
 | `ruff format --check` | 183 of 211 files would change |
 | Source files over 600 lines | `settings_page/page.py` 1748, `display/ui/last_workout_screen.py` 1271, `peloton/dashboard.py` 973, `scripts/refresh_cookies.py` 704, `settings_page/server.py` 670, `peloton_led.py` 618 |
+| Baseline after phase 1: inline structural `# noqa` | `C901` 37, `PLR0912` 26, `PLR0913` 12, `PLR0915` 16 (count with `grep -rn "noqa:[^#]*C901" --include=*.py . \| wc -l`; a line can carry several codes). Each fix removes its entry; `ruff check .` and `lint-imports` pass. |
 
 Worst functions: `validate_config` (peloton/config.py, 60), `build_rotation_pages`
 (peloton_led.py, 35), `apply_form` (settings_page/form.py, 32), `draw_icon`
@@ -31,7 +32,9 @@ Worst functions: `validate_config` (peloton/config.py, 60), `build_rotation_page
 (settings_page/server.py, 21), `refresh_cookies.main` (21), `load_snapshot`
 (peloton/cache.py, 21).
 
-The import layering already holds; nothing enforces it:
+The import layering already held before phase 1; phase 1's import-linter contracts now
+enforce it (`pyproject.toml`; the `driver` contract checks direct imports only, since
+`driver` reaches `peloton.config` through `utils.utils`):
 - `peloton/` imports only `models` and `requests` (plus itself).
 - `display/` imports from `peloton` only the pure helpers in `challenges`, `club` and
   `booked_classes`, never `api`, `dashboard` or `requests`. One cross-service import:

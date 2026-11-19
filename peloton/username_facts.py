@@ -211,7 +211,7 @@ def _share_line(count, workouts, slug):
     return f'{percent}% {name}' if len(f'{percent}% {name}') <= MAX_LABEL_CHARS else f'{percent}% {name.split()[-1]}'
 
 
-def _measure_facts(stats, title):
+def _measure_facts(stats, title):  # noqa: C901
     """The measures and bests a frame has enough data for: average class and week, the share of the
     most-done discipline, the frame's rank among equal blocks of days, then the busiest day, week and
     month, the longest workout, the highest bike output and the best Strive score. A fact with too
@@ -318,7 +318,7 @@ def anniversary_fact(snapshot):
     return {'kind': 'anniversary', 'label': 'ANNIVERSARY', 'value': f'{years} ON PELOTON', 'lines': [_plural(years, 'YEAR'), 'ON PELOTON']}
 
 
-def event_facts(snapshot):
+def event_facts(snapshot):  # noqa: C901, PLR0912
     """The facts measured from a date (frame_stats' neighbour, activity.event_stats), in the order
     they're shown (the anniversary is pinned, not here: anniversary_fact): this day in an earlier year, a comeback, a first,
     time since a discipline's last workout, the last class with a most-seen instructor. Every one has

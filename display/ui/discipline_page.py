@@ -3,7 +3,6 @@
 from .screen import Screen
 from typing import Optional, Dict, Any
 
-from driver import graphics
 from display.display import color_dict, get_text_width, loaded_fonts, wrap_text, draw_centered_text
 from utils import debug
 

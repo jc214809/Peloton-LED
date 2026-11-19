@@ -329,7 +329,7 @@ def test_active_days_count_each_local_day_once():
     from datetime import datetime, timezone
     from peloton.goals import weekly_progress
     now = datetime(2026, 9, 18, 12, tzinfo=timezone.utc)  # Friday
-    at = lambda *args: datetime(*args, tzinfo=timezone.utc).timestamp()
+    at = lambda *args: datetime(*args, tzinfo=timezone.utc).timestamp()  # noqa: E731  one-line test helper
     workouts = [
         {'status': 'COMPLETE', 'start_time': at(2026, 9, 14, 13)},  # Monday, twice: one active day
         {'status': 'COMPLETE', 'start_time': at(2026, 9, 14, 18)},

@@ -374,7 +374,7 @@ def test_single_rider_board_shows_the_logo_once_per_cycle_and_none_when_it_is_sw
                            (False, ['rotation', 'rotation', 'rotation'])):
         order = []
         with patch('peloton_led.show_and_wait', side_effect=lambda manager, name, *a: order.append(name)), \
-             patch('peloton_led.run_display_loop', side_effect=lambda *a, **k: order.append('rotation')):
+             patch('peloton_led.run_display_loop', side_effect=lambda *a, **k: order.append('rotation')):  # noqa: B023  called within the iteration: the loop runs inside the with
             run_multi_user_loop(Mock(), [{'dashboard': rider}], {'logo_duration': 2, 'show_logo': show}, {},
                                 cycles=3)
         assert order == expected
@@ -774,7 +774,6 @@ class _HardwareOptions:
 
 
 def _options_with(monkeypatch, run_as):
-    import utils.utils as utils_module
     from utils.utils import args, led_matrix_options
     if run_as is None:
         monkeypatch.delenv('PELOTON_MATRIX_USER', raising=False)

@@ -358,8 +358,8 @@ def test_all_user_renewal_failure_message_is_not_just_the_exception_type(tmp_pat
 
 # --- Refresh-token renewal (no browser) ---------------------------------------
 
-import json as _json
-from scripts.refresh_cookies import (AUTH0_CLIENT_ID, AUTH0_TOKEN_URL, BROWSER_FALLBACK_INTERVAL_SECONDS,
+import json as _json  # noqa: E402  section import, deliberately mid-file
+from scripts.refresh_cookies import (AUTH0_CLIENT_ID, AUTH0_TOKEN_URL, BROWSER_FALLBACK_INTERVAL_SECONDS,  # noqa: E402  section import, deliberately mid-file
                                      RefreshTokenRejected, browser_attempt_path, browser_fallback_due,
                                      browser_login_available, load_refresh_token,
                                      refresh_token_path, renew_with_refresh_token,
@@ -707,8 +707,8 @@ def test_seed_dir_install_hint_can_be_suppressed_for_seed_board(tmp_path, monkey
 
 
 # Refresh-chain age: learn how long Auth0 keeps a login's chain alive.
-from datetime import datetime as _datetime, timedelta as _timedelta, timezone as _timezone
-from scripts.refresh_cookies import describe_chain, load_refresh_chain
+from datetime import datetime as _datetime, timezone as _timezone  # noqa: E402  section import, deliberately mid-file
+from scripts.refresh_cookies import describe_chain, load_refresh_chain  # noqa: E402  section import, deliberately mid-file
 
 
 def test_new_refresh_token_starts_a_chain(tmp_path):

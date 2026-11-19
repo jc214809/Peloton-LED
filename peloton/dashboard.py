@@ -87,7 +87,7 @@ def with_demo_insight(summary, data, config):
 
 
 class Dashboard:
-    def __init__(self, token_path, config, demo=False, demo_login_needed=False, client_factory=None):
+    def __init__(self, token_path, config, demo=False, demo_login_needed=False, client_factory=None):  # noqa: PLR0915
         self.token_path = Path(token_path)
         self.config = config
         self.interval = config.get('refresh_interval', 300)
@@ -559,7 +559,7 @@ class Dashboard:
             logger.warning('Instructor milestone failed (%s)', type(exc).__name__)
             return None
 
-    def _workout_insight(self, client, workout, perf, settling, detail=None):
+    def _workout_insight(self, client, workout, perf, settling, detail=None):  # noqa: C901, PLR0912, PLR0915
         """The board's views (insight_lines.board_view) comparing this workout with similar earlier ones, or None.
 
         From the first refresh that sees the workout COMPLETE: the workout and class details are fetched
@@ -643,7 +643,7 @@ class Dashboard:
         with self._refresh_lock:
             return self._refresh_once()
 
-    def _refresh_once(self):
+    def _refresh_once(self):  # noqa: C901, PLR0912, PLR0915
         """Refresh once. Return the delay until the next request attempt."""
         if self.demo:
             return self.interval

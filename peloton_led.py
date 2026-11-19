@@ -18,7 +18,7 @@ from peloton.journey import journey_progress
 from peloton.screen_times import page_seconds
 from peloton.selection import normalize_discipline
 from peloton.username_facts import shown_keys, username_details
-from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # Kept available for callers.
+from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # noqa: F401  re-export kept for callers
 from utils import heartbeat
 from utils.utils import args, ensure_privileges_dropped, led_matrix_options
 from utils.username import resolve_display_username
@@ -70,7 +70,7 @@ def apply_scheduled_brightness(matrix, display, now=None, timezone_name=None):
 STATUS_SECONDS = 2
 
 
-def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, rivals=None,
+def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, rivals=None,  # noqa: C901, PLR0912, PLR0915
                          pass_index=0):
     """Build one rotation from configured named sections.
 
@@ -385,7 +385,7 @@ class NextClassTakeover:
         logger.info('Next-class takeover ended for %s (class at %s).', self._label(key[0]), key[2])
 
 
-def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None,
+def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None,  # noqa: C901, PLR0913
                      first_pass=0, takeover=None):
     """Play `cycles` rotations (0 forever). `takeover`, a NextClassTakeover, is checked before every page and
     every TAKEOVER_CHECK_SECONDS during one (not a celebration or PR page, which finish first). A page it cut
@@ -512,7 +512,7 @@ def configured_profiles(config, options):
     return profiles
 
 
-def main():
+def main():  # noqa: C901, PLR0912, PLR0915
     load_dotenv()
     options = args()
     try:

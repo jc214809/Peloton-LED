@@ -93,7 +93,7 @@ class PrCelebrationScreen(Screen):
     def update(self, dt):
         self.elapsed += max(0, dt)
 
-    def render(self, matrix, state: Optional[Any] = None) -> bool:
+    def render(self, matrix, state: Optional[Any] = None) -> bool:  # noqa: C901, PLR0912
         summary = state if isinstance(state, dict) else {}
         lines = pr_card_lines(summary)
         if lines is None:

@@ -244,7 +244,7 @@ def test_journey_bar_fills_with_this_legs_progress(height):
     image = render(height, progress_for(440))
     bar_y = 37 if height == 64 else 28
     lit = [x for x in range(64) if image.getpixel((x, bar_y)) == DONE_COLOR]
-    assert lit[0] == 2 and len(lit) == 29 and image.getpixel((31, bar_y)) == TIP_COLOR, 'the tip ends it' 
+    assert lit[0] == 2 and len(lit) == 29 and image.getpixel((31, bar_y)) == TIP_COLOR, 'the tip ends it'
     # Heading home, the trip number takes the bar's right end.
     image = render(height, progress_for(880 + 220))
     row = [image.getpixel((x, bar_y)) for x in range(64)]
@@ -329,10 +329,10 @@ def test_the_miles_to_go_and_the_percent_count_with_the_bar():
     assert 570 < float(middle[1].split()[0]) < 880 and 0 < int(middle[2][:-1]) < 35
     assert trip_text(progress, journey_screen.FILL_SECONDS) == ('1,190.0', '570.0 TO HOME', '35%')
     # A status that drops its decimal at the end drops it from the start, so the line never changes format.
-    whole = lambda text: '.' not in text
+    whole = lambda text: '.' not in text  # noqa: E731  one-line test helper
     assert trip_text(progress, 0, whole)[1] == '880 TO HOME'
     assert trip_text(progress, 0.5, whole)[1].split()[0].isdigit()
-    assert trip_text(progress, 9, whole)[1] == '570 TO HOME' 
+    assert trip_text(progress, 9, whole)[1] == '570 TO HOME'
 
 
 def test_the_tip_pulses_after_the_fill():
@@ -346,7 +346,7 @@ def test_the_tip_pulses_after_the_fill():
 def test_64_rows_slide_the_groups_in_one_after_another():
     js = journey_screen
     progress = progress_for(500, split=EVERY_GROUP)
-    squares = lambda at: [render(64, progress, at).getpixel((3, 43 + row * 7)) for row in range(3)]
+    squares = lambda at: [render(64, progress, at).getpixel((3, 43 + row * 7)) for row in range(3)]  # noqa: E731  one-line test helper
     black = (0, 0, 0)
     assert squares(js.ROW_START_SECONDS) == [black] * 3, 'nothing under the bar at first'
     assert squares(js.ROW_START_SECONDS + js.ROW_SLIDE_SECONDS) == [GROUP_COLORS['bike'], black, black]
@@ -456,7 +456,7 @@ def test_the_big_figure_shows_one_decimal_where_it_fits():
         small = loaded_fonts.get('stats')
         fonts = [loaded_fonts.get('big'), loaded_fonts.get('bold' if height == 64 else 'countdown')]
         unit = get_text_width(small, 'MI')
-        fits = lambda t: any(2 + get_text_width(f, t) + 2 + unit <= 62 for f in fonts if f)
+        fits = lambda t: any(2 + get_text_width(f, t) + 2 + unit <= 62 for f in fonts if f)  # noqa: B023,E731  called within the iteration: used on the next line; one-line test helper
         assert journey_text(journey_progress(totals, DEFAULT_JOURNEY), miles_fit=fits)[0] == text
 
 

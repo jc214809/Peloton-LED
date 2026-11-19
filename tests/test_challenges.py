@@ -22,7 +22,7 @@ NOW = 1_794_000_000  # 2026-11-08
 LATER = NOW + 30 * 86400
 
 
-def entry(title='The Annual 2026', value=5503, shown='5,503', unit='min', tier=('5K', 5000.0),
+def entry(title='The Annual 2026', value=5503, shown='5,503', unit='min', tier=('5K', 5000.0),  # noqa: PLR0913
           following=('6K', 6000.0), to_next='497', end=LATER, joined=True):
     """One entry of challenges/current, shaped like the real response (docs/PELOTON-API.md)."""
     def level(pair):

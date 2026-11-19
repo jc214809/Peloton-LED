@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # Importing unittest selects the emulator graphics without initializing a matrix.
-import unittest
+import unittest  # noqa: F401  side effect: selects the emulator graphics
 from PIL import Image, ImageDraw
 from display.display import initialize_fonts
 from display.ui.last_workout_screen import LastWorkoutScreen
@@ -49,7 +49,7 @@ def render_contact_sheet(destination):
         else:
             samples += [('Totals', DisciplinePageScreen(), {'discipline': 'Bike Bootcamp', 'count': 1234})]
         for label, screen, state in samples:
-            manager = ScreenManager(matrix, initial=screen, login_required=lambda: label == 'Login needed')
+            manager = ScreenManager(matrix, initial=screen, login_required=lambda: label == 'Login needed')  # noqa: B023  called within the iteration: the manager is used and dropped each pass
             if label == 'PR':
                 screen.update(BURST_SECONDS + SETTLE_SECONDS + 0.5)  # show the card, not the burst
             manager.tick(state)

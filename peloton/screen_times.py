@@ -67,7 +67,7 @@ def _is_zero(value):
     return not isinstance(value, bool) and isinstance(value, (int, float)) and value == 0
 
 
-def retire_zero_times(display, sections, default_rotation):
+def retire_zero_times(display, sections, default_rotation):  # noqa: C901
     """Older configs used 0 seconds for "don't show". Turn each 0 into the switch it meant, in place:
     a screen whose time was 0 leaves display.rotation, logo_duration 0 becomes show_logo false, and
     the 0s go (so the defaults apply if the screen is switched back on). The board shows what it did

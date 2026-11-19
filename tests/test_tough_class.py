@@ -246,7 +246,7 @@ def arrow_pixels(matrix, rows):
 def test_the_bars_frame_draws_the_arrow_in_pixels(height, baseline):
     matrix = render_detail(with_views(demo_ride(), board_view('tough_class', TOUGH)), height, 'insight_bars')
     pixels = matrix.image.load()
-    lit_at = lambda x, y: pixels[x, y] != (0, 0, 0)
+    lit_at = lambda x, y: pixels[x, y] != (0, 0, 0)  # noqa: E731  one-line test helper
     line = range(baseline - 6, baseline + 2)
     # On the text's own rows (its ink is baseline-5 to baseline-1), not a row below them.
     text_rows = [y for y in line if any(lit_at(x, y) for x in range(1, 11))]

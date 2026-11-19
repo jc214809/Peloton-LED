@@ -109,7 +109,7 @@ class Settings:
     """What the handlers share: where config.json is, the PIN gate, one save at a time, and the
     Updates card's updates.Updates (None: no card)."""
 
-    def __init__(self, config_path=CONFIG, gate=None, restart_unit=APP_UNIT, state_file=wifi_setup.STATE_FILE,
+    def __init__(self, config_path=CONFIG, gate=None, restart_unit=APP_UNIT, state_file=wifi_setup.STATE_FILE,  # noqa: PLR0913
                  send_pushover=notify.send_pushover, auth_env=AUTH_ENV, token_base=None,
                  default_token=logins.DEFAULT_TOKEN, token_mode_file=logins.TOKEN_MODE_FILE,
                  renew_unit=RENEW_UNIT, clock=time.time, updates=None, monotonic=time.monotonic):
@@ -433,7 +433,7 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return parse_qs(self.rfile.read(length).decode('utf-8', 'replace'), keep_blank_values=True)
 
-    def _page(self, problems=(), saved=None, config=None, login_outcome=None, login_problems=(), started=None,
+    def _page(self, problems=(), saved=None, config=None, login_outcome=None, login_problems=(), started=None,  # noqa: PLR0913
               alert_outcome=None, alert_problems=(), editing_rider=None, power_outcome=None):
         loaded, problem = self.settings.load()
         updates = self.settings.updates
@@ -483,7 +483,7 @@ class Handler(BaseHTTPRequestHandler):
                                    started=started if started in STARTS else None,
                                    alert_outcome=alert if alert in page.ALERT_OUTCOMES else None))
 
-    def do_POST(self):
+    def do_POST(self):  # noqa: C901, PLR0912
         path = urlsplit(self.path).path
         if not self._same_origin():
             return self._send(403, page.message_page('Not allowed', 'That form came from another site.'))
