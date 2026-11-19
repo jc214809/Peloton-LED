@@ -9,7 +9,7 @@ from peloton.summaries import summarize_workout
 from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count
 from peloton.config import load_config, load_dotenv
 from peloton.records import is_pr_workout
-from display.ui.last_workout_screen import _fmt_pace, _fmt_split, _stat_details
+from display.ui.last_workout.stats import _fmt_pace, _fmt_split, _stat_details
 from models import get_model_for_discipline
 from models.core import GeneralWorkout
 

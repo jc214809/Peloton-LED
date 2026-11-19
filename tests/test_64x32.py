@@ -4,7 +4,8 @@ from unittest.mock import Mock
 import pytest
 
 from display.display import initialize_fonts
-from display.ui.last_workout_screen import LastWorkoutScreen, rotating_details
+from display.ui.last_workout.rotation import rotating_details
+from display.ui.last_workout.screen import LastWorkoutScreen
 from peloton.demo import demo_data
 from peloton.summaries import summarize_workout
 from peloton_led import build_rotation_pages
@@ -273,7 +274,7 @@ def test_pr_is_marked_with_a_trophy_on_both_boards(height):
     ('', ''), (None, ''),
 ])
 def test_titles_lose_the_length_the_page_shows(title, expected):
-    from display.ui.last_workout_screen import title_without_length
+    from display.ui.last_workout.text import title_without_length
     assert title_without_length(title) == expected
 
 
@@ -292,14 +293,19 @@ class EdgeMatrix(ImageMatrix):
 
 def white_text(monkeypatch, summary, height, elapsed=0.5):
     """The (x, text) of every white string the page draws, checking nothing lands off the panel."""
-    import display.ui.last_workout_screen as screen_module
-    drawn, draw = [], screen_module._draw_text
+    import sys
+    from display.ui.last_workout.colors import _WHITE
+    from display.ui.last_workout.text import _draw_text as draw
+    drawn = []
 
     def spy(matrix, font, x, y, color, text):
-        if color is screen_module._WHITE:
+        if color is _WHITE:
             drawn.append((x, text))
         return draw(matrix, font, x, y, color, text)
-    monkeypatch.setattr(screen_module, '_draw_text', spy)
+    # Each module of the page binds _draw_text itself, so the spy goes on every one that draws with it.
+    for name, module in list(sys.modules.items()):
+        if name.startswith('display.ui.last_workout.') and getattr(module, '_draw_text', None) is draw:
+            monkeypatch.setattr(module, '_draw_text', spy)
     initialize_fonts(height)
     matrix = EdgeMatrix(height=height)
     screen = LastWorkoutScreen()

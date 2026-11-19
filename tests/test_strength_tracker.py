@@ -7,9 +7,9 @@ import pytest
 import requests
 
 from display.display import initialize_fonts
-from display.ui.last_workout_screen import (TRACKER_TIER_COLORS, LastWorkoutScreen, detail_hold_seconds,
-                                           rotating_details, stats_phase_seconds, strength_tracker as screen_tracker,
-                                           top_lift_text)
+from display.ui.last_workout.rotation import detail_hold_seconds, rotating_details, stats_phase_seconds
+from display.ui.last_workout.screen import LastWorkoutScreen
+from display.ui.last_workout.stats import TRACKER_TIER_COLORS, strength_tracker as screen_tracker, top_lift_text
 from peloton.dashboard import Dashboard
 from peloton.demo import demo_data
 from peloton.summaries import strength_tracker, summarize_workout
