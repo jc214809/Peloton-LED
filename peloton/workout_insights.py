@@ -99,7 +99,64 @@ def _all_hit(sets):
 
 # 5.1 Output or pace against peers
 
-def output_insight(target, group, real):  # noqa: C901, PLR0912
+def _output_kind(noun, key, group, result, real):
+    """(what the comparison group is called in the text, the real peers' stat or None without fill-ins)."""
+    if real < len(group):
+        kind = f'the closest {plural(noun)} you have (only {real} of this exact kind)'
+        return kind, compare.stat(result['value'], [p['work'].get(key) for p in group if not p.get('fill_in')])
+    return f'{plural(noun)} like this', None
+
+
+def _output_direction(result, filled, real_stat):
+    """(down, up): whether the work was a big step below or above the usual, with the real peers agreeing
+    when the group holds fill-ins."""
+    # Rounded so "at most 20%" holds at exactly 1 of 5 (1 - 0.8 is 0.19999... in floating point).
+    down = result['pct'] <= -BIG_CHANGE_PCT and result['below'] <= round((1 - RANK_SHARE) * result['n'], 9)
+    up = result['pct'] >= BIG_CHANGE_PCT and result['below'] >= round(RANK_SHARE * result['n'], 9)
+    if filled and down:
+        down = bool(real_stat) and real_stat['value'] < real_stat['median']
+    if filled and up:
+        up = bool(real_stat) and real_stat['value'] > real_stat['median']
+    return down, up
+
+
+def _output_down(unit, usual, kind, eff, heart, enough_hr, facts):
+    what = 'output' if unit == 'W' else 'pace'
+    text = f'Your {what} was down today: {usual} for {kind}.'
+    if enough_hr and heart['pct'] <= -EASY_HR_PCT:
+        text += ' Your heart rate was lower too, so it looks like an easier effort.'
+        facts['reason'] = 'easier'
+    elif enough_hr and eff['pct'] <= -COST_PCT:
+        text += ' Your heart rate was not lower, so the same work cost you more.'
+        facts['reason'] = 'cost_more'
+    return ('output_down', text, facts)
+
+
+def _output_up(noun, usual, kind, eff, heart, enough_hr, facts):
+    text = f'Strong {noun}: {usual} for {kind}.'
+    if enough_hr and eff['pct'] >= COST_PCT:
+        text += f' You got more out of every heartbeat than {TYPICAL}.'
+        facts['reason'] = 'efficient'
+        # The board says "same heart" only when it was: more per beat can come with a higher heart rate too.
+        facts['same_hr'] = abs(heart['value'] - heart['median']) <= SAME_HR_BPM
+    return ('output_up', text, facts)
+
+
+def _output_in_line(result, unit, noun, usual, kind, filled, facts):
+    facts['close'] = abs(result['pct']) < BIG_CHANGE_PCT
+    if abs(result['pct']) < BIG_CHANGE_PCT:
+        if filled:
+            return ('in_line', f"Good {noun}, right in line with {kind}: {_fmt(result['value'], unit)} "
+                               f"against a {TYPICAL} {_fmt(result['median'], unit)}.", facts)
+        return ('in_line', f"Good {noun}, right in line with your other {plural(noun)} like it "
+                           f"({_fmt(result['value'], unit)} against a {TYPICAL} "
+                           f"{_fmt(result['median'], unit)}).", facts)
+    if filled:
+        return ('in_line', f'A {CONSISTENT} {noun} for you: {usual} for {kind}, inside your {TYPICAL} range.', facts)
+    return ('in_line', f'A {CONSISTENT} {noun} for you: {usual}, inside your {TYPICAL} range.', facts)
+
+
+def output_insight(target, group, real):
     """down / up / in line, for every discipline with an output or speed series.
 
     `real` is how many of `group` are real peers; the rest are bike fill-ins (section 4.1), which
@@ -113,55 +170,20 @@ def output_insight(target, group, real):  # noqa: C901, PLR0912
     if not result or result['n'] < compare.MIN_PEERS:
         return None
     filled = real < len(group)
-    if filled:
-        kind = f'the closest {plural(noun)} you have (only {real} of this exact kind)'
-        real_stat = compare.stat(result['value'], [p['work'].get(key) for p in group if not p.get('fill_in')])
-    else:
-        kind = f'{plural(noun)} like this'
-        real_stat = None
+    kind, real_stat = _output_kind(noun, key, group, result, real)
     usual = f"{_fmt(result['value'], unit)} in the work segments against your {TYPICAL} {_fmt(result['median'], unit)}"
     eff = compare.stat(target.get('eff'), [p.get('eff') for p in group])
     heart = compare.stat(target['work'].get('heart_rate'), [p['work'].get('heart_rate') for p in group])
     enough_hr = eff and heart and eff['n'] >= compare.MIN_PEERS and heart['n'] >= compare.MIN_PEERS
-    # Rounded so "at most 20%" holds at exactly 1 of 5 (1 - 0.8 is 0.19999... in floating point).
-    down = result['pct'] <= -BIG_CHANGE_PCT and result['below'] <= round((1 - RANK_SHARE) * result['n'], 9)
-    up = result['pct'] >= BIG_CHANGE_PCT and result['below'] >= round(RANK_SHARE * result['n'], 9)
-    if filled and down:
-        down = bool(real_stat) and real_stat['value'] < real_stat['median']
-    if filled and up:
-        up = bool(real_stat) and real_stat['value'] > real_stat['median']
+    down, up = _output_direction(result, filled, real_stat)
     # `n` is the comparison group behind the usual, `real` its real peers (fewer when bike fill-ins were used).
     facts = {'value': result['value'], 'usual': result['median'], 'unit': unit, 'foot': unit == 'mph', 'noun': noun,
              'n': result['n'], 'real': real, 'reason': None}
     if down:
-        what = 'output' if unit == 'W' else 'pace'
-        text = f'Your {what} was down today: {usual} for {kind}.'
-        if enough_hr and heart['pct'] <= -EASY_HR_PCT:
-            text += ' Your heart rate was lower too, so it looks like an easier effort.'
-            facts['reason'] = 'easier'
-        elif enough_hr and eff['pct'] <= -COST_PCT:
-            text += ' Your heart rate was not lower, so the same work cost you more.'
-            facts['reason'] = 'cost_more'
-        return ('output_down', text, facts)
+        return _output_down(unit, usual, kind, eff, heart, enough_hr, facts)
     if up:
-        text = f'Strong {noun}: {usual} for {kind}.'
-        if enough_hr and eff['pct'] >= COST_PCT:
-            text += f' You got more out of every heartbeat than {TYPICAL}.'
-            facts['reason'] = 'efficient'
-            # The board says "same heart" only when it was: more per beat can come with a higher heart rate too.
-            facts['same_hr'] = abs(heart['value'] - heart['median']) <= SAME_HR_BPM
-        return ('output_up', text, facts)
-    facts['close'] = abs(result['pct']) < BIG_CHANGE_PCT
-    if abs(result['pct']) < BIG_CHANGE_PCT:
-        if filled:
-            return ('in_line', f"Good {noun}, right in line with {kind}: {_fmt(result['value'], unit)} "
-                               f"against a {TYPICAL} {_fmt(result['median'], unit)}.", facts)
-        return ('in_line', f"Good {noun}, right in line with your other {plural(noun)} like it "
-                           f"({_fmt(result['value'], unit)} against a {TYPICAL} "
-                           f"{_fmt(result['median'], unit)}).", facts)
-    if filled:
-        return ('in_line', f'A {CONSISTENT} {noun} for you: {usual} for {kind}, inside your {TYPICAL} range.', facts)
-    return ('in_line', f'A {CONSISTENT} {noun} for you: {usual}, inside your {TYPICAL} range.', facts)
+        return _output_up(noun, usual, kind, eff, heart, enough_hr, facts)
+    return _output_in_line(result, unit, noun, usual, kind, filled, facts)
 
 
 def _is_rating(value):
