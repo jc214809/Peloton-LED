@@ -84,7 +84,7 @@ Read the note before changing its area; update it in the same PR.
 - `peloton_led.py`: entry point, `build_rotation_pages`, `show_and_wait`, the loops
 - `peloton/`: config, API client, dashboard and cache, workout log and everything derived from it, name-page facts, workout compare, screen times, Pushover
 - `display/ui/`: one file per screen, plus `manager.py` and the overlays (padlock, stale clock, settings PIN, Wi-Fi setup)
-- `settings_page/`: the board's settings page (its own service, port 8080)
+- `settings_page/`: the board's settings page (its own service, port 8080); `page/` is the HTML, one module per card
 - `self_update/`: `peloton-update`
 - `driver/`: rgbmatrix or the emulator
 - `utils/`: matrix settings, health heartbeat, Wi-Fi setup state

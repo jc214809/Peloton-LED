@@ -15,7 +15,6 @@ ALLOWED_OVER = {
     'peloton/dashboard.py': 973,
     'peloton_led.py': 618,
     'scripts/refresh_cookies.py': 704,
-    'settings_page/page.py': 1748,
     'settings_page/server.py': 670,
 }
 

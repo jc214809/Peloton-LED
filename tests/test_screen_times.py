@@ -14,7 +14,7 @@ from peloton.screen_times import page_seconds, retire_zero_times
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 from settings_page import page
-from settings_page.form import apply_form
+from settings_page.form import apply_form, number_text
 
 from test_settings_form import posted
 
@@ -150,9 +150,9 @@ def test_the_settings_page_says_the_times_the_board_plays(tmp_path, rows):
         assert duration == page_seconds(display, section, rows, frames), section
         line = page.shows_for(section, display, rows)
         if frames > 1 and section == 'journey':  # the demo has bike and walk/run miles: both steps
-            assert f'({page.number_text(round(duration, 1))} s in all)' in line, line
+            assert f'({number_text(round(duration, 1))} s in all)' in line, line
         elif section != 'username':  # its line gives the rule (it depends on the day's highlights)
-            assert line.startswith(f'{page.number_text(round(duration, 1))} s'), (section, line)
+            assert line.startswith(f'{number_text(round(duration, 1))} s'), (section, line)
     assert {'username', 'versus', 'total_workouts', 'lifetime', 'goals', 'journey', 'challenges',
             'next_class'} <= seen
 

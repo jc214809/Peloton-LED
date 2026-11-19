@@ -14,6 +14,7 @@ from display.ui.logo_mask_screen import WHITE, LogoMaskScreen
 from scripts import render_logo
 from scripts.render_demo import ImageMatrix
 from settings_page import logo, page
+from settings_page.page.style import STYLE
 
 BLACK = (0, 0, 0)
 # Where each layout puts the mark, and the zone bar's left, top, width and height.
@@ -113,7 +114,7 @@ def test_every_settings_page_shows_the_icon():
     assert f'<link rel="apple-touch-icon" href="{page.TOUCH_ICON}">' in html
     pin = page.pin_page()
     assert f'<span class="mark">{logo.svg()}</span>' in pin
-    rule = re.search(r'^\.mark svg \{[^}]*\}', page.STYLE, re.M).group()
+    rule = re.search(r'^\.mark svg \{[^}]*\}', STYLE, re.M).group()
     assert 'stroke: none' in rule, "the page's line icons are stroked: the logo mustn't be"
 
 
