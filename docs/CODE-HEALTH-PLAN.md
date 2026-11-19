@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails) **done** on branch `code-health-guardrails`, awaiting merge (2026-11-18); phases 2 and 3 planned. Roadmap item 33.
+Status: phase 1 (guardrails) **done** on branch `code-health-guardrails`, awaiting merge (2026-11-18); 2e (`build_rotation_pages`, `apply_form`) **done** on branch `rotation-and-form-complexity`, awaiting merge; the rest of phase 2 and phase 3 planned. Roadmap item 33.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So
