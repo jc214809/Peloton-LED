@@ -40,11 +40,9 @@ class PrStarScreen(Screen):
     def _round_points(self, points: List[Tuple[float, float]]) -> List[Tuple[int, int]]:
         return [(int(round(x)), int(round(y))) for x, y in points]
 
-    def _scanline_fill_polygon(self, matrix, poly: List[Tuple[float, float]], color) -> None:  # noqa: C901, PLR0912
-        height = matrix.height
-        if not poly:
-            return
-
+    @staticmethod
+    def _polygon_edges(poly: List[Tuple[float, float]]) -> List[Tuple[float, float, float, float]]:
+        """(y_min, y_max, x_at_ymin, slope) for every non-horizontal edge."""
         edges = []
         n = len(poly)
         for i in range(n):
@@ -61,19 +59,35 @@ class PrStarScreen(Screen):
                 x_at_ymin = x2
                 slope = (x1 - x2) / (y1 - y2)
             edges.append((y_min, y_max, x_at_ymin, slope))
+        return edges
 
+    @staticmethod
+    def _crossings(edges, y: int) -> List[float]:
+        """Sorted x positions where the edges cross scanline y."""
+        xs = [x_at_ymin + slope * (y - y_min)
+              for y_min, y_max, x_at_ymin, slope in edges if y_min <= y < y_max]
+        xs.sort()
+        return xs
+
+    @staticmethod
+    def _draw_span(matrix, y: int, x_start: int, x_end: int, color) -> None:
+        try:
+            graphics.DrawLine(matrix, x_start, y, x_end, y, color)
+        except Exception:
+            for x in range(x_start, x_end + 1):
+                try:
+                    graphics.DrawPixel(matrix, x, y, color)
+                except Exception:
+                    pass
+
+    def _scanline_fill_polygon(self, matrix, poly: List[Tuple[float, float]], color) -> None:
+        if not poly:
+            return
+        edges = self._polygon_edges(poly)
         if not edges:
             return
-
-        for y in range(0, height):
-            xs = []
-            for y_min, y_max, x_at_ymin, slope in edges:
-                if y_min <= y < y_max:
-                    x = x_at_ymin + slope * (y - y_min)
-                    xs.append(x)
-            if not xs:
-                continue
-            xs.sort()
+        for y in range(0, matrix.height):
+            xs = self._crossings(edges, y)
             for i in range(0, len(xs), 2):
                 try:
                     x_start = int(round(xs[i]))
@@ -82,14 +96,7 @@ class PrStarScreen(Screen):
                     break
                 x_start = max(0, min(matrix.width - 1, x_start))
                 x_end = max(0, min(matrix.width - 1, x_end))
-                try:
-                    graphics.DrawLine(matrix, x_start, y, x_end, y, color)
-                except Exception:
-                    for x in range(x_start, x_end + 1):
-                        try:
-                            graphics.DrawPixel(matrix, x, y, color)
-                        except Exception:
-                            pass
+                self._draw_span(matrix, y, x_start, x_end, color)
 
     def render(self, matrix, state=None):
         color = color_dict.get(self.color_key) or color_dict.get("gold")

@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 (guardrails) and phase 2a–2d merged (2026-11-18); 2e (`build_rotation_pages`, `apply_form`) **done** on branch `rotation-and-form-complexity`, awaiting merge; 2f and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2e: `C901` 25, `PLR0912` 18, `PLR0913` 12, `PLR0915` 7.
+Status: phase 1 (guardrails) and phase 2a–2d merged (2026-11-18); 2e (`build_rotation_pages`, `apply_form`) **done** on branch `rotation-and-form-complexity`, awaiting merge; 2f part A (`draw_icon`, `PrCelebrationScreen.render`, `_scanline_fill_polygon`) **done** on branch `display-draw-complexity`, awaiting merge; 2f part B and phase 3 planned. Roadmap item 33. Structural `noqa`s after 2f-A: `C901` 22, `PLR0912` 15, `PLR0913` 12, `PLR0915` 6.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So

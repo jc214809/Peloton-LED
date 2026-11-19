@@ -93,60 +93,79 @@ class PrCelebrationScreen(Screen):
     def update(self, dt):
         self.elapsed += max(0, dt)
 
-    def render(self, matrix, state: Optional[Any] = None) -> bool:  # noqa: C901, PLR0912
+    def render(self, matrix, state: Optional[Any] = None) -> bool:
         summary = state if isinstance(state, dict) else {}
         lines = pr_card_lines(summary)
         if lines is None:
             return False
-        w, h = matrix.width, matrix.height
-
         if self.elapsed < BURST_SECONDS:
-            t = self.elapsed / BURST_SECONDS
-            # Ease-out growth, with rays shooting out behind the star.
-            grow = 1 - (1 - t) ** 3
-            outer = 3 + grow * (min(w, h) * 0.42)
-            cx, cy = (w - 1) / 2, (h - 1) / 2
-            ray = outer + 2 + t * 10
-            for i in range(8):
-                angle = i * math.pi / 4 + math.pi / 8
-                for step in range(3):
-                    r = ray + step * 2
-                    x, y = round(cx + r * math.cos(angle)), round(cy + r * math.sin(angle))
-                    if 0 <= x < w and 0 <= y < h:
-                        matrix.SetPixel(x, y, 255, 240 - step * 60, 120 - step * 40)
-            _fill_polygon(matrix, _star_points(cx, cy, outer), _GOLD)
+            self._draw_burst(matrix)
             return True
-
-        headline, value, gain = lines
         card_t = self.elapsed - BURST_SECONDS
-        compact = h < 64
-        # The star shrinks into a badge at the top as the card appears; on
-        # 32-row panels there's no room for the badge, so it shrinks away.
         settle = min(1.0, card_t / SETTLE_SECONDS)
+        self._draw_settling_star(matrix, settle)
+        if settle < 1:
+            return True
+        if matrix.height < 64:
+            self._draw_compact_card(matrix, summary, *lines)
+        else:
+            self._draw_full_card(matrix, summary, *lines)
+            self._draw_sparkles(matrix, card_t)
+        return True
+
+    def _draw_burst(self, matrix) -> None:
+        w, h = matrix.width, matrix.height
+        t = self.elapsed / BURST_SECONDS
+        # Ease-out growth, with rays shooting out behind the star.
+        grow = 1 - (1 - t) ** 3
+        outer = 3 + grow * (min(w, h) * 0.42)
+        cx, cy = (w - 1) / 2, (h - 1) / 2
+        ray = outer + 2 + t * 10
+        for i in range(8):
+            angle = i * math.pi / 4 + math.pi / 8
+            for step in range(3):
+                r = ray + step * 2
+                x, y = round(cx + r * math.cos(angle)), round(cy + r * math.sin(angle))
+                if 0 <= x < w and 0 <= y < h:
+                    matrix.SetPixel(x, y, 255, 240 - step * 60, 120 - step * 40)
+        _fill_polygon(matrix, _star_points(cx, cy, outer), _GOLD)
+
+    @staticmethod
+    def _draw_settling_star(matrix, settle: float) -> None:
+        """The star shrinks into a badge at the top as the card appears; on
+        32-row panels there's no room for the badge, so it shrinks away."""
+        w, h = matrix.width, matrix.height
+        compact = h < 64
         start = min(w, h) * 0.42
         outer = start - settle * (start if compact else start - 8)
         star_cy = (h - 1) / 2 - (0 if compact else settle * ((h - 1) / 2 - 10))
         if outer >= 1:
             _fill_polygon(matrix, _star_points((w - 1) / 2, star_cy, outer), _GOLD)
-        if settle < 1:
-            return True
 
+    @staticmethod
+    def _card_fonts():
         headline_font = loaded_fonts.get("titles") or loaded_fonts.get("stats")
         value_font = loaded_fonts.get("discipline") or headline_font
         info_font = loaded_fonts.get("info") or headline_font
+        return headline_font, value_font, info_font
+
+    def _draw_compact_card(self, matrix, summary: dict, headline: str, value: str, gain: Optional[str]) -> None:
+        headline_font, value_font, info_font = self._card_fonts()
         dur = summary.get("duration_min")
-        if compact:
-            _centered(matrix, headline_font, 8, _GOLD, headline)
-            if value:
-                _centered(matrix, value_font, 20, _WHITE, value)
-            if gain:
-                _centered(matrix, info_font, 30, _GREEN, gain)
-            elif isinstance(dur, (int, float)):
-                _centered(matrix, info_font, 30, _BLUE, f"{int(dur)} MIN CLASS")
-            return True
+        _centered(matrix, headline_font, 8, _GOLD, headline)
+        if value:
+            _centered(matrix, value_font, 20, _WHITE, value)
+        if gain:
+            _centered(matrix, info_font, 30, _GREEN, gain)
+        elif isinstance(dur, (int, float)):
+            _centered(matrix, info_font, 30, _BLUE, f"{int(dur)} MIN CLASS")
+
+    def _draw_full_card(self, matrix, summary: dict, headline: str, value: str, gain: Optional[str]) -> None:
+        headline_font, value_font, info_font = self._card_fonts()
+        dur = summary.get("duration_min")
         _centered(matrix, headline_font, 29, _GOLD, headline)
         if value:
-            if get_text_width(value_font, value) > w - 2:
+            if get_text_width(value_font, value) > matrix.width - 2:
                 value_font = headline_font
             _centered(matrix, value_font, 44, _WHITE, value)
         if gain:
@@ -154,10 +173,12 @@ class PrCelebrationScreen(Screen):
         if isinstance(dur, (int, float)):
             _centered(matrix, info_font, 62 if gain else 56, _BLUE, f"{int(dur)} MIN CLASS")
 
-        # Twinkling sparkles around the card.
+    @staticmethod
+    def _draw_sparkles(matrix, card_t: float) -> None:
+        """Twinkling sparkles around the card."""
+        w, h = matrix.width, matrix.height
         for i, (x, y) in enumerate(_SPARKLE_SPOTS):
             if int(card_t * 4 + i) % 3 == 0 and x < w and y < h:
                 matrix.SetPixel(x, y, 255, 255, 200)
                 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                     matrix.SetPixel(x + dx, y + dy, 150, 130, 40)
-        return True
