@@ -5,7 +5,9 @@ from typing import Any, List, Optional, Tuple
 
 from driver import graphics
 from display.display import get_text_width, loaded_fonts
+from peloton.selection import normalize_discipline
 from .last_workout.stats import _fmt_split, _whole
+from .lifetime_overview import discipline_color
 from .screen import Screen
 
 _GOLD = graphics.Color(255, 215, 0)
@@ -19,6 +21,11 @@ SETTLE_SECONDS = 0.3
 CARD_HOLD_SECONDS = 2.0
 # Kept in the top band beside the star badge so they never land on text.
 _SPARKLE_SPOTS = [(5, 5), (58, 6), (13, 13), (50, 13), (3, 16), (60, 15)]
+# 32 rows: the outer ends of the blank rows above the bottom line; the value row's margins are added per card.
+_COMPACT_SPARKLE_SPOTS = [(2, 22), (61, 22)]
+# 32 rows: each bottom-line turn; three fill the default card hold (4 s detail interval + CARD_HOLD_SECONDS).
+COMPACT_SWAP_SECONDS = 2.0
+_COMPACT_BADGE_RADIUS = 4.5
 
 
 def _star_points(cx: float, cy: float, outer: float) -> List[Tuple[float, float]]:
@@ -49,6 +56,16 @@ def _fill_polygon(matrix, poly: List[Tuple[float, float]], color) -> None:
 def _centered(matrix, font, y: int, color, text: str) -> None:
     x = max((matrix.width - get_text_width(font, text)) // 2, 1)
     graphics.DrawText(matrix, font, x, y, color, text)
+
+
+def _label_color(discipline: str):
+    """The discipline's icon colour, so it reads as a label rather than a second value; white when
+    that's too close to the gain's green or the class length's blue (running, rowing) to tell apart."""
+    rgb = discipline_color(normalize_discipline(discipline))
+    for other in (_GREEN, _BLUE):
+        if abs(rgb[0] - other.red) + abs(rgb[1] - other.green) + abs(rgb[2] - other.blue) < 100:
+            return _WHITE
+    return graphics.Color(*rgb)
 
 
 def pr_card_lines(summary: dict) -> Optional[Tuple[str, str, Optional[str]]]:
@@ -107,10 +124,10 @@ class PrCelebrationScreen(Screen):
         if settle < 1:
             return True
         if matrix.height < 64:
-            self._draw_compact_card(matrix, summary, *lines)
+            self._draw_compact_card(matrix, summary, card_t, *lines)
         else:
             self._draw_full_card(matrix, summary, *lines)
-            self._draw_sparkles(matrix, card_t)
+            self._draw_sparkles(matrix, card_t, _SPARKLE_SPOTS)
         return True
 
     def _draw_burst(self, matrix) -> None:
@@ -149,16 +166,52 @@ class PrCelebrationScreen(Screen):
         info_font = loaded_fonts.get("info") or headline_font
         return headline_font, value_font, info_font
 
-    def _draw_compact_card(self, matrix, summary: dict, headline: str, value: str, gain: Optional[str]) -> None:
+    def _draw_compact_card(self, matrix, summary: dict, card_t: float, headline: str, value: str,
+                           gain: Optional[str]) -> None:
+        """32 rows: headline between two star badges, the value (or the discipline for a plain
+        NEW PR), and a bottom line that takes turns between the gain and the class length."""
         headline_font, value_font, info_font = self._card_fonts()
-        dur = summary.get("duration_min")
         _centered(matrix, headline_font, 8, _GOLD, headline)
-        if value:
-            _centered(matrix, value_font, 20, _WHITE, value)
-        if gain:
-            _centered(matrix, info_font, 30, _GREEN, gain)
-        elif isinstance(dur, (int, float)):
-            _centered(matrix, info_font, 30, _BLUE, f"{int(dur)} MIN CLASS")
+        self._draw_badges(matrix, get_text_width(headline_font, headline))
+        middle = value
+        if not middle and isinstance(summary.get("discipline"), str):
+            middle = summary["discipline"].upper()
+        value_width = 0
+        if middle:
+            if get_text_width(value_font, middle) > matrix.width - 2:
+                value_font = info_font
+            value_width = get_text_width(value_font, middle)
+            _centered(matrix, value_font, 20, _WHITE, middle)
+        turns = self._compact_bottom_turns(summary, gain, middle)
+        if turns:
+            _centered(matrix, info_font, 30, *turns[int(card_t / COMPACT_SWAP_SECONDS) % len(turns)])
+        margin = (matrix.width - value_width) // 2
+        spots = list(_COMPACT_SPARKLE_SPOTS)
+        if margin >= 6:
+            spots += [(margin // 2, 15), (matrix.width - 1 - margin // 2, 18)]
+        self._draw_sparkles(matrix, card_t, spots)
+
+    @staticmethod
+    def _compact_bottom_turns(summary: dict, gain: Optional[str], middle: str) -> List[Tuple[Any, str]]:
+        """The bottom line's turns: gain, class length, discipline (unless the middle line has it)."""
+        turns = [(_GREEN, gain)] if gain else []
+        dur = summary.get("duration_min")
+        if isinstance(dur, (int, float)):
+            turns.append((_BLUE, f"{int(dur)} MIN CLASS"))
+        discipline = summary.get("discipline")
+        if isinstance(discipline, str) and discipline.strip() and discipline.upper() != middle:
+            turns.append((_label_color(discipline), discipline.upper()))
+        return turns
+
+    @staticmethod
+    def _draw_badges(matrix, headline_width: int) -> None:
+        """A small gold star in each margin beside the headline, where there's room."""
+        margin = (matrix.width - headline_width) // 2
+        if margin < 2 * _COMPACT_BADGE_RADIUS + 2:
+            return
+        cy = 4.5
+        for cx in ((margin - 1) / 2, matrix.width - 1 - (margin - 1) / 2):
+            _fill_polygon(matrix, _star_points(cx, cy, _COMPACT_BADGE_RADIUS), _GOLD)
 
     def _draw_full_card(self, matrix, summary: dict, headline: str, value: str, gain: Optional[str]) -> None:
         headline_font, value_font, info_font = self._card_fonts()
@@ -174,10 +227,10 @@ class PrCelebrationScreen(Screen):
             _centered(matrix, info_font, 62 if gain else 56, _BLUE, f"{int(dur)} MIN CLASS")
 
     @staticmethod
-    def _draw_sparkles(matrix, card_t: float) -> None:
+    def _draw_sparkles(matrix, card_t: float, spots: List[Tuple[int, int]]) -> None:
         """Twinkling sparkles around the card."""
         w, h = matrix.width, matrix.height
-        for i, (x, y) in enumerate(_SPARKLE_SPOTS):
+        for i, (x, y) in enumerate(spots):
             if int(card_t * 4 + i) % 3 == 0 and x < w and y < h:
                 matrix.SetPixel(x, y, 255, 255, 200)
                 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):

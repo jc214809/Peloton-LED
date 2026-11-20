@@ -28,7 +28,7 @@ the repo is public and two of them show your real workout data.
 | Screen | 64x32 before | Status |
 |---|---|---|
 | Last workout | Old 3-line layout; title cut off; no stat rotation, HR or calories | **done** |
-| PR celebration | Has a compact card | **checked, no change** |
+| PR celebration | Plain text card; gain hid the class length; empty row on `NEW PR` | **done** |
 | Username + details | Two value lines touched | **done** |
 | Total workouts count page | Two-line names crowded the count | **done** |
 | Lifetime disciplines | One text page per discipline (12 pages) | **done**: icon pages, 2 per page |
@@ -169,11 +169,26 @@ reached the stats phase, so the bar never showed. When there are no stats and
 the title fits on one line, the bar now shows in the intro (since 2026-11-11
 a one-line title shows it whether or not there are stats).
 
-### PR celebration (checked, no change)
+### PR celebration (done, 2026-11-19)
 The burst, the "OUTPUT PR / 512 KJ / 45 MIN CLASS" card, splits PRs and
-plain "NEW PR" all fit. The existing 32-row card has room for three lines,
-so when there's a gain (`+14 KJ`) it replaces the `45 MIN CLASS` line
-(64x64 shows both). No sparkles on 32 rows; they would sit on the text.
+plain "NEW PR" all fit in three lines. The card used to be plain text once the
+star shrank away; now (64x64 unchanged, compared byte for byte):
+- A 9 px gold star sits in each margin beside the headline (64x64's single
+  badge above it has no room). They're drawn only when the margin fits one.
+- Sparkles twinkle in the value line's side margins (when there are 6+ px)
+  and at the outer ends of the blank rows above the bottom line. Not between
+  the lines: those gaps are 4 rows, and a sparkle is 3, so it would touch text.
+  `test_32_row_sparkles_never_touch_text` checks the widest values.
+- The bottom line takes turns (`COMPACT_SWAP_SECONDS`, 2 s): `+14 KJ`, then
+  `45 MIN CLASS`, then the discipline (`CYCLING`, in its icon's colour from
+  `discipline_color`, so it doesn't read as a second white value; white for
+  running and rowing, whose icon green and blue match the gain and class length), skipping any it
+  doesn't have. It used to drop the class length when there was a gain, and
+  never named the discipline (Joel asked for it, 2026-11-19). 2 s, so three
+  turns fill the default card hold (4 s detail interval + 2 s).
+- A plain `NEW PR` (no output or split value) fills its empty middle line with
+  the discipline in white, dropping to the info font when the discipline font is
+  too wide (`TREAD BOOTCAMP`, `OUTDOOR WALKING`).
 
 ### Lifetime disciplines use icon pages (done)
 64x64 shows the lifetime counts as pages of four icon tiles (2x2). 64x32
