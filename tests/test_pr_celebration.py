@@ -108,19 +108,98 @@ def test_preview_rejects_malformed_page():
         find_latest_pr(_client([{'data': 'oops'}]), 'u', max_pages=1)
 
 
-def test_32_row_card_fits_panel_without_star_badge():
+def _render_32(summary, card_t):
+    from display.ui.pr_celebration import SETTLE_SECONDS
     matrix = ImageMatrix(height=32)
     initialize_fonts(32)
-    summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'duration_min': 30}
     screen = PrCelebrationScreen()
     screen.on_enter(matrix, summary)
-    screen.update(BURST_SECONDS + 1.0)
+    screen.update(BURST_SECONDS + SETTLE_SECONDS + card_t)
     assert screen.render(matrix, summary)
-    pixels = matrix.image.load()
-    rows = lambda color: {y for y in range(32) for x in range(64) if pixels[x, y] == color}  # noqa: E731  one-line test helper
-    gold, white, blue = rows(GOLD), rows(WHITE), rows(BLUE)
+    return matrix.image.load()
+
+
+def _points(pixels, color, height=32):
+    return {(x, y) for y in range(height) for x in range(64) if pixels[x, y] == color}
+
+
+def test_32_row_card_fits_panel_with_star_badges_beside_headline():
+    pixels = _render_32({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'duration_min': 30}, 1.0)
+    gold, white, blue = (_points(pixels, c) for c in (GOLD, WHITE, BLUE))
     assert gold and white and blue
-    assert max(gold) < min(white) and max(white) < min(blue) and max(blue) <= 31
+    rows = lambda pts: {y for _, y in pts}  # noqa: E731  one-line test helper
+    assert max(rows(gold)) < min(rows(white)) and max(rows(white)) < min(rows(blue)) and max(rows(blue)) <= 31
+    # A star in each margin of the 36 px headline (x 14-49), clear of its letters.
+    assert any(x < 12 for x, _ in gold) and any(x > 51 for x, _ in gold)
+
+
+def test_32_row_badges_step_aside_for_a_headline_too_wide_for_them(monkeypatch):
+    import display.ui.pr_celebration as pr
+    monkeypatch.setattr(pr, 'get_text_width', lambda font, text: 50 if text.endswith('PR') else 20)
+    pixels = _render_32({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412}, 1.0)
+    assert not any(x < 7 or x > 56 for x, _ in _points(pixels, GOLD))  # 7 px margins: no star fits
+
+
+def test_32_row_bottom_line_takes_turns_between_gain_class_length_and_discipline():
+    from display.ui.pr_celebration import COMPACT_SWAP_SECONDS
+    summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'previous_best_kj': 398,
+               'duration_min': 30, 'discipline': 'Tread Bootcamp'}
+    bottom = lambda pixels, color: {p for p in _points(pixels, color) if p[1] >= 24}  # noqa: E731  one-line test helper
+    turns = [_render_32(summary, i * COMPACT_SWAP_SECONDS + 0.5) for i in range(4)]
+    assert bottom(turns[0], GREEN) and not bottom(turns[0], BLUE) and not bottom(turns[0], WHITE)
+    assert bottom(turns[1], BLUE) and not bottom(turns[1], GREEN)
+    # Running's icon green is too close to the gain's: white instead.
+    assert bottom(turns[2], WHITE) and not bottom(turns[2], GREEN) and not bottom(turns[2], BLUE)
+    assert max(x for x, _ in bottom(turns[2], WHITE)) <= 62
+    assert bottom(turns[3], GREEN)  # and round again
+    # Without a class length or discipline the gain stays put.
+    steady = _render_32({**summary, 'duration_min': None, 'discipline': None}, COMPACT_SWAP_SECONDS + 0.5)
+    assert _points(steady, GREEN)
+
+
+@pytest.mark.parametrize('discipline, color', [
+    ('Cycling', (240, 70, 25)),  # its icon colour, as on the lifetime pages
+    ('Bike Bootcamp', (240, 70, 25)),  # a bootcamp takes its machine's
+    ('Outdoor Walking', (200, 200, 235)),  # no icon colour of its own: the default
+    ('Rowing', WHITE),  # icon blue is too close to the class length's
+    ('Running', WHITE),  # icon green is too close to the gain's
+])
+def test_32_row_discipline_takes_its_icon_colour_unless_it_clashes(discipline, color):
+    from display.ui.pr_celebration import COMPACT_SWAP_SECONDS
+    summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'duration_min': 30,
+               'discipline': discipline}
+    pixels = _render_32(summary, COMPACT_SWAP_SECONDS + 0.5)
+    assert {p for p in _points(pixels, color) if p[1] >= 24}
+
+
+def test_32_row_plain_pr_names_the_discipline_and_fits_the_widest():
+    from display.ui.pr_celebration import COMPACT_SWAP_SECONDS
+    pixels = _render_32({'is_pr': True, 'discipline': 'Tread Bootcamp', 'duration_min': 45}, 1.0)
+    white = _points(pixels, WHITE)
+    assert white and min(x for x, _ in white) >= 1 and max(x for x, _ in white) <= 62
+    # Named once: the bottom line keeps the class length instead of repeating it.
+    later = _render_32({'is_pr': True, 'discipline': 'Tread Bootcamp', 'duration_min': 45}, COMPACT_SWAP_SECONDS + 0.5)
+    assert {y for _, y in _points(later, WHITE)} == {y for _, y in white} and _points(later, BLUE)
+    assert not _points(_render_32({'is_pr': True, 'discipline': None}, 1.0), WHITE)
+
+
+@pytest.mark.parametrize('summary', [
+    {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 1234, 'previous_best_kj': 1233.2, 'duration_min': 120,
+     'discipline': 'Outdoor Walking'},
+    {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 51, 'duration_min': 10, 'discipline': 'Tread Bootcamp'},
+    {'is_pr': True, 'is_splits_pr': True, 'row_split_sec_per_500m': 128, 'duration_min': 120,
+     'discipline': 'Rowing'},
+    {'is_pr': True, 'discipline': 'Outdoor Walking', 'duration_min': 120},
+])
+def test_32_row_sparkles_never_touch_text(summary):
+    sparkle_colors = {(255, 255, 200), (150, 130, 40), (0, 0, 0)}
+    for tick in range(36):
+        pixels = _render_32(summary, tick * 0.25)
+        sparkle = _points(pixels, (255, 255, 200)) | _points(pixels, (150, 130, 40))
+        for x, y in sparkle:
+            near = {pixels[x + dx, y + dy] for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                    if 0 <= x + dx < 64 and 0 <= y + dy < 32}
+            assert near <= sparkle_colors, (x, y, tick)  # anything else is text or a badge
 
 
 def test_rotation_gives_pr_card_one_interval_and_the_extra_hold_after_the_burst():
