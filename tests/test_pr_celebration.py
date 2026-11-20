@@ -133,6 +133,13 @@ def test_32_row_card_fits_panel_with_star_badges_beside_headline():
     assert any(x < 12 for x, _ in gold) and any(x > 51 for x, _ in gold)
 
 
+def test_32_row_badges_step_aside_for_a_headline_too_wide_for_them(monkeypatch):
+    import display.ui.pr_celebration as pr
+    monkeypatch.setattr(pr, 'get_text_width', lambda font, text: 50 if text.endswith('PR') else 20)
+    pixels = _render_32({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412}, 1.0)
+    assert not any(x < 7 or x > 56 for x, _ in _points(pixels, GOLD))  # 7 px margins: no star fits
+
+
 def test_32_row_bottom_line_takes_turns_between_gain_class_length_and_discipline():
     from display.ui.pr_celebration import COMPACT_SWAP_SECONDS
     summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'previous_best_kj': 398,

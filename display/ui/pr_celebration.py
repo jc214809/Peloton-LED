@@ -169,7 +169,7 @@ class PrCelebrationScreen(Screen):
     def _draw_compact_card(self, matrix, summary: dict, card_t: float, headline: str, value: str,
                            gain: Optional[str]) -> None:
         """32 rows: headline between two star badges, the value (or the discipline for a plain
-        NEW PR), and a bottom line that takes turns between the gain and the class length."""
+        NEW PR), and a bottom line that takes turns between gain, class length and discipline."""
         headline_font, value_font, info_font = self._card_fonts()
         _centered(matrix, headline_font, 8, _GOLD, headline)
         self._draw_badges(matrix, get_text_width(headline_font, headline))
