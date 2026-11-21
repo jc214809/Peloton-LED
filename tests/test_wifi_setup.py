@@ -50,7 +50,7 @@ def fonts(request):
 
 def drawn_text(monkeypatch, height, state):
     """The lines the screen draws, and the rows they sit on."""
-    import display.ui.wifi_setup_screen as screen
+    import display.ui.overlays.wifi_setup_screen as screen
     lines = []
     monkeypatch.setattr(screen, 'draw_centered_text',
                         lambda matrix, font, text, y, color: lines.append((text, y, font.height)))
@@ -75,14 +75,14 @@ def test_the_second_page_says_where_the_settings_page_is(monkeypatch, fonts):
 
 
 def test_the_settings_address_matches_the_servers_port():
-    from display.ui.wifi_setup_screen import SETTINGS_ADDRESS
+    from display.ui.overlays.wifi_setup_screen import SETTINGS_ADDRESS
     from settings_page.server import PORT
     assert SETTINGS_ADDRESS == f'{wifi_setup.HOTSPOT_ADDRESS}:{PORT}'
 
 
 def test_name_lines_split_a_piece_too_wide_by_letters(fonts):
     from display.display import get_text_width, loaded_fonts
-    from display.ui.wifi_setup_screen import name_lines
+    from display.ui.overlays.wifi_setup_screen import name_lines
     font = loaded_fonts['info']
     lines = name_lines(font, 'x' * 40, 62)
     assert ''.join(lines) == 'x' * 40 and all(get_text_width(font, line) <= 62 for line in lines)

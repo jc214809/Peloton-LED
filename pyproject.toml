@@ -43,7 +43,7 @@ type = "forbidden"
 source_modules = ["display"]
 forbidden_modules = ["requests", "peloton.api", "peloton.dashboard", "settings_page"]
 # The one cross-service import: the panel's PIN overlay reads the PIN file path the settings service writes.
-ignore_imports = ["display.ui.settings_pin -> settings_page.pins"]
+ignore_imports = ["display.ui.overlays.settings_pin -> settings_page.pins"]
 
 [[tool.importlinter.contracts]]
 name = "driver wraps the matrix and knows nothing of the app"

@@ -84,7 +84,7 @@ Read the note before changing its area; update it in the same PR.
 - `peloton_led.py`: entry point, `show_and_wait`, the loops (re-exports `build_rotation_pages`)
 - `display/rotation_pages.py`: `build_rotation_pages`, one builder per screen
 - `peloton/`: config, API client, dashboard (`dashboard.py` plus `dashboard_*.py` mixins) and cache, screen times, Pushover; `feeds/` the API parsers, `stats/` lifetime and name-page figures, `workouts/` the workout log, insights and compare (layered `workouts` > `stats` > `feeds`: `docs/dev/DATA.md`)
-- `display/ui/`: one file per screen, plus `manager.py` and the overlays (padlock, stale clock, settings PIN, Wi-Fi setup); the latest-workout page is the package `display/ui/last_workout/` (`screen.py`, `tall_layout.py`, `short_layout.py`, `stats.py`, `rotation.py`, `charts.py`, `insight_frames.py`: see `docs/dev/SCREENS.md`)
+- `display/ui/`: one file per screen, plus `manager.py`; `overlays/` holds the padlock, stale clock, settings PIN and Wi-Fi setup screen; the latest-workout page is the package `display/ui/last_workout/` (`screen.py`, `tall_layout.py`, `short_layout.py`, `stats.py`, `rotation.py`, `charts.py`, `insight_frames.py`: see `docs/dev/SCREENS.md`)
 - `settings_page/`: the board's settings page (its own service, port 8080); `page/` is the HTML, one module per card
 - `self_update/`: `peloton-update`
 - `driver/`: rgbmatrix or the emulator

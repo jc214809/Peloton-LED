@@ -3,9 +3,9 @@
 import time
 from typing import Callable, Dict, Optional, Any
 from .screen import Screen
-from .login_indicator import draw_login_indicator
-from .stale_indicator import draw_stale_indicator
-from .settings_pin import draw_if_pin_shown
+from .overlays.login_indicator import draw_login_indicator
+from .overlays.stale_indicator import draw_stale_indicator
+from .overlays.settings_pin import draw_if_pin_shown
 from utils import debug
 
 class ScreenManager:
