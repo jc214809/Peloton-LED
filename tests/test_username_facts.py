@@ -103,20 +103,21 @@ def test_period_stats_counts_completed_workouts_in_a_window():
     start = frame_bounds(ZONE, NOW)['30d'][0]
     assert period_stats(workouts, start, None, ZONE, NOW) == {
         'workouts': 2, 'minutes': 75, 'disciplines': {'strength': 1, 'cycling': 1},
-        'instructor_counts': {'jess': 1, 'cody': 1}, 'instructors': 2, 'classes': 2, 'active_days': 2}
+        'instructor_counts': {'jess': 1, 'cody': 1}, 'instructors': 2, 'classes': 2,
+        'active_days': 3}       # the instructor-less meditation 'c' is an active day, not a workout
     assert period_stats([], None, None, ZONE, NOW)['workouts'] == 0
     assert period_stats(workouts, None, None, ZONE, NOW)['workouts'] == 3      # everything up to now
 
 
 def test_different_classes_count_a_class_once_and_leave_out_workouts_with_no_class():
-    # (A workout with no class has no instructor either, so it is left out of every count: see the
-    # class-led tests below.)
+    # (A workout with no class has no instructor either, so it is left out of every count except
+    # active days: see the class-led tests below.)
     workouts = [_w('a', NOW - timedelta(days=1), ride_id='hiit'), _w('b', NOW - timedelta(days=2), ride_id='hiit'),
                 _w('c', NOW - timedelta(days=3), ride_id='power')]
     workouts.append({'id': 'just-ride', 'status': 'COMPLETE', 'start_time': int((NOW - timedelta(days=4)).timestamp()),
                      'fitness_discipline': 'cycling', 'ride': {}})
     stats = period_stats(workouts, None, None, ZONE, NOW)
-    assert (stats['workouts'], stats['classes'], stats['active_days']) == (3, 2, 3)
+    assert (stats['workouts'], stats['classes'], stats['active_days']) == (3, 2, 4)   # Just Ride: a day
 
 
 # class-led workouts only
@@ -130,7 +131,7 @@ def _non_class(identity, when, discipline, title='', ride_id='0' * 32, instructo
                  'fitness_discipline': discipline, 'ride': ride}, **extra)
 
 
-def test_non_class_workouts_are_left_out_of_every_fact_figure():
+def test_non_class_workouts_are_left_out_of_every_fact_figure_but_active_days():
     day = lambda n: NOW - timedelta(days=n)       # noqa: E731
     workouts = [
         _w('class', day(1), minutes=30),
@@ -148,9 +149,29 @@ def test_non_class_workouts_are_left_out_of_every_fact_figure():
     workouts[5]['ride']['instructor'] = {'id': None}
     stats = frame_stats(workouts, ZONE, NOW)
     for key in ('30d', 'all'):
-        assert (stats[key]['workouts'], stats[key]['minutes'], stats[key]['active_days']) == (1, 30, 1)
+        assert (stats[key]['workouts'], stats[key]['minutes']) == (1, 30)
         assert stats[key]['disciplines'] == {'strength': 1} and stats[key]['classes'] == 1
-    assert period_stats(workouts, None, None, ZONE, NOW)['workouts'] == 1
+        # every completed, timed workout is an active day: eight workouts on eight different days
+        assert stats[key]['active_days'] == 8
+    unfiltered = period_stats(workouts, None, None, ZONE, NOW)
+    assert (unfiltered['workouts'], unfiltered['active_days']) == (1, 8)
+
+
+def test_outdoor_runs_and_walks_count_as_active_days_but_not_as_workouts():
+    workouts = [_w('class', NOW - timedelta(days=1)),
+                _non_class('run', NOW - timedelta(days=2), 'running', 'Outdoor Running', minutes=55, instructor_id=''),
+                _non_class('walk', NOW - timedelta(days=3), 'walking', 'Outdoor Walking', instructor_id=''),
+                _non_class('going', NOW - timedelta(days=4), 'running', 'Just Run', instructor_id='',
+                           status='IN_PROGRESS'),
+                _non_class('future', NOW + timedelta(days=2), 'walking', 'Outdoor Walking', instructor_id='')]
+    month = frame_stats(workouts, ZONE, NOW)['30d']
+    assert (month['workouts'], month['minutes'], month['active_days']) == (1, 20, 3)
+    assert month['by_discipline']['strength']['active_days'] == 1
+    stats = period_stats(workouts, None, None, ZONE, NOW)
+    assert (stats['workouts'], stats['active_days']) == (1, 3)
+    # a filter keeps the class-led count
+    assert period_stats(workouts, None, None, ZONE, NOW, discipline='strength')['active_days'] == 1
+    assert period_stats(workouts, None, None, ZONE, NOW, instructor='jess')['active_days'] == 1
 
 
 def test_the_longest_workout_is_never_a_forgotten_meditation_timer():

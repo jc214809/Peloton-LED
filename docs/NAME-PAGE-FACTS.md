@@ -36,9 +36,12 @@ rides, music warm-ups and cool-downs, and scenic rides and rows (`5 KM Alaska Gi
 `ride_id` (the scenic ones have a real one) and not the title (`Just Tabata` and `Justin Bieber`
 classes have instructors). Untimed sessions distorted facts (a forgotten 299-minute `Just Meditate`
 was the `LONGEST WORKOUT`). A missing, None, empty or non-text ID is a non-class workout. The
-frames' workouts, minutes, active days, disciplines, bests, ranks, comparisons, averages and events
+frames' workouts, minutes, disciplines, bests, ranks, comparisons, averages and events
 (`A YEAR AGO`'s counts, `WELCOME BACK`, `NEW DISCIPLINE`, `LAST <noun>`, anniversary dates) all
-exclude them. Left as Peloton's overview counts, so they include non-class workouts (and run
+exclude them. **Active days are the exception**: a frame's top-level `active_days` (and an unfiltered
+`period_stats`) counts every completed, timed workout, class or not, because an outdoor run or walk is a day
+the rider was active (owner's request, 2026-11-21; `_stamped(..., class_only=False)`). The
+`by_discipline`/`by_instructor` sub-stats and filtered `period_stats` keep the class-led count. Left as Peloton's overview counts, so they include non-class workouts (and run
 ahead of the frames' all-time count): `TOTAL WORKOUTS` and `TOP DISCIPLINE`, which the milestones and
 Lifetime pages also read (Joel, 2026-11-15: totals are totals of Peloton workouts). `list_facts.py`'s overview-against-log comparison therefore now shows the
 non-class workouts as the gap.
@@ -82,7 +85,7 @@ days, last year, last week, then `events` (below), which has no top three of its
 | All time | `TOP DISCIPLINE` | `CYCLING` / `641 WORKOUTS` | any discipline totals |
 | Workouts and time | `LAST 30 DAYS`, `LAST 90 DAYS`, `IN 2026`, `IN 2025`, `LAST WEEK` | `12 WORKOUTS` / `340 MINUTES` (`164 HOURS` from 600 minutes) | 1+ workout in the frame |
 | Most-done discipline | `MOST IN 30 DAYS` (`MOST IN 2026`, ...) | `STRENGTH` / `6 WORKOUTS` | 2+ workouts, and not the all-time top discipline |
-| Active days | the frame's title | `ACTIVE DAYS` / `10 OF 30` | 2+ active days |
+| Active days | the frame's title | `ACTIVE DAYS` / `10 OF 30` (any completed workout, class or not) | 2+ active days |
 | Unique instructors | the frame's title | `31 UNIQUE` / `INSTRUCTORS` | 2+ |
 
 ("Different classes" was a fact until 2026-11-08 and was dropped: a given. `period_stats` still counts them.)
