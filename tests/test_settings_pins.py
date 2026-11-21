@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-import display.ui.settings_pin as settings_pin
+import display.ui.overlays.settings_pin as settings_pin
 from settings_page import pins
 from settings_page.pins import MAX_SESSIONS, PIN_SHOWN_S, SEND_EVERY_S, SESSION_S, TRIES_PER_PIN, PinGate
 
@@ -191,7 +191,7 @@ def test_the_manager_draws_the_pin_over_any_screen(monkeypatch):
         def Clear(self):
             self.pixels = {}
 
-    monkeypatch.setattr('display.ui.settings_pin.shown_pin', lambda: '1234')
+    monkeypatch.setattr('display.ui.overlays.settings_pin.shown_pin', lambda: '1234')
     matrix = Matrix()
     manager = ScreenManager(matrix)
     manager.register('blank', Blank())

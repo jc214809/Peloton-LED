@@ -38,7 +38,7 @@ enforce it (`pyproject.toml`; the `driver` contract checks direct imports only, 
 - `peloton/` imports only `models` and `requests` (plus itself).
 - `display/` imports from `peloton` only the pure helpers in `challenges`, `club` and
   `booked_classes`, never `api`, `dashboard` or `requests`. One cross-service import:
-  `display/ui/settings_pin.py` takes `PIN_FILE` from `settings_page.pins`.
+  `display/ui/overlays/settings_pin.py` takes `PIN_FILE` from `settings_page.pins`.
 
 ## Decisions made
 
@@ -255,7 +255,7 @@ Decided 2026-11-21 (Joel approved after the import check):
   workouts/stats cycle. Layers: `workouts` > `stats` > `feeds`. This replaces the grouping below.
 - `_insights_model.py` is untracked and unimported: leave it.
 
-Done 2026-11-21 (branch `peloton-subpackages`): `feeds/`, `stats/`, `workouts/` as above; `schedule` stays in `peloton/` (it's refresh timing, not a statistic), and the layers contract is in `pyproject.toml`. The display overlays move (`display/ui/overlays/`) is a second PR.
+Done 2026-11-21 (branch `peloton-subpackages`): `feeds/`, `stats/`, `workouts/` as above; `schedule` stays in `peloton/` (it's refresh timing, not a statistic), and the layers contract is in `pyproject.toml`. The display overlays (`login_indicator`, `stale_indicator`, `settings_pin`, `wifi_setup_screen`) moved to `display/ui/overlays/` in a second PR (branch `display-overlays`), 2026-11-21.
 
 Branch `peloton-subpackages`. Runs with no other agent open, because it touches
 imports in nearly every file.

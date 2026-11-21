@@ -17,7 +17,7 @@ from utils.username import resolve_display_username
 from utils.wifi_setup import hotspot_name
 from display.rotation_pages import DEFAULT_ROTATION, build_rotation_pages
 from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
-from display.ui.settings_pin import shown_pin
+from display.ui.overlays.settings_pin import shown_pin
 
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
@@ -375,7 +375,7 @@ def _import_display():
     from display.ui.journey_screen import JourneyScreen
     from display.ui.heatmap_screen import HeatmapScreen
     from display.ui.streak_risk_screen import StreakRiskScreen
-    from display.ui.wifi_setup_screen import WifiSetupScreen
+    from display.ui.overlays.wifi_setup_screen import WifiSetupScreen
     from display.ui.challenge_screen import ChallengeScreen
     from display.ui.next_class_screen import NextClassScreen
     from display.ui.club_screen import ClubScreen

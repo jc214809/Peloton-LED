@@ -257,8 +257,8 @@ def _expand_streak_views(pages):
 
 def _render_tiles(pages, screens, detail_interval, height):
     from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
-    from display.ui.login_indicator import draw_login_indicator
-    from display.ui.stale_indicator import draw_stale_indicator
+    from display.ui.overlays.login_indicator import draw_login_indicator
+    from display.ui.overlays.stale_indicator import draw_stale_indicator
     from scripts.render_demo import ImageMatrix
     tiles = []
     for name, state, duration in pages:

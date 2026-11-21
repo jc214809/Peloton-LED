@@ -1,5 +1,5 @@
 """The settings page's PIN: asking for one puts a 4-digit PIN on the LED board (the display reads
-PIN_FILE; display/ui/settings_pin.py) for PIN_SHOWN_S, and typing it in gives that browser a
+PIN_FILE; display/ui/overlays/settings_pin.py) for PIN_SHOWN_S, and typing it in gives that browser a
 session for SESSION_S. A PIN takes TRIES_PER_PIN guesses, and a new one comes only once the last
 has run out, so guessing is slow and lights up the board. With Pushover keys (auth.env), the PIN
 can also be sent to a phone, at most once every SEND_EVERY_S, since anyone on the Wi-Fi can press

@@ -548,7 +548,7 @@ Live mode cycles through every completed workout on the latest active day. Every
 - `peloton/stats/summaries.py`: metric normalization for screens and reports
 - `peloton/screen_times.py`, `schedule.py`: screen durations, and polling Peloton less often overnight
 - `peloton/notify.py`: Pushover alerts
-- `display/ui/`: screens, the login indicator, the settings PIN overlay and the Wi-Fi setup screen
+- `display/ui/`: screens; `display/ui/overlays/` the login padlock, stale-data clock, settings PIN and the Wi-Fi setup screen
 - `settings_page/`: the board's settings page (config form, PIN sign-in, logins, updates, power menu; its own service)
 - `self_update/`: `peloton-update` (channels, pre-flight, health check, rollback)
 - `driver/`: hardware/emulator selection

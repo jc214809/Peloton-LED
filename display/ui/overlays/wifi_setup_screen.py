@@ -5,7 +5,7 @@ import re
 from display.display import color_dict, draw_centered_text, get_text_width, loaded_fonts
 from driver import graphics
 from utils.wifi_setup import HOTSPOT_ADDRESS
-from .screen import Screen
+from ..screen import Screen
 
 # The settings server's port (settings_page/server.py PORT); not imported, to keep the display
 # free of the server's imports.
