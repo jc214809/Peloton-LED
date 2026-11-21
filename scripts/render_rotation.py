@@ -208,7 +208,7 @@ def _build_screens(display, detail_interval):
     return {'username': UsernameScreen(font_key=display['font'], color_key=display['color']),
             'discipline': DisciplinePageScreen(), 'lifetime': LifetimeOverviewScreen(),
             'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
-            'pr': PrCelebrationScreen(), 'status': StatusScreen(), 'goal': GoalScreen(),
+            'pr': PrCelebrationScreen(detail_interval=detail_interval), 'status': StatusScreen(), 'goal': GoalScreen(),
             'logo': LogoMaskScreen(), 'streak': StreakScreen(), 'versus': VersusScreen(),
             'countdown': CountdownScreen(),
             'journey': JourneyScreen(),

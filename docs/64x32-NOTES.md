@@ -179,13 +179,18 @@ star shrank away; now (64x64 unchanged, compared byte for byte):
   and at the outer ends of the blank rows above the bottom line. Not between
   the lines: those gaps are 4 rows, and a sparkle is 3, so it would touch text.
   `test_32_row_sparkles_never_touch_text` checks the widest values.
-- The bottom line takes turns (`COMPACT_SWAP_SECONDS`, 2 s): `+14 KJ`, then
-  `45 MIN CLASS`, then the discipline (`CYCLING`, in its icon's colour from
-  `discipline_color`, so it doesn't read as a second white value; white for
-  running and rowing, whose icon green and blue match the gain and class length), skipping any it
+- The bottom line takes turns: `+14 KJ`, then `45 MIN CLASS`, then the
+  discipline (`CYCLING`, in its icon's colour from `discipline_color`, so it
+  doesn't read as a second white value; white for running and rowing, whose
+  icon green and blue match the gain and class length), skipping any it
   doesn't have. It used to drop the class length when there was a gain, and
-  never named the discipline (Joel asked for it, 2026-11-19). 2 s, so three
-  turns fill the default card hold (4 s detail interval + 2 s).
+  never named the discipline (Joel asked for it, 2026-11-19).
+- The turns split the settled card's time evenly (`compact_turn`: one
+  `last_workout_detail_interval` + `CARD_HOLD_SECONDS`, so 2 s each for three
+  by default) and the last holds to the end; the screen gets the interval
+  like `LastWorkoutScreen` does. The first version looped fixed 2 s turns from
+  the end of the burst, so the gain came back for the card's last 0.3 s and
+  flickered just before the page changed (seen on a board, 2026-11-19).
 - A plain `NEW PR` (no output or split value) fills its empty middle line with
   the discipline in white, dropping to the info font when the discipline font is
   too wide (`TREAD BOOTCAMP`, `OUTDOOR WALKING`).
