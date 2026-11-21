@@ -426,7 +426,8 @@ def _build_manager(matrix, display, active, ui):
     manager.register('lifetime', ui.LifetimeOverviewScreen())
     manager.register('last_workout', ui.LastWorkoutScreen(
         detail_interval=display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)))
-    manager.register('pr', ui.PrCelebrationScreen())
+    manager.register('pr', ui.PrCelebrationScreen(
+        detail_interval=display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)))
     manager.register('celebration', ui.CelebrationScreen())
     manager.register('status', ui.StatusScreen())
     manager.register('goal', ui.GoalScreen())

@@ -108,11 +108,12 @@ def test_preview_rejects_malformed_page():
         find_latest_pr(_client([{'data': 'oops'}]), 'u', max_pages=1)
 
 
-def _render_32(summary, card_t):
+def _render_32(summary, card_t, detail_interval=4.0):
+    """The 32-row page card_t seconds after the card settles."""
     from display.ui.pr_celebration import SETTLE_SECONDS
     matrix = ImageMatrix(height=32)
     initialize_fonts(32)
-    screen = PrCelebrationScreen()
+    screen = PrCelebrationScreen(detail_interval=detail_interval)
     screen.on_enter(matrix, summary)
     screen.update(BURST_SECONDS + SETTLE_SECONDS + card_t)
     assert screen.render(matrix, summary)
@@ -140,21 +141,53 @@ def test_32_row_badges_step_aside_for_a_headline_too_wide_for_them(monkeypatch):
     assert not any(x < 7 or x > 56 for x, _ in _points(pixels, GOLD))  # 7 px margins: no star fits
 
 
+def _bottom(pixels, color):
+    return {p for p in _points(pixels, color) if p[1] >= 24}
+
+
 def test_32_row_bottom_line_takes_turns_between_gain_class_length_and_discipline():
-    from display.ui.pr_celebration import COMPACT_SWAP_SECONDS
     summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'previous_best_kj': 398,
                'duration_min': 30, 'discipline': 'Tread Bootcamp'}
-    bottom = lambda pixels, color: {p for p in _points(pixels, color) if p[1] >= 24}  # noqa: E731  one-line test helper
-    turns = [_render_32(summary, i * COMPACT_SWAP_SECONDS + 0.5) for i in range(4)]
-    assert bottom(turns[0], GREEN) and not bottom(turns[0], BLUE) and not bottom(turns[0], WHITE)
-    assert bottom(turns[1], BLUE) and not bottom(turns[1], GREEN)
+    # Default 4 s interval: the card is up 6 s, 2 s a turn.
+    turns = [_render_32(summary, i * 2.0 + 0.5) for i in range(3)]
+    assert _bottom(turns[0], GREEN) and not _bottom(turns[0], BLUE) and not _bottom(turns[0], WHITE)
+    assert _bottom(turns[1], BLUE) and not _bottom(turns[1], GREEN)
     # Running's icon green is too close to the gain's: white instead.
-    assert bottom(turns[2], WHITE) and not bottom(turns[2], GREEN) and not bottom(turns[2], BLUE)
-    assert max(x for x, _ in bottom(turns[2], WHITE)) <= 62
-    assert bottom(turns[3], GREEN)  # and round again
+    assert _bottom(turns[2], WHITE) and not _bottom(turns[2], GREEN) and not _bottom(turns[2], BLUE)
+    assert max(x for x, _ in _bottom(turns[2], WHITE)) <= 62
     # Without a class length or discipline the gain stays put.
-    steady = _render_32({**summary, 'duration_min': None, 'discipline': None}, COMPACT_SWAP_SECONDS + 0.5)
+    steady = _render_32({**summary, 'duration_min': None, 'discipline': None}, 4.5)
     assert _points(steady, GREEN)
+
+
+@pytest.mark.parametrize('detail_interval', [2.0, 4.0, 7.0])
+@pytest.mark.parametrize('previous, expected', [
+    (398, [GREEN, BLUE, (240, 70, 25)]),  # gain, class length, cycling
+    (None, [BLUE, (240, 70, 25)]),
+])
+def test_32_row_turns_share_the_card_and_never_come_back_as_it_ends(detail_interval, previous, expected):
+    """Regression: 2 s turns looped from the end of the burst, so the gain came back for the card's
+    last 0.3 s and flickered just before the page changed (Joel, 2026-11-19)."""
+    from display.ui.pr_celebration import CARD_HOLD_SECONDS
+    summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'previous_best_kj': previous,
+               'duration_min': 30, 'discipline': 'Cycling'}
+    shown = detail_interval + CARD_HOLD_SECONDS  # how long build_rotation_pages leaves the settled card up
+    share = shown / len(expected)
+    for index, color in enumerate(expected):
+        for t in (index * share + 0.05, (index + 1) * share - 0.05):
+            pixels = _render_32(summary, t, detail_interval)
+            assert _bottom(pixels, color), (index, t)
+            assert not any(_bottom(pixels, other) for other in expected if other != color), (index, t)
+    # Past the page's end (a slow frame) it still holds the last turn.
+    assert _bottom(_render_32(summary, shown + 1.0, detail_interval), expected[-1])
+
+
+def test_compact_turn_holds_the_last_turn_and_survives_a_missing_interval():
+    from display.ui.pr_celebration import SETTLE_SECONDS, compact_turn
+    assert [compact_turn(SETTLE_SECONDS + t, 3, 4.0) for t in (0.0, 1.99, 2.01, 4.01, 5.99, 6.3, 60)] == [
+        0, 0, 1, 2, 2, 2, 2]
+    assert compact_turn(0.0, 2, 4.0) == 0  # still settling
+    assert PrCelebrationScreen(detail_interval=None).detail_interval == 4.0
 
 
 @pytest.mark.parametrize('discipline, color', [
@@ -165,20 +198,17 @@ def test_32_row_bottom_line_takes_turns_between_gain_class_length_and_discipline
     ('Running', WHITE),  # icon green is too close to the gain's
 ])
 def test_32_row_discipline_takes_its_icon_colour_unless_it_clashes(discipline, color):
-    from display.ui.pr_celebration import COMPACT_SWAP_SECONDS
     summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'duration_min': 30,
                'discipline': discipline}
-    pixels = _render_32(summary, COMPACT_SWAP_SECONDS + 0.5)
-    assert {p for p in _points(pixels, color) if p[1] >= 24}
+    assert _bottom(_render_32(summary, 5.5), color)  # the second of two turns
 
 
 def test_32_row_plain_pr_names_the_discipline_and_fits_the_widest():
-    from display.ui.pr_celebration import COMPACT_SWAP_SECONDS
     pixels = _render_32({'is_pr': True, 'discipline': 'Tread Bootcamp', 'duration_min': 45}, 1.0)
     white = _points(pixels, WHITE)
     assert white and min(x for x, _ in white) >= 1 and max(x for x, _ in white) <= 62
     # Named once: the bottom line keeps the class length instead of repeating it.
-    later = _render_32({'is_pr': True, 'discipline': 'Tread Bootcamp', 'duration_min': 45}, COMPACT_SWAP_SECONDS + 0.5)
+    later = _render_32({'is_pr': True, 'discipline': 'Tread Bootcamp', 'duration_min': 45}, 5.5)
     assert {y for _, y in _points(later, WHITE)} == {y for _, y in white} and _points(later, BLUE)
     assert not _points(_render_32({'is_pr': True, 'discipline': None}, 1.0), WHITE)
 

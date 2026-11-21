@@ -6,6 +6,7 @@ from typing import Any, List, Optional, Tuple
 from driver import graphics
 from display.display import get_text_width, loaded_fonts
 from peloton.selection import normalize_discipline
+from .last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
 from .last_workout.stats import _fmt_split, _whole
 from .lifetime_overview import discipline_color
 from .screen import Screen
@@ -23,8 +24,6 @@ CARD_HOLD_SECONDS = 2.0
 _SPARKLE_SPOTS = [(5, 5), (58, 6), (13, 13), (50, 13), (3, 16), (60, 15)]
 # 32 rows: the outer ends of the blank rows above the bottom line; the value row's margins are added per card.
 _COMPACT_SPARKLE_SPOTS = [(2, 22), (61, 22)]
-# 32 rows: each bottom-line turn; three fill the default card hold (4 s detail interval + CARD_HOLD_SECONDS).
-COMPACT_SWAP_SECONDS = 2.0
 _COMPACT_BADGE_RADIUS = 4.5
 
 
@@ -68,6 +67,17 @@ def _label_color(discipline: str):
     return graphics.Color(*rgb)
 
 
+def compact_turn(card_t: float, count: int, detail_interval: float) -> int:
+    """Which of `count` bottom-line turns shows card_t seconds after the burst (32 rows).
+
+    The settled card is up for one detail interval plus CARD_HOLD_SECONDS (as build_rotation_pages
+    times the page); the turns share that evenly and the last one holds to the end, so none comes
+    back for a flicker as the page ends.
+    """
+    share = (detail_interval + CARD_HOLD_SECONDS) / count
+    return min(int(max(0.0, card_t - SETTLE_SECONDS) / share), count - 1)
+
+
 def pr_card_lines(summary: dict) -> Optional[Tuple[str, str, Optional[str]]]:
     """(headline, value, gain) for a PR summary, or None if nothing to show.
 
@@ -101,8 +111,10 @@ class PrCelebrationScreen(Screen):
     animated = True
     atomic_frames = True
 
-    def __init__(self):
+    def __init__(self, detail_interval: float = LAST_WORKOUT_DETAIL_INTERVAL_SECONDS):
         self.elapsed = 0.0
+        # The page's own interval (build_rotation_pages sizes the card with it), so 32-row turns fit the card.
+        self.detail_interval = detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
 
     def on_enter(self, matrix, state=None):
         self.elapsed = 0.0
@@ -184,7 +196,7 @@ class PrCelebrationScreen(Screen):
             _centered(matrix, value_font, 20, _WHITE, middle)
         turns = self._compact_bottom_turns(summary, gain, middle)
         if turns:
-            _centered(matrix, info_font, 30, *turns[int(card_t / COMPACT_SWAP_SECONDS) % len(turns)])
+            _centered(matrix, info_font, 30, *turns[compact_turn(card_t, len(turns), self.detail_interval)])
         margin = (matrix.width - value_width) // 2
         spots = list(_COMPACT_SPARKLE_SPOTS)
         if margin >= 6:
