@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import pytest
 
@@ -488,6 +489,19 @@ def test_pushover_uses_auth_envs_keys_and_never_the_logins(env, monkeypatch, tmp
     title, seen = sent[0]
     assert title.endswith(": Update rolled back")
     assert seen == {"PUSHOVER_APP_TOKEN": "t-real", "PUSHOVER_USER_KEY": "u-real", "PELOTON_PASSWORD": None}
+
+
+def test_pushover_imports_nothing_once_the_checkout_has_moved(env, monkeypatch, tmp_path):
+    # A failed rollback leaves the new version on disk; an import then would mix it with the old
+    # modules in memory. None in sys.modules makes any import of logins raise ImportError.
+    monkeypatch.setitem(sys.modules, "settings_page.logins", None)
+    sent = []
+    monkeypatch.setattr(update_module.notify, "send_pushover", lambda title, message: sent.append(title))
+    auth_env = tmp_path / "auth.env"
+    auth_env.write_text('PUSHOVER_APP_TOKEN="t"\n')
+    Updater(env.board, state=env.state, gh=env.gh, config_path=str(env.config),
+            auth_env=str(auth_env))._pushover("Update rollback FAILED", "m")
+    assert sent and sent[0].endswith(": Update rollback FAILED")
 
 
 def test_pushover_without_auth_env_still_asks_notify_which_logs_it(env, monkeypatch, tmp_path):
