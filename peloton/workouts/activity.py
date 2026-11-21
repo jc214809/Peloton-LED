@@ -91,14 +91,15 @@ def class_led(workout):
     return isinstance(identity, str) and bool(identity.strip())
 
 
-def _stamped(workouts, timezone_name):
-    """[(local timestamp, workout)] for completed, class-led workouts that have a time. The name page's
-    facts (period_stats, frame_stats, event_stats) all start here, so an untimed Just Meditate never
-    counts toward a total, a longest workout or an active day."""
+def _stamped(workouts, timezone_name, class_only=True):
+    """[(local timestamp, workout)] for completed workouts that have a time, class-led only unless
+    `class_only` is False. The name page's facts (period_stats, frame_stats, event_stats) all start
+    here, so an untimed Just Meditate never counts toward a total or a longest workout. Only the
+    active-days figure passes `class_only=False`: an outdoor run or walk is a day the rider was active."""
     rows = []
     for workout in workouts:
         stamp = workout_timestamp(workout, timezone_name)
-        if is_completed(workout) and class_led(workout) and stamp is not None:
+        if is_completed(workout) and (class_led(workout) or not class_only) and stamp is not None:
             rows.append((stamp, workout))
     return rows
 
@@ -124,7 +125,7 @@ def _stats(rows, zone):
     counts, _ = merge_instructor_counts({}, {}, done)
     return {'workouts': len(done), 'minutes': int(round(seconds / 60)), 'disciplines': disciplines,
             'instructor_counts': counts, 'instructors': len(counts), 'classes': len(classes),
-            'active_days': len({stamp.astimezone(zone).date() for stamp, _ in rows})}
+            'active_days': _active_days(rows, zone)}
 
 
 def _instructor_ids(workout):
@@ -143,7 +144,17 @@ def period_stats(workouts, start=None, end=None, timezone_name=None, now=None, d
             if _in_window(stamp, start, end, current)
             and (discipline is None or discipline_of(workout) == discipline)
             and (instructor is None or instructor in _instructor_ids(workout))]
-    return _stats(rows, current.tzinfo)
+    stats = _stats(rows, current.tzinfo)
+    if discipline is None and instructor is None:
+        every = [(stamp, workout) for stamp, workout in _stamped(workouts, timezone_name, class_only=False)
+                 if _in_window(stamp, start, end, current)]
+        stats['active_days'] = _active_days(every, current.tzinfo)
+    return stats
+
+
+def _active_days(rows, zone):
+    """How many distinct local days the (timestamp, workout) rows fall on."""
+    return len({stamp.astimezone(zone).date() for stamp, _ in rows})
 
 
 def _top(groups, limit):
@@ -162,9 +173,11 @@ def frame_stats(workouts, timezone_name=None, now=None):
             for stamp, workout in _stamped(workouts, timezone_name)]
     result = {}
     zone = current.tzinfo
+    every = _stamped(workouts, timezone_name, class_only=False)
     for key, (start, end) in frame_bounds(timezone_name, now).items():
         inside = [row for row in rows if _in_window(row[0], start, end, current)]
         stats = _stats([row[:2] for row in inside], zone)
+        stats['active_days'] = _active_days([row for row in every if _in_window(row[0], start, end, current)], zone)
         disciplines, instructors = {}, {}
         for row in inside:
             if row[2]:
