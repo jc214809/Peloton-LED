@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from peloton.workout_features import (BIKE_CURVE, bike_plan, build_row, discipline, planned_watts,
+from peloton.workouts.workout_features import (BIKE_CURVE, bike_plan, build_row, discipline, planned_watts,
                                       strength_asks)
 
 START = 1_700_000_000

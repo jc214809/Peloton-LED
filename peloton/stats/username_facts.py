@@ -9,13 +9,13 @@ facts take turns. The top three is a headline's own when that headline is a disc
 all time: lifetime counts are the Lifetime pages'), else the general ones take turns (frame_rankings,
 and each discipline's all-time top three). On the day of the account's anniversary, it is the first headline
 (anniversary_fact).
-Everything comes from the dashboard cache and the workout log (peloton.activity.frame_stats); the log's
+Everything comes from the dashboard cache and the workout log (peloton.workouts.activity.frame_stats); the log's
 figures stay empty until its backfill is complete, and then the page falls back to what's left.
 """
 from datetime import date
 
-from .instructors import top_instructors
-from .selection import normalize_discipline
+from ..feeds.instructors import top_instructors
+from ..selection import normalize_discipline
 from .totals import total_workout_count
 
 RANKS = ('TOP', '2ND', '3RD')

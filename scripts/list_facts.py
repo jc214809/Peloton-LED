@@ -21,9 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from peloton.selection import normalize_discipline  # noqa: E402
-from peloton.username_facts import (FRAME_ORDER, frame_facts, frame_rankings, frame_subjects,  # noqa: E402
+from peloton.stats.username_facts import (FRAME_ORDER, frame_facts, frame_rankings, frame_subjects,  # noqa: E402
                                     record_name_facts, scored_facts, shown_keys, username_details)
-from peloton.workout_log import WorkoutLog  # noqa: E402
+from peloton.workouts.workout_log import WorkoutLog  # noqa: E402
 
 DEMO_DISCIPLINES = (('cycling', 5), ('strength', 4), ('stretching', 2), ('walking', 2), ('running', 1),
                     ('yoga', 1), ('meditation', 1), ('bike_bootcamp', 1))

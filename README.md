@@ -539,12 +539,13 @@ Live mode cycles through every completed workout on the latest active day. Every
 - `peloton/config.py`, `peloton/config_rules.py`: loading and validating `config.json` (a table of checks), per-rider settings
 - `peloton/dashboard.py` (with its `dashboard_*.py` modules), `peloton/cache.py`: background refresh, token reload, snapshots, and recovery
 - `peloton/api.py`: authenticated requests and bounded history pagination
-- `peloton/workout_log.py`: every workout as a slim row, the source of everything derived
-- `peloton/activity.py`, `journey.py`, `goals.py`, `instructors.py`: streaks, heatmap, time frames, journey miles, milestones, instructor counts
-- `peloton/username_facts.py`: the name page's scored highlights
-- `peloton/workout_features.py`, `workout_compare.py`, `workout_insights.py`, `insight_lines.py`, `workout_rows.py`: workout compare and the board's insight pages
-- `peloton/timestamps.py`, `selection.py`, `records.py`, `totals.py`: shared data and lifetime pagination rules
-- `peloton/summaries.py`: metric normalization for screens and reports
+- `peloton/feeds/`: the challenges, Club Peloton, booked-class, goals and instructor parsers
+- `peloton/workouts/workout_log.py`: every workout as a slim row, the source of everything derived
+- `peloton/workouts/activity.py`, `peloton/stats/journey.py`, `peloton/feeds/goals.py`, `peloton/feeds/instructors.py`: streaks, heatmap, time frames, journey miles, milestones, instructor counts
+- `peloton/stats/username_facts.py`: the name page's scored highlights
+- `peloton/workouts/workout_features.py`, `workout_compare.py`, `workout_insights.py`, `insight_lines.py`, `workout_rows.py`: workout compare and the board's insight pages
+- `peloton/timestamps.py`, `selection.py`, `peloton/stats/records.py`, `peloton/stats/totals.py`: shared data and lifetime pagination rules
+- `peloton/stats/summaries.py`: metric normalization for screens and reports
 - `peloton/screen_times.py`, `schedule.py`: screen durations, and polling Peloton less often overnight
 - `peloton/notify.py`: Pushover alerts
 - `display/ui/`: screens, the login indicator, the settings PIN overlay and the Wi-Fi setup screen

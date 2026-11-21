@@ -6,7 +6,7 @@ Spec: WORKOUT-COMPARE-SPEC.md (kept outside this repo), section 3. `build_row` i
   ride   = GET /api/ride/<ride_id>/details                      (may be None)
 
 Standard library only and import-free of the display code. Bumping ROW_VERSION makes every stored
-row stale (peloton/workout_rows.py rebuilds them from the saved raw files).
+row stale (peloton/workouts/workout_rows.py rebuilds them from the saved raw files).
 """
 import collections
 import logging

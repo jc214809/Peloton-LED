@@ -567,7 +567,7 @@ def test_profile_keeps_created_at_and_no_personal_fields(tmp_path):
 def test_the_anniversary_comes_from_the_profile_in_the_derived_figures(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path, {'timezone': 'America/New_York'})
     client.get_me.return_value = dict(client.get_me.return_value, created_at=1604844000)   # 2020-11-08 09:20 EST
-    with patch('peloton.workout_log.WorkoutLog.derived', return_value={}) as derived:
+    with patch('peloton.workouts.workout_log.WorkoutLog.derived', return_value={}) as derived:
         dashboard.refresh()
     assert derived.call_args.kwargs['member_since'] == 1604844000
 
@@ -587,7 +587,7 @@ def _insight_setup(tmp_path, config=None, discipline='cycling', status='COMPLETE
 
 
 def _fake_row(workout_id='w1', output=112):
-    from peloton.workout_features import ROW_VERSION
+    from peloton.workouts.workout_features import ROW_VERSION
     return {'id': workout_id, 'v': ROW_VERSION, 'start': 1_800_000_000, 'disc': 'cycling', 'wtype': 'class',
             'ctype': 'Music', 'mode': 'plain', 'outdoor': False, 'dur': 1200, 'complete': True,
             'work': {'output': output, 'heart_rate': None}, 'eff': None, 'strive': None,
@@ -595,7 +595,7 @@ def _fake_row(workout_id='w1', output=112):
 
 
 def _seed_peers(dashboard, outputs):
-    from peloton.workout_rows import RowStore, default_rows_path
+    from peloton.workouts.workout_rows import RowStore, default_rows_path
     store = RowStore(default_rows_path(dashboard.cache_path))
     for i, output in enumerate(outputs):
         row = _fake_row(f'p{i}', output)
@@ -666,7 +666,7 @@ def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_the
     dashboard, client, _ = _insight_setup(tmp_path, age_days=0)  # just finished: still settling
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
     rows = iter([_fake_row('w1', 112), _fake_row('w1', 112), _fake_row('w1', 150), _fake_row('w1', 150)])
-    from peloton.workout_rows import RowStore
+    from peloton.workouts.workout_rows import RowStore
     saves = []
     real_save = RowStore.save
     with patch('peloton.dashboard_insight.build_row', side_effect=lambda *_: next(rows)) as build, \
@@ -697,7 +697,7 @@ def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_the
 
 
 def test_insights_are_recomputed_only_when_the_row_store_changes(tmp_path):
-    from peloton.workout_insights import insights as real_insights
+    from peloton.workouts.workout_insights import insights as real_insights
     dashboard, client, token = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
     with patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)), \
@@ -771,7 +771,7 @@ def test_a_failing_row_save_is_logged_and_the_insight_still_shows(tmp_path, capl
     dashboard, client, _ = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
     with patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)), \
-            patch('peloton.workout_rows.RowStore.save', side_effect=OSError('read-only')):
+            patch('peloton.workouts.workout_rows.RowStore.save', side_effect=OSError('read-only')):
         dashboard.refresh()
     assert 'Could not save the workout rows' in caplog.text
     assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'
@@ -825,7 +825,7 @@ def test_the_board_keeps_every_shown_insight_in_order(tmp_path):
 def test_the_board_store_drops_rows_past_the_window_when_it_loads(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114])
-    from peloton.workout_rows import RowStore, default_rows_path
+    from peloton.workouts.workout_rows import RowStore, default_rows_path
     store = RowStore.load(default_rows_path(dashboard.cache_path))
     old = _fake_row('old')
     old['start'] = time.time() - 800 * 86400

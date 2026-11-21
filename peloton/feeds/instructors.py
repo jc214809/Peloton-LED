@@ -10,7 +10,7 @@ by ID and shows up once their name is known.
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .selection import is_completed
+from ..selection import is_completed
 
 
 def _instructor(workout):

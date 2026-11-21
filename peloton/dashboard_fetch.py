@@ -9,13 +9,13 @@ import time
 
 import requests
 
-from .booked_classes import reservation_ids, slim_class
-from .challenges import parse_challenges
-from .club import NOT_A_MEMBER, parse_score
+from .feeds.booked_classes import reservation_ids, slim_class
+from .feeds.challenges import parse_challenges
+from .feeds.club import NOT_A_MEMBER, parse_score
 from .config import DEFAULTS
 from .selection import last_active_day
 from .timestamps import workout_date, workout_timestamp
-from .goals import week_start
+from .feeds.goals import week_start
 
 logger = logging.getLogger('peloton-led.dashboard')
 

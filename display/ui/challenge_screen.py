@@ -3,7 +3,7 @@
 64 rows ("C1", Joel's pick on 2026-11-14): the title in gold, a smooth ring from the current tier to the next
 one in the next tier's colour, the number and unit inside it, and `497 TO 6K` along the bottom.
 32 rows ("A"): the title, the number, a bar from tier to tier, then the current tier and `497 TO 6K`.
-State: one record from peloton.challenges (validated again here: the cache can hold anything).
+State: one record from peloton.feeds.challenges (validated again here: the cache can hold anything).
 
 Each time the page is shown it plays a short intro, like the journey page's (20 fps, settled by INTRO_SECONDS):
 the title, unit and bottom line are there from the first frame; the ring (64 rows) or the bar (32 rows) fills
@@ -17,7 +17,7 @@ from functools import lru_cache
 from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
-from peloton.challenges import MONTH_ABBREVIATIONS, UNEARNED, tier_progress, valid_challenge
+from peloton.feeds.challenges import MONTH_ABBREVIATIONS, UNEARNED, tier_progress, valid_challenge
 from .journey_screen import ease_out
 from .screen import Screen
 

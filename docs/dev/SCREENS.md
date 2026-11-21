@@ -46,7 +46,7 @@ History (2026-11-14, Joel): four hand-drawn frames swapped at 8 fps came first (
 
 ## Models (`models/`)
 
-Typed workout data models for each discipline: `cycling.py`, `running.py`, `rowing.py`, `strength.py`, all extending `models/core.py`. Used by `peloton/summaries.py` to normalize raw API payloads into structured workout summaries.
+Typed workout data models for each discipline: `cycling.py`, `running.py`, `rowing.py`, `strength.py`, all extending `models/core.py`. Used by `peloton/stats/summaries.py` to normalize raw API payloads into structured workout summaries.
 
 ## Emulator
 

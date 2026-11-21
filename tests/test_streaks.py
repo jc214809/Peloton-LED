@@ -9,10 +9,10 @@ from display.ui.streak_risk_screen import StreakRiskScreen
 from display.ui.streak_screen import (FLAME_FRAME_SECONDS, FLAME_H, FLAME_RAMP, FLAME_W, SPARK_SECONDS,
                                       StreakScreen, _spark, daily_streak_lines, flame_color, flame_pixels,
                                       since_text, streak_lines, streak_views)
-from peloton.activity import daily_streak_start
+from peloton.workouts.activity import daily_streak_start
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import load_config
-from peloton.totals import parse_streaks
+from peloton.stats.totals import parse_streaks
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 

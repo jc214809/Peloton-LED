@@ -12,7 +12,7 @@ from display.ui.challenge_screen import (GOLD, INTRO_SECONDS, RING_TRACK, SWEEP_
 from peloton import dashboard as dashboard_module
 from peloton import dashboard_fetch
 from peloton.cache import load_snapshot, save_snapshot
-from peloton.challenges import (UNEARNED, format_number, parse_challenges, short_title, shown_challenges,
+from peloton.feeds.challenges import (UNEARNED, format_number, parse_challenges, short_title, shown_challenges,
                                 slim_challenge, tier_progress, valid_challenge)
 from peloton.config import DEFAULTS
 from peloton_led import build_rotation_pages

@@ -312,7 +312,7 @@ tokens and renewal.
 
 ### PR A: the log (no visible change)
 
-1. Log module (`peloton/workout_log.py`): row trimming, load/save, merge by
+1. Log module (`peloton/workouts/workout_log.py`): row trimming, load/save, merge by
    ID, ownership check, derived values (week, instructors, journey miles,
    latest day).
 2. API: a single-page fetch, and a page-by-page history iterator for

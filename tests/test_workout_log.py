@@ -11,10 +11,10 @@ import requests
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from peloton.goals import weekly_progress
-from peloton.instructors import merge_instructor_counts
-from peloton.journey import merge_distance_totals
-from peloton.workout_log import LOG_VERSION, WorkoutLog, default_log_path, trim
+from peloton.feeds.goals import weekly_progress
+from peloton.feeds.instructors import merge_instructor_counts
+from peloton.stats.journey import merge_distance_totals
+from peloton.workouts.workout_log import LOG_VERSION, WorkoutLog, default_log_path, trim
 import peloton.dashboard as dashboard_module
 import peloton.dashboard_history as dashboard_history
 from tests.test_dashboard import recent_fetches, setup_dashboard
@@ -212,7 +212,7 @@ def test_default_log_path_sits_beside_the_cache(tmp_path):
 def test_save_failure_leaves_no_temporary_file(tmp_path):
     log = WorkoutLog(tmp_path / 'log.json')
     log.merge([_w('w1')])
-    with patch('peloton.workout_log.json.dump', side_effect=ValueError('boom')):
+    with patch('peloton.workouts.workout_log.json.dump', side_effect=ValueError('boom')):
         with pytest.raises(ValueError):
             log.save()
     assert list(tmp_path.iterdir()) == []
@@ -405,7 +405,7 @@ def test_latest_day_longer_than_one_page_is_shown_whole(tmp_path):
 def test_this_week_is_complete_before_the_backfill_finishes(tmp_path, monkeypatch):
     # A frozen clock, Wednesday noon of last week: on the real one, the first
     # hour of a Monday has no room for 30 rides this week.
-    import peloton.goals as goals
+    import peloton.feeds.goals as goals
     last_week = datetime.fromtimestamp(NOW, NEW_YORK) - timedelta(days=7)
     monday = (last_week - timedelta(days=last_week.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     frozen = monday + timedelta(days=2, hours=12)

@@ -234,8 +234,8 @@ branch `config-validation-table`)
 > allowlist) and `load_snapshot` (a table of repairs in `peloton/cache.py`).
 >
 > Part D is done: `_callouts` (tally per callout, then write the fields), `build_row` (one helper per
-> field group) and `bike_plan` (segment kinds, samples, effort runs) in `peloton/workout_features.py`,
-> and `output_insight` (direction check and one builder per verdict) in `peloton/workout_insights.py`.
+> field group) and `bike_plan` (segment kinds, samples, effort runs) in `peloton/workouts/workout_features.py`,
+> and `output_insight` (direction check and one builder per verdict) in `peloton/workouts/workout_insights.py`.
 
 > Part H is done: `Updater._update` in `self_update/update.py` (the switch, install, restart and
 > health-check try block is now `_switch_and_check`; `tests/test_updater_update_paths.py` pins
@@ -254,6 +254,8 @@ Decided 2026-11-21 (Joel approved after the import check):
   `selection`); `activity` goes to `workouts/` and `records` to `stats/`, which breaks the
   workouts/stats cycle. Layers: `workouts` > `stats` > `feeds`. This replaces the grouping below.
 - `_insights_model.py` is untracked and unimported: leave it.
+
+Done 2026-11-21 (branch `peloton-subpackages`): `feeds/`, `stats/`, `workouts/` as above; `schedule` stays in `peloton/` (it's refresh timing, not a statistic), and the layers contract is in `pyproject.toml`. The display overlays move (`display/ui/overlays/`) is a second PR.
 
 Branch `peloton-subpackages`. Runs with no other agent open, because it touches
 imports in nearly every file.

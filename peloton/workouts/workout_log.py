@@ -10,11 +10,11 @@ import logging
 import os
 from pathlib import Path
 
-from .goals import weekly_progress
-from .instructors import merge_instructor_counts
-from .journey import merge_distance_totals
-from .selection import discipline_of
-from .timestamps import workout_timestamp
+from ..feeds.goals import weekly_progress
+from ..feeds.instructors import merge_instructor_counts
+from ..stats.journey import merge_distance_totals
+from ..selection import discipline_of
+from ..timestamps import workout_timestamp
 
 logger = logging.getLogger('peloton-led.workout-log')
 

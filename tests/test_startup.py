@@ -666,7 +666,7 @@ def test_scheduled_brightness_handles_day_and_overnight_ranges():
 
 
 def test_lifetime_icon_page_renders_real_pixels():
-    from peloton.totals import lifetime_overview_pages
+    from peloton.stats.totals import lifetime_overview_pages
 
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)

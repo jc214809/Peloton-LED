@@ -2,8 +2,8 @@
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from .selection import is_completed
-from .timestamps import workout_timestamp
+from ..selection import is_completed
+from ..timestamps import workout_timestamp
 
 
 def week_day(timezone_name=None, now=None):
@@ -122,7 +122,7 @@ def discipline_target_reached(count):
 
 def _discipline_counts(totals):
     """(slug, label, count) for each discipline in Peloton's overview totals, not the total."""
-    from .selection import normalize_discipline
+    from ..selection import normalize_discipline
     for label, count in (totals or {}).items():
         slug = normalize_discipline(label)
         if (slug and slug != 'total_workouts' and isinstance(count, int)

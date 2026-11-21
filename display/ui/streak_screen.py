@@ -198,7 +198,7 @@ def streak_views(streaks):
 
 
 class StreakScreen(FlickeringFlame, Screen):
-    """state is the snapshot's 'streaks' dict (see peloton.totals.parse_streaks),
+    """state is the snapshot's 'streaks' dict (see peloton.stats.totals.parse_streaks),
     plus 'daily_start' and 'today' for the daily footer and 'view' ('weekly'
     or 'daily'). Without a 'view', or when that one has nothing to show, the
     first available view is drawn. The flame burns (`flame_pixels`)."""

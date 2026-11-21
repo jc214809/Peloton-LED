@@ -8,17 +8,17 @@ in `display.rotation` (old configs' 0s are switched off by load_config).
 import time
 from typing import Any, NamedTuple
 
-from peloton.activity import daily_streak_start
-from peloton.booked_classes import next_booking
-from peloton.challenges import shown_challenges
-from peloton.club import club_page
-from peloton.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
+from peloton.workouts.activity import daily_streak_start
+from peloton.feeds.booked_classes import next_booking
+from peloton.feeds.challenges import shown_challenges
+from peloton.feeds.club import club_page
+from peloton.feeds.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
                            week_start)
-from peloton.journey import journey_progress
+from peloton.stats.journey import journey_progress
 from peloton.screen_times import page_seconds
 from peloton.selection import normalize_discipline
-from peloton.totals import lifetime_overview_pages, total_workout_count
-from peloton.username_facts import shown_keys, username_details
+from peloton.stats.totals import lifetime_overview_pages, total_workout_count
+from peloton.stats.username_facts import shown_keys, username_details
 from display.ui.celebration_screen import discipline_noun, milestone_noun
 from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details, stats_phase_seconds
 from display.ui.pr_celebration import (BURST_SECONDS as PR_BURST_SECONDS, CARD_HOLD_SECONDS as PR_CARD_HOLD_SECONDS,
@@ -181,7 +181,7 @@ def _heatmap_pages(inputs):
     """Activity heatmap: the last 12 weeks, when there are activity days."""
     if not inputs.snapshot.get('activity_days'):
         return []
-    from peloton.activity import HEATMAP_WEEKS
+    from peloton.workouts.activity import HEATMAP_WEEKS
     today = week_start(inputs.zone)[1].date().isoformat()
     return [('heatmap', {'days': inputs.snapshot['activity_days'], 'today': today, 'weeks': HEATMAP_WEEKS},
              inputs.seconds('heatmap'))]
@@ -267,7 +267,7 @@ def build_rotation_pages(snapshot, dashboard, display, username, matrix_height, 
     rider per multi-user cycle so the head-to-head page shows once.
     pass_index: which rotation pass this is; the streak page shows the
     weekly streak on even passes and the daily one on odd passes, and the
-    name page picks its varied highlights by it (peloton.username_facts).
+    name page picks its varied highlights by it (peloton.stats.username_facts).
     """
     rotation = display.get('rotation', DEFAULT_ROTATION)
     zone = display.get('timezone') or (snapshot.get('me') or {}).get('timezone')

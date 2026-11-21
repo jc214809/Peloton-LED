@@ -38,12 +38,12 @@ class PreviewDashboard:
         return bool(summary.get('is_pr'))
 
     def pending_milestones(self, snapshot):
-        from peloton.goals import STEP_CELEBRATION_WINDOW
+        from peloton.feeds.goals import STEP_CELEBRATION_WINDOW
         total = snapshot.get('totals', {}).get('Total Workouts') or 0
         return [m for m in self.milestones if 0 <= total - m < STEP_CELEBRATION_WINDOW][-1:]
 
     def pending_discipline_milestones(self, snapshot):
-        from peloton.goals import reached_discipline_milestones
+        from peloton.feeds.goals import reached_discipline_milestones
         return reached_discipline_milestones(snapshot.get('totals'))[:1]
 
 
@@ -74,8 +74,8 @@ def insights_enabled(options):
 
 def add_log_figures(snapshot, options):
     """Instructor counts and journey miles live in the workout log, not the cache."""
-    from peloton.journey import uses_metric
-    from peloton.workout_log import WorkoutLog, default_log_path
+    from peloton.stats.journey import uses_metric
+    from peloton.workouts.workout_log import WorkoutLog, default_log_path
     path = Path(getattr(options, 'log', None) or default_log_path(options.cache))
     if not path.exists():
         return
@@ -89,12 +89,12 @@ def add_log_figures(snapshot, options):
 
 def load_snapshot_for(options):
     if options.demo:
-        from peloton.challenges import parse_challenges
+        from peloton.feeds.challenges import parse_challenges
         import time
 
         from peloton.demo import demo_bookings, demo_club, demo_data
-        from peloton.summaries import summarize_workout
-        from peloton.totals import extract_discipline_totals, parse_streaks
+        from peloton.stats.summaries import summarize_workout
+        from peloton.stats.totals import extract_discipline_totals, parse_streaks
         data = demo_data()
         from peloton.dashboard_state import with_demo_insight
         switch = {'workout_insights': insights_enabled(options)}

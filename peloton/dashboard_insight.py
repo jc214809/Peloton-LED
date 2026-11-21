@@ -10,13 +10,13 @@ import time
 import requests
 
 from .dashboard_fetch import INSIGHT_RETRY_SECONDS
-from .insight_lines import board_insights
-from .instructors import class_numbers
-from .workout_compare import DISCIPLINES as INSIGHT_DISCIPLINES
-from .workout_features import build_row, discipline as row_discipline
-from .workout_insights import insights, milestone_insight, with_milestone
-from .workout_log import trim
-from .workout_rows import RowStore, default_rows_path, trim_for_board
+from .workouts.insight_lines import board_insights
+from .feeds.instructors import class_numbers
+from .workouts.workout_compare import DISCIPLINES as INSIGHT_DISCIPLINES
+from .workouts.workout_features import build_row, discipline as row_discipline
+from .workouts.workout_insights import insights, milestone_insight, with_milestone
+from .workouts.workout_log import trim
+from .workouts.workout_rows import RowStore, default_rows_path, trim_for_board
 
 logger = logging.getLogger('peloton-led.dashboard')
 

@@ -1,6 +1,6 @@
 """Workout compare on the board: what the insight frames show for one insight. Standard library only.
 
-`board_view(code, facts)` turns an insight's code and facts (peloton/workout_insights.py) into the content of the
+`board_view(code, facts)` turns an insight's code and facts (peloton/workouts/workout_insights.py) into the content of the
 card, bars and sentence frames (`display/ui/last_workout_screen.py` draws them). Every line is upper case and at most
 LINE_MAX characters, the width of the `stats` font's 60 px (a fixed 4 px advance on both boards), so this module
 wraps by character count and imports nothing. Only a movement name on the reason line may run longer: it scrolls.
@@ -277,7 +277,7 @@ def _rule(code):
     return None
 
 
-# Instructor milestones (peloton/workout_insights.milestone_insight): words only, no figure, gold.
+# Instructor milestones (peloton/workouts/workout_insights.milestone_insight): words only, no figure, gold.
 EDGE_MAX = 16              # the 64x32 page's lines run edge to edge (as on the name page)
 MONTHS = ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
 WELCOME_FOOTER = 'WELCOME!'

@@ -7,7 +7,7 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 ```
 1 More head-to-head stats ── independent (facts-engine step 1's `period_stats` is built)
 2 Journey moments ── after the journey redesign (journey-mile-groups) merges
-3 Workout graphs ── research first; builds on `performance_graph` in peloton/summaries.py and the workout pages
+3 Workout graphs ── research first; builds on `performance_graph` in peloton/stats/summaries.py and the workout pages
 4 Name page together facts ── shares figures with item 1 (head to head)
 5 Name page facts settings and log fields ── maybe
 6 Workout compare: Cardio classes ── unlikely (measured 2026-11-12: too rare to say much); independent
@@ -58,7 +58,7 @@ Notes:
 - This changes today's 64x64 page, so its byte-identical check doesn't apply to `versus`; check the other pages are unchanged and preview with `scripts/render_rotation.py --height 64 --rival <cache>`.
 - 32 rows keeps one stat at a time (labels and big numbers already rotate there); the page's minimum duration grows with the number of stats shown, so pick a per-pass set there too.
 - Optional: a settings-page choice of which stats compete (the Rotation card's Head to head row, or a small section).
-- Depends on: nothing. Per-week and per-month figures come from a helper over the workout log in `peloton/activity.py`, fed via `WorkoutLog.derived` like `streak_week_workouts`; every candidate field is already in the log, so no `LOG_VERSION` bump. The facts engine's step 1 added `period_stats` / `frame_stats` in `peloton/activity.py` (per-window counts from the log, rolling windows, in `WorkoutLog.derived` as `time_frames`; Joel prefers a rolling 30 days to the calendar month); extend them rather than adding a new pass over the log.
+- Depends on: nothing. Per-week and per-month figures come from a helper over the workout log in `peloton/workouts/activity.py`, fed via `WorkoutLog.derived` like `streak_week_workouts`; every candidate field is already in the log, so no `LOG_VERSION` bump. The facts engine's step 1 added `period_stats` / `frame_stats` in `peloton/workouts/activity.py` (per-window counts from the log, rolling windows, in `WorkoutLog.derived` as `time_frames`; Joel prefers a rolling 30 days to the calendar month); extend them rather than adding a new pass over the log.
 
 ### 2. Journey moments: arrival, turning for home, and the 32-row hand-off
 The redesigned journey page (`display/ui/journey_screen.py`, 2026-11-08) opens each step with a fill, a count-up, a pulsing tip and the groups coming in. Joel chose these three for later:
@@ -76,7 +76,7 @@ Notes:
 ### 3. Workout graphs: more of what Peloton records during a class
 Peloton records heart rate, output, cadence and more every 5 seconds of a class, and the board draws only one of them. This item is to decide which of the others deserve a graph slide on the workout pages, then build those. Research first: a mock-up of each candidate at 64x64 and 64x32 from the saved real workouts in `perf_graphs/` (91 of them), and Joel picks.
 
-**What the board draws today.** One graph slide per workout: output (W) when the workout has it, otherwise heart rate (BPM), then the heart-rate zones bar. `peloton/summaries.py` `performance_graph` averages the series into 60 columns (`GRAPH_POINTS`, one per pixel column of a 64-px panel) and colours each column by heart-rate zone; `display/ui/last_workout_screen.py` draws it. `rotating_details` appends the slides (`kind`: `graph`, `zones`, `muscles`), each holds `GRAPH_FRAME_EXTRA_SECONDS` longer, and `build_rotation_pages` sizes the page from the same list. Everything else the workout pages show is a number.
+**What the board draws today.** One graph slide per workout: output (W) when the workout has it, otherwise heart rate (BPM), then the heart-rate zones bar. `peloton/stats/summaries.py` `performance_graph` averages the series into 60 columns (`GRAPH_POINTS`, one per pixel column of a 64-px panel) and colours each column by heart-rate zone; `display/ui/last_workout_screen.py` draws it. `rotating_details` appends the slides (`kind`: `graph`, `zones`, `muscles`), each holds `GRAPH_FRAME_EXTRA_SECONDS` longer, and `build_rotation_pages` sizes the page from the same list. Everything else the workout pages show is a number.
 
 **What Peloton sends that isn't a graph yet** (counts are of the 91 saved workouts, in `docs/DATA-POINTS.md` terms):
 - Time series, one sample every 5 s: `cadence`, `resistance` and `speed` (bike, 13 workouts); `pace` (tread, 11) and `incline` (treadmill only, 7); `altitude` (outdoor, 3); `stroke_rate` and `split_pace` (row, 13). Heart rate (86) and output (33) are the two already used.
@@ -97,11 +97,11 @@ Peloton records heart rate, output, cadence and more every 5 seconds of a class,
 - Which metric per equipment, and whether `MUSCLE_DISCIPLINES`-style per-discipline lists are the right pattern for choosing.
 - 64x32 has half the height (about 15 usable rows with a title and caption), so a graph there may need to drop the zone colouring or the caption.
 
-**Constraints.** 60 columns, no axes (a caption states the peak and unit; labels fit 15 characters of the `stats` font); workouts without a heart-rate monitor or without a series must drop the slide, as they do now (see "Why some workouts lack a stat" in `docs/DATA-POINTS.md`); the downsampling must stay in `peloton/summaries.py` (business logic out of the screen) and be tested with real saved payloads.
+**Constraints.** 60 columns, no axes (a caption states the peak and unit; labels fit 15 characters of the `stats` font); workouts without a heart-rate monitor or without a series must drop the slide, as they do now (see "Why some workouts lack a stat" in `docs/DATA-POINTS.md`); the downsampling must stay in `peloton/stats/summaries.py` (business logic out of the screen) and be tested with real saved payloads.
 
 **To do the work.** Extend `performance_graph` (or add siblings) to return any named series; add the slide `kind`s to `rotating_details`; drawing in `display/ui/`; update `docs/DATA-POINTS.md` (its "Output / heart-rate graph" row and stats-per-workout table) and the README's workout-page section. Preview with `scripts/render_rotation.py` at both heights; the other pages must stay byte-identical. Depends on: nothing.
 
-A separate, later idea: charts of trends over time from the workout log (workouts per week as bars, this year against last year, the mix of disciplines by month, which weekdays and hours you work out), reusing `peloton/activity.py` windows the way the heatmap page does. Not part of this item.
+A separate, later idea: charts of trends over time from the workout log (workouts per week as bars, this year against last year, the mix of disciplines by month, which weekdays and hours you work out), reusing `peloton/workouts/activity.py` windows the way the heatmap page does. Not part of this item.
 
 ### 4. Name page: together facts (was facts-engine step 7)
 Facts about both riders on a two-rider board (`TOGETHER` / `31 WORKOUTS`, `BOTH TOOK` an instructor, `SAME CLASS`), from each rider's `period_stats`, shown once a cycle on the rider whose rotation gets `rivals`. Details: `docs/NAME-PAGE-FACTS.md` ("Step 7").
@@ -148,12 +148,12 @@ Every other Cardio data point, measured 2026-11-12 over all 134 Cardio workouts 
 
 If it's built (the shape that measured best: loosened rule, extremes only):
 - Decide first whether an "about your usual" line is worth showing (today `effort_insight` only speaks at the extremes, and the board shows nothing otherwise). It would be the only discipline that speaks when nothing stands out.
-- Rules in `peloton/workout_compare.py` (a Cardio peer rule beside `is_peer`) and `peloton/workout_insights.py` (`NOUN`, and whatever the "usual" line needs); board wording in `peloton/insight_lines.board_view` (headline, sentence, `STRIVE PER MIN` bars, footer such as `12 CARDIO CLASSES`). Tests on hand-made rows, plus the real-row fixture if it gains Cardio workouts.
+- Rules in `peloton/workouts/workout_compare.py` (a Cardio peer rule beside `is_peer`) and `peloton/workouts/workout_insights.py` (`NOUN`, and whatever the "usual" line needs); board wording in `peloton/workouts/insight_lines.board_view` (headline, sentence, `STRIVE PER MIN` bars, footer such as `12 CARDIO CLASSES`). Tests on hand-made rows, plus the real-row fixture if it gains Cardio workouts.
 - Board rows: `build_board_rows.py` / `trim_for_board` keep only `DISCIPLINES`, so the boards need a re-push (`scripts/push_workout_rows.sh`) once Cardio is in. No `ROW_VERSION` bump: the rows already carry Strive and length.
 - Depends on: nothing.
 
 ### 30. Weekly goals from Peloton's own Activity Goals
-The Goals page (`display/ui/goal_screen.py`) reads its targets from config (`weekly_goals`: `workouts`, `minutes`, `active_days`; `peloton/config.py` `_validate_weekly_goals`, per-rider override) and works out progress itself (`peloton/goals.py` `weekly_progress`: local Monday 00:00 to now, completed workouts, minutes from duration, distinct local dates). Peloton's app has its own weekly "Activity Goals" card with the same three goals, so the rider sets them twice.
+The Goals page (`display/ui/goal_screen.py`) reads its targets from config (`weekly_goals`: `workouts`, `minutes`, `active_days`; `peloton/config.py` `_validate_weekly_goals`, per-rider override) and works out progress itself (`peloton/feeds/goals.py` `weekly_progress`: local Monday 00:00 to now, completed workouts, minutes from duration, distinct local dates). Peloton's app has its own weekly "Activity Goals" card with the same three goals, so the rider sets them twice.
 
 **The endpoint** (found 2026-11-15 in the members.onepeloton.com `_app` JavaScript bundle, `GetUserGoals`; every `api.onepeloton.com` goal path returns 404): `GET https://progress-tracking.prod.k8s.onepeloton.com/api/users/{user_id}/goals` (`users`, plural). It takes the board's bearer token and `peloton-platform: web`, and returns about 800 bytes:
 
@@ -217,7 +217,7 @@ Surveyed 2026-11-12 on every 64x64 page and frame (Jen's real data plus a Tread 
 The work: in `display/ui/last_workout_screen.py` the 64-row stats phase places the graph from `mid_y` (`label_y = mid_y - 8`, graph `label_y + 4` to `last_row_y - 2`); give the graph frame its own `label_y` a fixed gap under the title (`block_y`), keeping the heart-rate row at the bottom. Mock up first with a one-line and a two-line title (Tread Bootcamp and Bike Bootcamp) and the heart-rate graph (no output), then Joel picks. The zones and muscles slides can stay where they are, or follow the graph so the slides line up; decide from the mock-ups. Only the 64x64 graph frames change: other pages and frames stay byte-identical; update the README's workout screenshots. 64x32 is unchanged (no spare rows). Depends on: nothing; goes with item 3, "Workout graphs" (more metrics) if both are done.
 
 ### 10. Trend charts from the workout log
-Already named under item 3 (Workout graphs) as a later idea; make it its own item. Pages from `peloton/activity.py` windows, like the heatmap: workouts per week as 12 bars, this year against last year by month, discipline mix by month, weekday and hour-of-day pattern. 64x64 first; 64x32 needs one chart per page.
+Already named under item 3 (Workout graphs) as a later idea; make it its own item. Pages from `peloton/workouts/activity.py` windows, like the heatmap: workouts per week as 12 bars, this year against last year by month, discipline mix by month, weekday and hour-of-day pattern. 64x64 first; 64x32 needs one chart per page.
 
 ### 11. Yearly goal and pace
 `ON PACE FOR 312` / `12 AHEAD OF LAST YEAR`: a yearly workouts (or minutes) target next to the weekly goals, from the log and `comparison_window`. Settings: a field on the Goals card per rider. Fits as a Goals-screen frame or a countdown page.
@@ -227,7 +227,7 @@ A Monday page (and an optional Pushover) summing last week: workouts, minutes, b
 
 ### 15. Weekly insights: looking back over the whole past week
 Insights today compare one workout with similar earlier ones. This is the same idea for the week just finished: a page (or two) shown for the first day or two of the new week, then gone. Open-ended on purpose: first look through the data and see what's worth saying, then pick. Starting points:
-- Run the checks over each past week of the workout log (`peloton/activity.py` windows; `frame_stats` already has "this week" and "last week") and the saved rows (`RowStore`), and see which weeks have something to say: more or fewer workouts, minutes or active days than the usual week, a PR, the most output in a week, a new discipline or instructor, a goal met or missed, a streak extended, a quiet week after a busy one.
+- Run the checks over each past week of the workout log (`peloton/workouts/activity.py` windows; `frame_stats` already has "this week" and "last week") and the saved rows (`RowStore`), and see which weeks have something to say: more or fewer workouts, minutes or active days than the usual week, a PR, the most output in a week, a new discipline or instructor, a goal met or missed, a streak extended, a quiet week after a busy one.
 - The private analysis prototype `weekly.py` (kept outside this repo) already walks the log by Monday week (running minutes and the longest steady stretch by pace); see whether any of its week-level measures are worth a board line.
 - Rules only, like workout compare: a small set of findings, at most two or three, each with the figures it compared and a "nothing worth saying" state that shows nothing.
 Decide before building: how long it shows (Monday and Tuesday? until the first workout of the week?), where it sits in the rotation, whether it's one page or a card plus bars like workout insights, and a settings switch (default off, like `workout_insights`) plus per-rider choice. Needs the week in the rider's timezone, and a memory of what was shown (like `milestone_shown_at`) so a restart doesn't replay it. Goes with Weekly recap above (the plain totals page and Pushover): decide whether this replaces it or adds the "what stood out" to it. Check both heights with `render_rotation.py`.

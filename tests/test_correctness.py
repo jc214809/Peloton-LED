@@ -5,10 +5,10 @@ import pytest
 
 from peloton.timestamps import parse_timestamp, workout_date
 from peloton.selection import latest_workout, last_active_day, select_latest, normalize_discipline
-from peloton.summaries import summarize_workout
-from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count
+from peloton.stats.summaries import summarize_workout
+from peloton.stats.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count
 from peloton.config import load_config, load_dotenv
-from peloton.records import is_pr_workout
+from peloton.stats.records import is_pr_workout
 from display.ui.last_workout.stats import _fmt_pace, _fmt_split, _stat_details
 from models import get_model_for_discipline
 from models.core import GeneralWorkout
@@ -310,7 +310,7 @@ def test_numeric_overflow_metric_is_missing():
 
 def test_weekly_progress_uses_local_monday_and_completed_duration():
     from datetime import datetime, timezone
-    from peloton.goals import weekly_progress
+    from peloton.feeds.goals import weekly_progress
     now = datetime(2026, 9, 16, 12, tzinfo=timezone.utc)  # Wednesday
     workouts = [
         {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 14, 13, tzinfo=timezone.utc).timestamp(),
@@ -327,7 +327,7 @@ def test_weekly_progress_uses_local_monday_and_completed_duration():
 
 def test_active_days_count_each_local_day_once():
     from datetime import datetime, timezone
-    from peloton.goals import weekly_progress
+    from peloton.feeds.goals import weekly_progress
     now = datetime(2026, 9, 18, 12, tzinfo=timezone.utc)  # Friday
     at = lambda *args: datetime(*args, tzinfo=timezone.utc).timestamp()  # noqa: E731  one-line test helper
     workouts = [

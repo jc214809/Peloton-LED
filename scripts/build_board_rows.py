@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'scripts'))
 
 from peloton.config import load_config, user_slug  # noqa: E402
-from peloton.workout_rows import RawFiles, RowStore, board_store, import_raw  # noqa: E402
+from peloton.workouts.workout_rows import RawFiles, RowStore, board_store, import_raw  # noqa: E402
 from workout_insights import rider_paths  # noqa: E402
 
 log = logging.getLogger('build-board-rows')

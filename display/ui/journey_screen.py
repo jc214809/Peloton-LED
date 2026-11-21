@@ -1,5 +1,5 @@
 """Lifetime miles as a trip: where you're headed, how far you've come, a progress bar for this leg,
-and the miles split by how they were covered (BIKE / WALK/RUN / ROW, peloton.journey.MILE_GROUPS).
+and the miles split by how they were covered (BIKE / WALK/RUN / ROW, peloton.stats.journey.MILE_GROUPS).
 
 64 rows show it all on one page. 32 rows show the trip, then the split ("MILES BY TYPE"), sharing
 the page's time (state['step_seconds'], from build_rotation_pages); with one group there's no split
@@ -160,7 +160,7 @@ def _right(matrix, font, right, y, color, text):
 
 
 class JourneyScreen(Screen):
-    """state: the dict from peloton.journey.journey_progress(), plus step_seconds on 32 rows."""
+    """state: the dict from peloton.stats.journey.journey_progress(), plus step_seconds on 32 rows."""
     animated = True
     atomic_frames = True
     frame_seconds = 0.05  # 20 fps, smooth enough for the fill and the slide

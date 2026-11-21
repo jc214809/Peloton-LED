@@ -20,7 +20,7 @@ if ROOT not in sys.path:
 
 from display.display import initialize_fonts  # noqa: E402
 from display.ui.challenge_screen import INTRO_SECONDS, ChallengeScreen  # noqa: E402
-from peloton.challenges import short_title  # noqa: E402
+from peloton.feeds.challenges import short_title  # noqa: E402
 from scripts.render_demo import ImageMatrix  # noqa: E402
 from scripts.render_logo import GAP, LABEL_WIDTH, SHEET_BACKGROUND, SHEET_SCALE  # noqa: E402
 

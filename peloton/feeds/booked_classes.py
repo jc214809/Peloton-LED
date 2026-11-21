@@ -10,7 +10,7 @@ import math
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-# Peloton's class disciplines under the board's names (peloton.workout_features.DISCIPLINE_ALIAS).
+# Peloton's class disciplines under the board's names (peloton.workouts.workout_features.DISCIPLINE_ALIAS).
 ALIAS = {'caesar': 'rowing', 'caesar_bootcamp': 'row_bootcamp', 'circuit': 'tread_bootcamp'}
 # What the class line calls a class of each discipline: `20 MIN RIDE`.
 NOUNS = {'cycling': 'RIDE', 'running': 'RUN', 'walking': 'WALK', 'rowing': 'ROW', 'strength': 'STRENGTH',

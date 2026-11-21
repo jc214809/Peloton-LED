@@ -53,7 +53,7 @@ class StubDashboard:
 @pytest.fixture
 def frozen(monkeypatch):
     monkeypatch.setattr(time, 'time', lambda: NOW.timestamp())
-    monkeypatch.setattr('peloton.goals.datetime', FrozenDatetime)
+    monkeypatch.setattr('peloton.feeds.goals.datetime', FrozenDatetime)
 
 
 def _demo(insights=False):

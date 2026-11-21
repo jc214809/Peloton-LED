@@ -2,8 +2,8 @@
 from datetime import date
 from math import isfinite
 
-from .selection import discipline_of, is_completed, normalize_discipline
-from .timestamps import workout_date
+from ..selection import discipline_of, is_completed, normalize_discipline
+from ..timestamps import workout_date
 
 KM_TO_MI = 0.621371
 M_TO_MI = 1 / 1609.344

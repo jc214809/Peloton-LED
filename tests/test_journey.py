@@ -10,7 +10,7 @@ from display.ui.journey_screen import (DONE_COLOR, GROUP_COLORS, TIP_COLOR, Jour
                                        group_cents, group_figure, journey_steps, journey_text,
                                        percent, tip_brightness, trip_text)
 from peloton.config import load_config
-from peloton.journey import (DEFAULT_JOURNEY, DISTANCE_DISCIPLINES, journey_progress,
+from peloton.stats.journey import (DEFAULT_JOURNEY, DISTANCE_DISCIPLINES, journey_progress,
                              merge_distance_totals, mile_group, uses_metric, workout_miles)
 from peloton.selection import normalize_discipline
 from peloton_led import build_rotation_pages

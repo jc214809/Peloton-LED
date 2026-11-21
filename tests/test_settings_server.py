@@ -441,7 +441,7 @@ def test_the_checkout_is_the_installers_or_this_codes_own(tmp_path):
 
 
 def test_the_page_shows_each_riders_workout_history(board, tmp_path):
-    from peloton.workout_features import ROW_VERSION
+    from peloton.workouts.workout_features import ROW_VERSION
     start = board.settings.clock() - 86400
     rows = {f'w{i}': {'id': f'w{i}', 'v': ROW_VERSION, 'disc': 'cycling', 'start': start} for i in range(3)}
     (tmp_path / 'cookies-joel-dashboard-cache.workout-rows.json').write_text(json.dumps({'version': 1, 'rows': rows}))

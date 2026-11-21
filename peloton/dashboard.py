@@ -25,12 +25,12 @@ from .dashboard_history import HistoryMixin
 from .dashboard_insight import InsightMixin
 from .dashboard_state import demo_values, initial_data, prepare_cached, slim_profile
 from .selection import is_brief, last_active_day
-from .summaries import summarize_workout
+from .stats.summaries import summarize_workout
 from .timestamps import workout_timestamp
-from .totals import extract_discipline_totals, parse_streaks
-from .records import merge_personal_records, parse_personal_records, previous_best_kj
+from .stats.totals import extract_discipline_totals, parse_streaks
+from .stats.records import merge_personal_records, parse_personal_records, previous_best_kj
 from .schedule import scheduled_refresh_interval
-from .workout_log import WorkoutLog, default_log_path
+from .workouts.workout_log import WorkoutLog, default_log_path
 
 logger = logging.getLogger('peloton-led.dashboard')
 

@@ -13,7 +13,7 @@ from display.ui.club_screen import (BAR_LEFT, BAR_RIGHT, BAR_TRACK, BOOST, FACET
 from peloton import dashboard as dashboard_module
 from peloton import dashboard_fetch
 from peloton.cache import load_snapshot, save_snapshot
-from peloton.club import (LEVELS, NOT_A_MEMBER, club_page, gem_kind, level_from_me, parse_score, tier_fraction,
+from peloton.feeds.club import (LEVELS, NOT_A_MEMBER, club_page, gem_kind, level_from_me, parse_score, tier_fraction,
                           valid_club)
 from peloton.config import DEFAULTS
 from peloton.demo import demo_club

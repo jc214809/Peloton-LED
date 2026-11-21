@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import pytest
 
 from peloton.cache import save_snapshot
-from peloton.workout_log import WorkoutLog
+from peloton.workouts.workout_log import WorkoutLog
 from scripts import list_facts
 from scripts.list_facts import demo_log, snapshot_for
 

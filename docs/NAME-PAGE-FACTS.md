@@ -5,8 +5,8 @@ file lists what it shows today and every idea for more, so the next pick is a ch
 rather than a fresh brainstorm. Ideas are laid out as a time frame × a stat, then six more
 dimensions that widen it, then the plan to build all of it in steps. Collected 2026-11-08.
 
-Code: `peloton/username_facts.py` picks the highlights, `display/ui/username.py` draws them, and
-`peloton/activity.py` computes the log figures (fed through `WorkoutLog.derived`).
+Code: `peloton/stats/username_facts.py` picks the highlights, `display/ui/username.py` draws them, and
+`peloton/workouts/activity.py` computes the log figures (fed through `WorkoutLog.derived`).
 
 ## How a page is built
 
@@ -14,7 +14,7 @@ Since step 6 (2026-11-08) a page is chosen by score, not by turns:
 
 1. `TOTAL WORKOUTS`: every page.
 2. **Headline 1** and 3. **Headline 2**: the two best-scoring facts, of different groups (`KINDS` in
-   `peloton/username_facts.py`). On the day of the account's anniversary, the anniversary is headline 1.
+   `peloton/stats/username_facts.py`). On the day of the account's anniversary, the anniversary is headline 1.
 4. to 6. **An instructor top three**: the first chosen discipline headline's own, else the general ones
    (all time, 30 days, year, 90 days, last year, last week) take turns.
 
@@ -29,7 +29,7 @@ from the workout log appear only once the log holds the whole history.
 ## Class-led workouts only
 
 Every figure from the workout log (`period_stats`, `frame_stats`, `event_stats`: all of them start at
-`_stamped` in `peloton/activity.py`) counts only workouts an instructor led (`class_led`: a non-empty
+`_stamped` in `peloton/workouts/activity.py`) counts only workouts an instructor led (`class_led`: a non-empty
 text `ride.instructor.id`). `instructor_id` is empty on exactly the non-class workouts: Outdoor
 Walking, Just Walk/Run/Ride/Stretch/Cardio/Meditate, Cardio: Pickleball, Entertainment and music
 rides, music warm-ups and cool-downs, and scenic rides and rows (`5 KM Alaska Girdwood Ride`). Not
@@ -61,7 +61,7 @@ No idea below needs a new API call.
 
 | Source | What it holds |
 |---|---|
-| Workout log (`<cache>.workouts.json`, `peloton/workout_log.py`) | Per workout: start time (date, weekday, hour), discipline, class ID (`ride_id`), title, class length, output (kJ), distance, calories, instructor (or group), output and splits PR flags, Strive score (`effort_points`), seconds in each heart-rate zone, streak eligibility |
+| Workout log (`<cache>.workouts.json`, `peloton/workouts/workout_log.py`) | Per workout: start time (date, weekday, hour), discipline, class ID (`ride_id`), title, class length, output (kJ), distance, calories, instructor (or group), output and splits PR flags, Strive score (`effort_points`), seconds in each heart-rate zone, streak eligibility |
 | Dashboard cache | Discipline totals, streaks (`best_weekly`, `current_weekly`, `current_daily`), personal records by discipline and length (`cycling\|30 min: 289.9 kJ`), weekly progress |
 | Profile (fetched daily) | Only `id`, `username`, `timezone`, `height_unit`, `created_at` are kept (`PROFILE_KEYS` in `peloton/dashboard_state.py`; `created_at` since step 5). Adding a key costs nothing: `total_followers`, `cycling_workout_ftp`, `estimated_cycling_ftp`, `badge_level` |
 
@@ -74,7 +74,7 @@ only says what window it measures.
 |---|---|---|---|
 | Highlight 1 | `TOTAL WORKOUTS` | `2,123` (big, gold) | the overview has a total |
 
-**Frames** (`FRAME_ORDER` in `peloton/username_facts.py`): all time, last 30 days, this year, last 90
+**Frames** (`FRAME_ORDER` in `peloton/stats/username_facts.py`): all time, last 30 days, this year, last 90
 days, last year, last week, then `events` (below), which has no top three of its own.
 
 | Headline (highlight 3) | Label | Lines | Shown when |
@@ -274,7 +274,7 @@ Check each label against the 15-character limit: `TOP OF LIFETIME` is exactly 15
 
 ### Code shape
 
-One helper in `peloton/activity.py`, `period_stats(workouts, start, end)`, makes one pass over the
+One helper in `peloton/workouts/activity.py`, `period_stats(workouts, start, end)`, makes one pass over the
 log for a frame and returns every stat above. Frames are a list of (key, label word, start, end),
 and `recent_activity` became `period_stats` for the last 30 days (step 1). The facts module then picks the
 pass's frame and builds highlights from its stats.
@@ -376,7 +376,7 @@ Shown once per cycle, like Head to head (the rider whose rotation gets `rivals`)
 
 Some filters people would want aren't in the log: live vs on-demand, class type (HIIT, power zone,
 low impact), music genre, cadence and resistance. Each would mean extending `trim()` in
-`peloton/workout_log.py` and bumping `LOG_VERSION` (one re-download per board), so they're at the
+`peloton/workouts/workout_log.py` and bumping `LOG_VERSION` (one re-download per board), so they're at the
 end of the plan, if ever.
 
 ## Plan
@@ -401,7 +401,7 @@ time, 30 days and each discipline). Step 1 reshaped these into frames.
 
 ### Step 1: time frames and `period_stats`: done (branch `facts-step-1-frames`)
 
-- `peloton/activity.py`: `frame_bounds` (week, last week, 30 days, 90 days, year, last year, all
+- `peloton/workouts/activity.py`: `frame_bounds` (week, last week, 30 days, 90 days, year, last year, all
   time: start inclusive, end exclusive, local midnight), `period_stats(workouts, start, end,
   timezone_name, now)` for one window, and `frame_stats` for every frame with the timestamps parsed
   once. A window's stats: workouts, minutes, per-discipline counts, per-instructor counts, how many
@@ -409,7 +409,7 @@ time, 30 days and each discipline). Step 1 reshaped these into frames.
   the two year frames, `year`. `recent_activity` is gone.
 - `WorkoutLog.derived` returns `time_frames` (`{frame key: stats}`, empty until the backfill is
   complete). `as_workout` now carries `ride_id` so classes can be counted.
-- `peloton/username_facts.py`: one frame per pass, as under "Built".
+- `peloton/stats/username_facts.py`: one frame per pass, as under "Built".
 - `scripts/list_facts.py`, with `--demo`.
 - Deliberately not done here: filters (step 2), so the all-time top three still takes turns through
   each discipline, and last week's and the other frames' top threes have no per-discipline form.

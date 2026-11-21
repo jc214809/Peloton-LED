@@ -4,7 +4,7 @@ import itertools
 
 import pytest
 
-from peloton.workout_compare import (DAY, MAX_PEERS, PLAN_KEYS, baseline, comparison_group, distance,
+from peloton.workouts.workout_compare import (DAY, MAX_PEERS, PLAN_KEYS, baseline, comparison_group, distance,
                                      fill_in, is_peer, is_warm_up_or_cool_down, peers, standardise, stat)
 
 T = 1_800_000_000

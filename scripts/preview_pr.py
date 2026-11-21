@@ -51,7 +51,7 @@ def token_path_for(config, config_path, user_name=None):
 
 def find_latest_pr(client, user_id, max_pages, page_size=50):
     """Newest completed PR workout and the number of history pages read."""
-    from peloton.records import is_pr_workout
+    from peloton.stats.records import is_pr_workout
     from peloton.selection import is_completed
     for page_number in range(max_pages):
         page = client.get_workouts_page(user_id, limit=page_size, page=page_number)
@@ -116,7 +116,7 @@ def main(argv=None):
     options = parse_options(argv)
     from peloton.api import PelotonClient, make_session
     from peloton.config import load_config, load_dotenv
-    from peloton.summaries import summarize_workout
+    from peloton.stats.summaries import summarize_workout
     load_dotenv(ROOT / '.env')
     try:
         config = load_config(options.config)

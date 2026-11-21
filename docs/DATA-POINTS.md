@@ -129,7 +129,7 @@ screen.
 COMPLETE workout the board could compare, up to 2 insights after the chart slides, each a card (the
 sentence) then a bars frame (headline, today against the usual or a share bar or blocks, the reason) on
 64x64, or a bars frame then 1-2 sentence pages on 64x32. The content comes from
-`peloton/insight_lines.board_view` (the insight's facts: the values, the comparison group's size, the
+`peloton/workouts/insight_lines.board_view` (the insight's facts: the values, the comparison group's size, the
 reason; Strive per minute for the effort codes). It needs the workout detail and class details, fetched
 once per workout, and the rider's row store; with no insight (too few peers, nothing stood out, a failed
 fetch) the frames are simply missing.

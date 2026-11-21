@@ -13,7 +13,7 @@ from .tall_layout import render_tall
 class LastWorkoutScreen(Screen):
     """Displays key stats from a workout summary on a 64x64 LED matrix.
 
-    state should be the dict returned by peloton.summaries.summarize_workout().
+    state should be the dict returned by peloton.stats.summaries.summarize_workout().
 
     The bottom HR/calories bar stays fixed for the whole screen. Everything
     above it goes through two phases:

@@ -12,7 +12,7 @@ from display.ui.last_workout.screen import LastWorkoutScreen
 from display.ui.last_workout.stats import TRACKER_TIER_COLORS, strength_tracker as screen_tracker, top_lift_text
 from peloton.dashboard import Dashboard
 from peloton.demo import demo_data
-from peloton.summaries import strength_tracker, summarize_workout
+from peloton.stats.summaries import strength_tracker, summarize_workout
 from scripts.render_demo import ImageMatrix
 from tests.test_dashboard import setup_dashboard
 
@@ -39,7 +39,7 @@ def detail(tier='gold', **summary):
             'movement_tracker_data': {'completed_movements_summary_data': tracked}}
 
 
-# --- peloton.summaries.strength_tracker ---
+# --- peloton.stats.summaries.strength_tracker ---
 
 def test_tracker_figures_come_from_the_workout_detail():
     assert strength_tracker(detail()) == {

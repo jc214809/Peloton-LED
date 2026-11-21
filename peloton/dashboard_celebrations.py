@@ -7,8 +7,8 @@ snapshot under the dashboard's `_lock`, then saves through its `_persist_snapsho
 import logging
 import time
 
-from .goals import local_date, parse_milestone_key, reached_discipline_milestones, reached_milestones
-from .username_facts import record_name_facts
+from .feeds.goals import local_date, parse_milestone_key, reached_discipline_milestones, reached_milestones
+from .stats.username_facts import record_name_facts
 
 logger = logging.getLogger('peloton-led.dashboard')
 

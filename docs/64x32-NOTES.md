@@ -292,7 +292,7 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
 - Replace version 2's two-line insight slide. Every insight a workout has, at most 4 (`MAX_BOARD_INSIGHTS`; it was 2 until 2026-11-15), after
   the graph / zones / muscles slides; every frame holds 1 s longer, like those. 64x64 shows each as a card
   (the sentence) then bars; 64x32 as bars, then the sentence on 1-2 pages. Content from
-  `peloton/insight_lines.board_view`.
+  `peloton/workouts/insight_lines.board_view`.
 - No discipline title and no heart-rate/calorie row on any insight frame (both boards). The other slides
   are unchanged, insights or not (`test_the_other_slides_are_unchanged_by_the_insights`).
 - Colours: the headline, today's bar and lit blocks amber (down, missed, under the callouts), green (up,
@@ -360,7 +360,7 @@ the castle while saying `414 TO HOME`. Both boards now use one design
   100% short of the destination), and an orange bar for this leg. Past the
   first leg, `TRIP 2` sits at the bar's right end.
 - The miles split three ways, by how they were covered
-  (`peloton.journey.MILE_GROUPS`): BIKE (Cycling, Bike Bootcamp), ROW
+  (`peloton.stats.journey.MILE_GROUPS`): BIKE (Cycling, Bike Bootcamp), ROW
   (Rowing, Row Bootcamp), and WALK/RUN for everything else (tread, outdoor,
   hiking), so every mile is in a row. Joel picked the WALK/RUN name; four
   groups (tread and outdoor apart) would not fit three rows.

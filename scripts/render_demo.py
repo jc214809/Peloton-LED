@@ -13,8 +13,8 @@ from display.ui.username import UsernameScreen
 from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS, PrCelebrationScreen
 from display.ui.manager import ScreenManager
 from peloton.demo import demo_data
-from peloton.summaries import summarize_workout
-from peloton.totals import extract_discipline_totals, lifetime_overview_pages
+from peloton.stats.summaries import summarize_workout
+from peloton.stats.totals import extract_discipline_totals, lifetime_overview_pages
 
 
 class ImageMatrix:
