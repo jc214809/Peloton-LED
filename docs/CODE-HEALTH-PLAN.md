@@ -243,6 +243,18 @@ branch `config-validation-table`)
 
 ## Phase 3: reorganize `peloton/` into subpackages (alone, after phase 2 merges)
 
+Decided 2026-11-21 (Joel approved after the import check):
+- **Precursor PR first, released before the move:** `self_update/update.py` imported
+  `settings_page.logins` inside `_pushover`, so a failed rollback (new files still on disk)
+  would load the new `peloton.config` against the old `peloton.api` in memory and lose the
+  "rollback FAILED" alert. The import is now at the top of the module.
+- **Never turn a module name into a package name:** `peloton/api.py` stays; the parsers go in
+  `peloton/feeds/` (`challenges`, `club`, `booked_classes`, `goals`, `instructors`).
+- `selection` and `timestamps` stay in `peloton/` (`goals` and `instructors` import
+  `selection`); `activity` goes to `workouts/` and `records` to `stats/`, which breaks the
+  workouts/stats cycle. Layers: `workouts` > `stats` > `feeds`. This replaces the grouping below.
+- `_insights_model.py` is untracked and unimported: leave it.
+
 Branch `peloton-subpackages`. Runs with no other agent open, because it touches
 imports in nearly every file.
 

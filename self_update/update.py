@@ -26,6 +26,10 @@ from dataclasses import dataclass
 from peloton import notify
 from self_update import github, state as states
 from self_update.board import CommandFailed
+# Eager, never inside _pushover: the updater runs from the checkout, so an import after a checkout
+# would load the new version's modules next to the old ones already in memory (a failed rollback's
+# alert would then die on ImportError).
+from settings_page.logins import read_auth_env
 from utils import heartbeat
 
 logger = logging.getLogger('peloton-led.update')
@@ -407,7 +411,6 @@ class Updater:
     def _pushover(self, title, message):
         """Pushover the news with auth.env's keys (peloton/notify.py, which logs and never raises;
         without the keys it logs that it didn't send). sudo and systemd-run don't pass auth.env on."""
-        from settings_page.logins import read_auth_env
         for name, value in read_auth_env(self.auth_env).items():
             if name in PUSHOVER_KEYS and value:
                 os.environ.setdefault(name, value)
