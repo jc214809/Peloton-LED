@@ -1,8 +1,8 @@
 """Normalize API metrics for screens and reports without inventing missing values."""
 from math import isfinite
 from models import get_model_for_discipline
-from .timestamps import parse_timestamp, display_timezone, workout_timestamp
-from .selection import discipline_of
+from ..timestamps import parse_timestamp, display_timezone, workout_timestamp
+from ..selection import discipline_of
 from .records import pr_types
 
 

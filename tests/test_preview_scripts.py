@@ -45,7 +45,7 @@ def test_cache_rotation_with_a_rival_and_no_overlays(tmp_path, capsys):
 
 
 def test_cache_rotation_reads_the_workout_log_and_config_route(tmp_path, capsys):
-    from peloton.workout_log import WorkoutLog, default_log_path
+    from peloton.workouts.workout_log import WorkoutLog, default_log_path
     snapshot = {**load_snapshot_for(SimpleNamespace(demo=True)), 'last_updated': 1773496800}
     cache = tmp_path / 'joel-cache.json'
     save_snapshot(cache, snapshot)

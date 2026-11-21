@@ -4,11 +4,11 @@ Pure functions (no locks, no network): `Dashboard.__init__` calls them and publi
 """
 import time
 
-from .challenges import parse_challenges
+from .feeds.challenges import parse_challenges
 from .demo import demo_bookings, demo_club, demo_data
-from .goals import weekly_progress
-from .summaries import summarize_workout
-from .totals import extract_discipline_totals, parse_streaks
+from .feeds.goals import weekly_progress
+from .stats.summaries import summarize_workout
+from .stats.totals import extract_discipline_totals, parse_streaks
 
 # The only profile fields the board reads; the rest of /api/me (email,
 # birthday, phone, weight, ...) is never stored.

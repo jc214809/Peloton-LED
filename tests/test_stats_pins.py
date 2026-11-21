@@ -2,9 +2,9 @@
 including odd or missing fields from Peloton's API (code health 2f-E)."""
 import pytest
 
-import peloton.summaries as summaries
-from peloton.summaries import summarize_workout
-from peloton.totals import extract_discipline_totals
+import peloton.stats.summaries as summaries
+from peloton.stats.summaries import summarize_workout
+from peloton.stats.totals import extract_discipline_totals
 
 
 # --- extract_discipline_totals ---------------------------------------------------------------

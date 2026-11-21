@@ -1,6 +1,6 @@
 """Workout compare: which earlier workouts are similar (spec sections 4 and 6).
 
-"Similar" is a set of hard rules, not a score. Works on the rows of peloton/workout_features.py.
+"Similar" is a set of hard rules, not a score. Works on the rows of peloton/workouts/workout_features.py.
 Standard library only.
 """
 import math

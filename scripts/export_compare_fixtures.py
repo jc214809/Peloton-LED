@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from peloton.workout_rows import RawFiles, RowStore, import_raw  # noqa: E402
+from peloton.workouts.workout_rows import RawFiles, RowStore, import_raw  # noqa: E402
 
 DEFAULT_OUT = ROOT / 'tests' / 'fixtures' / 'workout_compare' / 'real-rows.json'
 WINDOW_DAYS = 730

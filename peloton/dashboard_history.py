@@ -11,7 +11,7 @@ import time
 
 import requests
 
-from .journey import uses_metric
+from .stats.journey import uses_metric
 from .schedule import in_quiet_hours
 
 logger = logging.getLogger('peloton-led.dashboard')

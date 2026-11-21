@@ -3,9 +3,9 @@ import itertools
 
 import pytest
 
-from peloton import workout_compare as compare
-from peloton.insight_lines import board_insights, number
-from peloton.workout_insights import insights, strength_insights
+from peloton.workouts import workout_compare as compare
+from peloton.workouts.insight_lines import board_insights, number
+from peloton.workouts.workout_insights import insights, strength_insights
 
 T = 1_800_000_000
 DAY = 86400
@@ -295,7 +295,7 @@ def recent(shares, metric='resistance', first_day=1, **over):
 
 
 def best(today, history, metric='resistance', **over):
-    from peloton.workout_insights import callout_best
+    from peloton.workouts.workout_insights import callout_best
     target = ride(0, 100, target_missed={metric: today}, **over)
     return callout_best(target, [target] + history)
 
@@ -931,7 +931,7 @@ def test_count_facts_and_empty_facts():
                                          (100, True), (101, False), (150, False), (200, True), (400, True),
                                          (1000, True), (0, False)])
 def test_which_counts_are_milestones(n, expected):
-    from peloton.workout_insights import is_milestone
+    from peloton.workouts.workout_insights import is_milestone
     assert is_milestone(n) is expected
 
 
@@ -940,20 +940,20 @@ def _numbers(*pairs):
 
 
 def test_a_round_number_is_a_milestone_insight():
-    from peloton.workout_insights import milestone_insight
+    from peloton.workouts.workout_insights import milestone_insight
     code, text, facts = milestone_insight(_numbers(('Jess Sims', 200)))
     assert code == 'instructor_milestone' and text == 'Your 200th class with Jess Sims.'
     assert facts == {'n': 200, 'name': 'Jess Sims', 'since': '2019-03-02'}
 
 
 def test_a_first_class_is_a_milestone_insight():
-    from peloton.workout_insights import milestone_insight
+    from peloton.workouts.workout_insights import milestone_insight
     assert milestone_insight(_numbers(('Zacharias Niedzwiecki', 1)))[1] == \
         'Your first class with Zacharias Niedzwiecki: welcome!'
 
 
 def test_no_milestone_for_other_counts_or_unknown_instructors():
-    from peloton.workout_insights import milestone_insight
+    from peloton.workouts.workout_insights import milestone_insight
     assert milestone_insight(_numbers(('Jess Sims', 199))) is None
     assert milestone_insight(_numbers((None, 100), ('', 1))) is None
     assert milestone_insight([]) is None and milestone_insight(None) is None
@@ -961,12 +961,12 @@ def test_no_milestone_for_other_counts_or_unknown_instructors():
 
 
 def test_with_two_instructors_the_bigger_count_wins():
-    from peloton.workout_insights import milestone_insight
+    from peloton.workouts.workout_insights import milestone_insight
     assert milestone_insight(_numbers(('Selena', 1), ('Jess', 50)))[2]['name'] == 'Jess'
 
 
 def test_the_milestone_goes_after_the_output_insight_and_before_the_rest():
-    from peloton.workout_insights import with_milestone
+    from peloton.workouts.workout_insights import with_milestone
     milestone = ('instructor_milestone', '', {})
     out, call, eff = ('output_down', '', {}), ('resistance_low', '', {}), ('effort_high', '', {})
     assert with_milestone([out, call, eff], milestone) == [out, milestone, call, eff]
@@ -979,8 +979,8 @@ def test_the_milestone_goes_after_the_output_insight_and_before_the_rest():
 
 def test_the_milestone_follows_a_tough_class_too():
     """A tough class takes the output insight's place, so it keeps the first slot: tough class, then milestone."""
-    from peloton.insight_lines import board_insights
-    from peloton.workout_insights import with_milestone
+    from peloton.workouts.insight_lines import board_insights
+    from peloton.workouts.workout_insights import with_milestone
     milestone = ('instructor_milestone', '', {'n': 200, 'name': 'Jess Sims', 'since': '2019-03-02'})
     t = ride(0, 124, difficulty=9.1)
     tough = insights(t, [t] + [ride(1 + i, 188, difficulty=7.0) for i in range(5)])
@@ -989,8 +989,8 @@ def test_the_milestone_follows_a_tough_class_too():
 
 
 def test_the_milestone_is_shown_beside_every_other_insight():
-    from peloton.insight_lines import board_insights
-    from peloton.workout_insights import with_milestone
+    from peloton.workouts.insight_lines import board_insights
+    from peloton.workouts.workout_insights import with_milestone
     milestone = ('instructor_milestone', '', {'n': 100, 'name': 'Jess Sims', 'since': '2019-03-02'})
     messages = with_milestone([('resistance_low', '', {'pct': 30}), ('cadence_low', '', {'pct': 40})], milestone)
     assert [v['code'] for v in board_insights(messages)] == ['instructor_milestone', 'resistance_low', 'cadence_low']

@@ -250,7 +250,7 @@ def test_rotation_gives_pr_card_one_interval_and_the_extra_hold_after_the_burst(
 
 
 def test_records_parse_skips_unset_lengths_and_converts_to_kj():
-    from peloton.records import parse_personal_records
+    from peloton.stats.records import parse_personal_records
     overview = {'personal_records': [
         {'slug': 'caesar', 'records': [
             {'name': '45 min', 'raw_value': 225595.0, 'workout_id': 'row', 'workout_date': '2026-04-19'},
@@ -262,7 +262,7 @@ def test_records_parse_skips_unset_lengths_and_converts_to_kj():
 
 
 def test_records_merge_keeps_what_each_new_record_replaced():
-    from peloton.records import merge_personal_records, previous_best_kj
+    from peloton.stats.records import merge_personal_records, previous_best_kj
     old = {'value_kj': 250.0, 'workout_id': 'a', 'workout_date': 'd1'}
     new = {'value_kj': 262.0, 'workout_id': 'b', 'workout_date': 'd2'}
     other = {'value_kj': 90.0, 'workout_id': 'z', 'workout_date': 'd0'}

@@ -7,9 +7,9 @@ import pytest
 from display.display import initialize_fonts
 from display.ui.heatmap_screen import EMPTY, LEVELS, HeatmapScreen, heatmap_cells, level_color
 from display.ui.streak_risk_screen import StreakRiskScreen, days_left_text
-from peloton.activity import counts_for_streaks, daily_minutes, streak_week_workouts
+from peloton.workouts.activity import counts_for_streaks, daily_minutes, streak_week_workouts
 from peloton.config import load_config
-from peloton.workout_log import WorkoutLog
+from peloton.workouts.workout_log import WorkoutLog
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 

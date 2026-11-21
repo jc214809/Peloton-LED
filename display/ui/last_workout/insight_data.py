@@ -2,7 +2,7 @@
 from typing import List
 
 
-# Workout compare frames (peloton/insight_lines.board_view), after the chart slides.
+# Workout compare frames (peloton/workouts/insight_lines.board_view), after the chart slides.
 INSIGHT_KINDS = ('insight_card', 'insight_bars', 'insight_words')
 
 

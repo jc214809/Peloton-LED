@@ -11,7 +11,7 @@ rebuild from those files with no API calls. A run: rebuild any row missing or st
 files; list the newest workouts (1 call; the rider's workout log adds the last 730 days for
 catch-up); fetch up to --limit missing ones newest first (2-3 calls each); print the insights of
 each new workout, or of the latest one when nothing is new. Under each workout, a `board:` line per
-insight the LED board would show for it (peloton/insight_lines.py: headline | sentence), or that it shows none.
+insight the LED board would show for it (peloton/workouts/insight_lines.py: headline | sentence), or that it shows none.
 
 --dry-run makes no API calls and writes nothing. A 401 stops the run (exit 2) and keeps every row
 already saved. Uses the Mac's own token from the config, never a board's.
@@ -26,12 +26,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from peloton.api import PelotonClient, make_session  # noqa: E402
-from peloton.insight_lines import board_insights  # noqa: E402
+from peloton.workouts.insight_lines import board_insights  # noqa: E402
 from peloton.config import load_config, user_slug, user_token_path  # noqa: E402
-from peloton.workout_compare import DISCIPLINES  # noqa: E402
-from peloton.workout_insights import insights  # noqa: E402
-from peloton.workout_log import WorkoutLog, default_log_path  # noqa: E402
-from peloton.workout_rows import (MAX_PER_RUN, LoginRequired, RawFiles, RowStore,  # noqa: E402
+from peloton.workouts.workout_compare import DISCIPLINES  # noqa: E402
+from peloton.workouts.workout_insights import insights  # noqa: E402
+from peloton.workouts.workout_log import WorkoutLog, default_log_path  # noqa: E402
+from peloton.workouts.workout_rows import (MAX_PER_RUN, LoginRequired, RawFiles, RowStore,  # noqa: E402
                                   candidate_ids, default_rows_path, import_raw, sync)
 
 log = logging.getLogger('workout-insights')

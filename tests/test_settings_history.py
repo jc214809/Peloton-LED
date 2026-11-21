@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from peloton.config import user_cache_path
-from peloton.workout_features import ROW_VERSION
-from peloton.workout_rows import BOARD_DAYS, DAY, current_board_rows
+from peloton.workouts.workout_features import ROW_VERSION
+from peloton.workouts.workout_rows import BOARD_DAYS, DAY, current_board_rows
 from settings_page import history
 from settings_page.history import (MISSING, NO_CLASS, NO_GRAPH, NO_MOVEMENTS, OLD, READY, RECENT_DAYS, UNREADABLE,
                                    missing_data, rider_histories, rows_paths)

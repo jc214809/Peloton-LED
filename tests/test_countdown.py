@@ -7,7 +7,7 @@ from display.display import initialize_fonts
 from display.ui.countdown_screen import BAR_EMPTY, BAR_FILL, CountdownScreen
 from peloton.config import load_config
 from peloton.dashboard import Dashboard
-from peloton.goals import next_milestone, reached_milestones, upcoming_milestones
+from peloton.feeds.goals import next_milestone, reached_milestones, upcoming_milestones
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 

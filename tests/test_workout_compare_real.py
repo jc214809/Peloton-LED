@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from peloton.workout_insights import insights
+from peloton.workouts.workout_insights import insights
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / 'tests' / 'fixtures' / 'workout_compare' / 'real-rows.json'

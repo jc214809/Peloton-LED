@@ -4,7 +4,7 @@ import json
 import pytest
 
 from peloton.cache import CACHE_VERSION, load_snapshot
-from peloton.club import NOT_A_MEMBER
+from peloton.feeds.club import NOT_A_MEMBER
 
 
 def base():

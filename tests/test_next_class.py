@@ -12,7 +12,7 @@ from display.ui.next_class_screen import (COLUMN_LEFT, LINE_WIDTH, PULSE_FLOOR, 
                                           PULSE_WINDOW, TAG_COLORS, NextClassScreen, fitted, pulse_level, pulses)
 from peloton import dashboard as dashboard_module
 from peloton import dashboard_fetch
-from peloton.booked_classes import (NOUNS, SHOWN_AFTER_START, class_lines, day_word, instructor_lines,
+from peloton.feeds.booked_classes import (NOUNS, SHOWN_AFTER_START, class_lines, day_word, instructor_lines,
                                     next_booking, reservation_ids, slim_class, valid_booking, when)
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import DEFAULTS

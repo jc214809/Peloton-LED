@@ -2,7 +2,7 @@
 from html import escape
 from zoneinfo import available_timezones
 
-from peloton.booked_classes import TAKEOVER_END_AFTER_START, TAKEOVER_MAX_MINUTES
+from peloton.feeds.booked_classes import TAKEOVER_END_AFTER_START, TAKEOVER_MAX_MINUTES
 from peloton.config import DEFAULTS
 from settings_page.form import (COLORS, STREAK_REMINDER_DEFAULT, TIMING, TIMING_LEAST, WEEKDAYS, milestones_text,
                                 riders, section)

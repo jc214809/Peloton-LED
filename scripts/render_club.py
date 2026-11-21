@@ -18,7 +18,7 @@ if ROOT not in sys.path:
 
 from display.display import initialize_fonts  # noqa: E402
 from display.ui.club_screen import ClubScreen  # noqa: E402
-from peloton.club import club_page  # noqa: E402
+from peloton.feeds.club import club_page  # noqa: E402
 from scripts.render_demo import ImageMatrix  # noqa: E402
 from scripts.render_logo import GAP, LABEL_WIDTH, SHEET_BACKGROUND, SHEET_SCALE  # noqa: E402
 

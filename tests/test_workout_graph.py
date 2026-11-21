@@ -10,7 +10,7 @@ from display.ui.last_workout.colors import HR_ZONE_COLORS
 from display.ui.last_workout.rotation import GRAPH_FRAME_EXTRA_SECONDS, detail_at, detail_hold_seconds, rotating_details
 from display.ui.last_workout.screen import LastWorkoutScreen
 from peloton.demo import demo_data
-from peloton.summaries import heart_rate_zone_seconds, muscle_groups, performance_graph, summarize_workout
+from peloton.stats.summaries import heart_rate_zone_seconds, muscle_groups, performance_graph, summarize_workout
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 

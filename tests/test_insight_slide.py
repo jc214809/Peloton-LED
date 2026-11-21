@@ -7,7 +7,7 @@ from display.ui.last_workout.insight_frames import _draw_insight_frame
 from display.ui.last_workout.rotation import GRAPH_FRAME_EXTRA_SECONDS, detail_hold_seconds, rotating_details
 from display.ui.last_workout.screen import LastWorkoutScreen
 from peloton.demo import demo_data
-from peloton.insight_lines import board_view
+from peloton.workouts.insight_lines import board_view
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 from tests.test_insight_lines import SHOWN

@@ -1,12 +1,12 @@
-"""Workout insights: a tough class. The rule (peloton/workout_insights.py), its board view (insight_lines) and the
+"""Workout insights: a tough class. The rule (peloton/workouts/workout_insights.py), its board view (insight_lines) and the
 frames (the pixel arrow in the bars frame's bottom line, display/ui/last_workout/insight_frames.py)."""
 import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.last_workout.insight_data import _good_figure, _good_view, insight_views
 from display.ui.last_workout.rotation import rotating_details
-from peloton.insight_lines import GREEN, LINE_MAX, board_insights, board_view
-from peloton.workout_insights import insights, usual_classes
+from peloton.workouts.insight_lines import GREEN, LINE_MAX, board_insights, board_view
+from peloton.workouts.workout_insights import insights, usual_classes
 from tests.test_insight_slide import lit, render_detail, view, with_views
 from tests.test_insight_slide import demo_ride
 from tests.test_workout_insights import codes, foot, ride, strength, text

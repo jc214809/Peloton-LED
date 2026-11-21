@@ -6,10 +6,10 @@ import re
 from datetime import date
 from pathlib import Path
 
-from .booked_classes import TAKEOVER_MAX_MINUTES
+from .feeds.booked_classes import TAKEOVER_MAX_MINUTES
 from .config_rules import (Rule, int_in, is_bool, is_env_name, is_iso_date, is_nonblank_str, is_str, is_time_of_day,
                            is_timezone, non_negative_number, or_none, positive_number, run, whole_number)
-from .journey import DEFAULT_JOURNEY, DISTANCE_DISCIPLINES
+from .stats.journey import DEFAULT_JOURNEY, DISTANCE_DISCIPLINES
 from .screen_times import retire_zero_times
 from .selection import normalize_discipline
 

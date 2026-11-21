@@ -1,6 +1,6 @@
 """Extract unique non-negative discipline counts from overview variants."""
 from math import isfinite
-from .selection import normalize_discipline
+from ..selection import normalize_discipline
 
 RANGE_KEYS = ('discipline_totals', 'workouts', 'workouts_per_discipline', 'workout_counts',
               'workout_counts_by_discipline', 'discipline_counts')

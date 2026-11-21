@@ -3,7 +3,7 @@ import math
 from copy import deepcopy
 from datetime import datetime, timezone
 
-from .insight_lines import board_view
+from .workouts.insight_lines import board_view
 
 _HR_ZONES = [(0, 119), (120, 137), (138, 156), (157, 174), (175, 185)]
 
@@ -102,7 +102,7 @@ def demo_data():
 
 
 def demo_bookings(now):
-    """Two booked classes as the board keeps them (peloton.booked_classes.slim_class): a live ride in 45
+    """Two booked classes as the board keeps them (peloton.feeds.booked_classes.slim_class): a live ride in 45
     minutes, so the page counts down, and an encore Tread Bootcamp tomorrow."""
     return [{'id': 'demo-live-ride', 'start': float(now + 45 * 60), 'tag': 'LIVE', 'discipline': 'cycling',
              'minutes': 20, 'instructor': 'Ben Alldis'},
@@ -128,8 +128,8 @@ def demo_club_score(now):
 
 
 def demo_club(now):
-    """The demo rider's Club Peloton record as the board keeps it (peloton.club.parse_score)."""
-    from .club import parse_score
+    """The demo rider's Club Peloton record as the board keeps it (peloton.feeds.club.parse_score)."""
+    from .feeds.club import parse_score
     return parse_score(demo_club_score(now), now)
 
 

@@ -8,7 +8,7 @@ from display.display import initialize_fonts
 from display.ui.versus_screen import (DAY_AHEAD, DAY_DONE, DAY_TODAY, DETAIL_INTERVAL_SECONDS,
                                       VersusScreen, weekly_leader)
 from peloton.config import load_config
-from peloton.goals import week_day
+from peloton.feeds.goals import week_day
 from peloton_led import build_rotation_pages, run_multi_user_loop, weekly_rivals
 from scripts.render_demo import ImageMatrix
 

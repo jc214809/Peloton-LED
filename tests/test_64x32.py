@@ -7,7 +7,7 @@ from display.display import initialize_fonts
 from display.ui.last_workout.rotation import rotating_details
 from display.ui.last_workout.screen import LastWorkoutScreen
 from peloton.demo import demo_data
-from peloton.summaries import summarize_workout
+from peloton.stats.summaries import summarize_workout
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 

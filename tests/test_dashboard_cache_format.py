@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from peloton.cache import PERSISTED_KEYS, load_snapshot
-from peloton.challenges import parse_challenges
+from peloton.feeds.challenges import parse_challenges
 from peloton.dashboard import Dashboard
 from peloton.demo import demo_bookings, demo_club, demo_data
 from tests.test_dashboard import setup_dashboard

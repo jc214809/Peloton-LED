@@ -15,8 +15,8 @@ Kick-off message for each session:
 2. Branch: `facts-step-N-<short-name>` (e.g. `facts-step-1-frames`).
 3. `config.json` is Joel's real, untracked config. Never `git add -A` or `git commit -a`; add files
    by name.
-4. Read the files the step touches before changing them: `peloton/username_facts.py`,
-   `peloton/activity.py`, `peloton/workout_log.py` (`derived`), `display/ui/username.py`,
+4. Read the files the step touches before changing them: `peloton/stats/username_facts.py`,
+   `peloton/workouts/activity.py`, `peloton/workouts/workout_log.py` (`derived`), `display/ui/username.py`,
    `tests/test_username_facts.py`, and `build_rotation_pages` in `peloton_led.py`.
 
 ## Rules for every step
@@ -32,8 +32,8 @@ Kick-off message for each session:
   Log figures appear only once `WorkoutLog.complete` is true (this week excepted).
 - **Skip thin facts.** Every fact has a threshold (see `MIN_RANKED_CLASSES` and
   `MIN_RECENT_WORKOUTS`), so a fact never shows a 1 or a 0 unless it's the point of the fact.
-- **Business logic stays out of the screen.** Figures go in `peloton/activity.py`, the choice of
-  facts in `peloton/username_facts.py`, and drawing in `display/ui/username.py` (labels only; it
+- **Business logic stays out of the screen.** Figures go in `peloton/workouts/activity.py`, the choice of
+  facts in `peloton/stats/username_facts.py`, and drawing in `display/ui/username.py` (labels only; it
   shouldn't learn about facts).
 - **Python 3.11.** No PEP 701 f-strings: no line breaks or reused quotes inside `{}`.
 - **Times in the display timezone** (`display.timezone`, else the profile's), never the machine's.
@@ -80,7 +80,7 @@ Never say "verified" or "working" for anything you didn't run.
 Details are in `docs/NAME-PAGE-FACTS.md` ("Plan"). These notes are the traps.
 
 **Step 1: frames and `period_stats`**
-- `FRAMES` lives in `peloton/activity.py`: each frame is (key, label word, start, end). Frames:
+- `FRAMES` lives in `peloton/workouts/activity.py`: each frame is (key, label word, start, end). Frames:
   week, last week, 30 days, 90 days, year, last year, all time.
 - `period_stats(workouts, start, end)` is one loop that returns totals and distinct counts.
   `recent_activity` becomes a call to it; keep the snapshot key or rename it everywhere

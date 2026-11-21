@@ -1,4 +1,4 @@
-"""The name page's varied highlights: time frames over the workout log (peloton.activity), the facts
+"""The name page's varied highlights: time frames over the workout log (peloton.workouts.activity), the facts
 each frame has enough data for, and which frame and fact each pass shows."""
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import Mock
@@ -8,14 +8,14 @@ import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.username import UsernameScreen
-from peloton.activity import (MIN_RANK_BLOCKS, SUBJECT_DISCIPLINES, SUBJECT_INSTRUCTORS, block_rank, frame_bounds,
+from peloton.workouts.activity import (MIN_RANK_BLOCKS, SUBJECT_DISCIPLINES, SUBJECT_INSTRUCTORS, block_rank, frame_bounds,
                               event_stats, frame_stats, period_stats)
-from peloton.username_facts import (COOLDOWN_PASSES, FRAME_ORDER, KINDS, MAX_COMPARE_BONUS, MIN_RANKED_CLASSES,
+from peloton.stats.username_facts import (COOLDOWN_PASSES, FRAME_ORDER, KINDS, MAX_COMPARE_BONUS, MIN_RANKED_CLASSES,
                                     MIN_STREAK_WEEKS, RANK_FIRST_BONUS, RECENT_RECORD_BONUS, _comparison_fact,
                                     _since_fact,
                                     fact_score, frame_facts, frame_rankings, frame_subjects, frame_words,
                                     record_name_facts, scored_facts, shown_keys, username_details)
-from peloton.workout_log import WorkoutLog
+from peloton.workouts.workout_log import WorkoutLog
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 
@@ -376,7 +376,7 @@ def test_two_headlines_never_share_a_label(monkeypatch):
     clash = [(90, {'kind': 'total', 'label': 'LAST 30 DAYS', 'key': 'a', 'lines': ['1']}, None),
              (80, {'kind': 'instructors', 'label': 'LAST 30 DAYS', 'key': 'b', 'lines': ['2']}, None),
              (70, {'kind': 'since:yoga', 'label': 'LAST YOGA', 'key': 'c', 'lines': ['3']}, None)]
-    monkeypatch.setattr('peloton.username_facts.scored_facts', lambda snap: clash)
+    monkeypatch.setattr('peloton.stats.username_facts.scored_facts', lambda snap: clash)
     assert [d['key'] for d in username_details({})] == ['a', 'c']
 
 
@@ -938,7 +938,7 @@ MEMBER_SINCE = int(_local(2020, 11, 8, 9).timestamp())
 
 
 def test_event_stats_are_dates_in_the_display_timezone():
-    from peloton.activity import event_stats
+    from peloton.workouts.activity import event_stats
     events = event_stats(_event_log(), ZONE, NOW, MEMBER_SINCE)
     assert events['today'] == '2026-11-08' and events['anniversary'] == 6
     # The longest workout of the nearest earlier year with one: 45 minutes of yoga, not the cycling.
@@ -956,7 +956,7 @@ def test_event_stats_are_dates_in_the_display_timezone():
 
 
 def test_event_stats_the_day_is_the_display_timezones():
-    from peloton.activity import event_stats
+    from peloton.workouts.activity import event_stats
     # 03:30 UTC on 9 November is still the 8th in New York: today's date, and the anniversary.
     late = datetime(2026, 11, 9, 3, 30, tzinfo=timezone.utc)
     events = event_stats([_w('x', _local(2025, 11, 8, 22))], ZONE, late, MEMBER_SINCE)
@@ -970,19 +970,19 @@ def test_event_stats_the_day_is_the_display_timezones():
     (int(NOW.timestamp()), NOW, None),                      # joined today: no years yet
     (None, NOW, None), ('junk', NOW, None)])
 def test_anniversary_is_only_on_the_day_and_after_a_full_year(created, now, years):
-    from peloton.activity import anniversary
+    from peloton.workouts.activity import anniversary
     assert anniversary(created, ZONE, now) == years
 
 
 def test_event_stats_with_no_workouts():
-    from peloton.activity import event_stats
+    from peloton.workouts.activity import event_stats
     events = event_stats([], ZONE, NOW)
     assert events['first_ever'] is None and events['disciplines'] == {} and events['on_this_day'] == []
     assert events['anniversary'] is None
 
 
 def _events_snapshot(**extra):
-    from peloton.activity import event_stats
+    from peloton.workouts.activity import event_stats
     return _snapshot(events=event_stats(_event_log(), ZONE, NOW, MEMBER_SINCE), **extra)
 
 

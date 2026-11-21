@@ -1250,4 +1250,4 @@ The exact query text lives in `graphql.postman_collection.json` in the Postman r
 - [geudrik/peloton-client-library, API_DOCS.md](https://github.com/geudrik/peloton-client-library/blob/master/API_DOCS.md)
 - [philosowaffle/peloton-to-garmin, ApiClient.cs](https://github.com/philosowaffle/peloton-to-garmin/blob/master/src/Peloton/ApiClient.cs)
 - [peloton-to-garmin discussion #822 (November 2025)](https://github.com/philosowaffle/peloton-to-garmin/discussions/822)
-- This repo: `peloton/api.py` (the board's calls), `peloton/club.py` (the Club Peloton score), `peloton/summaries.py`, `peloton/records.py`, `peloton/totals.py` and `peloton/workout_features.py` (the fields it reads), and `scripts/refresh_cookies.py` (Auth0 login and renewal)
+- This repo: `peloton/api.py` (the board's calls), `peloton/feeds/club.py` (the Club Peloton score), `peloton/stats/summaries.py`, `peloton/stats/records.py`, `peloton/stats/totals.py` and `peloton/workouts/workout_features.py` (the fields it reads), and `scripts/refresh_cookies.py` (Auth0 login and renewal)

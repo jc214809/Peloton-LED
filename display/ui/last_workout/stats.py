@@ -58,7 +58,7 @@ def _count(value) -> Optional[int]:
 
 
 def strength_tracker(summary: dict) -> dict:
-    """The movement tracker's figures (peloton.summaries.strength_tracker), checked, since the cache
+    """The movement tracker's figures (peloton.stats.summaries.strength_tracker), checked, since the cache
     can hold anything: {'reps', 'volume', 'unit', 'targets_pct', 'tier', 'top'}, each None when
     missing or malformed; {} for an untracked workout."""
     tracker = summary.get('strength')

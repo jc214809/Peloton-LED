@@ -3,10 +3,10 @@ import json
 import os
 from pathlib import Path
 
-from .booked_classes import valid_bookings
-from .challenges import valid_challenge
-from .club import valid_club
-from .goals import parse_milestone_key
+from .feeds.booked_classes import valid_bookings
+from .feeds.challenges import valid_challenge
+from .feeds.club import valid_club
+from .feeds.goals import parse_milestone_key
 
 
 CACHE_VERSION = 1

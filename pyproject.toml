@@ -33,6 +33,11 @@ source_modules = ["peloton"]
 forbidden_modules = ["display", "settings_page", "self_update", "driver", "utils"]
 
 [[tool.importlinter.contracts]]
+name = "peloton's subpackages: the workout log builds on the stats, the stats on the parsed feeds"
+type = "layers"
+layers = ["peloton.workouts", "peloton.stats", "peloton.feeds"]
+
+[[tool.importlinter.contracts]]
 name = "the display loop never touches the network"
 type = "forbidden"
 source_modules = ["display"]

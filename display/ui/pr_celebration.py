@@ -105,7 +105,7 @@ def pr_card_lines(summary: dict) -> Optional[Tuple[str, str, Optional[str]]]:
 class PrCelebrationScreen(Screen):
     """Star burst, then a card with the PR type, new value, and class length.
 
-    state is a workout summary from peloton.summaries.summarize_workout().
+    state is a workout summary from peloton.stats.summaries.summarize_workout().
     """
 
     animated = True

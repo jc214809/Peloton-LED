@@ -4,7 +4,7 @@
 the LIVE / ENCORE tag, the time, the day in gold, the class in the discipline's colour and the instructor.
 32 rows: the icon on the left and a text column from x 28 (tag, time, day, first name).
 In the last hour the time is `45 MIN` (and the day `AT 2:15 PM`); from the start, `NOW` and `STARTING`.
-State: {'booking': one record from peloton.booked_classes (validated again here: the cache can hold anything),
+State: {'booking': one record from peloton.feeds.booked_classes (validated again here: the cache can hold anything),
 'now': the timestamp to count from, 'timezone': the board's zone name or None}.
 """
 import math
@@ -12,7 +12,7 @@ import math
 from driver import graphics
 
 from display.display import get_text_width, loaded_fonts, plain_letters
-from peloton.booked_classes import ENCORE, LIVE, class_lines, instructor_lines, valid_booking, when
+from peloton.feeds.booked_classes import ENCORE, LIVE, class_lines, instructor_lines, valid_booking, when
 from .discipline_icons import DISCIPLINE_ICON_ROWS
 from .lifetime_overview import discipline_color, draw_icon
 from .screen import Screen

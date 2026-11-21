@@ -14,7 +14,7 @@ from display.ui.lifetime_overview import discipline_color
 from peloton.cache import CACHE_VERSION, load_snapshot
 from peloton.config import load_config
 from peloton.dashboard import Dashboard
-from peloton.goals import (discipline_target_after, discipline_target_reached, parse_milestone_key,
+from peloton.feeds.goals import (discipline_target_after, discipline_target_reached, parse_milestone_key,
                            reached_discipline_milestones, upcoming_discipline_milestones)
 from peloton_led import build_rotation_pages, run_display_loop
 from scripts.render_demo import ImageMatrix

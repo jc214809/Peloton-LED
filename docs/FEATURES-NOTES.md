@@ -59,7 +59,7 @@ heart-rate and zone data from it.
 - **Demo data:** the demo cycling ride now has a synthetic interval-workout
   series so demo mode and the tests show the graph.
 
-Code: `performance_graph` / `heart_rate_zone_seconds` in `peloton/summaries.py`;
+Code: `performance_graph` / `heart_rate_zone_seconds` in `peloton/stats/summaries.py`;
 `_draw_graph` / `_draw_zones` in `display/ui/last_workout/charts.py`, `rotating_details` in
 `display/ui/last_workout/rotation.py`; tests in `tests/test_workout_graph.py`.
 
@@ -84,7 +84,7 @@ the default rotation.
 - Adds a `big` font key (10x20 on 64 rows, 7x13 bold on 32 rows) for large
   numbers. The next features use it too.
 
-Code: `display/ui/streak_screen.py`, `parse_streaks` in `peloton/totals.py`;
+Code: `display/ui/streak_screen.py`, `parse_streaks` in `peloton/stats/totals.py`;
 tests in `tests/test_streaks.py`.
 
 ## #3 Joel vs. Jen this week
@@ -155,7 +155,7 @@ Workouts page).
   `overview_duration`.
 
 Code: `display/ui/countdown_screen.py`; `next_milestone` and
-`reached_milestones` in `peloton/goals.py`; tests in
+`reached_milestones` in `peloton/feeds/goals.py`; tests in
 `tests/test_countdown.py`.
 
 ## #9 Distance journey
@@ -193,7 +193,7 @@ Your lifetime miles become a trip from one place to another.
   The journey page stays hidden until the tally has miles.
 - Long place names are trimmed to the panel's width.
 
-Code: `peloton/journey.py`, `display/ui/journey_screen.py`, the tally in
+Code: `peloton/stats/journey.py`, `display/ui/journey_screen.py`, the tally in
 `peloton/dashboard.py`; tests in `tests/test_journey.py`.
 
 ## Open questions for Joel

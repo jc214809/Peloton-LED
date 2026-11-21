@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 import peloton_led
-from peloton.booked_classes import (SHOWN_AFTER_START, TAKEOVER_END_AFTER_START, TAKEOVER_MAX_MINUTES,
+from peloton.feeds.booked_classes import (SHOWN_AFTER_START, TAKEOVER_END_AFTER_START, TAKEOVER_MAX_MINUTES,
                                     takeover_booking, when)
 from peloton.config import DEFAULTS, validate_config
 from peloton_led import (TAKEOVER_CHECK_SECONDS, NextClassTakeover, run_display_loop, run_multi_user_loop,

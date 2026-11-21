@@ -2,9 +2,9 @@
 import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from peloton.insight_lines import (EDGE_MAX, HIDDEN_CODES, LINE_MAX, LINES_32, LINES_64, MAX_BLOCKS, MAX_BOARD_INSIGHTS,
+from peloton.workouts.insight_lines import (EDGE_MAX, HIDDEN_CODES, LINE_MAX, LINES_32, LINES_64, MAX_BLOCKS, MAX_BOARD_INSIGHTS,
                                    board_insights, board_view, wrap)
-from peloton.workout_insights import MAX_MESSAGES, insights
+from peloton.workouts.workout_insights import MAX_MESSAGES, insights
 from tests.test_workout_insights import effort, foot, heavier, lighter, ride, run_bike
 
 BIKE = {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 9, 'real': 9, 'reason': None}
@@ -304,7 +304,7 @@ def test_real_insights_make_views_from_their_own_facts():
                                      (111, '111TH'), (112, '112TH'), (113, '113TH'), (200, '200TH'),
                                      (1000, '1000TH')])
 def test_ordinals(n, text):
-    from peloton.insight_lines import ordinal
+    from peloton.workouts.insight_lines import ordinal
     assert ordinal(n) == text
 
 

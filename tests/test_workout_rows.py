@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 import requests
 
-from peloton import workout_rows
-from peloton.workout_features import ROW_VERSION
-from peloton.workout_rows import (LoginRequired, RawFiles, RowStore, candidate_ids, default_rows_path,
+from peloton.workouts import workout_rows
+from peloton.workouts.workout_features import ROW_VERSION
+from peloton.workouts.workout_rows import (LoginRequired, RawFiles, RowStore, candidate_ids, default_rows_path,
                                   fetch_row, import_raw, sync)
 
 START = 1_700_000_000
@@ -542,7 +542,7 @@ def test_script_run_stores_and_prints_new_workout(script, config, tmp_path, monk
 
 def test_script_uses_workout_log_user_id_and_ids(script, config, tmp_path, monkeypatch, capsys):
     import time
-    from peloton.workout_log import WorkoutLog, default_log_path
+    from peloton.workouts.workout_log import WorkoutLog, default_log_path
     log_path = default_log_path(tmp_path / 'joel-cache.json')
     wl = WorkoutLog(log_path)
     wl.user_id = 'u9'

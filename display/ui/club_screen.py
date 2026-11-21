@@ -7,14 +7,14 @@ a Legend); `2X` in gold in the bottom left corner during a double-points boost.
 32 rows: a 12 px gem at the left with the level and points beside it, the bar, then `1,341 TO CHAMPION`
 (`2X` at its left when both fit).
 Before the first score only the gem and the level show (from /api/me).
-State: peloton.club.club_page (validated again here: the cache can hold anything).
+State: peloton.feeds.club.club_page (validated again here: the cache can hold anything).
 """
 from functools import lru_cache
 
 from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
-from peloton.club import KINDS, gem_kind, tier_fraction, valid_club
+from peloton.feeds.club import KINDS, gem_kind, tier_fraction, valid_club
 from .screen import Screen
 
 WHITE = (255, 255, 255)

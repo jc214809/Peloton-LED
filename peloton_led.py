@@ -7,10 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from peloton.booked_classes import SHOWN_AFTER_START, takeover_booking
+from peloton.feeds.booked_classes import SHOWN_AFTER_START, takeover_booking
 from peloton.config import DEFAULTS, load_config, load_dotenv, user_cache_path, user_token_path
 from peloton.dashboard import Dashboard
-from peloton.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # noqa: F401  re-export kept for callers
+from peloton.stats.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # noqa: F401  re-export kept for callers
 from utils import heartbeat
 from utils.utils import args, ensure_privileges_dropped, led_matrix_options
 from utils.username import resolve_display_username

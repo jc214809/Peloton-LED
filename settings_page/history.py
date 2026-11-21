@@ -1,6 +1,6 @@
 """Workout compare's history on this board, for the settings page: no HTTP, no HTML.
 
-Each rider's row store (`peloton/workout_rows.py`, seeded from the Mac by `scripts/push_workout_rows.sh`)
+Each rider's row store (`peloton/workouts/workout_rows.py`, seeded from the Mac by `scripts/push_workout_rows.sh`)
 is counted as the display counts it: rows of this ROW_VERSION, of a compared discipline, from the last
 BOARD_DAYS. The count is kept until the file changes, so the page doesn't re-read megabytes each load.
 It also lists the last RECENT_DAYS' workouts that were saved without all their data (`missing`), so a
@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from peloton.config import user_cache_path
-from peloton.workout_rows import DAY, current_board_rows, default_rows_path
+from peloton.workouts.workout_rows import DAY, current_board_rows, default_rows_path
 
 log = logging.getLogger(__name__)
 

@@ -2,10 +2,10 @@
 per-discipline figures."""
 from datetime import date, datetime, timedelta
 
-from .goals import week_start
-from .instructors import merge_instructor_counts
-from .selection import discipline_of, is_completed
-from .timestamps import display_timezone, parse_timestamp, workout_date, workout_timestamp
+from ..feeds.goals import week_start
+from ..feeds.instructors import merge_instructor_counts
+from ..selection import discipline_of, is_completed
+from ..timestamps import display_timezone, parse_timestamp, workout_date, workout_timestamp
 from .workout_log import length_seconds
 
 HEATMAP_WEEKS = 12
