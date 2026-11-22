@@ -1,0 +1,5 @@
+# Commits `git blame` skips: whole-repo mechanical rewrites with no behavior change.
+# GitHub reads this file by itself; locally run once: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Code health: ruff format and import sorting
+87952589cef206b57242b720865a6f95ec889fa1

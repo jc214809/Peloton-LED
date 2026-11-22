@@ -4,9 +4,9 @@ with the board's own fonts (no image decoding).
 A 64-row panel stacks them; a shorter one puts the mark on the left and the rest beside it.
 Without fonts loaded (initialize_fonts) the words are left out.
 """
-from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
+from driver import graphics
 
 from .logo_art import LABEL_GREY, MARK_WIDTH, PELOTON_RED, mark_pixels, zone_color
 from .screen import Screen

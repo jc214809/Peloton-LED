@@ -1,5 +1,6 @@
 """Weekly goal and lifetime milestone calculations."""
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from ..selection import is_completed
@@ -8,29 +9,28 @@ from ..timestamps import workout_timestamp
 
 def week_day(timezone_name=None, now=None):
     """Today's index in the weekly-goal week: 0 for Monday through 6 for Sunday."""
-    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
-    return (now or datetime.now(timezone.utc)).astimezone(zone).weekday()
+    zone = ZoneInfo(timezone_name) if timezone_name else UTC
+    return (now or datetime.now(UTC)).astimezone(zone).weekday()
 
 
 def local_date(timestamp, timezone_name=None):
     """The calendar date of a Unix timestamp in the display timezone."""
-    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
+    zone = ZoneInfo(timezone_name) if timezone_name else UTC
     return datetime.fromtimestamp(timestamp, zone).date()
 
 
 def week_start(timezone_name=None, now=None):
     """Monday 00:00 of the current week in the display timezone, and now."""
-    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
-    current = (now or datetime.now(timezone.utc)).astimezone(zone)
-    monday = (current - timedelta(days=current.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0)
+    zone = ZoneInfo(timezone_name) if timezone_name else UTC
+    current = (now or datetime.now(UTC)).astimezone(zone)
+    monday = (current - timedelta(days=current.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     return monday, current
 
 
 def weekly_progress(workouts, timezone_name=None, now=None):
     """Return completed workouts, minutes, output (kJ) and active days (local dates with at least one
     completed workout) since local Monday."""
-    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
+    zone = ZoneInfo(timezone_name) if timezone_name else UTC
     monday, current = week_start(timezone_name, now)
     count = 0
     seconds = 0
@@ -49,8 +49,7 @@ def weekly_progress(workouts, timezone_name=None, now=None):
         work = workout.get('total_work')
         if isinstance(work, (int, float)) and not isinstance(work, bool) and work > 0:
             joules += work
-    return {'workouts': count, 'minutes': int(round(seconds / 60)),
-            'output_kj': int(round(joules / 1000)), 'active_days': len(days)}
+    return {'workouts': count, 'minutes': int(round(seconds / 60)), 'output_kj': int(round(joules / 1000)), 'active_days': len(days)}
 
 
 # A step milestone only celebrates if it was crossed this recently, so the
@@ -123,10 +122,10 @@ def discipline_target_reached(count):
 def _discipline_counts(totals):
     """(slug, label, count) for each discipline in Peloton's overview totals, not the total."""
     from ..selection import normalize_discipline
+
     for label, count in (totals or {}).items():
         slug = normalize_discipline(label)
-        if (slug and slug != 'total_workouts' and isinstance(count, int)
-                and not isinstance(count, bool) and count >= 0):
+        if slug and slug != 'total_workouts' and isinstance(count, int) and not isinstance(count, bool) and count >= 0:
             yield slug, label, count
 
 
@@ -138,8 +137,9 @@ def upcoming_discipline_milestones(totals, within=UPCOMING_WITHIN, limit=MAX_UPC
     for slug, label, count in _discipline_counts(totals):
         target = discipline_target_after(count)
         if target - count <= within:
-            upcoming.append({'discipline': slug, 'label': label, 'count': count, 'target': target,
-                             'previous': discipline_target_reached(count) or 0})
+            upcoming.append(
+                {'discipline': slug, 'label': label, 'count': count, 'target': target, 'previous': discipline_target_reached(count) or 0}
+            )
     upcoming.sort(key=lambda item: (item['target'] - item['count'], -item['target'], item['label']))
     return upcoming[:limit]
 
@@ -151,10 +151,8 @@ def upcoming_milestones(total, thresholds, step, totals, within=UPCOMING_WITHIN,
     upcoming = upcoming_discipline_milestones(totals, within, limit=None)
     around = next_milestone(total, thresholds, step)
     if around and around[1] - total <= within:
-        upcoming.append({'discipline': None, 'label': 'Workouts', 'count': total,
-                         'target': around[1], 'previous': around[0]})
-    upcoming.sort(key=lambda item: (item['target'] - item['count'], item['discipline'] is not None,
-                                    -item['target'], item['label']))
+        upcoming.append({'discipline': None, 'label': 'Workouts', 'count': total, 'target': around[1], 'previous': around[0]})
+    upcoming.sort(key=lambda item: (item['target'] - item['count'], item['discipline'] is not None, -item['target'], item['label']))
     return upcoming[:limit]
 
 

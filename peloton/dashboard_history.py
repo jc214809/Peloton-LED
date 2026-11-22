@@ -5,14 +5,15 @@ total, and the background history download / re-walk.
 `_log_lock`; the derived-figure sequence numbers by `_lock` (in `_publish_derived`); both locks stay as
 they were when this code lived in dashboard.py.
 """
+
 import logging
 import threading
 import time
 
 import requests
 
-from .stats.journey import uses_metric
 from .schedule import in_quiet_hours
+from .stats.journey import uses_metric
 
 logger = logging.getLogger('peloton-led.dashboard')
 
@@ -28,9 +29,12 @@ REWALK_INTERVAL_SECONDS = 24 * 3600
 
 class HistoryMixin:
     def _derive(self, me):
-        return {'journey': self.config.get('journey'), 'metric': uses_metric(me),
-                'tzname': self.config.get('timezone') or me.get('timezone'),
-                'member_since': me.get('created_at')}
+        return {
+            'journey': self.config.get('journey'),
+            'metric': uses_metric(me),
+            'tzname': self.config.get('timezone') or me.get('timezone'),
+            'member_since': me.get('created_at'),
+        }
 
     def _compute_derived(self, args):
         """Log figures plus their sequence number. Call with the log lock held
@@ -69,12 +73,15 @@ class HistoryMixin:
             return None
         log.check['mismatches'] += 1
         self._save_log()
-        logger.warning('Workout log has %d workouts but Peloton reports %d (%d refresh(es) in a row)',
-                       count, total, log.check['mismatches'])
+        logger.warning(
+            'Workout log has %d workouts but Peloton reports %d (%d refresh(es) in a row)', count, total, log.check['mismatches']
+        )
         last = log.check['last_rewalk']
-        due = (log.check['mismatches'] >= MISMATCH_LIMIT
-               and (last is None or time.time() - last >= REWALK_INTERVAL_SECONDS)
-               and (not self.refresh_schedule or in_quiet_hours(self.refresh_schedule, timezone_name=tz)))
+        due = (
+            log.check['mismatches'] >= MISMATCH_LIMIT
+            and (last is None or time.time() - last >= REWALK_INTERVAL_SECONDS)
+            and (not self.refresh_schedule or in_quiet_hours(self.refresh_schedule, timezone_name=tz))
+        )
         return True if due else None
 
     def _history_running(self):
@@ -83,8 +90,9 @@ class HistoryMixin:
     def _start_history_walk(self, client, user_id, rewalk):
         if self._history_running() or self._stop.is_set():
             return
-        self._history_thread = threading.Thread(target=self._walk_history, args=(client, user_id, rewalk),
-                                                name='peloton-history', daemon=True)
+        self._history_thread = threading.Thread(
+            target=self._walk_history, args=(client, user_id, rewalk), name='peloton-history', daemon=True
+        )
         self._history_thread.start()
 
     def wait_for_history(self, timeout=None):
@@ -107,14 +115,12 @@ class HistoryMixin:
             if full:
                 self._log.begin_walk()
         kind = 're-walk' if rewalk else 'download'
-        logger.info('Workout history %s started for %s (batches of %d, from batch %d)',
-                    kind, self.log_path.name, batch, start)
+        logger.info('Workout history %s started for %s (batches of %d, from batch %d)', kind, self.log_path.name, batch, start)
         started = time.monotonic()
         finished = False
         try:
             last = None
-            for page_number, rows, page in client.iter_workout_pages(
-                    user_id, batch, start_page=start, max_pages=MAX_HISTORY_BATCHES):
+            for page_number, rows, page in client.iter_workout_pages(user_id, batch, start_page=start, max_pages=MAX_HISTORY_BATCHES):
                 with self._log_lock:
                     if self._log.user_id != user_id:
                         return
@@ -134,13 +140,18 @@ class HistoryMixin:
                 derived = self._compute_derived(self._derive_args) if self._derive_args else None
             finished = True
             total = last.get('total') if last else None
-            logger.info('Workout history %s finished: %d workouts in the log, Peloton reports %s, '
-                        '%d removed, %.0fs', kind, count, total, removed, time.monotonic() - started)
+            logger.info(
+                'Workout history %s finished: %d workouts in the log, Peloton reports %s, %d removed, %.0fs',
+                kind,
+                count,
+                total,
+                removed,
+                time.monotonic() - started,
+            )
             if derived:
                 self._publish_derived(*derived)
         except (OSError, ValueError, requests.RequestException) as exc:
-            logger.warning('Workout history %s paused (%s); it resumes on a later refresh',
-                           kind, type(exc).__name__)
+            logger.warning('Workout history %s paused (%s); it resumes on a later refresh', kind, type(exc).__name__)
         finally:
             if not finished:
                 with self._log_lock:

@@ -1,4 +1,6 @@
 """PR flags shared by summaries and display selection."""
+
+
 def pr_types(workout):
     kinds = set()
     if workout.get('is_total_work_personal_record') is True:
@@ -32,10 +34,16 @@ def parse_personal_records(overview):
             raw = record.get('raw_value')
             workout_id = record.get('workout_id')
             # Unset lengths come back as -1 with no workout.
-            if (not discipline or not record.get('name') or not isinstance(workout_id, str)
-                    or isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0):
+            if (
+                not discipline
+                or not record.get('name')
+                or not isinstance(workout_id, str)
+                or isinstance(raw, bool)
+                or not isinstance(raw, (int, float))
+                or raw <= 0
+            ):
                 continue
-            records[f"{discipline}|{record['name']}"] = {
+            records[f'{discipline}|{record["name"]}'] = {
                 'value_kj': round(raw / 1000, 1),
                 'workout_id': workout_id,
                 'workout_date': record.get('workout_date'),
@@ -70,4 +78,3 @@ def previous_best_kj(workout_id, records):
             value = previous.get('value_kj')
             return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
     return None
-

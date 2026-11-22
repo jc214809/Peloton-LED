@@ -1,4 +1,5 @@
 """Quiet-hours refresh scheduling: poll Peloton less often overnight."""
+
 from datetime import datetime
 from zoneinfo import ZoneInfo
 

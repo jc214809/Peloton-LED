@@ -1,8 +1,8 @@
 """The 64x64 layout of the page: discipline, the intro (duration, title, instructor) or one stat at a time."""
-from typing import List, Tuple
 
 from display.display import get_text_width
 from driver import graphics
+
 from .charts import _draw_graph, _draw_muscles, _draw_top_lift, _draw_zones
 from .colors import _BLUE, _WHITE, _disc_color
 from .fonts import PageFonts
@@ -18,7 +18,7 @@ _STAT_STEP = 6
 _LAST_ROW_Y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below.
 
 
-def _draw_discipline(matrix, discipline: str, fonts: PageFonts) -> Tuple[int, int]:
+def _draw_discipline(matrix, discipline: str, fonts: PageFonts) -> tuple[int, int]:
     """Line 1: the discipline, on screen for both intro and stats. Returns (block_y, line count)."""
     w = matrix.width
     disc_text = discipline.upper()
@@ -28,26 +28,24 @@ def _draw_discipline(matrix, discipline: str, fonts: PageFonts) -> Tuple[int, in
     # space and keeps the title plus all three cycling stat rows legible.
     if discipline.lower() == 'bike bootcamp' and fonts.titles:
         disc_font = fonts.titles
-    elif get_text_width(disc_font, disc_text) > w - 2 and fonts.text and (
-            get_text_width(fonts.text, disc_text) <= w - 2):
+    elif get_text_width(disc_font, disc_text) > w - 2 and fonts.text and (get_text_width(fonts.text, disc_text) <= w - 2):
         disc_font = fonts.text
-    disc_lines = _wrap_two_lines(disc_font, disc_text, w - 2)[:2] or [""]
-    disc_font_h = getattr(disc_font, "height", 9)
+    disc_lines = _wrap_two_lines(disc_font, disc_text, w - 2)[:2] or ['']
+    disc_font_h = getattr(disc_font, 'height', 9)
     disc_y = 8 if len(disc_lines) > 1 else 12
     for i, line in enumerate(disc_lines):
         dx = max((w - get_text_width(disc_font, line)) // 2, 1)
-        graphics.DrawText(matrix, disc_font, dx, disc_y + i * disc_font_h,
-                          _disc_color(discipline), line)
+        graphics.DrawText(matrix, disc_font, dx, disc_y + i * disc_font_h, _disc_color(discipline), line)
     return disc_y + (len(disc_lines) - 1) * disc_font_h, len(disc_lines)
 
 
 def _draw_duration(matrix, summary: dict, text_font, dur_y: int) -> None:
     """Line 2: the duration, centred."""
     w = matrix.width
-    dur_min = summary.get("duration_min")
+    dur_min = summary.get('duration_min')
     if isinstance(dur_min, (int, float)):
         dur_val = str(int(dur_min))
-        dur_label = "min"
+        dur_label = 'min'
         dur_val_w = _text_width(text_font, dur_val)
         dur_label_w = _text_width(text_font, dur_label)
         dur_total_w = dur_val_w + 1 + dur_label_w
@@ -56,10 +54,10 @@ def _draw_duration(matrix, summary: dict, text_font, dur_y: int) -> None:
         _draw_text(matrix, text_font, dur_x + dur_val_w + 1, dur_y, _BLUE, dur_label)
 
 
-def _draw_title(matrix, summary: dict, text_font, dur_y: int) -> List[str]:
+def _draw_title(matrix, summary: dict, text_font, dur_y: int) -> list[str]:
     """Lines 3-4: the title below the duration with a visible gap. Returns the lines drawn."""
     w = matrix.width
-    title_stripped = title_without_length(summary.get("title"))
+    title_stripped = title_without_length(summary.get('title'))
     # Edge to edge, as on 32 rows (Joel, 2026-11-16).
     title_lines = _wrap_two_lines(text_font, title_stripped, w)
     for i, line in enumerate(title_lines[:2]):
@@ -68,8 +66,7 @@ def _draw_title(matrix, summary: dict, text_font, dur_y: int) -> List[str]:
     return title_lines[:2]
 
 
-def _draw_instructor(matrix, instructor_detail: dict, header_bottom: int, title_line_count: int,
-                     fonts: PageFonts, elapsed: float) -> bool:
+def _draw_instructor(matrix, instructor_detail: dict, header_bottom: int, title_line_count: int, fonts: PageFonts, elapsed: float) -> bool:
     """The instructor, underneath the title. Returns True when the heart-rate row has to go (intro_without_hr)."""
     w = matrix.width
     intro_without_hr = False
@@ -94,7 +91,7 @@ def _draw_instructor(matrix, instructor_detail: dict, header_bottom: int, title_
         y = max(y, header_bottom + 8)
         intro_without_hr = y + 8 + 7 > _BOTTOM_Y - 8
     if show_label:
-        label_text = _truncate(fonts.stat, "INSTRUCTOR", w - 4)
+        label_text = _truncate(fonts.stat, 'INSTRUCTOR', w - 4)
         lx = max((w - _text_width(fonts.stat, label_text)) // 2, 2)
         _draw_text(matrix, fonts.stat, lx, y + offset, graphics.Color(145, 165, 190), label_text)
         y += 8
@@ -105,8 +102,7 @@ def _draw_instructor(matrix, instructor_detail: dict, header_bottom: int, title_
     return intro_without_hr
 
 
-def _draw_intro(matrix, summary: dict, instructor_detail, block_y: int, disc_line_count: int,
-                fonts: PageFonts, elapsed: float) -> bool:
+def _draw_intro(matrix, summary: dict, instructor_detail, block_y: int, disc_line_count: int, fonts: PageFonts, elapsed: float) -> bool:
     """Duration, title and the instructor under them. Returns True when the heart-rate row has to go."""
     # Tighten the gap when the discipline wraps to 2 lines, to leave room for the title below.
     dur_y = block_y + (7 if disc_line_count > 1 else 10)
@@ -121,8 +117,7 @@ def _draw_intro(matrix, summary: dict, instructor_detail, block_y: int, disc_lin
 def _draw_stat_value(matrix, summary: dict, detail: dict, label_y: int, offset: int, fonts: PageFonts) -> None:
     """A stat's label and large value, with the PR trophy after a total output PR."""
     w = matrix.width
-    value_font = (fonts.title if get_text_width(fonts.title, detail['value'].upper()) <= w - 4
-                  else fonts.text)
+    value_font = fonts.title if get_text_width(fonts.title, detail['value'].upper()) <= w - 4 else fonts.text
     value_y = label_y + 15
     label_text = _truncate(fonts.stat, detail['label'].upper(), w - 4)
     lx = max((w - _text_width(fonts.stat, label_text)) // 2, 2)
@@ -130,15 +125,16 @@ def _draw_stat_value(matrix, summary: dict, detail: dict, label_y: int, offset: 
 
     value_text = _truncate(value_font, detail['value'].upper(), w - 4)
     vx = max((w - get_text_width(value_font, value_text)) // 2, 2)
-    star = bool(summary.get("is_output_pr")) and detail['label'] == 'total output'
+    star = bool(summary.get('is_output_pr')) and detail['label'] == 'total output'
     graphics.DrawText(matrix, value_font, vx, value_y + offset, _value_color(detail), value_text)
     if star:
         star_x = vx + get_text_width(value_font, value_text) + 2
         _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)
 
 
-def _draw_stats(matrix, summary: dict, stat_details: List[dict], block_y: int, fonts: PageFonts,
-                elapsed: float, detail_interval: float) -> None:
+def _draw_stats(
+    matrix, summary: dict, stat_details: list[dict], block_y: int, fonts: PageFonts, elapsed: float, detail_interval: float
+) -> None:
     """Stats phase: the discipline title stays; everything below it (duration/workout-title/instructor)
     is replaced by one rotating stat at a time, using the space freed up below the title."""
     interval = detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
@@ -153,20 +149,21 @@ def _draw_stats(matrix, summary: dict, stat_details: List[dict], block_y: int, f
     if kind == 'graph':
         _draw_graph(matrix, summary, fonts.stat, label_y, label_y + 4, _LAST_ROW_Y - 2)
     elif kind == 'zones':
-        _draw_zones(matrix, summary['hr_zone_seconds'], fonts.stat, fonts.titles or fonts.text,
-                    label_y, label_y + 5, label_y + 13, label_y + 24)
+        _draw_zones(
+            matrix, summary['hr_zone_seconds'], fonts.stat, fonts.titles or fonts.text, label_y, label_y + 5, label_y + 13, label_y + 24
+        )
     elif kind == 'muscles':
         # Starts higher than the other slides: three rows need the room.
         _draw_muscles(matrix, summary['muscles'], fonts.text, block_y + 8)
     elif kind == 'top_lift':
-        _draw_top_lift(matrix, summary, fonts.stat, fonts.titles or fonts.text, fonts.text,
-                       (fonts.title, fonts.titles or fonts.text), block_y + 10)
+        _draw_top_lift(
+            matrix, summary, fonts.stat, fonts.titles or fonts.text, fonts.text, (fonts.title, fonts.titles or fonts.text), block_y + 10
+        )
     else:
         _draw_stat_value(matrix, summary, detail, label_y, offset, fonts)
 
 
-def render_tall(matrix, summary: dict, discipline: str, fonts: PageFonts, elapsed: float,
-                detail_interval: float) -> bool:
+def render_tall(matrix, summary: dict, discipline: str, fonts: PageFonts, elapsed: float, detail_interval: float) -> bool:
     """64x64 version of the two-phase layout: the discipline, then the intro or one stat, then the bar."""
     w = matrix.width
     all_details = _stat_details(summary)
@@ -189,7 +186,7 @@ def render_tall(matrix, summary: dict, discipline: str, fonts: PageFonts, elapse
     # ── PR trophy, where the "PR" letters used to sit ─────────────────
     # Intro only: in the stats phase it would touch wide labels, and the
     # output value carries its own trophy there.
-    if summary.get("is_pr") and in_intro:
+    if summary.get('is_pr') and in_intro:
         _draw_trophy(matrix, w - _TROPHY_W - 2, 16)
 
     return True

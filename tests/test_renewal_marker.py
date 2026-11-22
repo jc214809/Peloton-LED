@@ -1,4 +1,5 @@
 """The renewal job's 'needs a fresh login' marker and the padlock it drives."""
+
 import os
 import time
 from unittest.mock import Mock, patch
@@ -7,15 +8,14 @@ import pytest
 import requests
 
 from peloton.config import renewal_failed_path
-from peloton.dashboard import Dashboard, RENEWAL_MARKER_CHECK_SECONDS
+from peloton.dashboard import RENEWAL_MARKER_CHECK_SECONDS, Dashboard
 from scripts.refresh_cookies import LoginRequired, RefreshTokenRejected, ensure_token
 
 
 def _dashboard(tmp_path, **kwargs):
     token = tmp_path / 'cookies-joel.txt'
     token.write_text('token')
-    return Dashboard(token, {'cache_path': str(tmp_path / 'cache.json')},
-                     client_factory=lambda path: Mock(), **kwargs), token
+    return Dashboard(token, {'cache_path': str(tmp_path / 'cache.json')}, client_factory=lambda path: Mock(), **kwargs), token
 
 
 def _age(path, seconds):
@@ -82,6 +82,7 @@ def test_rejected_token_still_shows_padlock(tmp_path):
 
 # The renewal job's side.
 
+
 @pytest.mark.parametrize('failure', [RefreshTokenRejected('invalid_grant'), LoginRequired('seed it')])
 def test_login_required_failures_write_the_marker(tmp_path, failure):
     token = tmp_path / 'cookies.txt'
@@ -125,8 +126,10 @@ def test_missing_refresh_and_browser_is_login_required(tmp_path):
     token.write_text('rejected')
     response = requests.Response()
     response.status_code = 401
-    with patch('scripts.refresh_cookies.verify_token', side_effect=requests.HTTPError(response=response)), \
-         patch('scripts.refresh_cookies.browser_login_available', return_value=False):
+    with (
+        patch('scripts.refresh_cookies.verify_token', side_effect=requests.HTTPError(response=response)),
+        patch('scripts.refresh_cookies.browser_login_available', return_value=False),
+    ):
         with pytest.raises(LoginRequired):
             ensure_token(token, tmp_path / 'config.json')
     assert renewal_failed_path(token).exists()
@@ -134,6 +137,7 @@ def test_missing_refresh_and_browser_is_login_required(tmp_path):
 
 def test_show_and_wait_repaints_when_the_marker_appears():
     from peloton_led import show_and_wait
+
     dashboard = Mock()
     states = iter([False, True, True, True, True, True, True, True, True, True])
     type(dashboard).login_indicator_required = property(lambda self: next(states, True))

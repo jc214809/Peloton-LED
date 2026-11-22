@@ -1,32 +1,53 @@
 """Streak screen (weekly and daily) and the streak data behind it."""
-from datetime import date, datetime, timezone
+
+from datetime import UTC, date, datetime
 from unittest.mock import Mock
 
 import pytest
 
 from display.display import initialize_fonts
 from display.ui.streak_risk_screen import StreakRiskScreen
-from display.ui.streak_screen import (FLAME_FRAME_SECONDS, FLAME_H, FLAME_RAMP, FLAME_W, SPARK_SECONDS,
-                                      StreakScreen, _spark, daily_streak_lines, flame_color, flame_pixels,
-                                      since_text, streak_lines, streak_views)
-from peloton.workouts.activity import daily_streak_start
+from display.ui.streak_screen import (
+    FLAME_FRAME_SECONDS,
+    FLAME_H,
+    FLAME_RAMP,
+    FLAME_W,
+    SPARK_SECONDS,
+    StreakScreen,
+    _spark,
+    daily_streak_lines,
+    flame_color,
+    flame_pixels,
+    since_text,
+    streak_lines,
+    streak_views,
+)
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import load_config
 from peloton.stats.totals import parse_streaks
+from peloton.workouts.activity import daily_streak_start
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 
 
 def test_parse_streaks_keeps_only_whole_non_negative_counts():
-    overview = {'streaks': {'current_weekly': 2, 'best_weekly': 74, 'current_daily': 3,
-                            'start_date_of_current_weekly': 1789410461,
-                            'start_date_of_current_daily': 1793750400}}
-    assert parse_streaks(overview) == {'current_weekly': 2, 'best_weekly': 74, 'current_daily': 3,
-                                       'start_date_of_current_daily': 1793750400}
-    assert parse_streaks({'streaks': {'current_daily': 3, 'start_date_of_current_daily': None}}) == {
-        'current_daily': 3}
-    assert parse_streaks({'streaks': {'current_weekly': '2', 'best_weekly': -1,
-                                      'current_daily': True}}) == {}
+    overview = {
+        'streaks': {
+            'current_weekly': 2,
+            'best_weekly': 74,
+            'current_daily': 3,
+            'start_date_of_current_weekly': 1789410461,
+            'start_date_of_current_daily': 1793750400,
+        }
+    }
+    assert parse_streaks(overview) == {
+        'current_weekly': 2,
+        'best_weekly': 74,
+        'current_daily': 3,
+        'start_date_of_current_daily': 1793750400,
+    }
+    assert parse_streaks({'streaks': {'current_daily': 3, 'start_date_of_current_daily': None}}) == {'current_daily': 3}
+    assert parse_streaks({'streaks': {'current_weekly': '2', 'best_weekly': -1, 'current_daily': True}}) == {}
     assert parse_streaks({'streaks': None}) == {}
     assert parse_streaks({}) == {}
     assert parse_streaks(None) == {}
@@ -42,13 +63,16 @@ def test_streak_lines_mark_a_tied_record_and_skip_zero():
 
 
 @pytest.mark.parametrize('height', [32, 64])
-@pytest.mark.parametrize('streaks', [
-    {'current_weekly': 2, 'best_weekly': 74},
-    {'current_weekly': 1234, 'best_weekly': 1500},
-    # The widest daily footers: 4-digit count, a three-wide month and a year.
-    {'current_daily': 1234, 'daily_start': '2023-11-30', 'today': '2026-11-02'},
-    {'current_weekly': 103, 'current_daily': 703, 'daily_start': '2024-11-30', 'today': '2026-11-02',
-     'view': 'daily'}])
+@pytest.mark.parametrize(
+    'streaks',
+    [
+        {'current_weekly': 2, 'best_weekly': 74},
+        {'current_weekly': 1234, 'best_weekly': 1500},
+        # The widest daily footers: 4-digit count, a three-wide month and a year.
+        {'current_daily': 1234, 'daily_start': '2023-11-30', 'today': '2026-11-02'},
+        {'current_weekly': 103, 'current_daily': 703, 'daily_start': '2024-11-30', 'today': '2026-11-02', 'view': 'daily'},
+    ],
+)
 def test_streak_screen_fits_the_panel(height, streaks):
     matrix = ImageMatrix(height=height)
     initialize_fonts(height)
@@ -69,7 +93,11 @@ def test_streak_screen_renders_nothing_without_a_streak():
 def test_daily_streak_shows_from_two_days_with_its_start_date():
     today = '2026-11-02'
     assert daily_streak_lines({'current_daily': 703, 'daily_start': '2024-12-01', 'today': today}) == (
-        703, 'DAY STREAK', 'SINCE DEC 2024', False)
+        703,
+        'DAY STREAK',
+        'SINCE DEC 2024',
+        False,
+    )
     assert daily_streak_lines({'current_daily': 3, 'daily_start': '2026-10-31', 'today': today})[2] == 'SINCE OCT 31'
     # Missing or damaged dates just drop the footer.
     assert daily_streak_lines({'current_daily': 3})[2] == ''
@@ -88,8 +116,7 @@ def test_since_text_switches_to_the_year_after_a_year():
 
 def test_streak_views_put_weekly_first_and_skip_empty_ones():
     both = {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12}
-    assert [(view, lines[1]) for view, lines in streak_views(both)] == [
-        ('weekly', 'WEEK STREAK'), ('daily', 'DAY STREAK')]
+    assert [(view, lines[1]) for view, lines in streak_views(both)] == [('weekly', 'WEEK STREAK'), ('daily', 'DAY STREAK')]
     assert [view for view, _ in streak_views({**both, 'current_daily': 1})] == ['weekly']
     assert [view for view, _ in streak_views({**both, 'current_weekly': 0})] == ['daily']
     assert streak_views({'current_weekly': 0, 'current_daily': 1}) == []
@@ -121,18 +148,21 @@ def _pin_today(monkeypatch, day):
 
 def test_rotation_alternates_weekly_and_daily_across_passes(monkeypatch):
     _pin_today(monkeypatch, (2026, 11, 2))
-    display = {'rotation': ['streaks'], 'last_workout_duration': 15, 'overview_duration': 4,
-               'screen_durations': {'streaks': 6}}
-    snapshot = {'summaries': [], 'totals': {}, 'status': 'ready',
-                'streaks': {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12},
-                'activity_days': {'2026-11-01': 30}}
+    display = {'rotation': ['streaks'], 'last_workout_duration': 15, 'overview_duration': 4, 'screen_durations': {'streaks': 6}}
+    snapshot = {
+        'summaries': [],
+        'totals': {},
+        'status': 'ready',
+        'streaks': {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12},
+        'activity_days': {'2026-11-01': 30},
+    }
     # Nothing logged today yet: the streak runs through yesterday.
-    expected = {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12,
-                'today': '2026-11-02', 'daily_start': '2026-10-21'}
+    expected = {'current_weekly': 3, 'best_weekly': 9, 'current_daily': 12, 'today': '2026-11-02', 'daily_start': '2026-10-21'}
     # One streak per pass, each for the configured time: weekly, daily, weekly.
     for pass_index, view in enumerate(('weekly', 'daily', 'weekly')):
         assert build_rotation_pages(snapshot, Mock(), display, 'R', 64, pass_index=pass_index) == [
-            ('streak', {**expected, 'view': view}, 6)]
+            ('streak', {**expected, 'view': view}, 6)
+        ]
     # Weekly alone shows on every pass.
     snapshot['streaks']['current_daily'] = 1
     assert build_rotation_pages(snapshot, Mock(), display, 'R', 64, pass_index=1)[0][1]['view'] == 'weekly'
@@ -142,13 +172,10 @@ def test_rotation_alternates_weekly_and_daily_across_passes(monkeypatch):
     snapshot['streak_week_workouts'] = 0
     monkeypatch.setattr('display.rotation_pages.week_day', lambda zone: 6)
     pages = build_rotation_pages(snapshot, Mock(), display, 'R', 64)
-    assert [(name, state['view'], state['daily_start']) for name, state, _ in pages] == [
-        ('streak', 'daily', '2026-10-28')]
+    assert [(name, state['view'], state['daily_start']) for name, state, _ in pages] == [('streak', 'daily', '2026-10-28')]
     # Peloton's own start date wins over counting back.
-    snapshot['streaks']['start_date_of_current_daily'] = int(
-        datetime(2026, 10, 27, 15, tzinfo=timezone.utc).timestamp())
-    assert build_rotation_pages(snapshot, Mock(), {**display, 'timezone': 'America/New_York'},
-                                'R', 64)[0][1]['daily_start'] == '2026-10-27'
+    snapshot['streaks']['start_date_of_current_daily'] = int(datetime(2026, 10, 27, 15, tzinfo=UTC).timestamp())
+    assert build_rotation_pages(snapshot, Mock(), {**display, 'timezone': 'America/New_York'}, 'R', 64)[0][1]['daily_start'] == '2026-10-27'
 
 
 def test_daily_streak_start_counts_back_from_today_or_yesterday():
@@ -162,22 +189,21 @@ def test_daily_streak_start_counts_back_from_today_or_yesterday():
 def test_daily_streak_start_prefers_pelotons_date_on_the_display_calendar():
     today = date(2026, 11, 2)
     # 2024-12-01 03:00 UTC is still Nov 30 in New York.
-    stamp = int(datetime(2024, 12, 1, 3, tzinfo=timezone.utc).timestamp())
+    stamp = int(datetime(2024, 12, 1, 3, tzinfo=UTC).timestamp())
     assert daily_streak_start(703, today, {}, stamp, 'America/New_York') == date(2024, 11, 30)
     assert daily_streak_start(703, today, {}, stamp, 'UTC') == date(2024, 12, 1)
     # A start after today, or one that isn't a timestamp, falls back to counting back.
-    tomorrow = int(datetime(2026, 11, 3, 12, tzinfo=timezone.utc).timestamp())
+    tomorrow = int(datetime(2026, 11, 3, 12, tzinfo=UTC).timestamp())
     for bad in (tomorrow, 'soon', True, None):
         assert daily_streak_start(3, today, {}, bad, 'UTC') == date(2026, 10, 31)
 
 
 def test_rotation_includes_streaks_only_when_there_is_one():
-    display = {'rotation': ['streaks'], 'last_workout_duration': 15, 'overview_duration': 4,
-               'screen_durations': {'streaks': 6}}
-    snapshot = {'summaries': [], 'totals': {}, 'status': 'ready',
-                'streaks': {'current_weekly': 3, 'best_weekly': 9}}
+    display = {'rotation': ['streaks'], 'last_workout_duration': 15, 'overview_duration': 4, 'screen_durations': {'streaks': 6}}
+    snapshot = {'summaries': [], 'totals': {}, 'status': 'ready', 'streaks': {'current_weekly': 3, 'best_weekly': 9}}
     assert build_rotation_pages(snapshot, Mock(), display, 'R', 64) == [
-        ('streak', {'current_weekly': 3, 'best_weekly': 9, 'view': 'weekly'}, 6)]
+        ('streak', {'current_weekly': 3, 'best_weekly': 9, 'view': 'weekly'}, 6)
+    ]
     snapshot['streaks'] = {'current_weekly': 0}
     assert build_rotation_pages(snapshot, Mock(), display, 'R', 64) == []
     snapshot['streaks'] = {'current_weekly': 0, 'current_daily': 1}
@@ -247,8 +273,7 @@ def test_flame_is_repeatable_and_safe_with_odd_times():
 
 
 def test_sparks_rise_in_some_spans_and_not_others():
-    spans = [[_spark(span * SPARK_SECONDS + i * 0.05) for i in range(int(SPARK_SECONDS / 0.05))]
-             for span in range(20)]
+    spans = [[_spark(span * SPARK_SECONDS + i * 0.05) for i in range(int(SPARK_SECONDS / 0.05))] for span in range(20)]
     with_spark = [s for s in spans if any(s)]
     assert 0 < len(with_spark) < len(spans)
     for span in with_spark:
@@ -257,9 +282,9 @@ def test_sparks_rise_in_some_spans_and_not_others():
         assert all(2 <= spark[0] < FLAME_W - 2 for spark in span if spark)
 
 
-@pytest.mark.parametrize('screen, state', [
-    (StreakScreen, {'current_weekly': 1234, 'best_weekly': 1500}),
-    (StreakRiskScreen, {'current': 1234, 'days_left': 2})])
+@pytest.mark.parametrize(
+    'screen, state', [(StreakScreen, {'current_weekly': 1234, 'best_weekly': 1500}), (StreakRiskScreen, {'current': 1234, 'days_left': 2})]
+)
 @pytest.mark.parametrize('height', [32, 64])
 def test_flame_burns_on_the_page_and_restarts_on_entry(screen, state, height):
     initialize_fonts(height)
@@ -290,12 +315,12 @@ def test_render_streaks_draws_the_readme_screenshots(tmp_path, capsys):
     from PIL import Image
 
     from scripts import render_logo, render_streaks
+
     render_streaks.main(['--out-dir', str(tmp_path)])
     scale, gap, left = render_logo.SHEET_SCALE, render_logo.GAP, render_logo.LABEL_WIDTH
     for name, (screen_class, states) in render_streaks.SHEETS.items():
         sheet = Image.open(tmp_path / name).convert('RGB')
-        assert sheet.size == (left + len(states) * (64 * scale + gap),
-                              gap + 64 * scale + gap * 2 + 32 * scale + gap)
+        assert sheet.size == (left + len(states) * (64 * scale + gap), gap + 64 * scale + gap * 2 + 32 * scale + gap)
         top = gap
         for height in (64, 32):
             initialize_fonts(height)
@@ -313,5 +338,6 @@ def test_render_streaks_draws_the_readme_screenshots(tmp_path, capsys):
 
 def test_render_streaks_stops_on_a_page_it_cannot_draw():
     from scripts import render_streaks
+
     with pytest.raises(RuntimeError, match='drew nothing'):
         render_streaks.panels(StreakScreen, [{}], 64)

@@ -1,22 +1,20 @@
 # python file: display/ui/discipline_page.py
 
-from .screen import Screen
-from typing import Optional, Dict, Any
+from typing import Any
 
-from display.display import color_dict, get_text_width, loaded_fonts, wrap_text, draw_centered_text
+from display.display import color_dict, draw_centered_text, get_text_width, loaded_fonts, wrap_text
 from utils import debug
+
+from .screen import Screen
 
 
 class DisciplinePageScreen(Screen):
-    def __init__(self,
-                 title_font_key: str = "discipline",
-                 number_font_key: str = "countdown",
-                 color_key: str = "red"):
+    def __init__(self, title_font_key: str = 'discipline', number_font_key: str = 'countdown', color_key: str = 'red'):
         self.title_font_key = title_font_key
         self.number_font_key = number_font_key
         self.color_key = color_key
 
-    def render(self, matrix, state: Optional[Dict[str, Any]] = None):
+    def render(self, matrix, state: dict[str, Any] | None = None):
         """Render a discipline page.
 
         state can be a dict containing:
@@ -25,24 +23,24 @@ class DisciplinePageScreen(Screen):
         - title_font_key, number_font_key, color_key (optional overrides)
         - number_color_key: color for the count only (default: color_key)
         """
-        title_font_key = (state or {}).get("title_font_key") or self.title_font_key
-        number_font_key = (state or {}).get("number_font_key") or self.number_font_key
-        color_key = (state or {}).get("color_key") or self.color_key
+        title_font_key = (state or {}).get('title_font_key') or self.title_font_key
+        number_font_key = (state or {}).get('number_font_key') or self.number_font_key
+        color_key = (state or {}).get('color_key') or self.color_key
 
         title_font = loaded_fonts.get(title_font_key)
         number_font = loaded_fonts.get(number_font_key)
 
         if not title_font or not number_font:
             missing = title_font_key if not title_font else number_font_key
-            debug.error("Font %s is not loaded; call initialize_fonts() first.", missing)
+            debug.error('Font %s is not loaded; call initialize_fonts() first.', missing)
             return False
 
-        color = color_dict.get(color_key, color_dict.get("white"))
-        number_color = color_dict.get((state or {}).get("number_color_key"), color)
+        color = color_dict.get(color_key, color_dict.get('white'))
+        number_color = color_dict.get((state or {}).get('number_color_key'), color)
 
-        discipline_name = (state or {}).get("discipline") or "Discipline"
-        count_val = (state or {}).get("count")
-        count_text = f"{int(count_val):,}" if isinstance(count_val, (int, float)) else str(count_val or "0")
+        discipline_name = (state or {}).get('discipline') or 'Discipline'
+        count_val = (state or {}).get('count')
+        count_text = f'{int(count_val):,}' if isinstance(count_val, (int, float)) else str(count_val or '0')
 
         max_name_width = max(matrix.width - 4, 4)
         title_lines = wrap_text(title_font, discipline_name, max_name_width, padding=2)

@@ -6,6 +6,7 @@ def parse_each_font_once():
     """bdfparser reads a BDF in pure Python (~0.5 s a font) and every render re-runs initialize_fonts, which
     was most of the suite's run time. Parsed fonts are read-only, so share one per path."""
     from RGBMatrixEmulator.graphics import font as emulator_font
+
     parsed = {}
     real_load = emulator_font.Font.LoadFont
 
@@ -30,6 +31,7 @@ def no_history_batch_pause(monkeypatch):
 def heartbeat_in_tmp(tmp_path, monkeypatch):
     """The display beats after each screen (utils/heartbeat.py): never into a real board's /run."""
     import utils.heartbeat as heartbeat
+
     monkeypatch.setattr(heartbeat, 'HEARTBEAT_FILE', str(tmp_path / 'peloton-led' / 'health'))
     heartbeat._last_problem = None
 

@@ -1,13 +1,22 @@
 """Consistent completed-workout selection and discipline matching."""
+
 import logging
-from datetime import datetime, timezone
-from .timestamps import workout_timestamp, workout_date
+from datetime import UTC, datetime
+
+from .timestamps import workout_date, workout_timestamp
 
 logger = logging.getLogger('peloton-led.selection')
-ALIASES = {'bike': 'cycling', 'ride': 'cycling', 'caesar': 'rowing',
-           'caesar_bootcamp': 'row_bootcamp', 'circuit': 'tread_bootcamp',
-           'outdoor_run': 'running_outdoor', 'outdoor_running': 'running_outdoor',
-           'outdoor_walk': 'walking_outdoor', 'outdoor_walking': 'walking_outdoor'}
+ALIASES = {
+    'bike': 'cycling',
+    'ride': 'cycling',
+    'caesar': 'rowing',
+    'caesar_bootcamp': 'row_bootcamp',
+    'circuit': 'tread_bootcamp',
+    'outdoor_run': 'running_outdoor',
+    'outdoor_running': 'running_outdoor',
+    'outdoor_walk': 'walking_outdoor',
+    'outdoor_walking': 'walking_outdoor',
+}
 
 
 def normalize_discipline(value):
@@ -21,9 +30,13 @@ def discipline_of(workout):
     Running in October 2025: your earlier ones stay Walking, as in the app's totals, while the
     class now says Running)."""
     ride = workout.get('ride') or {}
-    return normalize_discipline(workout.get('fitness_discipline') or ride.get('fitness_discipline')
-        or workout.get('fitness_discipline_display_name') or ride.get('fitness_discipline_display_name')
-        or workout.get('discipline'))
+    return normalize_discipline(
+        workout.get('fitness_discipline')
+        or ride.get('fitness_discipline')
+        or workout.get('fitness_discipline_display_name')
+        or ride.get('fitness_discipline_display_name')
+        or workout.get('discipline')
+    )
 
 
 def is_completed(workout):
@@ -67,9 +80,9 @@ def ordered_workouts(workouts, tzname=None):
             continue
         result.append(workout)
     # Date-only entries participate in active-day groups but not latest-instant selection.
-    return sorted(result, key=lambda w: (
-        workout_date(w, tzname),
-        workout_timestamp(w, tzname) or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+    return sorted(
+        result, key=lambda w: (workout_date(w, tzname), workout_timestamp(w, tzname) or datetime.min.replace(tzinfo=UTC)), reverse=True
+    )
 
 
 def latest_workout(workouts, tzname=None):

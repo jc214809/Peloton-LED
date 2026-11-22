@@ -11,25 +11,25 @@ def fonts():
     """Define font paths for different board sizes."""
     return {
         32: {
-            "discipline": "assets/fonts/patched/5x8.bdf",
-            "info": "assets/fonts/patched/4x6-legacy.bdf",
-            "titles": "assets/fonts/patched/4x6-legacy.bdf",
-            "stats":"assets/fonts/patched/4x6-legacy.bdf",
-            "countdown": "assets/fonts/patched/6x9.bdf",
-            "big": "assets/fonts/patched/7x13B.bdf",
-            "bold": "assets/fonts/patched/7x13B.bdf"
+            'discipline': 'assets/fonts/patched/5x8.bdf',
+            'info': 'assets/fonts/patched/4x6-legacy.bdf',
+            'titles': 'assets/fonts/patched/4x6-legacy.bdf',
+            'stats': 'assets/fonts/patched/4x6-legacy.bdf',
+            'countdown': 'assets/fonts/patched/6x9.bdf',
+            'big': 'assets/fonts/patched/7x13B.bdf',
+            'bold': 'assets/fonts/patched/7x13B.bdf',
         },
         64: {
-            "discipline": "assets/fonts/patched/6x13.bdf",
-            "info": "assets/fonts/patched/4x6-legacy.bdf",
-            "titles": "assets/fonts/patched/5x8.bdf",
-            "stats":"assets/fonts/patched/tom-thumb.bdf",
-            "countdown": "assets/fonts/patched/7x13.bdf",
-            "big": "assets/fonts/patched/10x20.bdf",
-            "bold": "assets/fonts/patched/7x13B.bdf",
-            "title_bold": "assets/fonts/patched/6x13B.bdf",
-            "goal_value": "assets/fonts/patched/8x13B.bdf"
-        }
+            'discipline': 'assets/fonts/patched/6x13.bdf',
+            'info': 'assets/fonts/patched/4x6-legacy.bdf',
+            'titles': 'assets/fonts/patched/5x8.bdf',
+            'stats': 'assets/fonts/patched/tom-thumb.bdf',
+            'countdown': 'assets/fonts/patched/7x13.bdf',
+            'big': 'assets/fonts/patched/10x20.bdf',
+            'bold': 'assets/fonts/patched/7x13B.bdf',
+            'title_bold': 'assets/fonts/patched/6x13B.bdf',
+            'goal_value': 'assets/fonts/patched/8x13B.bdf',
+        },
     }
 
 
@@ -44,7 +44,7 @@ def initialize_fonts(matrix_height):
     font_dict = fonts().get(matrix_height)
 
     if font_dict is None:
-        debug.error(f"No font definitions found for height {matrix_height}.")
+        debug.error(f'No font definitions found for height {matrix_height}.')
         return None  # Handle case where no fonts are defined
 
     # Load each font and log the process
@@ -56,24 +56,27 @@ def initialize_fonts(matrix_height):
             loaded_fonts[name] = font  # Cache the loaded font
             debug.info(f"Successfully loaded font '{name}' from '{absolute_path}'")
         except Exception as e:
-            debug.error(f"Error loading font from path {absolute_path}: {e}")
+            debug.error(f'Error loading font from path {absolute_path}: {e}')
 
-    debug.info(f"Loaded fonts: {list(loaded_fonts.keys())}")  # Show successfully loaded fonts
+    debug.info(f'Loaded fonts: {list(loaded_fonts.keys())}')  # Show successfully loaded fonts
     if len(loaded_fonts) != len(font_dict):
         raise RuntimeError('Required display fonts could not be loaded')
     return loaded_fonts
 
+
 def colors():
     # Return a dictionary of colors
     return {
-        "red": graphics.Color(242, 5, 5),
-        "disney_blue": graphics.Color(17, 60, 207),
-        "white": graphics.Color(255, 255, 255),
-        "down": graphics.Color(250, 0, 0),
-        "gold": graphics.Color(255, 215, 0)
+        'red': graphics.Color(242, 5, 5),
+        'disney_blue': graphics.Color(17, 60, 207),
+        'white': graphics.Color(255, 255, 255),
+        'down': graphics.Color(250, 0, 0),
+        'gold': graphics.Color(255, 215, 0),
     }
 
+
 color_dict = colors()
+
 
 def get_text_width(font, text):
     """Helper to calculate total width of text in pixels."""
@@ -94,7 +97,7 @@ def wrap_text(font, text, max_width, padding):
     """
     words = text.split()
     lines = []
-    current_line = ""
+    current_line = ''
 
     for word in words:
         word_width = get_text_width(font, word)
@@ -102,11 +105,11 @@ def wrap_text(font, text, max_width, padding):
             # Word alone doesn't fit; put it on its own line
             if current_line:
                 lines.append(current_line)
-                current_line = ""
+                current_line = ''
             lines.append(word)
             continue
 
-        test_line = (current_line + " " + word).strip() if current_line else word
+        test_line = (current_line + ' ' + word).strip() if current_line else word
         test_line_width = get_text_width(font, test_line)
         if test_line_width <= max_width - padding:
             current_line = test_line
@@ -118,6 +121,7 @@ def wrap_text(font, text, max_width, padding):
         lines.append(current_line)
     lines = [line for line in lines if line.strip()]
     return lines
+
 
 def draw_centered_text(matrix, font, text, y, color):
     """Draw text horizontally centered on the matrix using provided font."""

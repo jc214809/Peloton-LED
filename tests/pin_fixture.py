@@ -4,6 +4,7 @@ JSON, and each case lists ids. One case and one value per line, so a diff shows 
 Used by test_rotation_pages_pin.py and test_settings_form_pin.py. Cases map a name to a JSON structure in which
 every table value was replaced by its id (see Table.intern) and is put back by Table.resolve.
 """
+
 import hashlib
 import json
 
@@ -24,7 +25,7 @@ class Table:
     def intern(self, value):
         """The id of a JSON-able value, storing it when it is new."""
         text = canonical(value)
-        key = hashlib.sha256(text.encode()).hexdigest()[:self.id_length]
+        key = hashlib.sha256(text.encode()).hexdigest()[: self.id_length]
         known = self.values.setdefault(key, json.loads(text))
         assert canonical(known) == text, f'hash collision on {key}'
         return key
@@ -36,8 +37,9 @@ class Table:
 def write(path, table, cases):
     """Write the cases (name: JSON) and the table, one per line."""
     lines = ['{"cases":{']
-    lines += [f'{json.dumps(name)}:{canonical(case)}{"," if i < len(cases) - 1 else ""}'
-              for i, (name, case) in enumerate(sorted(cases.items()))]
+    lines += [
+        f'{json.dumps(name)}:{canonical(case)}{"," if i < len(cases) - 1 else ""}' for i, (name, case) in enumerate(sorted(cases.items()))
+    ]
     lines += ['},"values":{']
     items = sorted(table.values.items())
     lines += [f'"{key}":{canonical(value)}{"," if i < len(items) - 1 else ""}' for i, (key, value) in enumerate(items)]

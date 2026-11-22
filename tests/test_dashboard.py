@@ -1,9 +1,10 @@
-from unittest.mock import Mock, patch
 import json
-import time
-from datetime import datetime
-from zoneinfo import ZoneInfo
 import stat
+import time
+from datetime import UTC, datetime
+from unittest.mock import Mock, patch
+from zoneinfo import ZoneInfo
+
 import requests
 
 from peloton.api import PelotonClient
@@ -14,11 +15,12 @@ from peloton.demo import demo_data
 def serve_history(client):
     """Answer get_workouts_page from client.history (newest first), with the
     real paging logic, so tests can change history between refreshes."""
+
     def page(user_id, limit, page=0):
-        rows = client.history[page * limit:(page + 1) * limit]
+        rows = client.history[page * limit : (page + 1) * limit]
         pages = max(1, -(-len(client.history) // limit))
-        return {'data': rows, 'total': len(client.history), 'page_count': pages,
-                'show_next': page < pages - 1}
+        return {'data': rows, 'total': len(client.history), 'page_count': pages, 'show_next': page < pages - 1}
+
     client.get_workouts_page.side_effect = page
     client.page_rows = PelotonClient.page_rows
     client.is_last_page = PelotonClient.is_last_page
@@ -120,8 +122,11 @@ def test_corrupt_or_wrong_version_cache_is_ignored(tmp_path):
     token = tmp_path / 'token'
     token.write_text('synthetic-token')
     cache_path = tmp_path / 'dashboard-cache.json'
-    for contents in ('not json', json.dumps({'version': 999, 'snapshot': {}}),
-                     json.dumps({'version': 1, 'snapshot': {'summaries': {}, 'totals': {}}})):
+    for contents in (
+        'not json',
+        json.dumps({'version': 999, 'snapshot': {}}),
+        json.dumps({'version': 1, 'snapshot': {'summaries': {}, 'totals': {}}}),
+    ):
         cache_path.write_text(contents)
         dashboard = Dashboard(token, {})
         snapshot = dashboard.snapshot()
@@ -335,20 +340,16 @@ def test_lru_performance_cache_is_bounded(tmp_path):
 
 
 def test_refresh_summarizes_every_workout_on_latest_active_day(tmp_path):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     dashboard, client, _ = setup_dashboard(tmp_path)
-    latest_day = datetime.now(timezone.utc) - timedelta(days=7)
+    latest_day = datetime.now(UTC) - timedelta(days=7)
     older_day = latest_day - timedelta(days=1)
     client.history = [
-        {'id': 'older', 'status': 'COMPLETE', 'start_time': older_day.timestamp(),
-         'fitness_discipline': 'strength'},
-        {'id': 'morning', 'status': 'COMPLETE', 'start_time': latest_day.replace(hour=9).timestamp(),
-         'fitness_discipline': 'yoga'},
-        {'id': 'evening', 'status': 'COMPLETE', 'start_time': latest_day.replace(hour=18).timestamp(),
-         'fitness_discipline': 'rowing'},
-        {'id': 'active', 'status': 'IN_PROGRESS', 'start_time': latest_day.replace(hour=20).timestamp(),
-         'fitness_discipline': 'cycling'},
+        {'id': 'older', 'status': 'COMPLETE', 'start_time': older_day.timestamp(), 'fitness_discipline': 'strength'},
+        {'id': 'morning', 'status': 'COMPLETE', 'start_time': latest_day.replace(hour=9).timestamp(), 'fitness_discipline': 'yoga'},
+        {'id': 'evening', 'status': 'COMPLETE', 'start_time': latest_day.replace(hour=18).timestamp(), 'fitness_discipline': 'rowing'},
+        {'id': 'active', 'status': 'IN_PROGRESS', 'start_time': latest_day.replace(hour=20).timestamp(), 'fitness_discipline': 'cycling'},
     ]
     client.get_perf_graph.return_value = {'duration': 1200}
     dashboard.refresh()
@@ -373,13 +374,16 @@ def test_same_rejected_token_finishes_attempt_state(tmp_path):
 
 def test_background_refresh_does_not_block_snapshot_or_shutdown(tmp_path):
     import threading
+
     dashboard, client, _ = setup_dashboard(tmp_path)
     entered, release = threading.Event(), threading.Event()
     data = demo_data()
+
     def slow_profile():
         entered.set()
         assert release.wait(3)
         return data['me']
+
     client.get_me.side_effect = slow_profile
     dashboard.start()
     try:
@@ -394,16 +398,19 @@ def test_background_refresh_does_not_block_snapshot_or_shutdown(tmp_path):
 
 def test_worker_refreshes_automatically_without_screen_calls(tmp_path):
     import threading
+
     dashboard, client, _ = setup_dashboard(tmp_path)
     dashboard.interval = 0.02
     refreshed = threading.Event()
     calls = 0
+
     def overview(_):
         nonlocal calls
         calls += 1
         if calls == 2:
             refreshed.set()
         return demo_data()['overview']
+
     client.get_overview.side_effect = overview
     dashboard.start()
     try:
@@ -415,16 +422,19 @@ def test_worker_refreshes_automatically_without_screen_calls(tmp_path):
 
 def test_request_refresh_wakes_sleeping_worker(tmp_path):
     import threading
+
     dashboard, client, _ = setup_dashboard(tmp_path)
     dashboard.interval = 3600
     refreshed = threading.Event()
     calls = 0
+
     def overview(_):
         nonlocal calls
         calls += 1
         if calls == 2:
             refreshed.set()
         return demo_data()['overview']
+
     client.get_overview.side_effect = overview
     dashboard.start()
     try:
@@ -441,6 +451,7 @@ def test_request_refresh_wakes_sleeping_worker(tmp_path):
 
 def test_stop_reports_blocked_worker_then_completes(tmp_path):
     import threading
+
     dashboard, client, _ = setup_dashboard(tmp_path)
     entered, release = threading.Event(), threading.Event()
     client.get_me.side_effect = lambda: (entered.set(), release.wait(2), demo_data()['me'])[-1]
@@ -454,6 +465,7 @@ def test_stop_reports_blocked_worker_then_completes(tmp_path):
 
 def test_screen_rotation_continues_during_slow_refresh(tmp_path, instant_clock):
     import threading
+
     from peloton_led import run_display_loop
 
     dashboard, client, _ = setup_dashboard(tmp_path)
@@ -475,12 +487,18 @@ def test_screen_rotation_continues_during_slow_refresh(tmp_path, instant_clock):
 
 
 def _overview_with_record(data, raw_value, workout_id):
-    return dict(data['overview'], personal_records=[
-        {'slug': 'cycling', 'records': [
-            {'name': '30 min', 'raw_value': raw_value, 'workout_id': workout_id,
-             'workout_date': '2026-09-01T12:00:00'},
-            {'name': '45 min', 'raw_value': -1, 'workout_id': None, 'workout_date': None},
-        ]}])
+    return dict(
+        data['overview'],
+        personal_records=[
+            {
+                'slug': 'cycling',
+                'records': [
+                    {'name': '30 min', 'raw_value': raw_value, 'workout_id': workout_id, 'workout_date': '2026-09-01T12:00:00'},
+                    {'name': '45 min', 'raw_value': -1, 'workout_id': None, 'workout_date': None},
+                ],
+            }
+        ],
+    )
 
 
 def test_new_pr_gets_the_record_it_beat_and_survives_restart(tmp_path):
@@ -531,19 +549,26 @@ def test_damaged_records_table_is_dropped_without_losing_cache(tmp_path):
 
 def test_a_workout_under_a_minute_is_not_a_latest_workout(tmp_path):
     # A 41-second "Just Walk" (a start tapped by accident) became the first latest-workout page.
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     dashboard, client, _ = setup_dashboard(tmp_path)
-    day = datetime.now(timezone.utc) - timedelta(days=7)
+    day = datetime.now(UTC) - timedelta(days=7)
     earlier = day - timedelta(days=1)
 
     def workout(identity, start, seconds):
-        return {'id': identity, 'status': 'COMPLETE', 'start_time': start.timestamp(),
-                'end_time': start.timestamp() + seconds if seconds is not None else None,
-                'fitness_discipline': 'walking'}
-    client.history = [workout('walk', day.replace(hour=12, minute=15), 3611),
-                      workout('tap', day.replace(hour=12, minute=14), 41),
-                      workout('unknown-length', day.replace(hour=17), None)]
+        return {
+            'id': identity,
+            'status': 'COMPLETE',
+            'start_time': start.timestamp(),
+            'end_time': start.timestamp() + seconds if seconds is not None else None,
+            'fitness_discipline': 'walking',
+        }
+
+    client.history = [
+        workout('walk', day.replace(hour=12, minute=15), 3611),
+        workout('tap', day.replace(hour=12, minute=14), 41),
+        workout('unknown-length', day.replace(hour=17), None),
+    ]
     client.get_perf_graph.return_value = {'duration': 1200}
     dashboard.refresh()
     assert [s['workout_id'] for s in dashboard.snapshot()['summaries']] == ['walk', 'unknown-length']
@@ -554,19 +579,33 @@ def test_a_workout_under_a_minute_is_not_a_latest_workout(tmp_path):
 
 
 def test_profile_keeps_created_at_and_no_personal_fields(tmp_path):
-    me = {'id': 'u1', 'username': 'joel', 'timezone': 'America/New_York', 'height_unit': 'in',
-          'created_at': 1604844000, 'email': 'a@b.c', 'birthday': 123, 'phone_number': '555', 'weight': 180,
-          'total_followers': 3}
+    me = {
+        'id': 'u1',
+        'username': 'joel',
+        'timezone': 'America/New_York',
+        'height_unit': 'in',
+        'created_at': 1604844000,
+        'email': 'a@b.c',
+        'birthday': 123,
+        'phone_number': '555',
+        'weight': 180,
+        'total_followers': 3,
+    }
     dashboard, client, _ = setup_dashboard(tmp_path)
     client.get_me.return_value = me
     dashboard.refresh()
-    assert dashboard.snapshot()['me'] == {'id': 'u1', 'username': 'joel', 'timezone': 'America/New_York',
-                                          'height_unit': 'in', 'created_at': 1604844000}
+    assert dashboard.snapshot()['me'] == {
+        'id': 'u1',
+        'username': 'joel',
+        'timezone': 'America/New_York',
+        'height_unit': 'in',
+        'created_at': 1604844000,
+    }
 
 
 def test_the_anniversary_comes_from_the_profile_in_the_derived_figures(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path, {'timezone': 'America/New_York'})
-    client.get_me.return_value = dict(client.get_me.return_value, created_at=1604844000)   # 2020-11-08 09:20 EST
+    client.get_me.return_value = dict(client.get_me.return_value, created_at=1604844000)  # 2020-11-08 09:20 EST
     with patch('peloton.workouts.workout_log.WorkoutLog.derived', return_value={}) as derived:
         dashboard.refresh()
     assert derived.call_args.kwargs['member_since'] == 1604844000
@@ -574,12 +613,13 @@ def test_the_anniversary_comes_from_the_profile_in_the_derived_figures(tmp_path)
 
 # --- Workout compare on the board (display.workout_insights) ---
 
+
 def _insight_setup(tmp_path, config=None, discipline='cycling', status='COMPLETE', age_days=7):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
+
     dashboard, client, token = setup_dashboard(tmp_path, {'workout_insights': True} if config is None else config)
-    start = datetime.now(timezone.utc) - timedelta(days=age_days)
-    client.history = [{'id': 'w1', 'status': status, 'start_time': start.timestamp(),
-                       'fitness_discipline': discipline}]
+    start = datetime.now(UTC) - timedelta(days=age_days)
+    client.history = [{'id': 'w1', 'status': status, 'start_time': start.timestamp(), 'fitness_discipline': discipline}]
     client.get_perf_graph.return_value = {'duration': 1200}
     client.get_workout_detail.return_value = {'id': 'w1', 'status': 'COMPLETE', 'start_time': 1, 'ride': {'id': 'r1'}}
     client.get_ride_details.return_value = {'ride': {}}
@@ -588,14 +628,32 @@ def _insight_setup(tmp_path, config=None, discipline='cycling', status='COMPLETE
 
 def _fake_row(workout_id='w1', output=112):
     from peloton.workouts.workout_features import ROW_VERSION
-    return {'id': workout_id, 'v': ROW_VERSION, 'start': 1_800_000_000, 'disc': 'cycling', 'wtype': 'class',
-            'ctype': 'Music', 'mode': 'plain', 'outdoor': False, 'dur': 1200, 'complete': True,
-            'work': {'output': output, 'heart_rate': None}, 'eff': None, 'strive': None,
-            'target_under': None, 'pace_fit': None, 'sets': None, 'plan': None, 'arms_sections': 0}
+
+    return {
+        'id': workout_id,
+        'v': ROW_VERSION,
+        'start': 1_800_000_000,
+        'disc': 'cycling',
+        'wtype': 'class',
+        'ctype': 'Music',
+        'mode': 'plain',
+        'outdoor': False,
+        'dur': 1200,
+        'complete': True,
+        'work': {'output': output, 'heart_rate': None},
+        'eff': None,
+        'strive': None,
+        'target_under': None,
+        'pace_fit': None,
+        'sets': None,
+        'plan': None,
+        'arms_sections': 0,
+    }
 
 
 def _seed_peers(dashboard, outputs):
     from peloton.workouts.workout_rows import RowStore, default_rows_path
+
     store = RowStore(default_rows_path(dashboard.cache_path))
     for i, output in enumerate(outputs):
         row = _fake_row(f'p{i}', output)
@@ -631,8 +689,10 @@ def test_new_workout_fetches_detail_and_ride_once_and_gets_an_insight(tmp_path):
 def test_a_detail_without_a_class_makes_no_ride_call(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path)
     client.get_workout_detail.return_value = {'id': 'w1', 'status': 'COMPLETE', 'start_time': 1}
-    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row()), \
-            patch('peloton.dashboard_insight.insights', return_value=[('nothing', '', {})]):
+    with (
+        patch('peloton.dashboard_insight.build_row', return_value=_fake_row()),
+        patch('peloton.dashboard_insight.insights', return_value=[('nothing', '', {})]),
+    ):
         dashboard.refresh()
     client.get_ride_details.assert_not_called()
     assert 'insights' not in dashboard.snapshot()['summaries'][0]
@@ -641,8 +701,14 @@ def test_a_detail_without_a_class_makes_no_ride_call(tmp_path):
 def test_real_row_building_end_to_end_gives_a_resistance_insight(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path)
     client.get_workout_detail.return_value = {
-        'id': 'w1', 'status': 'COMPLETE', 'start_time': 1_800_000_000, 'end_time': 1_800_001_200,
-        'fitness_discipline': 'cycling', 'timezone': 'UTC', 'ride': {'id': 'r1', 'duration': 1200}}
+        'id': 'w1',
+        'status': 'COMPLETE',
+        'start_time': 1_800_000_000,
+        'end_time': 1_800_001_200,
+        'fitness_discipline': 'cycling',
+        'timezone': 'UTC',
+        'ride': {'id': 'r1', 'duration': 1200},
+    }
     dashboard.refresh()
     # Whatever the rules say about this bare workout, the refresh survived and stored a row.
     assert dashboard._rows.is_current('w1')
@@ -661,16 +727,20 @@ def test_unfinished_or_other_discipline_workouts_get_none_and_no_calls(tmp_path)
 
 def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_then_stops(tmp_path, caplog):
     import logging
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     caplog.set_level(logging.INFO, logger='peloton-led.dashboard')
     dashboard, client, _ = _insight_setup(tmp_path, age_days=0)  # just finished: still settling
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
     rows = iter([_fake_row('w1', 112), _fake_row('w1', 112), _fake_row('w1', 150), _fake_row('w1', 150)])
     from peloton.workouts.workout_rows import RowStore
+
     saves = []
     real_save = RowStore.save
-    with patch('peloton.dashboard_insight.build_row', side_effect=lambda *_: next(rows)) as build, \
-            patch.object(RowStore, 'save', autospec=True, side_effect=lambda store: saves.append(1) or real_save(store)):
+    with (
+        patch('peloton.dashboard_insight.build_row', side_effect=lambda *_: next(rows)) as build,
+        patch.object(RowStore, 'save', autospec=True, side_effect=lambda store: saves.append(1) or real_save(store)),
+    ):
         dashboard.refresh()
         assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'  # no hour's wait
         assert len(saves) == 1
@@ -683,7 +753,7 @@ def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_the
         assert 'Workout w1 insights changed' in caplog.text
         assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'output_up'
         # The hour is over: one last rebuild, then the row and its insights stay as they are.
-        client.history[0]['start_time'] = datetime.now(timezone.utc).timestamp() - 2 * 3600
+        client.history[0]['start_time'] = datetime.now(UTC).timestamp() - 2 * 3600
         dashboard.refresh()
         assert build.call_count == 4
         dashboard.refresh()
@@ -698,10 +768,13 @@ def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_the
 
 def test_insights_are_recomputed_only_when_the_row_store_changes(tmp_path):
     from peloton.workouts.workout_insights import insights as real_insights
+
     dashboard, client, token = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
-    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)), \
-            patch('peloton.dashboard_insight.insights', side_effect=real_insights) as computed:
+    with (
+        patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)),
+        patch('peloton.dashboard_insight.insights', side_effect=real_insights) as computed,
+    ):
         for _ in range(3):
             dashboard.refresh()
         assert computed.call_count == 1
@@ -770,8 +843,10 @@ def test_other_http_errors_in_the_insight_are_swallowed(tmp_path):
 def test_a_failing_row_save_is_logged_and_the_insight_still_shows(tmp_path, caplog):
     dashboard, client, _ = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
-    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)), \
-            patch('peloton.workouts.workout_rows.RowStore.save', side_effect=OSError('read-only')):
+    with (
+        patch('peloton.dashboard_insight.build_row', return_value=_fake_row('w1', 112)),
+        patch('peloton.workouts.workout_rows.RowStore.save', side_effect=OSError('read-only')),
+    ):
         dashboard.refresh()
     assert 'Could not save the workout rows' in caplog.text
     assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'in_line'
@@ -800,23 +875,31 @@ def test_the_cache_keeps_the_insight_and_a_switched_off_board_strips_it(tmp_path
 
 def test_a_cached_version_2_insight_is_dropped_whether_the_switch_is_on_or_off(tmp_path):
     from peloton.cache import save_snapshot
+
     for config in ({'workout_insights': True}, {}):
         folder = tmp_path / str(bool(config))
         folder.mkdir()
         dashboard, client, token = _insight_setup(folder, config=config)
         old = {'code': 'output_up', 'lines': ['STRONG RIDE', '205 VS 180 W'], 'facts': {}}
-        save_snapshot(dashboard.cache_path, {'summaries': [{'workout_id': 'w1', 'insight': old}, 'junk'],
-                                             'totals': {}, 'last_updated': 1.0})
+        save_snapshot(
+            dashboard.cache_path, {'summaries': [{'workout_id': 'w1', 'insight': old}, 'junk'], 'totals': {}, 'last_updated': 1.0}
+        )
         summary = Dashboard(token, config, client_factory=lambda _: client).snapshot()['summaries'][0]  # noqa: B023  called within the iteration: snapshot() runs synchronously
         assert 'insight' not in summary and summary['workout_id'] == 'w1'
 
 
 def test_the_board_keeps_every_shown_insight_in_order(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path)
-    messages = [('too_few', '', {'n': 1, 'noun': 'ride'}), ('resistance_low', '', {'pct': 30}),
-                ('cadence_low', '', {'pct': 40}), ('effort_high', '', {'n': 5})]  # effort: no rate, skipped
-    with patch('peloton.dashboard_insight.build_row', return_value=_fake_row()), \
-            patch('peloton.dashboard_insight.insights', return_value=messages + [('pace_low', '', {'pct': 50})]):
+    messages = [
+        ('too_few', '', {'n': 1, 'noun': 'ride'}),
+        ('resistance_low', '', {'pct': 30}),
+        ('cadence_low', '', {'pct': 40}),
+        ('effort_high', '', {'n': 5}),
+    ]  # effort: no rate, skipped
+    with (
+        patch('peloton.dashboard_insight.build_row', return_value=_fake_row()),
+        patch('peloton.dashboard_insight.insights', return_value=messages + [('pace_low', '', {'pct': 50})]),
+    ):
         dashboard.refresh()
     views = dashboard.snapshot()['summaries'][0]['insights']
     assert [view['code'] for view in views] == ['resistance_low', 'cadence_low', 'pace_low']
@@ -826,6 +909,7 @@ def test_the_board_store_drops_rows_past_the_window_when_it_loads(tmp_path):
     dashboard, client, _ = _insight_setup(tmp_path)
     _seed_peers(dashboard, [110, 111, 112, 113, 114])
     from peloton.workouts.workout_rows import RowStore, default_rows_path
+
     store = RowStore.load(default_rows_path(dashboard.cache_path))
     old = _fake_row('old')
     old['start'] = time.time() - 800 * 86400
@@ -839,6 +923,7 @@ def test_the_board_store_drops_rows_past_the_window_when_it_loads(tmp_path):
 
 # --- Instructor milestones (counted from the workout log) ---
 
+
 def _milestone_setup(tmp_path, before, discipline='cycling', complete=True, instructor=None):
     """A refresh whose workout w1 is the (before + 1)th class with Jess Sims in a log of `before` earlier ones."""
     dashboard, client, token = _insight_setup(tmp_path, discipline=discipline)
@@ -846,8 +931,13 @@ def _milestone_setup(tmp_path, before, discipline='cycling', complete=True, inst
     log = dashboard._log
     log.claim('demo')
     for i in range(before):
-        log.workouts[f'old{i}'] = {'start': 1_000_000 + i, 'status': 'COMPLETE', 'instructor_id': 'jess',
-                                   'group_ids': None, 'tz': 'America/New_York'}
+        log.workouts[f'old{i}'] = {
+            'start': 1_000_000 + i,
+            'status': 'COMPLETE',
+            'instructor_id': 'jess',
+            'group_ids': None,
+            'tz': 'America/New_York',
+        }
     log.backfill['complete'] = complete
     return dashboard, client, token
 

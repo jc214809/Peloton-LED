@@ -1,11 +1,20 @@
 import stat
 import time
 from unittest.mock import MagicMock, patch
+
 import pytest
 import requests
-from scripts.refresh_cookies import (_dump_failure_diagnostics, browser_login, ensure_all_tokens,
-                                     ensure_token, resolve_token_paths, save_verified_token,
-                                     token_expiration, token_status)
+
+from scripts.refresh_cookies import (
+    _dump_failure_diagnostics,
+    browser_login,
+    ensure_all_tokens,
+    ensure_token,
+    resolve_token_paths,
+    save_verified_token,
+    token_expiration,
+    token_status,
+)
 
 
 def test_failed_verification_preserves_old_token(tmp_path):
@@ -21,10 +30,12 @@ def test_failed_verification_preserves_old_token(tmp_path):
 def test_successful_save_is_private_and_verified_before_replacement(tmp_path):
     token = tmp_path / 'token'
     token.write_text('old-synthetic')
+
     def verify(path):
         assert token.read_text() == 'old-synthetic'
         assert path.read_text() == 'new-synthetic'
         return 'demo'
+
     with patch('scripts.refresh_cookies.verify_token', side_effect=verify):
         assert save_verified_token('new-synthetic', token) == 'demo'
     assert token.read_text() == 'new-synthetic'
@@ -59,6 +70,7 @@ def test_browser_login_waits_for_the_form_not_network_idle(tmp_path):
     # The members app keeps the network busy; on a Pi Zero 2 W "networkidle"
     # never arrived within 30 s, so login failed before the form was tried.
     import playwright.sync_api
+
     from scripts.refresh_cookies import FORM_TIMEOUT_MS, TOKEN_TIMEOUT_MS
 
     page = MagicMock()
@@ -118,8 +130,7 @@ def test_browser_login_wraps_timeout_reaching_login_form(tmp_path):
 def test_ensure_does_not_open_browser_for_valid_token(tmp_path):
     token = tmp_path / 'token'
     token.write_text('valid')
-    with patch('scripts.refresh_cookies.verify_token', return_value='demo'), \
-         patch('scripts.refresh_cookies.browser_login') as login:
+    with patch('scripts.refresh_cookies.verify_token', return_value='demo'), patch('scripts.refresh_cookies.browser_login') as login:
         assert ensure_token(token, tmp_path / 'config.json') == ('demo', False)
     login.assert_not_called()
 
@@ -131,9 +142,11 @@ def test_ensure_renews_valid_token_with_less_than_12_hours_left(tmp_path, monkey
     config.write_text('{}')
     monkeypatch.setenv('PELOTON_EMAIL', 'rider@example.com')
     monkeypatch.setenv('PELOTON_PASSWORD', 'secret')
-    with patch('scripts.refresh_cookies.verify_token', return_value='demo'), \
-         patch('scripts.refresh_cookies.token_expiration', return_value=time.time() + 11 * 3600), \
-         patch('scripts.refresh_cookies.browser_login', return_value='demo') as login:
+    with (
+        patch('scripts.refresh_cookies.verify_token', return_value='demo'),
+        patch('scripts.refresh_cookies.token_expiration', return_value=time.time() + 11 * 3600),
+        patch('scripts.refresh_cookies.browser_login', return_value='demo') as login,
+    ):
         assert ensure_token(token, config) == ('demo', True)
     login.assert_called_once_with('rider@example.com', 'secret', token, headless=True)
 
@@ -141,9 +154,11 @@ def test_ensure_renews_valid_token_with_less_than_12_hours_left(tmp_path, monkey
 def test_ensure_keeps_valid_token_with_more_than_12_hours_left(tmp_path):
     token = tmp_path / 'token'
     token.write_text('valid-jwt-placeholder')
-    with patch('scripts.refresh_cookies.verify_token', return_value='demo'), \
-         patch('scripts.refresh_cookies.token_expiration', return_value=time.time() + 13 * 3600), \
-         patch('scripts.refresh_cookies.browser_login') as login:
+    with (
+        patch('scripts.refresh_cookies.verify_token', return_value='demo'),
+        patch('scripts.refresh_cookies.token_expiration', return_value=time.time() + 13 * 3600),
+        patch('scripts.refresh_cookies.browser_login') as login,
+    ):
         assert ensure_token(token, tmp_path / 'config.json') == ('demo', False)
     login.assert_not_called()
 
@@ -151,6 +166,7 @@ def test_ensure_keeps_valid_token_with_more_than_12_hours_left(tmp_path):
 def test_token_expiration_reads_jwt_payload(tmp_path):
     import base64
     import json
+
     token = tmp_path / 'token'
     encoded = base64.urlsafe_b64encode(json.dumps({'exp': 1_800_000_000}).encode()).decode().rstrip('=')
     token.write_text(f'header.{encoded}.signature')
@@ -160,6 +176,7 @@ def test_token_expiration_reads_jwt_payload(tmp_path):
 def _jwt_with_exp(exp) -> str:
     import base64
     import json
+
     encoded = base64.urlsafe_b64encode(json.dumps({'exp': exp}).encode()).decode().rstrip('=')
     return f'header.{encoded}.signature'
 
@@ -199,6 +216,7 @@ def test_token_status_reports_non_jwt_shape(tmp_path):
 def test_token_status_reports_payload_with_no_exp_claim(tmp_path):
     import base64
     import json
+
     token = tmp_path / 'token'
     encoded = base64.urlsafe_b64encode(json.dumps({'sub': 'rider'}).encode()).decode().rstrip('=')
     token.write_text(f'header.{encoded}.signature')
@@ -236,19 +254,18 @@ def test_resolve_token_paths_missing_config_returns_fallback(tmp_path):
 
 def test_resolve_token_paths_derives_each_users_token_file(tmp_path):
     import json
+
     config = tmp_path / 'config.json'
     config.write_text(json.dumps({'users': [{'name': 'Joel'}, {'name': 'Jen', 'token_path': 'jen.token'}]}))
     resolved = resolve_token_paths(config, tmp_path / 'cookies.txt')
     assert resolved == [('Joel', tmp_path / 'cookies-joel.txt'), ('Jen', tmp_path / 'jen.token')]
 
 
-@pytest.mark.parametrize('failure', [requests.ConnectionError('offline'),
-                                     requests.Timeout('slow')])
+@pytest.mark.parametrize('failure', [requests.ConnectionError('offline'), requests.Timeout('slow')])
 def test_ensure_does_not_open_browser_for_network_failure(tmp_path, failure):
     token = tmp_path / 'token'
     token.write_text('existing')
-    with patch('scripts.refresh_cookies.verify_token', side_effect=failure), \
-         patch('scripts.refresh_cookies.browser_login') as login:
+    with patch('scripts.refresh_cookies.verify_token', side_effect=failure), patch('scripts.refresh_cookies.browser_login') as login:
         with pytest.raises(type(failure)):
             ensure_token(token, tmp_path / 'config.json')
     login.assert_not_called()
@@ -264,8 +281,10 @@ def test_ensure_refreshes_after_401(tmp_path, monkeypatch):
     response = requests.Response()
     response.status_code = 401
     rejected = requests.HTTPError(response=response)
-    with patch('scripts.refresh_cookies.verify_token', side_effect=rejected), \
-         patch('scripts.refresh_cookies.browser_login', return_value='demo') as login:
+    with (
+        patch('scripts.refresh_cookies.verify_token', side_effect=rejected),
+        patch('scripts.refresh_cookies.browser_login', return_value='demo') as login,
+    ):
         assert ensure_token(token, config) == ('demo', True)
     login.assert_called_once_with('rider@example.com', 'secret', token, headless=True)
 
@@ -288,26 +307,30 @@ def test_ensure_rejected_token_requires_unattended_credentials(tmp_path, monkeyp
     token.write_text('rejected')
     response = requests.Response()
     response.status_code = 401
-    with patch('scripts.refresh_cookies.verify_token',
-               side_effect=requests.HTTPError(response=response)):
+    with patch('scripts.refresh_cookies.verify_token', side_effect=requests.HTTPError(response=response)):
         with pytest.raises(RuntimeError, match='credentials'):
             ensure_token(token, tmp_path / 'missing.json')
 
 
 def test_ensure_all_tokens_uses_isolated_paths_and_credentials(tmp_path, monkeypatch):
     import json
+
     config = tmp_path / 'config.json'
-    config.write_text(json.dumps({'users': [
-        {'name': 'Rider One', 'token_path': 'one.token'},
-        {'name': 'Rider Two', 'token_path': 'two.token',
-         'email_env': 'SECOND_EMAIL', 'password_env': 'SECOND_PASSWORD'},
-    ]}))
+    config.write_text(
+        json.dumps(
+            {
+                'users': [
+                    {'name': 'Rider One', 'token_path': 'one.token'},
+                    {'name': 'Rider Two', 'token_path': 'two.token', 'email_env': 'SECOND_EMAIL', 'password_env': 'SECOND_PASSWORD'},
+                ]
+            }
+        )
+    )
     monkeypatch.setenv('PELOTON_EMAIL_RIDER_ONE', 'one@example.com')
     monkeypatch.setenv('PELOTON_PASSWORD_RIDER_ONE', 'one-secret')
     monkeypatch.setenv('SECOND_EMAIL', 'two@example.com')
     monkeypatch.setenv('SECOND_PASSWORD', 'two-secret')
-    with patch('scripts.refresh_cookies.ensure_token', side_effect=[
-            ('one-user', False), ('two-user', True)]) as ensure:
+    with patch('scripts.refresh_cookies.ensure_token', side_effect=[('one-user', False), ('two-user', True)]) as ensure:
         results = ensure_all_tokens(config)
     assert results == [('Rider One', 'one-user', False), ('Rider Two', 'two-user', True)]
     assert ensure.call_args_list[0].args[:2] == (tmp_path / 'one.token', config)
@@ -318,14 +341,14 @@ def test_ensure_all_tokens_uses_isolated_paths_and_credentials(tmp_path, monkeyp
 
 def test_ensure_all_tokens_derives_token_path_from_name_when_omitted(tmp_path, monkeypatch):
     import json
+
     config = tmp_path / 'config.json'
     config.write_text(json.dumps({'users': [{'name': 'Joel'}, {'name': 'Jen'}]}))
     monkeypatch.setenv('PELOTON_EMAIL_JOEL', 'joel@example.com')
     monkeypatch.setenv('PELOTON_PASSWORD_JOEL', 'joel-secret')
     monkeypatch.setenv('PELOTON_EMAIL_JEN', 'jen@example.com')
     monkeypatch.setenv('PELOTON_PASSWORD_JEN', 'jen-secret')
-    with patch('scripts.refresh_cookies.ensure_token', side_effect=[
-            ('joel-user', False), ('jen-user', False)]) as ensure:
+    with patch('scripts.refresh_cookies.ensure_token', side_effect=[('joel-user', False), ('jen-user', False)]) as ensure:
         ensure_all_tokens(config)
     assert ensure.call_args_list[0].args[0] == tmp_path / 'cookies-joel.txt'
     assert ensure.call_args_list[1].args[0] == tmp_path / 'cookies-jen.txt'
@@ -333,13 +356,19 @@ def test_ensure_all_tokens_derives_token_path_from_name_when_omitted(tmp_path, m
 
 def test_all_user_renewal_attempts_later_profiles_after_one_failure(tmp_path):
     import json
+
     config = tmp_path / 'config.json'
-    config.write_text(json.dumps({'users': [
-        {'name': 'One', 'token_path': 'one.token'},
-        {'name': 'Two', 'token_path': 'two.token'},
-    ]}))
-    with patch('scripts.refresh_cookies.ensure_token',
-               side_effect=[RuntimeError('first failed'), ('two-user', False)]) as ensure:
+    config.write_text(
+        json.dumps(
+            {
+                'users': [
+                    {'name': 'One', 'token_path': 'one.token'},
+                    {'name': 'Two', 'token_path': 'two.token'},
+                ]
+            }
+        )
+    )
+    with patch('scripts.refresh_cookies.ensure_token', side_effect=[RuntimeError('first failed'), ('two-user', False)]) as ensure:
         with pytest.raises(RuntimeError, match='One'):
             ensure_all_tokens(config)
     assert ensure.call_count == 2
@@ -347,11 +376,15 @@ def test_all_user_renewal_attempts_later_profiles_after_one_failure(tmp_path):
 
 def test_all_user_renewal_failure_message_is_not_just_the_exception_type(tmp_path):
     import json
+
     config = tmp_path / 'config.json'
     config.write_text(json.dumps({'users': [{'name': 'Joel', 'token_path': 'joel.token'}]}))
-    with patch('scripts.refresh_cookies.ensure_token',
-               side_effect=RuntimeError('No access token found after login; browser reached '
-                                        'www.onepeloton.com/login. The existing token was not changed.')):
+    with patch(
+        'scripts.refresh_cookies.ensure_token',
+        side_effect=RuntimeError(
+            'No access token found after login; browser reached www.onepeloton.com/login. The existing token was not changed.'
+        ),
+    ):
         with pytest.raises(RuntimeError, match='browser reached www.onepeloton.com/login'):
             ensure_all_tokens(config)
 
@@ -359,11 +392,21 @@ def test_all_user_renewal_failure_message_is_not_just_the_exception_type(tmp_pat
 # --- Refresh-token renewal (no browser) ---------------------------------------
 
 import json as _json  # noqa: E402  section import, deliberately mid-file
-from scripts.refresh_cookies import (AUTH0_CLIENT_ID, AUTH0_TOKEN_URL, BROWSER_FALLBACK_INTERVAL_SECONDS,  # noqa: E402  section import, deliberately mid-file
-                                     RefreshTokenRejected, browser_attempt_path, browser_fallback_due,
-                                     browser_login_available, load_refresh_token,
-                                     refresh_token_path, renew_with_refresh_token,
-                                     save_refresh_token, seed_tokens)
+
+from scripts.refresh_cookies import (  # noqa: E402  section import, deliberately mid-file
+    AUTH0_CLIENT_ID,
+    AUTH0_TOKEN_URL,
+    BROWSER_FALLBACK_INTERVAL_SECONDS,
+    RefreshTokenRejected,
+    browser_attempt_path,
+    browser_fallback_due,
+    browser_login_available,
+    load_refresh_token,
+    refresh_token_path,
+    renew_with_refresh_token,
+    save_refresh_token,
+    seed_tokens,
+)
 
 
 def _token_response(status, body):
@@ -419,14 +462,16 @@ def test_renew_persists_rotated_refresh_token_before_verifying_access_token(tmp_
         assert path.read_text() == 'access-new'
         return 'demo'
 
-    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(
-            200, {'access_token': 'access-new', 'refresh_token': 'refresh-new', 'expires_in': 172800})) as post, \
-         patch('scripts.refresh_cookies.verify_token', side_effect=verify):
+    with (
+        patch(
+            'scripts.refresh_cookies.requests.post',
+            return_value=_token_response(200, {'access_token': 'access-new', 'refresh_token': 'refresh-new', 'expires_in': 172800}),
+        ) as post,
+        patch('scripts.refresh_cookies.verify_token', side_effect=verify),
+    ):
         assert renew_with_refresh_token(token) == 'demo'
     assert post.call_args.args == (AUTH0_TOKEN_URL,)
-    assert post.call_args.kwargs['json'] == {'grant_type': 'refresh_token',
-                                             'client_id': 'client-synthetic',
-                                             'refresh_token': 'refresh-old'}
+    assert post.call_args.kwargs['json'] == {'grant_type': 'refresh_token', 'client_id': 'client-synthetic', 'refresh_token': 'refresh-old'}
     assert post.call_args.kwargs['timeout'] > 0
     assert token.read_text() == 'access-new'
     assert sorted(p.name for p in tmp_path.iterdir()) == ['cookies-joel.refresh.json', 'cookies-joel.txt']
@@ -434,9 +479,10 @@ def test_renew_persists_rotated_refresh_token_before_verifying_access_token(tmp_
 
 def test_renew_without_rotation_keeps_the_existing_refresh_token(tmp_path):
     token = _seeded(tmp_path)
-    with patch('scripts.refresh_cookies.requests.post',
-               return_value=_token_response(200, {'access_token': 'access-new'})), \
-         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+    with (
+        patch('scripts.refresh_cookies.requests.post', return_value=_token_response(200, {'access_token': 'access-new'})),
+        patch('scripts.refresh_cookies.verify_token', return_value='demo'),
+    ):
         renew_with_refresh_token(token)
     assert load_refresh_token(refresh_token_path(token))[0] == 'refresh-old'
 
@@ -445,8 +491,10 @@ def test_renew_without_rotation_keeps_the_existing_refresh_token(tmp_path):
 def test_renew_invalid_grant_raises_rejected_and_changes_nothing(tmp_path, status):
     token = _seeded(tmp_path)
     before = refresh_token_path(token).read_text()
-    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(
-            status, {'error': 'invalid_grant', 'error_description': 'Unknown or invalid refresh token.'})):
+    with patch(
+        'scripts.refresh_cookies.requests.post',
+        return_value=_token_response(status, {'error': 'invalid_grant', 'error_description': 'Unknown or invalid refresh token.'}),
+    ):
         with pytest.raises(RefreshTokenRejected, match='seed-dir'):
             renew_with_refresh_token(token)
     assert token.read_text() == 'access-old'
@@ -455,8 +503,7 @@ def test_renew_invalid_grant_raises_rejected_and_changes_nothing(tmp_path, statu
 
 def test_renew_other_client_error_is_not_reported_as_rejected(tmp_path):
     token = _seeded(tmp_path)
-    with patch('scripts.refresh_cookies.requests.post',
-               return_value=_token_response(429, {'error': 'too_many_requests'})):
+    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(429, {'error': 'too_many_requests'})):
         with pytest.raises(RuntimeError, match='HTTP 429 \\(too_many_requests\\)') as raised:
             renew_with_refresh_token(token)
     assert not isinstance(raised.value, RefreshTokenRejected)
@@ -494,8 +541,7 @@ def test_renew_bad_json_changes_nothing(tmp_path, body):
 
 def test_renew_missing_access_token_still_saves_the_rotated_refresh_token(tmp_path):
     token = _seeded(tmp_path)
-    with patch('scripts.refresh_cookies.requests.post',
-               return_value=_token_response(200, {'refresh_token': 'refresh-new'})):
+    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(200, {'refresh_token': 'refresh-new'})):
         with pytest.raises(RuntimeError, match='no access_token'):
             renew_with_refresh_token(token)
     assert token.read_text() == 'access-old'
@@ -518,9 +564,11 @@ def _rejected_401():
 
 def test_ensure_uses_refresh_token_instead_of_browser(tmp_path):
     token = _seeded(tmp_path)
-    with patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()), \
-         patch('scripts.refresh_cookies.renew_with_refresh_token', return_value='demo') as renew, \
-         patch('scripts.refresh_cookies.browser_login') as login:
+    with (
+        patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()),
+        patch('scripts.refresh_cookies.renew_with_refresh_token', return_value='demo') as renew,
+        patch('scripts.refresh_cookies.browser_login') as login,
+    ):
         assert ensure_token(token, tmp_path / 'config.json') == ('demo', True)
     renew.assert_called_once_with(token)
     login.assert_not_called()
@@ -528,10 +576,12 @@ def test_ensure_uses_refresh_token_instead_of_browser(tmp_path):
 
 def test_ensure_renews_near_expiry_with_refresh_token(tmp_path):
     token = _seeded(tmp_path)
-    with patch('scripts.refresh_cookies.verify_token', return_value='demo'), \
-         patch('scripts.refresh_cookies.token_expiration', return_value=time.time() + 11 * 3600), \
-         patch('scripts.refresh_cookies.renew_with_refresh_token', return_value='demo') as renew, \
-         patch('scripts.refresh_cookies.browser_login') as login:
+    with (
+        patch('scripts.refresh_cookies.verify_token', return_value='demo'),
+        patch('scripts.refresh_cookies.token_expiration', return_value=time.time() + 11 * 3600),
+        patch('scripts.refresh_cookies.renew_with_refresh_token', return_value='demo') as renew,
+        patch('scripts.refresh_cookies.browser_login') as login,
+    ):
         assert ensure_token(token, tmp_path / 'config.json') == ('demo', True)
     renew.assert_called_once_with(token)
     login.assert_not_called()
@@ -544,10 +594,11 @@ def _rejected_refresh(token, tmp_path, monkeypatch, available=True, credentials=
     else:
         monkeypatch.delenv('PELOTON_EMAIL', raising=False)
         monkeypatch.delenv('PELOTON_PASSWORD', raising=False)
-    return (patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()),
-            patch('scripts.refresh_cookies.renew_with_refresh_token',
-                  side_effect=RefreshTokenRejected('invalid_grant; seed-dir')),
-            patch('scripts.refresh_cookies.browser_login_available', return_value=available))
+    return (
+        patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()),
+        patch('scripts.refresh_cookies.renew_with_refresh_token', side_effect=RefreshTokenRejected('invalid_grant; seed-dir')),
+        patch('scripts.refresh_cookies.browser_login_available', return_value=available),
+    )
 
 
 def test_ensure_without_a_browser_never_falls_back_after_invalid_grant(tmp_path, monkeypatch):
@@ -574,7 +625,7 @@ def test_ensure_without_credentials_never_falls_back_after_invalid_grant(tmp_pat
 def test_ensure_with_a_browser_logs_in_once_after_invalid_grant(tmp_path, monkeypatch):
     token = _seeded(tmp_path)
     verify, renew, available = _rejected_refresh(token, tmp_path, monkeypatch)
-    with verify, renew, available,          patch('scripts.refresh_cookies.browser_login', return_value='demo') as login:
+    with verify, renew, available, patch('scripts.refresh_cookies.browser_login', return_value='demo') as login:
         assert ensure_token(token, tmp_path / 'config.json') == ('demo', True)
     login.assert_called_once_with('rider@example.com', 'secret', token, headless=True)
     assert browser_attempt_path(token).exists()
@@ -583,14 +634,13 @@ def test_ensure_with_a_browser_logs_in_once_after_invalid_grant(tmp_path, monkey
 def test_failed_browser_fallback_waits_a_day_before_trying_again(tmp_path, monkeypatch):
     token = _seeded(tmp_path)
     verify, renew, available = _rejected_refresh(token, tmp_path, monkeypatch)
-    with verify, renew, available,          patch('scripts.refresh_cookies.browser_login', side_effect=RuntimeError('too slow')) as login:
+    with verify, renew, available, patch('scripts.refresh_cookies.browser_login', side_effect=RuntimeError('too slow')) as login:
         with pytest.raises(RefreshTokenRejected, match='fallback also failed: too slow'):
             ensure_token(token, tmp_path / 'config.json')
         with pytest.raises(RefreshTokenRejected, match='already tried'):
             ensure_token(token, tmp_path / 'config.json')
         assert login.call_count == 1
-        with patch('scripts.refresh_cookies.time.time',
-                   return_value=time.time() + BROWSER_FALLBACK_INTERVAL_SECONDS + 1):
+        with patch('scripts.refresh_cookies.time.time', return_value=time.time() + BROWSER_FALLBACK_INTERVAL_SECONDS + 1):
             with pytest.raises(RefreshTokenRejected, match='fallback also failed'):
                 ensure_token(token, tmp_path / 'config.json')
         assert login.call_count == 2
@@ -613,9 +663,11 @@ def test_ensure_without_refresh_token_or_browser_asks_for_a_seed(tmp_path, monke
     token.write_text('rejected')
     monkeypatch.setenv('PELOTON_EMAIL', 'rider@example.com')
     monkeypatch.setenv('PELOTON_PASSWORD', 'secret')
-    with patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()), \
-         patch('scripts.refresh_cookies.browser_login_available', return_value=False), \
-         patch('scripts.refresh_cookies.browser_login') as login:
+    with (
+        patch('scripts.refresh_cookies.verify_token', side_effect=_rejected_401()),
+        patch('scripts.refresh_cookies.browser_login_available', return_value=False),
+        patch('scripts.refresh_cookies.browser_login') as login,
+    ):
         with pytest.raises(RuntimeError, match='no refresh token .* --seed-dir'):
             ensure_token(token, tmp_path / 'config.json')
     login.assert_not_called()
@@ -642,10 +694,11 @@ def _logged_in_playwright(credentials):
 
 def test_browser_login_saves_the_refresh_token_beside_the_access_token(tmp_path):
     token = tmp_path / 'cookies-joel.txt'
-    playwright_cm = _logged_in_playwright({'access_token': 'access-new', 'refresh_token': 'refresh-new',
-                                           'client_id': 'client-synthetic'})
-    with patch('playwright.sync_api.sync_playwright', return_value=playwright_cm), \
-         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+    playwright_cm = _logged_in_playwright({'access_token': 'access-new', 'refresh_token': 'refresh-new', 'client_id': 'client-synthetic'})
+    with (
+        patch('playwright.sync_api.sync_playwright', return_value=playwright_cm),
+        patch('scripts.refresh_cookies.verify_token', return_value='demo'),
+    ):
         assert browser_login('rider@example.com', 'secret', token) == 'demo'
     assert token.read_text() == 'access-new'
     assert load_refresh_token(refresh_token_path(token)) == ('refresh-new', 'client-synthetic')
@@ -654,10 +707,11 @@ def test_browser_login_saves_the_refresh_token_beside_the_access_token(tmp_path)
 
 def test_browser_login_without_refresh_token_still_saves_access_token(tmp_path, capsys):
     token = tmp_path / 'cookies.txt'
-    playwright_cm = _logged_in_playwright({'access_token': 'access-new', 'refresh_token': None,
-                                           'client_id': None})
-    with patch('playwright.sync_api.sync_playwright', return_value=playwright_cm), \
-         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+    playwright_cm = _logged_in_playwright({'access_token': 'access-new', 'refresh_token': None, 'client_id': None})
+    with (
+        patch('playwright.sync_api.sync_playwright', return_value=playwright_cm),
+        patch('scripts.refresh_cookies.verify_token', return_value='demo'),
+    ):
         browser_login('rider@example.com', 'secret', token)
     assert token.read_text() == 'access-new'
     assert not refresh_token_path(token).exists()
@@ -666,10 +720,16 @@ def test_browser_login_without_refresh_token_still_saves_access_token(tmp_path, 
 
 def test_seed_tokens_writes_one_pair_per_rider_under_board_file_names(tmp_path, monkeypatch):
     config = tmp_path / 'config.json'
-    config.write_text(_json.dumps({'users': [
-        {'name': 'Joel', 'token_path': '/var/lib/peloton-led/cookies-joel.txt'},
-        {'name': 'Jen'},
-    ]}))
+    config.write_text(
+        _json.dumps(
+            {
+                'users': [
+                    {'name': 'Joel', 'token_path': '/var/lib/peloton-led/cookies-joel.txt'},
+                    {'name': 'Jen'},
+                ]
+            }
+        )
+    )
     for name in ('JOEL', 'JEN'):
         monkeypatch.setenv(f'PELOTON_EMAIL_{name}', f'{name.lower()}@example.com')
         monkeypatch.setenv(f'PELOTON_PASSWORD_{name}', 'secret')
@@ -697,7 +757,9 @@ def test_seed_tokens_fails_when_login_gives_no_refresh_token(tmp_path, monkeypat
 
 def test_seed_dir_install_hint_can_be_suppressed_for_seed_board(tmp_path, monkeypatch, capsys):
     import sys as _sys
+
     from scripts import refresh_cookies
+
     seeded = [('Joel', tmp_path / 'cookies-joel.txt')]
     for hint, expected in ((['--no-install-hint'], False), ([], True)):
         monkeypatch.setattr(_sys, 'argv', ['refresh_cookies.py', '--seed-dir', str(tmp_path), *hint])
@@ -707,7 +769,9 @@ def test_seed_dir_install_hint_can_be_suppressed_for_seed_board(tmp_path, monkey
 
 
 # Refresh-chain age: learn how long Auth0 keeps a login's chain alive.
-from datetime import datetime as _datetime, timezone as _timezone  # noqa: E402  section import, deliberately mid-file
+from datetime import UTC  # noqa: E402  section import, deliberately mid-file
+from datetime import datetime as _datetime  # noqa: E402  section import, deliberately mid-file
+
 from scripts.refresh_cookies import describe_chain, load_refresh_chain  # noqa: E402  section import, deliberately mid-file
 
 
@@ -717,18 +781,26 @@ def test_new_refresh_token_starts_a_chain(tmp_path):
     assert chain['chain_start_exact'] is True
     assert chain['renewals'] == 0
     started = _datetime.fromisoformat(chain['chain_started_at'])
-    assert abs((_datetime.now(_timezone.utc) - started).total_seconds()) < 60
+    assert abs((_datetime.now(UTC) - started).total_seconds()) < 60
 
 
 def test_rotation_carries_the_chain_start_and_counts_renewals(tmp_path):
     token = tmp_path / 'cookies-joel.txt'
     token.write_text('access-old')
     started = '2026-10-01T00:00:00+00:00'
-    save_refresh_token(refresh_token_path(token), 'refresh-old', 'client-synthetic',
-                       {'chain_started_at': started, 'chain_start_exact': True, 'renewals': 4})
-    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(
-            200, {'access_token': 'access-new', 'refresh_token': 'refresh-new'})), \
-         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+    save_refresh_token(
+        refresh_token_path(token),
+        'refresh-old',
+        'client-synthetic',
+        {'chain_started_at': started, 'chain_start_exact': True, 'renewals': 4},
+    )
+    with (
+        patch(
+            'scripts.refresh_cookies.requests.post',
+            return_value=_token_response(200, {'access_token': 'access-new', 'refresh_token': 'refresh-new'}),
+        ),
+        patch('scripts.refresh_cookies.verify_token', return_value='demo'),
+    ):
         renew_with_refresh_token(token)
     chain = load_refresh_chain(refresh_token_path(token))
     assert chain == {'chain_started_at': started, 'chain_start_exact': True, 'renewals': 5}
@@ -739,15 +811,15 @@ def test_untracked_file_falls_back_to_its_save_time_as_a_lower_bound(tmp_path):
     path = tmp_path / 'cookies.refresh.json'
     path.write_text(_json.dumps({'refresh_token': 'r', 'saved_at': '2026-10-30T00:00:00+00:00'}))
     chain = load_refresh_chain(path)
-    assert chain == {'chain_started_at': '2026-10-30T00:00:00+00:00',
-                     'chain_start_exact': False, 'renewals': None}
-    now = _datetime(2026, 11, 1, tzinfo=_timezone.utc)
+    assert chain == {'chain_started_at': '2026-10-30T00:00:00+00:00', 'chain_start_exact': False, 'renewals': None}
+    now = _datetime(2026, 11, 1, tzinfo=UTC)
     assert describe_chain(chain, now) == 'refresh chain at least 2.0 days old'
     assert describe_chain({**chain, 'renewals': 1}, now) == 'refresh chain at least 2.0 days old, 1+ renewals'
 
 
-@pytest.mark.parametrize('content', ['not json', '[]', '{"chain_started_at": "yesterday", "renewals": -1}',
-                                     '{"chain_started_at": 5, "renewals": true}'])
+@pytest.mark.parametrize(
+    'content', ['not json', '[]', '{"chain_started_at": "yesterday", "renewals": -1}', '{"chain_started_at": 5, "renewals": true}']
+)
 def test_unreadable_chain_metadata_is_unknown_not_an_error(tmp_path, content):
     path = tmp_path / 'cookies.refresh.json'
     path.write_text(content)
@@ -762,18 +834,16 @@ def test_missing_refresh_file_chain_is_unknown(tmp_path):
 
 def test_describe_chain_exact(tmp_path):
     chain = {'chain_started_at': '2026-10-01T00:00:00+00:00', 'chain_start_exact': True, 'renewals': 1}
-    assert describe_chain(chain, _datetime(2026, 10, 4, 12, tzinfo=_timezone.utc)) == \
-        'refresh chain 3.5 days old, 1 renewal'
+    assert describe_chain(chain, _datetime(2026, 10, 4, 12, tzinfo=UTC)) == 'refresh chain 3.5 days old, 1 renewal'
 
 
 def test_invalid_grant_message_reports_the_chain_age(tmp_path):
     token = tmp_path / 'cookies.txt'
     token.write_text('access-old')
-    save_refresh_token(refresh_token_path(token), 'r', 'c',
-                       {'chain_started_at': '2026-10-01T00:00:00+00:00', 'chain_start_exact': True,
-                        'renewals': 30})
-    with patch('scripts.refresh_cookies.requests.post',
-               return_value=_token_response(403, {'error': 'invalid_grant'})):
+    save_refresh_token(
+        refresh_token_path(token), 'r', 'c', {'chain_started_at': '2026-10-01T00:00:00+00:00', 'chain_start_exact': True, 'renewals': 30}
+    )
+    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(403, {'error': 'invalid_grant'})):
         with pytest.raises(RefreshTokenRejected, match=r'refresh chain [\d.]+ days old, 30 renewals'):
             renew_with_refresh_token(token)
 
@@ -781,18 +851,22 @@ def test_invalid_grant_message_reports_the_chain_age(tmp_path):
 def test_untracked_file_gains_a_chain_on_first_renewal(tmp_path):
     token = tmp_path / 'cookies.txt'
     token.write_text('access-old')
-    refresh_token_path(token).write_text(_json.dumps(
-        {'refresh_token': 'r', 'client_id': 'c', 'saved_at': '2026-10-30T00:00:00+00:00'}))
-    with patch('scripts.refresh_cookies.requests.post', return_value=_token_response(
-            200, {'access_token': 'a', 'refresh_token': 'r2'})), \
-         patch('scripts.refresh_cookies.verify_token', return_value='demo'):
+    refresh_token_path(token).write_text(_json.dumps({'refresh_token': 'r', 'client_id': 'c', 'saved_at': '2026-10-30T00:00:00+00:00'}))
+    with (
+        patch('scripts.refresh_cookies.requests.post', return_value=_token_response(200, {'access_token': 'a', 'refresh_token': 'r2'})),
+        patch('scripts.refresh_cookies.verify_token', return_value='demo'),
+    ):
         renew_with_refresh_token(token)
     assert load_refresh_chain(refresh_token_path(token)) == {
-        'chain_started_at': '2026-10-30T00:00:00+00:00', 'chain_start_exact': False, 'renewals': 1}
+        'chain_started_at': '2026-10-30T00:00:00+00:00',
+        'chain_start_exact': False,
+        'renewals': 1,
+    }
 
 
 def test_status_reports_the_chain(tmp_path, capsys, monkeypatch):
     from scripts import refresh_cookies
+
     token = tmp_path / 'cookies.txt'
     token.write_text(_jwt_with_exp(time.time() + 3600))
     save_refresh_token(refresh_token_path(token), 'r', 'c')

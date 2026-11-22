@@ -6,16 +6,18 @@ every method still shares one `self` (and so the same locks): `dashboard_fetch` 
 for), `dashboard_insight` (workout insight views), `dashboard_history` (the workout log and its history walks),
 `dashboard_celebrations` (PRs and milestones); `dashboard_state` builds the snapshot's starting points.
 """
+
 import logging
 import threading
 import time
 from collections import OrderedDict
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import requests
+
 from .api import PelotonClient, make_session
 from .cache import load_snapshot, save_snapshot
 from .config import renewal_failed_path
@@ -24,12 +26,12 @@ from .dashboard_fetch import CHALLENGES_REFRESH_SECONDS, CLUB_REFRESH_SECONDS, F
 from .dashboard_history import HistoryMixin
 from .dashboard_insight import InsightMixin
 from .dashboard_state import demo_values, initial_data, prepare_cached, slim_profile
-from .selection import is_brief, last_active_day
-from .stats.summaries import summarize_workout
-from .timestamps import workout_timestamp
-from .stats.totals import extract_discipline_totals, parse_streaks
-from .stats.records import merge_personal_records, parse_personal_records, previous_best_kj
 from .schedule import scheduled_refresh_interval
+from .selection import is_brief, last_active_day
+from .stats.records import merge_personal_records, parse_personal_records, previous_best_kj
+from .stats.summaries import summarize_workout
+from .stats.totals import extract_discipline_totals, parse_streaks
+from .timestamps import workout_timestamp
 from .workouts.workout_log import WorkoutLog, default_log_path
 
 logger = logging.getLogger('peloton-led.dashboard')
@@ -83,11 +85,9 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
 
     def _init_paths(self):
         configured_cache = self.config.get('cache_path')
-        self.cache_path = (Path(configured_cache).expanduser() if configured_cache else
-                           self.token_path.with_name('dashboard-cache.json'))
+        self.cache_path = Path(configured_cache).expanduser() if configured_cache else self.token_path.with_name('dashboard-cache.json')
         configured_log = self.config.get('log_path')
-        self.log_path = (Path(configured_log).expanduser() if configured_log else
-                         default_log_path(self.cache_path))
+        self.log_path = Path(configured_log).expanduser() if configured_log else default_log_path(self.cache_path)
 
     def _init_log_state(self):
         self._log = None
@@ -191,8 +191,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
     def stale_indicator_required(self):
         """Only show the stale clock after three consecutive refresh failures."""
         with self._lock:
-            return (self._data['data_stale'] and
-                    self._data.get('consecutive_failures', 0) >= 3)
+            return self._data['data_stale'] and self._data.get('consecutive_failures', 0) >= 3
 
     def _publish(self, **values):
         with self._lock:
@@ -206,15 +205,16 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
 
     def _current_interval(self):
         """The refresh interval for right now, honoring quiet hours."""
-        return scheduled_refresh_interval(self.refresh_schedule, self.interval,
-                                          timezone_name=self.config.get('timezone'))
+        return scheduled_refresh_interval(self.refresh_schedule, self.interval, timezone_name=self.config.get('timezone'))
 
     def _finish_attempt(self, started, delay, **values):
         """Publish refresh health fields together and return the next delay."""
-        self._publish(refresh_in_progress=False,
-                      last_refresh_duration=max(0.0, time.monotonic() - started),
-                      next_refresh_at=time.time() + delay,
-                      **values)
+        self._publish(
+            refresh_in_progress=False,
+            last_refresh_duration=max(0.0, time.monotonic() - started),
+            next_refresh_at=time.time() + delay,
+            **values,
+        )
         return delay
 
     def _stamp(self):
@@ -241,8 +241,9 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         if stamp is None:
             self._client = None
             self._token_stamp = None
-            return self._finish_attempt(started, interval, login_required=True,
-                                        status='login_needed', last_error='token_missing', data_stale=True)
+            return self._finish_attempt(
+                started, interval, login_required=True, status='login_needed', last_error='token_missing', data_stale=True
+            )
         try:
             return self._refresh_with_client(stamp, started, interval)
         except (OSError, ValueError, requests.RequestException) as exc:
@@ -261,8 +262,9 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
             self._club_checked_at = None
         elif self.login_required:
             # Rejected token: wait for a replacement instead of retrying it.
-            return self._finish_attempt(started, interval,
-                login_required=True, status='login_needed', last_error='authentication', data_stale=True)
+            return self._finish_attempt(
+                started, interval, login_required=True, status='login_needed', last_error='authentication', data_stale=True
+            )
         client = self._client
         me = self._profile(client)
         user_id = me.get('id')
@@ -289,14 +291,24 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
             generation = self._data['generation'] + 1
         refreshed_at = time.time()
         self._failures = 0
-        delay = self._finish_attempt(started, interval,
-            me=me, totals=extract_discipline_totals(overview), summaries=summaries,
+        delay = self._finish_attempt(
+            started,
+            interval,
+            me=me,
+            totals=extract_discipline_totals(overview),
+            summaries=summaries,
             streaks=parse_streaks(overview),
             personal_records=personal_records,
-            login_required=False, status='ready', last_updated=refreshed_at,
-            last_error=None, generation=generation,
+            login_required=False,
+            status='ready',
+            last_updated=refreshed_at,
+            last_error=None,
+            generation=generation,
             active_day_count=len(active_day),
-            data_stale=False, cache_loaded=False, consecutive_failures=0)
+            data_stale=False,
+            cache_loaded=False,
+            consecutive_failures=0,
+        )
         self._publish_derived(*derived)
         try:
             self._persist_snapshot()
@@ -308,8 +320,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         """The rider's slim profile: the one in the snapshot, refetched at startup and then daily."""
         with self._lock:
             me = self._data.get('me') or {}
-        if (not me.get('id') or self._profile_checked_at is None
-                or time.monotonic() - self._profile_checked_at >= PROFILE_REFRESH_SECONDS):
+        if not me.get('id') or self._profile_checked_at is None or time.monotonic() - self._profile_checked_at >= PROFILE_REFRESH_SECONDS:
             me = slim_profile(client.get_me())
             self._profile_checked_at = time.monotonic()
         return me
@@ -319,9 +330,8 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         identity = workout.get('id')
         cached = self._cached_performance(identity)
         timestamp = workout_timestamp(workout, tz)
-        settling = timestamp is None or (datetime.now(timezone.utc) - timestamp).total_seconds() < 3600
-        signature = (workout.get('total_work'), workout.get('status'),
-                     workout.get('end_time'), workout.get('updated_at'))
+        settling = timestamp is None or (datetime.now(UTC) - timestamp).total_seconds() < 3600
+        signature = (workout.get('total_work'), workout.get('status'), workout.get('end_time'), workout.get('updated_at'))
         if identity and (cached is None or cached[0] != signature or settling or cached[1] is None):
             perf = client.get_perf_graph(identity)
             self._cache_performance(identity, signature, perf)
@@ -354,19 +364,21 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         response = getattr(exc, 'response', None)
         unauthorized = response is not None and response.status_code == 401
         missing = isinstance(exc, (FileNotFoundError, PermissionError)) or (
-            isinstance(exc, ValueError) and str(exc) == 'Peloton token file is empty')
+            isinstance(exc, ValueError) and str(exc) == 'Peloton token file is empty'
+        )
         if unauthorized or missing:
             logger.warning('Peloton login needed; replace the token file to resume')
-            return self._finish_attempt(started, interval,
-                login_required=True, status='login_needed', last_error='authentication', data_stale=True)
+            return self._finish_attempt(
+                started, interval, login_required=True, status='login_needed', last_error='authentication', data_stale=True
+            )
         self._failures += 1
         delay = min(self.interval, 15 * 2 ** min(self._failures - 1, 6))
         if response is not None and response.status_code == 429:
             delay = self._retry_after_delay(response, delay)
         logger.warning('Refresh failed (%s); retaining previous data, retrying in %.0fs', type(exc).__name__, delay)
-        return self._finish_attempt(started, delay, status='offline',
-                                    last_error=type(exc).__name__, data_stale=True,
-                                    consecutive_failures=self._failures)
+        return self._finish_attempt(
+            started, delay, status='offline', last_error=type(exc).__name__, data_stale=True, consecutive_failures=self._failures
+        )
 
     @staticmethod
     def _retry_after_delay(response, delay):
@@ -376,7 +388,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
             delay = max(delay, float(retry))
         except ValueError:
             try:
-                delay = max(delay, (parsedate_to_datetime(retry) - datetime.now(timezone.utc)).total_seconds())
+                delay = max(delay, (parsedate_to_datetime(retry) - datetime.now(UTC)).total_seconds())
             except (ValueError, TypeError, OverflowError):
                 pass
         return delay

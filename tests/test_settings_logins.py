@@ -1,11 +1,13 @@
 """The settings page's Logins card: login health from renewal's files, the write-only credentials in
 auth.env, and the Renew now and test alert buttons. No network; systemctl and Pushover are faked."""
+
 import base64
 import json
 import os
 import pathlib
 import re
 import time
+from datetime import UTC
 from html import unescape
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -14,10 +16,18 @@ import pytest
 
 import settings_page.server as server
 from settings_page import logins, page
+from settings_page.logins import (
+    alert_state,
+    credential_changes,
+    read_auth_env,
+    rider_logins,
+    rider_paths,
+    token_mode,
+    update_auth_env,
+    when,
+)
 from settings_page.page.alerts_section import alerts_card
 from settings_page.page.logins_section import _login_status, logins_card
-from settings_page.logins import (alert_state, credential_changes, read_auth_env, rider_logins, rider_paths,
-                                  token_mode, update_auth_env, when)
 from tests.test_settings_form import TWO_RIDERS
 from tests.test_settings_server import Board
 
@@ -36,9 +46,11 @@ def state(tmp_path):
     """Joel: a good token with a refresh chain. Jen: an expired token, a padlock, a browser try."""
     joel, jen = tmp_path / 'cookies-joel.txt', tmp_path / 'cookies-jen.txt'
     joel.write_text(jwt(time.time() + 3 * 86400))
-    (tmp_path / 'cookies-joel.refresh.json').write_text(json.dumps(
-        {'refresh_token': 'rt-secret', 'chain_started_at': '2026-11-01T00:00:00+00:00',
-         'chain_start_exact': True, 'renewals': 4}))
+    (tmp_path / 'cookies-joel.refresh.json').write_text(
+        json.dumps(
+            {'refresh_token': 'rt-secret', 'chain_started_at': '2026-11-01T00:00:00+00:00', 'chain_start_exact': True, 'renewals': 4}
+        )
+    )
     jen.write_text(jwt(time.time() - 60))
     marker = tmp_path / 'cookies-jen.renewal-failed'
     marker.write_text(json.dumps({'reason': 'invalid_grant: chain is dead', 'at': '2026-11-03T10:00:00+00:00'}))
@@ -50,13 +62,15 @@ def state(tmp_path):
 
 def test_rider_paths_follow_the_app(tmp_path):
     single = rider_paths({'display': {'username': 'Joel'}}, tmp_path, '/var/lib/peloton-led/cookies.txt')
-    assert single == [('default', 'Joel', __import__('pathlib').Path('/var/lib/peloton-led/cookies.txt'),
-                       'PELOTON_EMAIL', 'PELOTON_PASSWORD')]
+    assert single == [
+        ('default', 'Joel', __import__('pathlib').Path('/var/lib/peloton-led/cookies.txt'), 'PELOTON_EMAIL', 'PELOTON_PASSWORD')
+    ]
     assert rider_paths({}, tmp_path)[0][1] == 'This board'
     riders = rider_paths(TWO_RIDERS, tmp_path)
     assert [(k, n, p.name, e, w) for k, n, p, e, w in riders] == [
         ('0', 'Joel', 'cookies-joel.txt', 'PELOTON_EMAIL_RIDER_ONE', 'PELOTON_PASSWORD_RIDER_ONE'),
-        ('1', 'Jen', 'cookies-jen.txt', 'PELOTON_EMAIL_JEN', 'PELOTON_PASSWORD_JEN')]
+        ('1', 'Jen', 'cookies-jen.txt', 'PELOTON_EMAIL_JEN', 'PELOTON_PASSWORD_JEN'),
+    ]
     assert riders[1][2] == tmp_path / 'cookies-jen.txt'  # relative to the config the display reads
     assert [k for k, *_ in rider_paths({'users': ['junk', {'name': 'A'}]}, tmp_path)] == ['1']
 
@@ -89,27 +103,29 @@ def test_alert_state_and_token_mode(tmp_path):
     assert alert_state(token) == {}
     mode = tmp_path / 'token-mode'
     assert token_mode(mode) is None
-    for text, expected in (('no-browser flag\n', 'no-browser'), ('browser auto', 'browser'), ('none', 'none'),
-                           ('weird', None), ('', None)):
+    for text, expected in (('no-browser flag\n', 'no-browser'), ('browser auto', 'browser'), ('none', 'none'), ('weird', None), ('', None)):
         mode.write_text(text)
         assert token_mode(mode) == expected
 
 
-AUTH = '''# Written by setup_config.py
+AUTH = """# Written by setup_config.py
 PELOTON_EMAIL_RIDER_ONE="joel@example.com"
 PELOTON_PASSWORD_RIDER_ONE="pa\\"ss\\\\word"
 export PUSHOVER_APP_TOKEN='abc'
 
 PUSHOVER_USER_KEY=plain
-'''
+"""
 
 
 def test_auth_env_is_read_as_systemd_reads_it(tmp_path):
     path = tmp_path / 'auth.env'
     path.write_text(AUTH)
-    assert read_auth_env(path) == {'PELOTON_EMAIL_RIDER_ONE': 'joel@example.com',
-                                   'PELOTON_PASSWORD_RIDER_ONE': 'pa"ss\\word',
-                                   'PUSHOVER_APP_TOKEN': 'abc', 'PUSHOVER_USER_KEY': 'plain'}
+    assert read_auth_env(path) == {
+        'PELOTON_EMAIL_RIDER_ONE': 'joel@example.com',
+        'PELOTON_PASSWORD_RIDER_ONE': 'pa"ss\\word',
+        'PUSHOVER_APP_TOKEN': 'abc',
+        'PUSHOVER_USER_KEY': 'plain',
+    }
     assert read_auth_env(tmp_path / 'missing') == {}
 
 
@@ -122,8 +138,9 @@ def test_updating_auth_env_keeps_everything_else(tmp_path):
     path = tmp_path / 'auth.env'
     path.write_text(AUTH)
     os.chmod(path, 0o600)
-    update_auth_env(path, {'PELOTON_PASSWORD_RIDER_ONE': 'new "one" \\ here', 'PUSHOVER_USER_KEY': None,
-                           'PELOTON_EMAIL_JEN': 'jen@example.com'})
+    update_auth_env(
+        path, {'PELOTON_PASSWORD_RIDER_ONE': 'new "one" \\ here', 'PUSHOVER_USER_KEY': None, 'PELOTON_EMAIL_JEN': 'jen@example.com'}
+    )
     text = path.read_text()
     assert text.startswith('# Written by setup_config.py\nPELOTON_EMAIL_RIDER_ONE="joel@example.com"\n')
     assert 'PUSHOVER_USER_KEY' not in text and "export PUSHOVER_APP_TOKEN='abc'" in text
@@ -141,6 +158,7 @@ def test_updating_a_missing_auth_env_makes_it_owner_only(tmp_path, monkeypatch):
 
     def denied(*args):
         raise PermissionError
+
     monkeypatch.setattr(logins.os, 'chown', denied)  # not root: it's ours already
     update_auth_env(path, {'PUSHOVER_APP_TOKEN': None})
     assert path.read_text() == ''
@@ -151,24 +169,33 @@ def _riders(tmp_path):
 
 
 def test_credential_changes(tmp_path):
-    form = {'cred_0_name': ['Joel'], 'cred_0_email': [' joel@new.com '], 'cred_0_password': [''],
-            'cred_1_name': ['Jen'], 'cred_1_email': [''], 'cred_1_password': [' sp ace '],
-            'pushover_app_token': ['a' * 30], 'pushover_user_key': ['']}
+    form = {
+        'cred_0_name': ['Joel'],
+        'cred_0_email': [' joel@new.com '],
+        'cred_0_password': [''],
+        'cred_1_name': ['Jen'],
+        'cred_1_email': [''],
+        'cred_1_password': [' sp ace '],
+        'pushover_app_token': ['a' * 30],
+        'pushover_user_key': [''],
+    }
     changes, problems, changed = credential_changes(form, _riders(tmp_path))
     assert problems == []
-    assert changes == {'PELOTON_EMAIL_RIDER_ONE': 'joel@new.com', 'PELOTON_PASSWORD_JEN': ' sp ace ',
-                       'PUSHOVER_APP_TOKEN': 'a' * 30}
+    assert changes == {'PELOTON_EMAIL_RIDER_ONE': 'joel@new.com', 'PELOTON_PASSWORD_JEN': ' sp ace ', 'PUSHOVER_APP_TOKEN': 'a' * 30}
     assert changed == ["Joel's email", "Jen's password", 'Pushover app token']
     assert credential_changes({}, _riders(tmp_path)) == ({}, [], [])
 
 
-@pytest.mark.parametrize('form,message', [
-    ({'cred_0_email': ['not-an-email']}, "Joel's email doesn't look like an email address."),
-    ({'cred_1_password': ['line\nbreak']}, "Jen's password can't contain line breaks"),
-    ({'pushover_user_key': ['short']}, 'The Pushover user key should be letters and numbers only'),
-    ({'pushover_app_token': ['a' * 29 + '!']}, 'The Pushover app token should be letters and numbers only'),
-    ({'cred_0_name': ['Joe'], 'cred_0_email': ['a@b.co']}, 'The riders in config.json changed'),
-])
+@pytest.mark.parametrize(
+    'form,message',
+    [
+        ({'cred_0_email': ['not-an-email']}, "Joel's email doesn't look like an email address."),
+        ({'cred_1_password': ['line\nbreak']}, "Jen's password can't contain line breaks"),
+        ({'pushover_user_key': ['short']}, 'The Pushover user key should be letters and numbers only'),
+        ({'pushover_app_token': ['a' * 29 + '!']}, 'The Pushover app token should be letters and numbers only'),
+        ({'cred_0_name': ['Joe'], 'cred_0_email': ['a@b.co']}, 'The riders in config.json changed'),
+    ],
+)
 def test_bad_credentials_change_nothing_and_never_echo_the_value(tmp_path, form, message):
     changes, problems, changed = credential_changes(form, _riders(tmp_path))
     assert changes == {} and changed == [] and len(problems) == 1 and problems[0].startswith(message)
@@ -184,15 +211,18 @@ def test_clearing_pushover_wins_over_typed_keys(tmp_path):
 
 
 def test_when():
-    from datetime import timezone
-    assert when(0, timezone.utc) == 'Thu Jan 1, 12:00 AM'
+    assert when(0, UTC) == 'Thu Jan 1, 12:00 AM'
     assert when('soon') == 'unknown'
 
 
 # --- Over HTTP
 
-SECRETS = {'PELOTON_EMAIL_RIDER_ONE': 'joel@example.com', 'PELOTON_PASSWORD_RIDER_ONE': 'hunter2-secret',
-           'PUSHOVER_APP_TOKEN': 'a' * 30, 'PUSHOVER_USER_KEY': 'u' * 30}
+SECRETS = {
+    'PELOTON_EMAIL_RIDER_ONE': 'joel@example.com',
+    'PELOTON_PASSWORD_RIDER_ONE': 'hunter2-secret',
+    'PUSHOVER_APP_TOKEN': 'a' * 30,
+    'PUSHOVER_USER_KEY': 'u' * 30,
+}
 
 
 @pytest.fixture
@@ -210,9 +240,10 @@ ZONE = ZoneInfo(TWO_RIDERS['display']['timezone'])
 
 
 def test_the_card_shows_health_and_never_a_secret(board, tmp_path):
-    board.units = {server.RENEW_UNIT: {'ActiveState': 'inactive', 'Result': 'exit-code',
-                                       'ExecMainExitTimestamp': '@1762264800'},
-                   server.RENEW_TIMER: {'ActiveState': 'active', 'NextElapseUSecRealtime': '@1762268400'}}
+    board.units = {
+        server.RENEW_UNIT: {'ActiveState': 'inactive', 'Result': 'exit-code', 'ExecMainExitTimestamp': '@1762264800'},
+        server.RENEW_TIMER: {'ActiveState': 'active', 'NextElapseUSecRealtime': '@1762268400'},
+    }
     (tmp_path / 'token-mode').write_text('no-browser flag\n')
     (tmp_path / 'token-alert-state.json').write_text(json.dumps({'failures': 3, 'last_message': 'Jen: invalid_grant'}))
     board.sign_in()
@@ -264,8 +295,7 @@ def test_a_running_renewal_is_followed_until_it_is_done(board):
     board.units = {server.RENEW_UNIT: {'ActiveState': 'activating'}}
     now = json.loads(board.request('/renew/status')[2])
     assert now['renewing'] is True and 'Running now' in now['html'] and now['html'].startswith('<dl class="facts" id="renewal"')
-    board.units = {server.RENEW_UNIT: {'ActiveState': 'inactive', 'Result': 'success',
-                                       'ExecMainExitTimestamp': '@1762264800'}}
+    board.units = {server.RENEW_UNIT: {'ActiveState': 'inactive', 'Result': 'success', 'ExecMainExitTimestamp': '@1762264800'}}
     now = json.loads(board.request('/renew/status')[2])
     assert now['renewing'] is False and 'Last run worked' in now['html'] and 'data-running' not in now['html']
 
@@ -326,13 +356,21 @@ def test_saving_logins_writes_auth_env_and_updates_pushover_at_once(board, monke
     environ = {}
     monkeypatch.setattr(server.os, 'environ', environ)
     import logging
+
     settings_log = logging.getLogger('peloton-led.settings')  # "peloton-led" may not propagate to caplog's root
     settings_log.addHandler(caplog.handler)
     caplog.set_level(logging.INFO, logger='peloton-led.settings')  # setLevel clears the logger's cache
     board.sign_in()
-    status, headers, _ = board.request('/credentials', {
-        'cred_0_name': 'Joel', 'cred_0_password': 'brand-new-pass', 'cred_1_name': 'Jen',
-        'cred_1_email': 'jen@example.com', 'pushover_user_key': 'k' * 30})
+    status, headers, _ = board.request(
+        '/credentials',
+        {
+            'cred_0_name': 'Joel',
+            'cred_0_password': 'brand-new-pass',
+            'cred_1_name': 'Jen',
+            'cred_1_email': 'jen@example.com',
+            'pushover_user_key': 'k' * 30,
+        },
+    )
     assert headers['Location'] == '/?logins=logins_saved#logins'
     saved = read_auth_env(board.auth_env)
     assert saved['PELOTON_PASSWORD_RIDER_ONE'] == 'brand-new-pass' and saved['PELOTON_EMAIL_JEN'] == 'jen@example.com'
@@ -359,6 +397,7 @@ def test_logins_that_cannot_be_written_say_so(board, monkeypatch):
 
     def fail(path, changes):
         raise OSError('read-only file system')
+
     monkeypatch.setattr(logins, 'update_auth_env', fail)
     status, _, body = board.request('/credentials', {'cred_0_password': 'x'})
     assert status == 400 and "Couldn't save the logins: read-only file system" in body
@@ -393,20 +432,22 @@ def test_test_alert_outcomes(board, monkeypatch):
 def test_renew_now(board):
     board.sign_in()
     calls = []
-    board.settings._systemctl = lambda *args, unit=None: calls.append((args, unit)) or SimpleNamespace(
-        returncode=0, stderr='')
+    board.settings._systemctl = lambda *args, unit=None: calls.append((args, unit)) or SimpleNamespace(returncode=0, stderr='')
     assert board.request('/renew', {})[1]['Location'] == '/?logins=renew_started#logins'
     assert calls == [(('start', '--no-block'), server.RENEW_UNIT)]
     board.units = {server.RENEW_UNIT: {'ActiveState': 'activating'}}
     assert board.request('/renew', {})[1]['Location'] == '/?logins=renew_running#logins'
 
 
-@pytest.mark.parametrize('result,outcome', [
-    (SimpleNamespace(returncode=1, stderr='Unit not found'), 'renew_failed'),
-    (SimpleNamespace(returncode=5, stderr=''), 'renew_failed'),
-    (OSError('no dbus'), 'renew_failed'),
-    (None, 'renew_unavailable'),
-])
+@pytest.mark.parametrize(
+    'result,outcome',
+    [
+        (SimpleNamespace(returncode=1, stderr='Unit not found'), 'renew_failed'),
+        (SimpleNamespace(returncode=5, stderr=''), 'renew_failed'),
+        (OSError('no dbus'), 'renew_failed'),
+        (None, 'renew_unavailable'),
+    ],
+)
 def test_renew_problems(tmp_path, monkeypatch, result, outcome):
     settings = server.Settings(str(tmp_path / 'config.json'))
     monkeypatch.setattr(settings, '_unit_properties', lambda unit, *names: {})
@@ -415,6 +456,7 @@ def test_renew_problems(tmp_path, monkeypatch, result, outcome):
         if isinstance(result, Exception):
             raise result
         return result
+
     settings._systemctl = systemctl
     assert settings.renew() == outcome
 
@@ -422,8 +464,11 @@ def test_renew_problems(tmp_path, monkeypatch, result, outcome):
 def test_unit_properties_are_read_from_systemctl_show(tmp_path, monkeypatch):
     settings = server.Settings(str(tmp_path / 'config.json'))
     runs = []
-    answers = [SimpleNamespace(returncode=0, stdout='ActiveState=active\nNextElapseUSecRealtime=@1762268400\nnoise\n'),
-               SimpleNamespace(returncode=1, stdout=''), OSError('boom')]
+    answers = [
+        SimpleNamespace(returncode=0, stdout='ActiveState=active\nNextElapseUSecRealtime=@1762268400\nnoise\n'),
+        SimpleNamespace(returncode=1, stdout=''),
+        OSError('boom'),
+    ]
 
     def run(cmd, **kwargs):
         runs.append(cmd)
@@ -431,12 +476,14 @@ def test_unit_properties_are_read_from_systemctl_show(tmp_path, monkeypatch):
         if isinstance(answer, Exception):
             raise answer
         return answer
+
     monkeypatch.setattr(server.shutil, 'which', lambda name: '/bin/systemctl')
     monkeypatch.setattr(server.subprocess, 'run', run)
     assert settings._unit_properties('x.timer', 'ActiveState', 'NextElapseUSecRealtime') == {
-        'ActiveState': 'active', 'NextElapseUSecRealtime': '@1762268400'}
-    assert runs[0] == ['systemctl', 'show', '--timestamp=unix', '--property=ActiveState',
-                       '--property=NextElapseUSecRealtime', 'x.timer']
+        'ActiveState': 'active',
+        'NextElapseUSecRealtime': '@1762268400',
+    }
+    assert runs[0] == ['systemctl', 'show', '--timestamp=unix', '--property=ActiveState', '--property=NextElapseUSecRealtime', 'x.timer']
     assert settings._unit_properties('x.timer', 'ActiveState') == {}
     assert settings._unit_properties('x.timer', 'ActiveState') == {}
     settings.restart_unit = ''
@@ -448,6 +495,7 @@ def test_seed_command_names_the_checkout_owner(tmp_path, monkeypatch):
     config.write_text('{}')
     settings = server.Settings(str(config))
     import pwd
+
     me = pwd.getpwuid(os.getuid()).pw_name
     assert settings.checkout_owner() == (me if me != 'root' else '<user>')
     assert server.Settings(str(tmp_path / 'missing.json')).checkout_owner() == '<user>'
@@ -463,8 +511,17 @@ def test_the_card_on_a_fresh_board(tmp_path):
     assert 'sign in with the PIN' in alerts_card({'pushover': True}, signed_in=False)
 
 
-@pytest.mark.parametrize('value, expected', [('@1762264800', 1762264800.0), ('', None), (None, None), ('n/a', None),
-                                             ('@junk', '@junk'), ('Wed 2026-11-04 09:00:00 EST', 'Wed 2026-11-04 09:00:00 EST')])
+@pytest.mark.parametrize(
+    'value, expected',
+    [
+        ('@1762264800', 1762264800.0),
+        ('', None),
+        (None, None),
+        ('n/a', None),
+        ('@junk', '@junk'),
+        ('Wed 2026-11-04 09:00:00 EST', 'Wed 2026-11-04 09:00:00 EST'),
+    ],
+)
 def test_systemd_times_become_epoch_seconds(value, expected):
     assert server.unix_time(value) == expected
 
@@ -477,10 +534,22 @@ def test_renewal_rows_for_each_state():
     assert re.search(r'id="logins"', page.settings_page({}, logins={'riders': [], 'seed': 'x'}))
 
 
-@pytest.mark.parametrize('value, seconds', [
-    ('2h 5min 3.5s', 7503.5), ('1d 30min', 88200.0), ('1w', 604800.0), ('750ms', 0.75), ('3min 200us', 180.0002),
-    ('', None), (None, None), ('0', None), ('infinity', None), ('n/a', None), ('5 parsecs', None),
-])
+@pytest.mark.parametrize(
+    'value, seconds',
+    [
+        ('2h 5min 3.5s', 7503.5),
+        ('1d 30min', 88200.0),
+        ('1w', 604800.0),
+        ('750ms', 0.75),
+        ('3min 200us', 180.0002),
+        ('', None),
+        (None, None),
+        ('0', None),
+        ('infinity', None),
+        ('n/a', None),
+        ('5 parsecs', None),
+    ],
+)
 def test_systemd_timespans_become_seconds(value, seconds):
     found = server.timespan_seconds(value)
     assert found == pytest.approx(seconds) if seconds is not None else found is None
@@ -497,8 +566,7 @@ def test_a_timer_counted_from_boot_still_says_when_it_next_runs(tmp_path):
 
 
 def test_the_card_shows_the_next_check_of_a_timer_counted_from_boot(board):
-    board.units = {server.RENEW_TIMER: {'ActiveState': 'active', 'NextElapseUSecRealtime': '',
-                                        'NextElapseUSecMonotonic': '2h'}}
+    board.units = {server.RENEW_TIMER: {'ActiveState': 'active', 'NextElapseUSecRealtime': '', 'NextElapseUSecMonotonic': '2h'}}
     board.settings.clock, board.settings.monotonic = (lambda: 1762264800.0), (lambda: 3600.0)
     board.sign_in()
     card = board.request('/')[2].split('id="logins"', 1)[1].split('</section>', 1)[0]
@@ -507,14 +575,28 @@ def test_the_card_shows_the_next_check_of_a_timer_counted_from_boot(board):
 
 
 def test_a_token_problem_says_what_it_means_and_keeps_its_capitals():
-    from settings_page.logins import RiderLogin
     import dataclasses
+
+    from settings_page.logins import RiderLogin
+
     fields = {f.name: None for f in dataclasses.fields(RiderLogin)}
-    login = RiderLogin(**{**fields, 'key': '0', 'name': 'Joel', 'token': {'ok': False, 'reason': 'JWT payload has no usable exp claim'},
-                          'chain': None, 'padlock': None, 'browser_attempt': None, 'email_set': True,
-                          'password_set': True})
+    login = RiderLogin(
+        **{
+            **fields,
+            'key': '0',
+            'name': 'Joel',
+            'token': {'ok': False, 'reason': 'JWT payload has no usable exp claim'},
+            'chain': None,
+            'padlock': None,
+            'browser_attempt': None,
+            'email_set': True,
+            'password_set': True,
+        }
+    )
     html = _login_status(login, {'mode': 'browser'}, None)
-    assert '<span class="k">Token</span><span>The token file can&#x27;t be used (JWT payload has no usable exp claim)</span>' in html, 'JWT, not Jwt'
+    assert ('<span class="k">Token</span><span>The token file can&#x27;t be used (JWT payload has no usable exp claim)</span>') in html, (
+        'JWT, not Jwt'
+    )
     assert html.startswith('<details class="rider-card" open>'), 'no working token: it opens by itself'
     missing = dataclasses.replace(login, token={'ok': False, 'reason': 'file does not exist'})
     assert '<span>No token on this board yet</span>' in _login_status(missing, {'mode': 'browser'}, None)
@@ -530,12 +612,15 @@ def test_the_cards_interval_and_renewal_window_are_the_units_own():
     assert f'--renew-before-hours {logins.RENEW_BEFORE_S // 3600} ' in service
 
 
-@pytest.mark.parametrize('expires, next_check, expected', [
-    (100_000, 40_000, 58_000),  # due at 56_800: the first hourly check from 40_000 at or after it
-    (100_000, 60_000, 60_000),  # already due: the next check
-    (100_000, 56_800, 56_800),  # due exactly at a check
-    (100_000, None, 56_800),    # no timer running: when it becomes due
-])
+@pytest.mark.parametrize(
+    'expires, next_check, expected',
+    [
+        (100_000, 40_000, 58_000),  # due at 56_800: the first hourly check from 40_000 at or after it
+        (100_000, 60_000, 60_000),  # already due: the next check
+        (100_000, 56_800, 56_800),  # due exactly at a check
+        (100_000, None, 56_800),  # no timer running: when it becomes due
+    ],
+)
 def test_a_token_renews_at_the_first_check_within_twelve_hours_of_expiring(expires, next_check, expected):
     assert logins.renews_at({'ok': True, 'expires_at': expires}, next_check) == expected
 
@@ -547,30 +632,52 @@ def test_a_token_without_an_expiry_has_no_renewal_time():
 
 def _rider(name, expires, chain='refresh chain 3 days old'):
     import dataclasses
+
     from settings_page.logins import RiderLogin
+
     fields = {f.name: None for f in dataclasses.fields(RiderLogin)}
-    return RiderLogin(**{**fields, 'key': name.lower(), 'name': name, 'chain': chain, 'email_set': False,
-                         'password_set': False, 'token': {'ok': True, 'expires_at': expires, 'expired': False}})
+    return RiderLogin(
+        **{
+            **fields,
+            'key': name.lower(),
+            'name': name,
+            'chain': chain,
+            'email_set': False,
+            'password_set': False,
+            'token': {'ok': True, 'expires_at': expires, 'expired': False},
+        }
+    )
 
 
 def test_the_card_shows_the_interval_and_when_each_token_renews():
     next_check = 1762400000.0
-    view = {'mode': 'no-browser', 'timer_next': next_check, 'display_running': True, 'seed': 'x',
-            'riders': [_rider('Joel', next_check + 30 * 3600), _rider('Jen', next_check + 14 * 3600)]}
+    view = {
+        'mode': 'no-browser',
+        'timer_next': next_check,
+        'display_running': True,
+        'seed': 'x',
+        'riders': [_rider('Joel', next_check + 30 * 3600), _rider('Jen', next_check + 14 * 3600)],
+    }
     html = logins_card(view, zone=ZONE)
     assert '<dt>Interval</dt><dd>Every hour <span class="hint">&middot; each check renews only tokens within 12 hours' in html
     assert f'<dt>Next check</dt><dd>{logins.when(next_check, ZONE)}</dd>' in html
     jen = logins.when(next_check + 2 * 3600, ZONE)  # due 2 hours after the next check, on a check
     joel = logins.when(next_check + 18 * 3600, ZONE)
-    assert (f'<dt>Next renewal</dt><dd>Around {jen} <span class="hint">&middot; Jen\'s token, 12 hours before '
-            'it expires</span></dd>') in html, 'the soonest rider'
+    assert (
+        f'<dt>Next renewal</dt><dd>Around {jen} <span class="hint">&middot; Jen\'s token, 12 hours before it expires</span></dd>'
+    ) in html, 'the soonest rider'
     assert f'<span class="k">Renews</span><span>Around {jen} \u00b7 12 hours before it expires</span>' in html
-    assert f'<span class="what">Renews around {joel}</span>' in html, 'on the closed card\'s line'
+    assert f'<span class="what">Renews around {joel}</span>' in html, "on the closed card's line"
 
 
 def test_with_no_check_scheduled_it_renews_at_the_first_check_after_its_due():
-    view = {'mode': 'no-browser', 'timer_next': None, 'display_running': False, 'seed': 'x',
-            'riders': [_rider('Joel', 1762400000.0 + 13 * 3600)]}
+    view = {
+        'mode': 'no-browser',
+        'timer_next': None,
+        'display_running': False,
+        'seed': 'x',
+        'riders': [_rider('Joel', 1762400000.0 + 13 * 3600)],
+    }
     html = logins_card(view, zone=ZONE)
     due = logins.when(1762400000.0 + 3600, ZONE)
     assert '<dt>Interval</dt><dd>Every hour while the display is on' in html
@@ -578,8 +685,12 @@ def test_with_no_check_scheduled_it_renews_at_the_first_check_after_its_due():
 
 
 def test_no_renewal_time_without_a_way_to_renew():
-    no_refresh = {'mode': 'no-browser', 'timer_next': 1762400000.0, 'seed': 'x',
-                  'riders': [_rider('Joel', 1762400000.0 + 5 * 3600, chain=None)]}
+    no_refresh = {
+        'mode': 'no-browser',
+        'timer_next': 1762400000.0,
+        'seed': 'x',
+        'riders': [_rider('Joel', 1762400000.0 + 5 * 3600, chain=None)],
+    }
     assert 'Next renewal' not in logins_card(no_refresh) and 'Renews ' not in logins_card(no_refresh)
     browser = {**no_refresh, 'mode': 'browser'}
     assert 'Next renewal' in logins_card(browser), 'a browser board signs in without a refresh token'

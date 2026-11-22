@@ -1,4 +1,5 @@
 """The workout-compare frames on the latest-workout page: card + bars on 64x64, bars + sentence on 64x32."""
+
 import pytest
 
 from display.display import initialize_fonts
@@ -17,9 +18,9 @@ GOLD = (255, 200, 0)
 AMBER = (255, 140, 0)
 GREEN = (60, 220, 110)
 RED = (230, 40, 40)
-WHITE = (200, 205, 215)   # the insight text colour
+WHITE = (200, 205, 215)  # the insight text colour
 GREY = (145, 165, 190)
-USUAL_BAR = (20, 50, 140)   # the usual's bar (navy)
+USUAL_BAR = (20, 50, 140)  # the usual's bar (navy)
 DIM = (70, 80, 95)
 HEART = (220, 20, 20)
 CYCLING = (220, 50, 20)
@@ -47,8 +48,9 @@ def render_detail(summary, height, kind, index=0, page=None, seconds=0.5):
     matrix = ImageMatrix(height=height)
     initialize_fonts(height)
     details = rotating_details(summary, height)
-    turn = next(i for i, d in enumerate(details) if d.get('kind') == kind and d.get('index', 0) == index
-                and (page is None or d.get('page') == page))
+    turn = next(
+        i for i, d in enumerate(details) if d.get('kind') == kind and d.get('index', 0) == index and (page is None or d.get('page') == page)
+    )
     screen = LastWorkoutScreen()
     screen.on_enter(matrix, summary)
     screen.update(4 + sum(detail_hold_seconds(d, 4) for d in details[:turn]) + seconds)
@@ -59,16 +61,19 @@ def render_detail(summary, height, kind, index=0, page=None, seconds=0.5):
 def test_the_frames_come_after_the_chart_slides_in_order():
     ride = ride_with_two()
     tall = rotating_details(ride, 64)
-    assert [d.get('kind') for d in tall][-6:] == ['graph', 'zones', 'insight_card', 'insight_bars',
-                                                 'insight_card', 'insight_bars']
+    assert [d.get('kind') for d in tall][-6:] == ['graph', 'zones', 'insight_card', 'insight_bars', 'insight_card', 'insight_bars']
     assert [d['index'] for d in tall[-4:]] == [0, 0, 1, 1]
     assert all(d['label'] == 'insight' and d['value'] == '' for d in tall[-4:])
     short = rotating_details(ride, 32)
     pages = [len(v['pages32']) for v in ride['insights']]
     assert pages == [2, 1]
     assert [(d.get('kind'), d.get('index'), d.get('page')) for d in short][-5:] == [
-        ('insight_bars', 0, None), ('insight_words', 0, 0), ('insight_words', 0, 1),
-        ('insight_bars', 1, None), ('insight_words', 1, 0)]
+        ('insight_bars', 0, None),
+        ('insight_words', 0, 0),
+        ('insight_words', 0, 1),
+        ('insight_bars', 1, None),
+        ('insight_words', 1, 0),
+    ]
     strength = with_views(demo_strength(), view('go_up_lighter'))
     assert [d.get('kind') for d in rotating_details(strength, 64)][-3:] == ['muscles', 'insight_card', 'insight_bars']
 
@@ -83,34 +88,57 @@ def test_three_insights_each_get_their_frames_and_numbered_headers():
     ride = with_views(demo_ride(), view('output_down', reason='easier'), view('effort_high'), view('callout_best'))
     tall = rotating_details(ride, 64)
     assert [(d.get('kind'), d.get('index')) for d in tall][-6:] == [
-        ('insight_card', 0), ('insight_bars', 0), ('insight_card', 1), ('insight_bars', 1),
-        ('insight_card', 2), ('insight_bars', 2)]
+        ('insight_card', 0),
+        ('insight_bars', 0),
+        ('insight_card', 1),
+        ('insight_bars', 1),
+        ('insight_card', 2),
+        ('insight_bars', 2),
+    ]
     short = rotating_details(ride, 32)
     assert [d.get('index') for d in short if d.get('kind') == 'insight_bars'] == [0, 1, 2]
     third = render_detail(ride, 64, 'insight_bars', index=2)
-    assert lit(third, GREEN, range(14, 23), range(64))                        # TOP RESISTANCE
-    assert lit(third, GREY, range(3, 10), range(50, 63))                      # 3/3
+    assert lit(third, GREEN, range(14, 23), range(64))  # TOP RESISTANCE
+    assert lit(third, GREY, range(3, 10), range(50, 63))  # 3/3
     assert third.image.tobytes() != render_detail(ride, 64, 'insight_bars', index=1).image.tobytes()
 
 
 def _damaged():
     good = view('pace_low')
     return [
-        None, 'text', {}, [None], ['text'], [{}],
-        [{**good, 'figure': 'bars'}], [{**good, 'figure': {'kind': 'pie', 'pct': 3}}],
-        [{**good, 'highlight': 'FIRST'}], [{**good, 'highlight': [3]}], [{**good, 'highlight': []}],
-        [{**good, 'figure': {'kind': 'share', 'pct': 101}}], [{**good, 'figure': {'kind': 'share', 'pct': -1}}],
-        [{**good, 'figure': {'kind': 'share', 'pct': True}}], [{**good, 'figure': {'kind': 'share', 'pct': 5,
-                                                                                    'unit': 7}}],
+        None,
+        'text',
+        {},
+        [None],
+        ['text'],
+        [{}],
+        [{**good, 'figure': 'bars'}],
+        [{**good, 'figure': {'kind': 'pie', 'pct': 3}}],
+        [{**good, 'highlight': 'FIRST'}],
+        [{**good, 'highlight': [3]}],
+        [{**good, 'highlight': []}],
+        [{**good, 'figure': {'kind': 'share', 'pct': 101}}],
+        [{**good, 'figure': {'kind': 'share', 'pct': -1}}],
+        [{**good, 'figure': {'kind': 'share', 'pct': True}}],
+        [{**good, 'figure': {'kind': 'share', 'pct': 5, 'unit': 7}}],
         [{**good, 'figure': {'kind': 'bars', 'today': 1, 'usual': 2}}],
         [{**good, 'figure': {'kind': 'blocks', 'total': 3, 'lit': 4}}],
         [{**good, 'figure': {'kind': 'blocks', 'total': 31, 'lit': 1}}],
         [{**good, 'figure': {'kind': 'blocks', 'total': 3.0, 'lit': 1}}],
-        [{**good, 'colour': 'amber'}], [{**good, 'colour': [255, 140]}], [{**good, 'colour': [255, 140, 300]}],
-        [{**good, 'colour': [True, 0, 0]}], [{**good, 'headline': ''}], [{**good, 'footer': None}],
-        [{**good, 'reason': 7}], [{**good, 'lines64': []}], [{**good, 'lines64': ['A'] * 6}],
-        [{**good, 'lines64': ['A', 3]}], [{**good, 'pages32': []}], [{**good, 'pages32': [['A']] * 3}],
-        [{**good, 'pages32': [['A', 'B', 'C', 'D']]}], [{**good, 'pages32': ['ABC']}],
+        [{**good, 'colour': 'amber'}],
+        [{**good, 'colour': [255, 140]}],
+        [{**good, 'colour': [255, 140, 300]}],
+        [{**good, 'colour': [True, 0, 0]}],
+        [{**good, 'headline': ''}],
+        [{**good, 'footer': None}],
+        [{**good, 'reason': 7}],
+        [{**good, 'lines64': []}],
+        [{**good, 'lines64': ['A'] * 6}],
+        [{**good, 'lines64': ['A', 3]}],
+        [{**good, 'pages32': []}],
+        [{**good, 'pages32': [['A']] * 3}],
+        [{**good, 'pages32': [['A', 'B', 'C', 'D']]}],
+        [{**good, 'pages32': ['ABC']}],
     ]
 
 
@@ -156,50 +184,50 @@ def assert_no_heart_row(matrix):
 def test_64_card_layout():
     matrix = render_detail(ride_with_two(), 64, 'insight_card')
     assert lit(matrix, GOLD, [2], range(3, 8)) and lit(matrix, GOLD, range(2, 10), range(11, 50))  # bulb, INSIGHT
-    assert lit(matrix, GREY, range(3, 10), range(50, 63))                    # 1/2
-    assert len(lit(matrix, CYCLING, [12], range(64))) == 60                   # the discipline rule, 2-61
-    assert not lit(matrix, CYCLING, range(0, 12), range(64))                  # no discipline title
-    assert lit(matrix, WHITE, range(14, 50), range(64))                       # the sentence ...
-    assert lit(matrix, AMBER, range(14, 50), range(64))                       # ... numbers in the insight's colour
-    assert not lit(matrix, CYCLING, range(14, 50), range(64))                 # (not the discipline's)
-    assert lit(matrix, GREY, range(54, 62), range(64))                        # 9 SIMILAR RIDES
+    assert lit(matrix, GREY, range(3, 10), range(50, 63))  # 1/2
+    assert len(lit(matrix, CYCLING, [12], range(64))) == 60  # the discipline rule, 2-61
+    assert not lit(matrix, CYCLING, range(0, 12), range(64))  # no discipline title
+    assert lit(matrix, WHITE, range(14, 50), range(64))  # the sentence ...
+    assert lit(matrix, AMBER, range(14, 50), range(64))  # ... numbers in the insight's colour
+    assert not lit(matrix, CYCLING, range(14, 50), range(64))  # (not the discipline's)
+    assert lit(matrix, GREY, range(54, 62), range(64))  # 9 SIMILAR RIDES
     assert_no_heart_row(matrix)
     single = render_detail(with_views(demo_ride(), view('pace_low')), 64, 'insight_card')
-    assert not lit(single, GREY, range(3, 10), range(50, 63))                 # one insight: no 1/2
+    assert not lit(single, GREY, range(3, 10), range(50, 63))  # one insight: no 1/2
 
 
 def test_64_bars_layout():
     matrix = render_detail(ride_with_two(), 64, 'insight_bars')
-    assert lit(matrix, AMBER, range(14, 23), range(64))                       # OUTPUT DOWN
-    assert len(lit(matrix, AMBER, [35], range(64))) >= 30                     # today's bar, rows 34-37
-    assert len(lit(matrix, USUAL_BAR, [48], range(64))) == 60                      # the usual's, full width
-    assert lit(matrix, WHITE, range(54, 62), range(64))                       # AN EASIER DAY
+    assert lit(matrix, AMBER, range(14, 23), range(64))  # OUTPUT DOWN
+    assert len(lit(matrix, AMBER, [35], range(64))) >= 30  # today's bar, rows 34-37
+    assert len(lit(matrix, USUAL_BAR, [48], range(64))) == 60  # the usual's, full width
+    assert lit(matrix, WHITE, range(54, 62), range(64))  # AN EASIER DAY
     assert not lit(matrix, CYCLING, range(0, 12), range(64))
     assert_no_heart_row(matrix)
     hardest = render_detail(ride_with_two(), 64, 'insight_bars', index=1)
-    assert len(lit(hardest, RED, [35], range(64))) == 60                      # today is the larger
-    assert lit(hardest, GREY, range(3, 10), range(50, 63))                    # 2/2
+    assert len(lit(hardest, RED, [35], range(64))) == 60  # today is the larger
+    assert lit(hardest, GREY, range(3, 10), range(50, 63))  # 2/2
 
 
 def test_32_bars_and_words_layout():
     bars = render_detail(ride_with_two(), 32, 'insight_bars')
-    assert lit(bars, GOLD, [0], range(1, 6))                                  # the bulb at (1, 0)
-    assert lit(bars, AMBER, range(0, 7), range(9, 64))                        # headline
-    assert len(lit(bars, AMBER, [11], range(0, 42))) >= 20                    # today, rows 9-13 from x 1
-    assert len(lit(bars, USUAL_BAR, [19], range(0, 42))) == 41                     # usual, 40 px from x 1
-    assert lit(bars, AMBER, range(7, 14), range(50, 64))                      # 124 on the right
-    assert lit(bars, WHITE, range(24, 31), range(64))                         # reason on baseline 30
-    assert not lit(bars, CYCLING, range(32), range(64))                       # no title, no rule
+    assert lit(bars, GOLD, [0], range(1, 6))  # the bulb at (1, 0)
+    assert lit(bars, AMBER, range(0, 7), range(9, 64))  # headline
+    assert len(lit(bars, AMBER, [11], range(0, 42))) >= 20  # today, rows 9-13 from x 1
+    assert len(lit(bars, USUAL_BAR, [19], range(0, 42))) == 41  # usual, 40 px from x 1
+    assert lit(bars, AMBER, range(7, 14), range(50, 64))  # 124 on the right
+    assert lit(bars, WHITE, range(24, 31), range(64))  # reason on baseline 30
+    assert not lit(bars, CYCLING, range(32), range(64))  # no title, no rule
     assert_no_heart_row(bars)
     first = render_detail(ride_with_two(), 32, 'insight_words', page=0)
     second = render_detail(ride_with_two(), 32, 'insight_words', page=1)
     for words in (first, second):
-        assert lit(words, GOLD, range(0, 7), range(9, 40))                    # INSIGHT
-        assert lit(words, GREY, range(0, 7), range(50, 64))                   # 1/2, 2/2
-        assert len(lit(words, CYCLING, [8], range(64))) == 64                 # the rule on row 8
+        assert lit(words, GOLD, range(0, 7), range(9, 40))  # INSIGHT
+        assert lit(words, GREY, range(0, 7), range(50, 64))  # 1/2, 2/2
+        assert len(lit(words, CYCLING, [8], range(64))) == 64  # the rule on row 8
         assert lit(words, WHITE, range(10, 31), range(64))
         assert_no_heart_row(words)
-    assert lit(first, AMBER, range(10, 31), range(64))                        # 124 and 188, the insight's colour
+    assert lit(first, AMBER, range(10, 31), range(64))  # 124 and 188, the insight's colour
     assert not lit(first, CYCLING, range(10, 31), range(64))
     assert first.image.tobytes() != second.image.tobytes()
     one_page = render_detail(ride_with_two(), 32, 'insight_words', index=1)
@@ -214,8 +242,8 @@ def test_share_bar_frame(height):
         assert lit(matrix, GREY, range(26, 33), range(64)) and lit(matrix, GREY, range(43, 50), range(64))
     else:
         assert lit(matrix, AMBER, range(11, 19), range(1, 12)) and lit(matrix, DIM, range(11, 19), range(13, 42))
-        assert lit(matrix, AMBER, range(11, 18), range(48, 64))               # 28%
-    assert lit(matrix, WHITE, range(height - 8, height), range(64))           # TURN IT UP
+        assert lit(matrix, AMBER, range(11, 18), range(48, 64))  # 28%
+    assert lit(matrix, WHITE, range(height - 8, height), range(64))  # TURN IT UP
     empty = render_detail(with_views(demo_ride(), view('resistance_low', pct=0)), height, 'insight_bars')
     bar_rows = range(35, 42) if height == 64 else range(11, 19)
     assert not lit(empty, AMBER, bar_rows, range(0, 42)) and lit(empty, DIM, bar_rows, range(0, 42))
@@ -230,16 +258,15 @@ def test_blocks_frames(height):
     size = 7 if height == 64 else 5
     assert len(lit(streak, GREEN, [top + 1], range(64))) == 3 * size
     assert len(lit(streak, GREEN, [top + size], range(64))) == 0
-    assert len(lit(missed, AMBER, [top + 1], range(64))) == 2 * size   # the missed sets
+    assert len(lit(missed, AMBER, [top + 1], range(64))) == 2 * size  # the missed sets
     assert len(lit(missed, DIM, [top + 1], range(64))) == 4 * size
     if height == 64:
-        assert lit(streak, GREY, range(44, 51), range(64))                    # 3 IN A ROW
+        assert lit(streak, GREY, range(44, 51), range(64))  # 3 IN A ROW
     else:
         assert min(x for x, _ in lit(streak, GREEN, [top], range(64))) == 4
     # More sets take smaller blocks, never wider than the panel.
     for sets in (9, 20, 30):
-        frame = render_detail(with_views(demo_strength(), view('missed_targets', sets=sets, missed=4)),
-                              height, 'insight_bars')
+        frame = render_detail(with_views(demo_strength(), view('missed_targets', sets=sets, missed=4)), height, 'insight_bars')
         assert len(lit(frame, AMBER, [top], range(64))) + len(lit(frame, DIM, [top], range(64))) >= sets
         assert not lit(frame, DIM, [top], [63])
 
@@ -251,13 +278,15 @@ def test_callout_best_bars_frame(height):
     matrix = render_detail(best, height, 'insight_bars')
     row, usual_row, width = (35, 48, 60) if height == 64 else (11, 19, 41)
     today = len(lit(matrix, GREEN, [row], range(0, 42 if height == 32 else 64)))
-    assert 0 < today < width // 2                                             # 6% against 14%
+    assert 0 < today < width // 2  # 6% against 14%
     assert len(lit(matrix, USUAL_BAR, [usual_row], range(64))) == width
-    assert lit(matrix, WHITE, range(height - 8, height), range(64))           # TIME MISSED
+    assert lit(matrix, WHITE, range(height - 8, height), range(64))  # TIME MISSED
     headline = lit(matrix, GREEN, range(0, 7) if height == 32 else range(14, 23), range(64))
-    assert max(x for x, _ in headline) > 50                                   # TOP RESISTANCE, not TOP
-    words = [render_detail(best, height, 'insight_card' if height == 64 else 'insight_words', page=p)
-             for p in ((None,) if height == 64 else (0, 1))]
+    assert max(x for x, _ in headline) > 50  # TOP RESISTANCE, not TOP
+    words = [
+        render_detail(best, height, 'insight_card' if height == 64 else 'insight_words', page=p)
+        for p in ((None,) if height == 64 else (0, 1))
+    ]
     assert all(lit(frame, GREEN, range(10, height), range(64)) for frame in words)  # 20, the shares
 
 
@@ -280,27 +309,31 @@ def test_a_long_movement_reason_scrolls_under_blank_margins(height):
         assert not lit(frame, WHITE, rows, [0, 1, 62, 63])
         assert lit(frame, WHITE, rows, range(2, 62))
     # Held at the start, then at the end.
-    assert (render_detail(summary, height, 'insight_bars', seconds=0.1).image.tobytes()
-            == render_detail(summary, height, 'insight_bars', seconds=0.3).image.tobytes())
-    assert (render_detail(summary, height, 'insight_bars', seconds=4.5).image.tobytes()
-            == render_detail(summary, height, 'insight_bars', seconds=4.9).image.tobytes())
+    assert (
+        render_detail(summary, height, 'insight_bars', seconds=0.1).image.tobytes()
+        == render_detail(summary, height, 'insight_bars', seconds=0.3).image.tobytes()
+    )
+    assert (
+        render_detail(summary, height, 'insight_bars', seconds=4.5).image.tobytes()
+        == render_detail(summary, height, 'insight_bars', seconds=4.9).image.tobytes()
+    )
 
 
 def test_a_short_reason_does_not_scroll():
     for height in (32, 64):
         summary = ride_with_two()
-        assert (render_detail(summary, height, 'insight_bars', seconds=0.1).image.tobytes()
-                == render_detail(summary, height, 'insight_bars', seconds=4.5).image.tobytes())
+        assert (
+            render_detail(summary, height, 'insight_bars', seconds=0.1).image.tobytes()
+            == render_detail(summary, height, 'insight_bars', seconds=4.5).image.tobytes()
+        )
 
 
 @pytest.mark.parametrize('height', [32, 64])
 def test_the_other_slides_are_unchanged_by_the_insights(height):
-    for plain, shown in ((demo_ride(), ride_with_two()),
-                         (demo_strength(), with_views(demo_strength(), view('go_up_lighter')))):
+    for plain, shown in ((demo_ride(), ride_with_two()), (demo_strength(), with_views(demo_strength(), view('go_up_lighter')))):
         details = rotating_details(plain, height)
-        assert rotating_details(shown, height)[:len(details)] == details
-        times = [0.5] + [4.5 + sum(detail_hold_seconds(d, 4) for d in details[:turn]) for turn in
-                         range(len(details))]
+        assert rotating_details(shown, height)[: len(details)] == details
+        times = [0.5] + [4.5 + sum(detail_hold_seconds(d, 4) for d in details[:turn]) for turn in range(len(details))]
         for seconds in times:
             frames = []
             for summary in (plain, shown):
@@ -324,20 +357,23 @@ def test_a_frame_for_a_missing_view_draws_nothing():
 
 def test_the_demo_shows_the_frames_only_with_the_switch_on():
     from peloton.dashboard import Dashboard
+
     off = Dashboard('unused', {}, demo=True).snapshot()['summaries']
     on = Dashboard('unused', {'workout_insights': True}, demo=True).snapshot()['summaries']
     assert not any('insights' in s for s in off)
     shown = {s['workout_id']: [v['code'] for v in insight_views(s)] for s in on if 'insights' in s}
-    assert shown == {'demo-cycling': ['tough_class', 'effort_high'],
-                     'demo-rowing': ['instructor_milestone'],
-                     'demo-strength': ['go_up_lighter', 'go_up_streak']}
+    assert shown == {
+        'demo-cycling': ['tough_class', 'effort_high'],
+        'demo-rowing': ['instructor_milestone'],
+        'demo-strength': ['go_up_lighter', 'go_up_streak'],
+    }
 
 
 @pytest.mark.parametrize('height', [32, 64])
 def test_the_word_after_a_colon_sits_closer(height):
-    from display.display import loaded_fonts
-    from display.display import get_text_width
+    from display.display import get_text_width, loaded_fonts
     from display.ui.last_workout.text import COLON_GAP_TRIM, _centred, _words_width
+
     initialize_fonts(height)
     font = loaded_fonts['stats']
     assert _words_width(font, 'GO UP: HEAVY') == get_text_width(font, 'GO UP: HEAVY') - COLON_GAP_TRIM
@@ -350,12 +386,13 @@ def test_the_word_after_a_colon_sits_closer(height):
         filled = sorted(set(columns))
         return [b - a - 1 for a, b in zip(filled, filled[1:]) if b - a > 2]
 
-    assert gaps('A B') == [5]           # between two words
-    assert gaps('A: B') == [2, 3]       # before the colon's dot, then 3 to the next word (was 6)
+    assert gaps('A B') == [5]  # between two words
+    assert gaps('A: B') == [2, 3]  # before the colon's dot, then 3 to the next word (was 6)
 
 
 def test_64_bars_write_weights_as_one_word():
     from display.display import get_text_width, loaded_fonts
+
     strength = with_views(demo_strength(), view('go_up_lighter'))
     matrix = render_detail(strength, 64, 'insight_bars')
     font = loaded_fonts['stats']
@@ -368,6 +405,7 @@ def test_64_bars_write_weights_as_one_word():
 
 # --- Instructor milestones: words only, no figure frame ---
 
+
 def milestone_view(n=200, name='Jess Sims', since='2019-03-02'):
     return board_view('instructor_milestone', {'n': n, 'name': name, 'since': since})
 
@@ -375,13 +413,16 @@ def milestone_view(n=200, name='Jess Sims', since='2019-03-02'):
 def test_a_milestone_is_one_frame_on_each_board():
     summary = with_views(demo_ride(), milestone_view())
     plain = rotating_details(demo_ride(), 64)
-    assert [d['kind'] for d in rotating_details(summary, 64)[len(plain):]] == ['insight_card']
-    short = rotating_details(summary, 32)[len(rotating_details(demo_ride(), 32)):]
+    assert [d['kind'] for d in rotating_details(summary, 64)[len(plain) :]] == ['insight_card']
+    short = rotating_details(summary, 32)[len(rotating_details(demo_ride(), 32)) :]
     assert [(d['kind'], d['page']) for d in short] == [('insight_words', 0)]
     two = with_views(demo_ride(), milestone_view(), view('pace_low'))
     assert [d['kind'] for d in rotating_details(two, 64)[-3:]] == ['insight_card', 'insight_card', 'insight_bars']
-    both = [(d['kind'], d['index']) for d in rotating_details(
-        with_views(demo_ride(), view('pace_low'), milestone_view()), 32) if d.get('kind') in INSIGHT_KINDS]
+    both = [
+        (d['kind'], d['index'])
+        for d in rotating_details(with_views(demo_ride(), view('pace_low'), milestone_view()), 32)
+        if d.get('kind') in INSIGHT_KINDS
+    ]
     assert both[0] == ('insight_bars', 0) and both[-1] == ('insight_words', 1)
     assert ('insight_bars', 1) not in both
 
@@ -401,8 +442,7 @@ def test_the_milestone_page_adds_one_frame_of_hold_time():
 
     display = {'rotation': ['latest_workouts'], 'last_workout_detail_interval': 4.0, 'screen_durations': {}}
     for height in (64, 32):
-        snapshot = {'me': data['me'], 'summaries': [with_views(demo_ride(), milestone_view())], 'totals': {},
-                    'weekly_progress': {}}
+        snapshot = {'me': data['me'], 'summaries': [with_views(demo_ride(), milestone_view())], 'totals': {}, 'weekly_progress': {}}
         plain = build_rotation_pages({**snapshot, 'summaries': [demo_ride()]}, Dash(), display, 'R', height)
         shown = build_rotation_pages(snapshot, Dash(), display, 'R', height)
         assert shown[0][2] == pytest.approx(plain[0][2] + 4 + GRAPH_FRAME_EXTRA_SECONDS)
@@ -417,8 +457,8 @@ def test_64_milestone_card_draws_inside_the_panel_with_the_ordinal_in_gold(name,
     matrix = render_detail(with_views(demo_ride(), milestone_view(n, name)), 64, 'insight_card')
     gold_text = lit(matrix, GOLD, range(18, 56), range(64))
     assert gold_text and {y for _, y in gold_text} <= set(range(18, 28))  # the ordinal, on the first line only
-    assert lit(matrix, WHITE, range(18, 56), range(64))                   # the rest of the words, soft white
-    assert lit(matrix, GREY, range(56, 64), range(64))                    # the footer
+    assert lit(matrix, WHITE, range(18, 56), range(64))  # the rest of the words, soft white
+    assert lit(matrix, GREY, range(56, 64), range(64))  # the footer
     assert not lit(matrix, GOLD, range(56, 64), range(64))
 
 

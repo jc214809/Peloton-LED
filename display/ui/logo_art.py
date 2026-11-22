@@ -48,7 +48,7 @@ _ROWS = [row for row in LOGO_ROWS_32 if '#' in row]
 _LEFT = min(row.index('#') for row in _ROWS)
 _RIGHT = max(row.rindex('#') for row in _ROWS)
 # The mark alone, cropped to its lit pixels: 23 wide, 28 tall.
-MARK = tuple(row[_LEFT:_RIGHT + 1] for row in _ROWS)
+MARK = tuple(row[_LEFT : _RIGHT + 1] for row in _ROWS)
 MARK_WIDTH, MARK_HEIGHT = len(MARK[0]), len(MARK)
 
 

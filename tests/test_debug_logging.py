@@ -9,7 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 def _import_debug_in_subprocess(env):
     return subprocess.run(
         [sys.executable, '-c', 'from utils import debug; debug.info("hi"); print("IMPORT_OK")'],
-        cwd=ROOT, env=env, capture_output=True, text=True, timeout=30,
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
 
 
@@ -26,8 +30,7 @@ def test_unwritable_log_dir_does_not_crash_the_import(tmp_path):
     unwritable_parent.mkdir()
     unwritable_parent.chmod(0o500)  # no write permission
     try:
-        result = _import_debug_in_subprocess(
-            {**os.environ, 'PELOTON_LOG_DIR': str(unwritable_parent / 'logs')})
+        result = _import_debug_in_subprocess({**os.environ, 'PELOTON_LOG_DIR': str(unwritable_parent / 'logs')})
         assert result.returncode == 0, result.stderr
         assert 'IMPORT_OK' in result.stdout
         assert 'Could not set up file logging' in result.stderr

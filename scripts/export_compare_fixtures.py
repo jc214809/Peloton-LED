@@ -9,6 +9,7 @@ years before it (for strength that is every tracked strength class in the window
 history needs). Rows are built from the saved raw files by the current code, so re-export after a
 ROW_VERSION bump.
 """
+
 import argparse
 import json
 import sys
@@ -93,7 +94,7 @@ def main(argv=None):
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, separators=(',', ':')), encoding='utf-8')
     count = sum(len(rows) for rows in payload['rows'].values())
-    print(f"{len(payload['cases'])} cases, {count} rows, {out.stat().st_size // 1024} KB -> {out}")
+    print(f'{len(payload["cases"])} cases, {count} rows, {out.stat().st_size // 1024} KB -> {out}')
     return 0
 
 

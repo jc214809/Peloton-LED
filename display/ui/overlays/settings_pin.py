@@ -6,6 +6,7 @@ at most every CHECK_EVERY_S. Drawn as big white digits in a gold-edged black box
 same size on 64x64 and 64x32 boards so it reads from across the room: its own 3x5 digits at
 SCALE, so it needs no font.
 """
+
 import logging
 import time
 

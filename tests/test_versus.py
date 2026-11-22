@@ -1,12 +1,12 @@
 """Head-to-head weekly page for households with two or more riders."""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
 import pytest
 
 from display.display import initialize_fonts
-from display.ui.versus_screen import (DAY_AHEAD, DAY_DONE, DAY_TODAY, DETAIL_INTERVAL_SECONDS,
-                                      VersusScreen, weekly_leader)
+from display.ui.versus_screen import DAY_AHEAD, DAY_DONE, DAY_TODAY, DETAIL_INTERVAL_SECONDS, VersusScreen, weekly_leader
 from peloton.config import load_config
 from peloton.feeds.goals import week_day
 from peloton_led import build_rotation_pages, run_multi_user_loop, weekly_rivals
@@ -32,16 +32,21 @@ def dashboard_with(progress):
 
 
 def test_rivals_come_from_every_profile_and_tolerate_missing_progress():
-    profiles = [{'name': 'Joel', 'dashboard': dashboard_with({'workouts': 2, 'minutes': 35})},
-                {'name': 'Jen', 'dashboard': dashboard_with(None)}]
+    profiles = [
+        {'name': 'Joel', 'dashboard': dashboard_with({'workouts': 2, 'minutes': 35})},
+        {'name': 'Jen', 'dashboard': dashboard_with(None)},
+    ]
     assert weekly_rivals(profiles) == [
         {'name': 'Joel', 'workouts': 2, 'minutes': 35, 'output_kj': 0},
-        {'name': 'Jen', 'workouts': 0, 'minutes': 0, 'output_kj': 0}]
+        {'name': 'Jen', 'workouts': 0, 'minutes': 0, 'output_kj': 0},
+    ]
 
 
 def test_versus_page_is_shown_once_per_household_cycle():
-    profiles = [{'name': 'Joel', 'dashboard': dashboard_with({'workouts': 2})},
-                {'name': 'Jen', 'dashboard': dashboard_with({'workouts': 7})}]
+    profiles = [
+        {'name': 'Joel', 'dashboard': dashboard_with({'workouts': 2})},
+        {'name': 'Jen', 'dashboard': dashboard_with({'workouts': 7})},
+    ]
     with patch('peloton_led.run_display_loop') as run:
         run_multi_user_loop(Mock(), profiles, {}, {}, cycles=1)
     rivals = [call.kwargs['rivals'] for call in run.call_args_list]
@@ -60,8 +65,7 @@ def test_versus_needs_two_riders(rivals, expected):
 def test_32_row_versus_page_is_long_enough_for_each_stat():
     display = {'rotation': ['versus'], 'last_workout_duration': 15, 'overview_duration': 5}
     snapshot = {'summaries': [], 'totals': {}, 'status': 'ready'}
-    assert build_rotation_pages(snapshot, Mock(), display, 'R', 32, rivals=[JOEL, JEN])[0][2] == \
-        3 * DETAIL_INTERVAL_SECONDS
+    assert build_rotation_pages(snapshot, Mock(), display, 'R', 32, rivals=[JOEL, JEN])[0][2] == 3 * DETAIL_INTERVAL_SECONDS
     assert build_rotation_pages(snapshot, Mock(), display, 'R', 64, rivals=[JOEL, JEN])[0][2] == 5
 
 
@@ -76,14 +80,13 @@ def render(height, riders, elapsed=0.5, weekday=None):
 
 
 def test_week_day_follows_the_weekly_goal_timezone():
-    now = datetime(2026, 11, 2, 3, tzinfo=timezone.utc)  # Monday in UTC, still Sunday in New York
+    now = datetime(2026, 11, 2, 3, tzinfo=UTC)  # Monday in UTC, still Sunday in New York
     assert week_day('UTC', now) == 0
     assert week_day('America/New_York', now) == 6
 
 
 def test_versus_page_gets_today_in_the_configured_timezone():
-    display = {'rotation': ['versus'], 'last_workout_duration': 15, 'overview_duration': 5,
-               'timezone': 'America/New_York'}
+    display = {'rotation': ['versus'], 'last_workout_duration': 15, 'overview_duration': 5, 'timezone': 'America/New_York'}
     snapshot = {'summaries': [], 'totals': {}, 'status': 'ready', 'me': {'timezone': 'UTC'}}
     with patch('display.rotation_pages.week_day', return_value=4) as day:
         state = build_rotation_pages(snapshot, Mock(), display, 'R', 64, rivals=[JOEL, JEN])[0][1]
@@ -107,6 +110,7 @@ def test_week_dashes_light_finished_days_and_mark_today(height, top, rows):
 def test_64_row_week_strip_replaces_the_title():
     def grey_title(matrix):  # THIS WEEK is the only grey text above the names.
         return any(matrix.image.getpixel((x, y)) == (145, 165, 190) for x in range(64) for y in range(8))
+
     assert grey_title(render(64, [JOEL, JEN]))
     assert not grey_title(render(64, [JOEL, JEN], weekday=0))
 
@@ -118,10 +122,16 @@ def test_unknown_weekday_draws_no_strip(weekday):
 
 
 @pytest.mark.parametrize('height', [32, 64])
-@pytest.mark.parametrize('riders', [
-    [JOEL, JEN],
-    [{'name': 'Christopher', 'workouts': 12, 'minutes': 1450, 'output_kj': 12345},
-     {'name': 'Alexandria', 'workouts': 9, 'minutes': 999, 'output_kj': 9999}]])
+@pytest.mark.parametrize(
+    'riders',
+    [
+        [JOEL, JEN],
+        [
+            {'name': 'Christopher', 'workouts': 12, 'minutes': 1450, 'output_kj': 12345},
+            {'name': 'Alexandria', 'workouts': 9, 'minutes': 999, 'output_kj': 9999},
+        ],
+    ],
+)
 def test_versus_fits_both_boards(height, riders):
     for turn in range(3 if height == 32 else 1):
         matrix = render(height, riders, 0.5 + turn * DETAIL_INTERVAL_SECONDS)
@@ -135,8 +145,7 @@ def test_versus_fits_both_boards(height, riders):
 def test_leader_trophy_is_not_clipped_at_the_top(height):
     matrix = render(height, [JOEL, JEN], weekday=2)
     # The trophy's rim is a solid 7-pixel gold row; the gold values never are.
-    assert any(all(matrix.image.getpixel((x + dx, y)) == GOLD for dx in range(7))
-               for y in range(12) for x in range(57))
+    assert any(all(matrix.image.getpixel((x + dx, y)) == GOLD for dx in range(7)) for y in range(12) for x in range(57))
 
 
 def test_versus_tie_has_no_gold():

@@ -1,5 +1,6 @@
 """Activity from workout history: the heatmap, the streak reminder and the name page's time-frame and
 per-discipline figures."""
+
 from datetime import date, datetime, timedelta
 
 from ..feeds.goals import week_start
@@ -36,8 +37,12 @@ def streak_week_workouts(workouts, timezone_name=None, now=None):
     count = 0
     for workout in workouts:
         stamp = workout_timestamp(workout, timezone_name)
-        if (is_completed(workout) and counts_for_streaks(workout) and stamp is not None
-                and monday <= stamp.astimezone(monday.tzinfo) <= current):
+        if (
+            is_completed(workout)
+            and counts_for_streaks(workout)
+            and stamp is not None
+            and monday <= stamp.astimezone(monday.tzinfo) <= current
+        ):
             count += 1
     return count
 
@@ -71,13 +76,15 @@ def frame_bounds(timezone_name=None, now=None):
         return datetime(day.year, day.month, day.day, tzinfo=zone)
 
     this_year, last_year = midnight(date(today.year, 1, 1)), midnight(date(today.year - 1, 1, 1))
-    return {'week': (monday, None),
-            'last_week': (midnight(monday.date() - timedelta(days=7)), monday),
-            '30d': (midnight(today - timedelta(days=29)), None),
-            '90d': (midnight(today - timedelta(days=89)), None),
-            'year': (this_year, None),
-            'last_year': (last_year, this_year),
-            'all': (None, None)}
+    return {
+        'week': (monday, None),
+        'last_week': (midnight(monday.date() - timedelta(days=7)), monday),
+        '30d': (midnight(today - timedelta(days=29)), None),
+        '90d': (midnight(today - timedelta(days=89)), None),
+        'year': (this_year, None),
+        'last_year': (last_year, this_year),
+        'all': (None, None),
+    }
 
 
 def class_led(workout):
@@ -123,9 +130,15 @@ def _stats(rows, zone):
         if isinstance(ride.get('id'), str) and ride['id']:
             classes.add(ride['id'])
     counts, _ = merge_instructor_counts({}, {}, done)
-    return {'workouts': len(done), 'minutes': int(round(seconds / 60)), 'disciplines': disciplines,
-            'instructor_counts': counts, 'instructors': len(counts), 'classes': len(classes),
-            'active_days': _active_days(rows, zone)}
+    return {
+        'workouts': len(done),
+        'minutes': int(round(seconds / 60)),
+        'disciplines': disciplines,
+        'instructor_counts': counts,
+        'instructors': len(counts),
+        'classes': len(classes),
+        'active_days': _active_days(rows, zone),
+    }
 
 
 def _instructor_ids(workout):
@@ -140,14 +153,20 @@ def period_stats(workouts, start=None, end=None, timezone_name=None, now=None, d
     with no class, like Just Ride, don't count) and how many days had a workout.
     `discipline` (a slug) or `instructor` (an ID) keeps only those workouts."""
     _, current = week_start(timezone_name, now)
-    rows = [(stamp, workout) for stamp, workout in _stamped(workouts, timezone_name)
-            if _in_window(stamp, start, end, current)
-            and (discipline is None or discipline_of(workout) == discipline)
-            and (instructor is None or instructor in _instructor_ids(workout))]
+    rows = [
+        (stamp, workout)
+        for stamp, workout in _stamped(workouts, timezone_name)
+        if _in_window(stamp, start, end, current)
+        and (discipline is None or discipline_of(workout) == discipline)
+        and (instructor is None or instructor in _instructor_ids(workout))
+    ]
     stats = _stats(rows, current.tzinfo)
     if discipline is None and instructor is None:
-        every = [(stamp, workout) for stamp, workout in _stamped(workouts, timezone_name, class_only=False)
-                 if _in_window(stamp, start, end, current)]
+        every = [
+            (stamp, workout)
+            for stamp, workout in _stamped(workouts, timezone_name, class_only=False)
+            if _in_window(stamp, start, end, current)
+        ]
         stats['active_days'] = _active_days(every, current.tzinfo)
     return stats
 
@@ -169,8 +188,7 @@ def frame_stats(workouts, timezone_name=None, now=None):
     {slug: stats}, SUBJECT_DISCIPLINES of them) and instructors (`by_instructor`, {id: stats},
     SUBJECT_INSTRUCTORS), split in the same pass rather than by looping the log again."""
     _, current = week_start(timezone_name, now)
-    rows = [(stamp, workout, discipline_of(workout), _instructor_ids(workout))
-            for stamp, workout in _stamped(workouts, timezone_name)]
+    rows = [(stamp, workout, discipline_of(workout), _instructor_ids(workout)) for stamp, workout in _stamped(workouts, timezone_name)]
     result = {}
     zone = current.tzinfo
     every = _stamped(workouts, timezone_name, class_only=False)
@@ -184,18 +202,17 @@ def frame_stats(workouts, timezone_name=None, now=None):
                 disciplines.setdefault(row[2], []).append(row[:2])
             for identity in row[3]:
                 instructors.setdefault(identity, []).append(row[:2])
-        stats['by_discipline'] = {slug: _stats(disciplines[slug], zone)
-                                  for slug in _top(disciplines, SUBJECT_DISCIPLINES)}
-        stats['by_instructor'] = {identity: _stats(instructors[identity], zone)
-                                  for identity in _top(instructors, SUBJECT_INSTRUCTORS)}
+        stats['by_discipline'] = {slug: _stats(disciplines[slug], zone) for slug in _top(disciplines, SUBJECT_DISCIPLINES)}
+        stats['by_instructor'] = {identity: _stats(instructors[identity], zone) for identity in _top(instructors, SUBJECT_INSTRUCTORS)}
         stats.update(_bests(inside, zone, start, key in MONTH_FRAMES))
         if key in RANKED_FRAMES:
             stats['rank'] = block_rank(rows, RANKED_FRAMES[key], current.date(), zone)
         before = comparison_window(key, start, current)
         if before:
             stats['before'] = _totals([row for row in rows if _in_window(row[0], before[0], before[1], current)])
-        stats['days'] = None if start is None else (
-            ((end.date() if end is not None else current.date() + timedelta(days=1)) - start.date()).days)
+        stats['days'] = (
+            None if start is None else (((end.date() if end is not None else current.date() + timedelta(days=1)) - start.date()).days)
+        )
         if key in ('year', 'last_year'):
             stats['year'] = start.year
         result[key] = stats
@@ -212,7 +229,7 @@ def comparison_window(key, start, current):
     if key == 'year':
         try:
             same_day = current.replace(year=current.year - 1)
-        except ValueError:      # 29 February
+        except ValueError:  # 29 February
             same_day = current.replace(year=current.year - 1, day=28)
         return start.replace(year=start.year - 1), same_day
     return None
@@ -263,18 +280,30 @@ def _bests(rows, zone, start, months):
         if seconds and (longest is None or seconds >= longest['seconds']):
             longest = {'seconds': seconds, 'minutes': int(round(seconds / 60)), 'discipline': discipline}
         work = workout.get('total_work')
-        if (discipline in OUTPUT_DISCIPLINES and isinstance(work, (int, float)) and not isinstance(work, bool)
-                and work > 0 and (output is None or work >= output['joules'])):
+        if (
+            discipline in OUTPUT_DISCIPLINES
+            and isinstance(work, (int, float))
+            and not isinstance(work, bool)
+            and work > 0
+            and (output is None or work >= output['joules'])
+        ):
             output = {'joules': work, 'kj': work / 1000, 'minutes': int(round(seconds / 60)), 'discipline': discipline}
         points = workout.get('effort_points')
-        if (isinstance(points, (int, float)) and not isinstance(points, bool) and points > 0
-                and (strive is None or points >= strive['points'])):
+        if (
+            isinstance(points, (int, float))
+            and not isinstance(points, bool)
+            and points > 0
+            and (strive is None or points >= strive['points'])
+        ):
             strive = {'points': points, 'discipline': discipline}
-    return {'busiest_day': _entry(_best(days)), 'busiest_week': _entry(_best(weeks)),
-            'busiest_month': _entry(_best(months_seen)),
-            'longest': longest and {k: v for k, v in longest.items() if k != 'seconds'},
-            'best_output': output and {k: v for k, v in output.items() if k != 'joules'},
-            'best_strive': strive}
+    return {
+        'busiest_day': _entry(_best(days)),
+        'busiest_week': _entry(_best(weeks)),
+        'busiest_month': _entry(_best(months_seen)),
+        'longest': longest and {k: v for k, v in longest.items() if k != 'seconds'},
+        'best_output': output and {k: v for k, v in output.items() if k != 'joules'},
+        'best_strive': strive,
+    }
 
 
 def block_rank(rows, days, today, zone):
@@ -292,8 +321,7 @@ def block_rank(rows, days, today, zone):
     if oldest + 1 < MIN_RANK_BLOCKS:
         return None
     totals = [counts.get(block, 0) for block in range(oldest + 1)]
-    return {'rank': 1 + sum(1 for total in totals[1:] if total > totals[0]), 'of': len(totals),
-            'best': max(totals)}
+    return {'rank': 1 + sum(1 for total in totals[1:] if total > totals[0]), 'of': len(totals), 'best': max(totals)}
 
 
 def daily_streak_start(current_daily, today, days=None, started_at=None, timezone_name=None):
@@ -357,18 +385,35 @@ def event_stats(workouts, timezone_name=None, now=None, member_since=None):
     disciplines = {}
     for slug, days in per_discipline.items():
         days.sort()
-        disciplines[slug] = {'workouts': len(days), 'first': days[0].isoformat(), 'last': days[-1].isoformat(),
-                             'before_last': days[-2].isoformat() if len(days) > 1 else None}
-    instructors = {identity: {'workouts': len(per_instructor[identity]),
-                              'last': max(per_instructor[identity]).isoformat()}
-                   for identity in _top(per_instructor, EVENT_INSTRUCTORS)}
+        disciplines[slug] = {
+            'workouts': len(days),
+            'first': days[0].isoformat(),
+            'last': days[-1].isoformat(),
+            'before_last': days[-2].isoformat() if len(days) > 1 else None,
+        }
+    instructors = {
+        identity: {'workouts': len(per_instructor[identity]), 'last': max(per_instructor[identity]).isoformat()}
+        for identity in _top(per_instructor, EVENT_INSTRUCTORS)
+    }
     # The longest workout of the nearest earlier year that has one.
     on_this_day = []
     for year in sorted({year for year, _, _ in same_day}, reverse=True):
         longest = max((row for row in same_day if row[0] == year), key=lambda row: row[1])
         then = sum(1 for day in ever if day <= date(year, today.month, today.day))
-        on_this_day.append({'years_ago': today.year - year, 'minutes': int(round(longest[1] / 60)),
-                            'discipline': longest[2], 'workouts_then': then, 'workouts_now': len(ever)})
-    return {'today': today.isoformat(), 'anniversary': anniversary(member_since, timezone_name, now),
-            'on_this_day': on_this_day, 'first_ever': min(ever).isoformat() if ever else None,
-            'disciplines': disciplines, 'instructors': instructors}
+        on_this_day.append(
+            {
+                'years_ago': today.year - year,
+                'minutes': int(round(longest[1] / 60)),
+                'discipline': longest[2],
+                'workouts_then': then,
+                'workouts_now': len(ever),
+            }
+        )
+    return {
+        'today': today.isoformat(),
+        'anniversary': anniversary(member_since, timezone_name, now),
+        'on_this_day': on_this_day,
+        'first_ever': min(ever).isoformat() if ever else None,
+        'disciplines': disciplines,
+        'instructors': instructors,
+    }

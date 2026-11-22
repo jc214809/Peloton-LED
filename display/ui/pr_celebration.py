@@ -1,11 +1,12 @@
 # display/ui/pr_celebration.py
 
 import math
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
-from driver import graphics
 from display.display import get_text_width, loaded_fonts
+from driver import graphics
 from peloton.selection import normalize_discipline
+
 from .last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
 from .last_workout.stats import _fmt_split, _whole
 from .lifetime_overview import discipline_color
@@ -27,7 +28,7 @@ _COMPACT_SPARKLE_SPOTS = [(2, 22), (61, 22)]
 _COMPACT_BADGE_RADIUS = 4.5
 
 
-def _star_points(cx: float, cy: float, outer: float) -> List[Tuple[float, float]]:
+def _star_points(cx: float, cy: float, outer: float) -> list[tuple[float, float]]:
     inner = outer * 0.381966
     points = []
     for i in range(10):
@@ -37,7 +38,7 @@ def _star_points(cx: float, cy: float, outer: float) -> List[Tuple[float, float]
     return points
 
 
-def _fill_polygon(matrix, poly: List[Tuple[float, float]], color) -> None:
+def _fill_polygon(matrix, poly: list[tuple[float, float]], color) -> None:
     ys = [y for _, y in poly]
     for y in range(max(0, int(min(ys))), min(matrix.height, int(max(ys)) + 1)):
         yc = y + 0.5
@@ -78,27 +79,27 @@ def compact_turn(card_t: float, count: int, detail_interval: float) -> int:
     return min(int(max(0.0, card_t - SETTLE_SECONDS) / share), count - 1)
 
 
-def pr_card_lines(summary: dict) -> Optional[Tuple[str, str, Optional[str]]]:
+def pr_card_lines(summary: dict) -> tuple[str, str, str | None] | None:
     """(headline, value, gain) for a PR summary, or None if nothing to show.
 
     gain is only produced when a previous best is supplied, since Peloton's
     workout payload flags a PR without saying what the old record was.
     """
-    if summary.get("is_output_pr") and isinstance(summary.get("total_output_kj"), (int, float)):
-        precise = summary.get("total_work_kj")
-        value = precise if isinstance(precise, (int, float)) else summary["total_output_kj"]
-        previous = summary.get("previous_best_kj")
+    if summary.get('is_output_pr') and isinstance(summary.get('total_output_kj'), (int, float)):
+        precise = summary.get('total_work_kj')
+        value = precise if isinstance(precise, (int, float)) else summary['total_output_kj']
+        previous = summary.get('previous_best_kj')
         gain = None
         if isinstance(previous, (int, float)) and value > previous:
             diff = value - previous
             # Small PRs are common; don't let "+0.8" round away to "+0".
-            gain = f"+{diff:.1f} KJ" if diff < 1 else f"+{_whole(diff)} KJ"
+            gain = f'+{diff:.1f} KJ' if diff < 1 else f'+{_whole(diff)} KJ'
         # The app's Total Output, not the precise work: they can round differently.
-        return "OUTPUT PR", f"{_whole(summary['total_output_kj'])} KJ", gain
-    if summary.get("is_splits_pr") and summary.get("row_split_sec_per_500m"):
-        return "SPLITS PR", f"{_fmt_split(summary['row_split_sec_per_500m'])}/500", None
-    if summary.get("is_pr"):
-        return "NEW PR", "", None
+        return 'OUTPUT PR', f'{_whole(summary["total_output_kj"])} KJ', gain
+    if summary.get('is_splits_pr') and summary.get('row_split_sec_per_500m'):
+        return 'SPLITS PR', f'{_fmt_split(summary["row_split_sec_per_500m"])}/500', None
+    if summary.get('is_pr'):
+        return 'NEW PR', '', None
     return None
 
 
@@ -122,7 +123,7 @@ class PrCelebrationScreen(Screen):
     def update(self, dt):
         self.elapsed += max(0, dt)
 
-    def render(self, matrix, state: Optional[Any] = None) -> bool:
+    def render(self, matrix, state: Any | None = None) -> bool:
         summary = state if isinstance(state, dict) else {}
         lines = pr_card_lines(summary)
         if lines is None:
@@ -173,21 +174,20 @@ class PrCelebrationScreen(Screen):
 
     @staticmethod
     def _card_fonts():
-        headline_font = loaded_fonts.get("titles") or loaded_fonts.get("stats")
-        value_font = loaded_fonts.get("discipline") or headline_font
-        info_font = loaded_fonts.get("info") or headline_font
+        headline_font = loaded_fonts.get('titles') or loaded_fonts.get('stats')
+        value_font = loaded_fonts.get('discipline') or headline_font
+        info_font = loaded_fonts.get('info') or headline_font
         return headline_font, value_font, info_font
 
-    def _draw_compact_card(self, matrix, summary: dict, card_t: float, headline: str, value: str,
-                           gain: Optional[str]) -> None:
+    def _draw_compact_card(self, matrix, summary: dict, card_t: float, headline: str, value: str, gain: str | None) -> None:
         """32 rows: headline between two star badges, the value (or the discipline for a plain
         NEW PR), and a bottom line that takes turns between gain, class length and discipline."""
         headline_font, value_font, info_font = self._card_fonts()
         _centered(matrix, headline_font, 8, _GOLD, headline)
         self._draw_badges(matrix, get_text_width(headline_font, headline))
         middle = value
-        if not middle and isinstance(summary.get("discipline"), str):
-            middle = summary["discipline"].upper()
+        if not middle and isinstance(summary.get('discipline'), str):
+            middle = summary['discipline'].upper()
         value_width = 0
         if middle:
             if get_text_width(value_font, middle) > matrix.width - 2:
@@ -204,13 +204,13 @@ class PrCelebrationScreen(Screen):
         self._draw_sparkles(matrix, card_t, spots)
 
     @staticmethod
-    def _compact_bottom_turns(summary: dict, gain: Optional[str], middle: str) -> List[Tuple[Any, str]]:
+    def _compact_bottom_turns(summary: dict, gain: str | None, middle: str) -> list[tuple[Any, str]]:
         """The bottom line's turns: gain, class length, discipline (unless the middle line has it)."""
         turns = [(_GREEN, gain)] if gain else []
-        dur = summary.get("duration_min")
+        dur = summary.get('duration_min')
         if isinstance(dur, (int, float)):
-            turns.append((_BLUE, f"{int(dur)} MIN CLASS"))
-        discipline = summary.get("discipline")
+            turns.append((_BLUE, f'{int(dur)} MIN CLASS'))
+        discipline = summary.get('discipline')
         if isinstance(discipline, str) and discipline.strip() and discipline.upper() != middle:
             turns.append((_label_color(discipline), discipline.upper()))
         return turns
@@ -225,9 +225,9 @@ class PrCelebrationScreen(Screen):
         for cx in ((margin - 1) / 2, matrix.width - 1 - (margin - 1) / 2):
             _fill_polygon(matrix, _star_points(cx, cy, _COMPACT_BADGE_RADIUS), _GOLD)
 
-    def _draw_full_card(self, matrix, summary: dict, headline: str, value: str, gain: Optional[str]) -> None:
+    def _draw_full_card(self, matrix, summary: dict, headline: str, value: str, gain: str | None) -> None:
         headline_font, value_font, info_font = self._card_fonts()
-        dur = summary.get("duration_min")
+        dur = summary.get('duration_min')
         _centered(matrix, headline_font, 29, _GOLD, headline)
         if value:
             if get_text_width(value_font, value) > matrix.width - 2:
@@ -236,10 +236,10 @@ class PrCelebrationScreen(Screen):
         if gain:
             _centered(matrix, info_font, 54, _GREEN, gain)
         if isinstance(dur, (int, float)):
-            _centered(matrix, info_font, 62 if gain else 56, _BLUE, f"{int(dur)} MIN CLASS")
+            _centered(matrix, info_font, 62 if gain else 56, _BLUE, f'{int(dur)} MIN CLASS')
 
     @staticmethod
-    def _draw_sparkles(matrix, card_t: float, spots: List[Tuple[int, int]]) -> None:
+    def _draw_sparkles(matrix, card_t: float, spots: list[tuple[int, int]]) -> None:
         """Twinkling sparkles around the card."""
         w, h = matrix.width, matrix.height
         for i, (x, y) in enumerate(spots):

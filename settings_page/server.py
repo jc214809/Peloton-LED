@@ -14,6 +14,7 @@ credentials in auth.env, write-only: nothing secret is ever sent to the browser.
 (--checkout, the installer's PELOTON_CHECKOUT). Standard library and requests (for Pushover, via
 peloton.notify) only.
 """
+
 import argparse
 import json
 import logging
@@ -109,10 +110,22 @@ class Settings:
     """What the handlers share: where config.json is, the PIN gate, one save at a time, and the
     Updates card's updates.Updates (None: no card)."""
 
-    def __init__(self, config_path=CONFIG, gate=None, restart_unit=APP_UNIT, state_file=wifi_setup.STATE_FILE,  # noqa: PLR0913
-                 send_pushover=notify.send_pushover, auth_env=AUTH_ENV, token_base=None,
-                 default_token=logins.DEFAULT_TOKEN, token_mode_file=logins.TOKEN_MODE_FILE,
-                 renew_unit=RENEW_UNIT, clock=time.time, updates=None, monotonic=time.monotonic):
+    def __init__(  # noqa: PLR0913
+        self,
+        config_path=CONFIG,
+        gate=None,
+        restart_unit=APP_UNIT,
+        state_file=wifi_setup.STATE_FILE,
+        send_pushover=notify.send_pushover,
+        auth_env=AUTH_ENV,
+        token_base=None,
+        default_token=logins.DEFAULT_TOKEN,
+        token_mode_file=logins.TOKEN_MODE_FILE,
+        renew_unit=RENEW_UNIT,
+        clock=time.time,
+        updates=None,
+        monotonic=time.monotonic,
+    ):
         self.updates, self.monotonic = updates, monotonic
         self.config_path, self.restart_unit, self.state_file = config_path, restart_unit, state_file
         self.send_pushover, self.auth_env, self.default_token = send_pushover, auth_env, default_token
@@ -148,8 +161,7 @@ class Settings:
         unit = unit or self.restart_unit
         if not unit or not shutil.which('systemctl'):
             return None
-        return subprocess.run(['systemctl', *args, unit], capture_output=True, text=True,
-                              timeout=SYSTEMCTL_TIMEOUT_S)
+        return subprocess.run(['systemctl', *args, unit], capture_output=True, text=True, timeout=SYSTEMCTL_TIMEOUT_S)
 
     def _unit_properties(self, unit, *names):
         """{property: value} from systemctl show, or {} when there's no telling. Times come as
@@ -193,14 +205,13 @@ class Settings:
             logger.error('Power menu: %s failed: %s', action, exc)
             return 'failed'
         if done.returncode:
-            logger.error('Power menu: %s failed: %s', action,
-                         done.stderr.strip() or f'systemctl exited {done.returncode}')
+            logger.error('Power menu: %s failed: %s', action, done.stderr.strip() or f'systemctl exited {done.returncode}')
             return 'failed'
         logger.info('Power menu: %s done.', action)
         return 'ok'
 
     def restart_app(self):
-        """"restarted"; "not_running" (a manual board with the display off: it reads the new config
+        """ "restarted"; "not_running" (a manual board with the display off: it reads the new config
         when it starts); "saved" (no systemd: restart it by hand); or "failed" (logged)."""
         running = self.display_running()
         if running is None:
@@ -270,6 +281,7 @@ class Settings:
         """Who to seed the board as: the config's owner when that's a person (the checkout's)."""
         try:
             import pwd
+
             owner = pwd.getpwuid(os.stat(self.config_path).st_uid).pw_name
         except (ImportError, KeyError, OSError):
             return '<user>'
@@ -288,8 +300,9 @@ class Settings:
         if done is None:
             return 'renew_unavailable'
         if done.returncode:
-            logger.error('Settings page: starting %s failed: %s', self.renew_unit,
-                         done.stderr.strip() or f'systemctl exited {done.returncode}')
+            logger.error(
+                'Settings page: starting %s failed: %s', self.renew_unit, done.stderr.strip() or f'systemctl exited {done.returncode}'
+            )
             return 'renew_failed'
         logger.info('Settings page: started %s.', self.renew_unit)
         return 'renew_started'
@@ -303,8 +316,7 @@ class Settings:
         if self._last_test is not None and now - self._last_test < TEST_ALERT_EVERY_S:
             return 'test_wait'
         self._last_test = now
-        sent = self.send_pushover(f'{board_name()} test alert',
-                                  'Pushover works: token renewal problems will be sent here.')
+        sent = self.send_pushover(f'{board_name()} test alert', 'Pushover works: token renewal problems will be sent here.')
         return 'test_sent' if sent else 'test_failed'
 
     def save_credentials(self, form):
@@ -339,8 +351,10 @@ class Settings:
 
         def send(pin, left):
             minutes = max(1, round(left / 60))
-            return self.send_pushover(f'{board} settings', f"PIN for {board}'s settings page: {pin}\n"
-                                      f"It works for {minutes} minute{'s' if minutes > 1 else ''}.")
+            return self.send_pushover(
+                f'{board} settings', f"PIN for {board}'s settings page: {pin}\nIt works for {minutes} minute{'s' if minutes > 1 else ''}."
+            )
+
         return self.gate.send_pin(send)
 
 
@@ -433,16 +447,42 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return parse_qs(self.rfile.read(length).decode('utf-8', 'replace'), keep_blank_values=True)
 
-    def _page(self, problems=(), saved=None, config=None, login_outcome=None, login_problems=(), started=None,  # noqa: PLR0913
-              alert_outcome=None, alert_problems=(), editing_rider=None, power_outcome=None):
+    def _page(  # noqa: PLR0913
+        self,
+        problems=(),
+        saved=None,
+        config=None,
+        login_outcome=None,
+        login_problems=(),
+        started=None,
+        alert_outcome=None,
+        alert_problems=(),
+        editing_rider=None,
+        power_outcome=None,
+    ):
         loaded, problem = self.settings.load()
         updates = self.settings.updates
         shown = config if config is not None else loaded
-        return page.settings_page(shown, self._in_setup(), problems, saved,
-                                  board_name(), problem, self.settings.logins(), self._signed_in(),
-                                  login_outcome, login_problems, updates.view() if updates else None, started,
-                                  alert_outcome, alert_problems, editing_rider, self.settings.workout_history(shown),
-                                  power_outcome, self.settings.display_running())
+        return page.settings_page(
+            shown,
+            self._in_setup(),
+            problems,
+            saved,
+            board_name(),
+            problem,
+            self.settings.logins(),
+            self._signed_in(),
+            login_outcome,
+            login_problems,
+            updates.view() if updates else None,
+            started,
+            alert_outcome,
+            alert_problems,
+            editing_rider,
+            self.settings.workout_history(shown),
+            power_outcome,
+            self.settings.display_running(),
+        )
 
     # --- routes
 
@@ -468,20 +508,33 @@ class Handler(BaseHTTPRequestHandler):
             return self._redirect('/')
         if url.path == '/signin' or not self._allowed():
             sent = query.get('sent', [None])[0]
-            return self._send(200, page.pin_page(PIN_SHOWN_S if 'shown' in query else None, 'wrong' in query,
-                                                 board_name(), self.settings.phone(),
-                                                 sent if sent in page.SENT else None, 'signedout' in query,
-                                                 self.settings.display_running() is not False))
+            return self._send(
+                200,
+                page.pin_page(
+                    PIN_SHOWN_S if 'shown' in query else None,
+                    'wrong' in query,
+                    board_name(),
+                    self.settings.phone(),
+                    sent if sent in page.SENT else None,
+                    'signedout' in query,
+                    self.settings.display_running() is not False,
+                ),
+            )
         saved = query.get('saved', [None])[0]
         outcome = query.get('logins', [None])[0]
         started = query.get('update', [None])[0]
         alert = query.get('alerts', [None])[0]
         power = query.get('power', [None])[0]
-        self._send(200, self._page(saved=saved if saved in page.SAVED else None,
-                                   power_outcome=power if power in page.POWER_OUTCOMES else None,
-                                   login_outcome=outcome if outcome in page.LOGIN_OUTCOMES else None,
-                                   started=started if started in STARTS else None,
-                                   alert_outcome=alert if alert in page.ALERT_OUTCOMES else None))
+        self._send(
+            200,
+            self._page(
+                saved=saved if saved in page.SAVED else None,
+                power_outcome=power if power in page.POWER_OUTCOMES else None,
+                login_outcome=outcome if outcome in page.LOGIN_OUTCOMES else None,
+                started=started if started in STARTS else None,
+                alert_outcome=alert if alert in page.ALERT_OUTCOMES else None,
+            ),
+        )
 
     def do_POST(self):
         path = urlsplit(self.path).path
@@ -513,13 +566,11 @@ class Handler(BaseHTTPRequestHandler):
         token = self.settings.gate.try_pin((form.get('pin') or [''])[0])
         if not token:
             return self._redirect('/signin?wrong')
-        return self._redirect('/', [('Set-Cookie', f'{COOKIE}={token}; Max-Age={SESSION_S}; Path=/; '
-                                                   f'HttpOnly; SameSite=Strict')])
+        return self._redirect('/', [('Set-Cookie', f'{COOKIE}={token}; Max-Age={SESSION_S}; Path=/; HttpOnly; SameSite=Strict')])
 
     def _post_signout(self, form):
         self.settings.gate.sign_out(self._token())
-        return self._redirect('/signin?signedout', [('Set-Cookie', f'{COOKIE}=; Max-Age=0; Path=/; '
-                                                                   f'HttpOnly; SameSite=Strict')])
+        return self._redirect('/signin?signedout', [('Set-Cookie', f'{COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict')])
 
     def _post_power(self, form):
         return self._power((form.get('action') or [''])[0])
@@ -538,22 +589,22 @@ class Handler(BaseHTTPRequestHandler):
         if problems:
             logger.info('Settings page: %s not saved: %s', 'alert keys' if alerts else 'logins', '; '.join(problems))
             # A rider's form names its rider (cred_<key>_name): their card and form reopen with the problems.
-            rider = next((name[len('cred_'):-len('_name')] for name in form
-                          if name.startswith('cred_') and name.endswith('_name')), None)
-            return self._send(400, self._page(**({'alert_problems': problems} if alerts
-                                                 else {'login_problems': problems, 'editing_rider': rider})))
+            rider = next((name[len('cred_') : -len('_name')] for name in form if name.startswith('cred_') and name.endswith('_name')), None)
+            return self._send(
+                400, self._page(**({'alert_problems': problems} if alerts else {'login_problems': problems, 'editing_rider': rider}))
+            )
         if alerts:
             removed = (form.get('pushover_clear') or [''])[0] == 'on' and outcome == 'logins_saved'
-            return self._redirect(f'/?alerts={"alerts_removed" if removed else outcome.replace("logins_", "alerts_")}'
-                                  '#alerts')
+            return self._redirect(f'/?alerts={"alerts_removed" if removed else outcome.replace("logins_", "alerts_")}#alerts')
         return self._redirect(f'/?logins={outcome}#logins')
 
     def _post_save(self, form):
         if self.settings.updates and self.settings.updates.running():
             # A rollback would put back config.json as it was, losing the save.
             loaded, _ = self.settings.load()
-            return self._send(409, self._page(["An update is running: save once it's done (see Updates)."],
-                                              config=apply_form(loaded, form)[0]))
+            return self._send(
+                409, self._page(["An update is running: save once it's done (see Updates)."], config=apply_form(loaded, form)[0])
+            )
         with self.settings.save_lock:
             config, _ = self.settings.load()
             new, problems = apply_form(config, form)
@@ -579,8 +630,7 @@ class Handler(BaseHTTPRequestHandler):
         updates = self.settings.updates
         if updates and updates.running():
             logger.info('Power menu: %s refused while an update runs.', action)
-            return self._send(409, page.message_page('Update running', 'Wait for the update to finish '
-                                                                       '(see Updates), then try again.'))
+            return self._send(409, page.message_page('Update running', 'Wait for the update to finish (see Updates), then try again.'))
         logger.info('Power menu: %s requested from %s.', action, self.client_address[0])
         if action in POWER_MESSAGES:
             title, text = POWER_MESSAGES[action]
@@ -612,10 +662,14 @@ class Handler(BaseHTTPRequestHandler):
 
 # POST paths to the Handler method that serves them. PIN_POSTS need no PIN session (they are how you get
 # one); SETTINGS_POSTS pass _allowed() first. The /update/* paths are served by _update, only with updates.
-PIN_POSTS = {'/pin/show': '_post_pin_show', '/pin/send': '_post_pin_send', '/pin': '_post_pin',
-             '/signout': '_post_signout'}
-SETTINGS_POSTS = {'/save': '_post_save', '/credentials': '_post_credentials', '/renew': '_post_renew',
-                  '/alert/test': '_post_alert_test', '/power': '_post_power'}
+PIN_POSTS = {'/pin/show': '_post_pin_show', '/pin/send': '_post_pin_send', '/pin': '_post_pin', '/signout': '_post_signout'}
+SETTINGS_POSTS = {
+    '/save': '_post_save',
+    '/credentials': '_post_credentials',
+    '/renew': '_post_renew',
+    '/alert/test': '_post_alert_test',
+    '/power': '_post_power',
+}
 
 
 def board_name():
@@ -633,24 +687,31 @@ def main(argv=None):
     parser.add_argument('--port', type=int, default=PORT)
     parser.add_argument('--host', default='', help='address to listen on (default: all)')
     parser.add_argument('--config', default=CONFIG, help=f'the config.json to edit (default: {CONFIG})')
-    parser.add_argument('--auth-env', default=AUTH_ENV,
-                        help="the riders' logins and the Pushover keys, set (never shown) on the Logins card")
-    parser.add_argument('--token-base', default=None,
-                        help="where riders' relative token paths start (default: the config's folder)")
+    parser.add_argument(
+        '--auth-env', default=AUTH_ENV, help="the riders' logins and the Pushover keys, set (never shown) on the Logins card"
+    )
+    parser.add_argument('--token-base', default=None, help="where riders' relative token paths start (default: the config's folder)")
     parser.add_argument('--cookies', default=logins.DEFAULT_TOKEN, help="a single-rider board's token file")
-    parser.add_argument('--restart-unit', default=APP_UNIT, help="the display's systemd unit, restarted after a "
-                                                                 "save; '' for none")
+    parser.add_argument('--restart-unit', default=APP_UNIT, help="the display's systemd unit, restarted after a save; '' for none")
     parser.add_argument('--pin-file', default=PIN_FILE, help='where the display reads the PIN')
-    parser.add_argument('--checkout', default=default_checkout(),
-                        help=f'the git checkout the Updates card updates (default: ${CHECKOUT_ENV}, or this '
-                             "code's own checkout; none: no Updates card)")
+    parser.add_argument(
+        '--checkout',
+        default=default_checkout(),
+        help=f"the git checkout the Updates card updates (default: ${CHECKOUT_ENV}, or this code's own checkout; none: no Updates card)",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
     for name, value in read_pushover_keys(args.auth_env).items():
         os.environ.setdefault(name, value)
-    settings = Settings(args.config, PinGate(args.pin_file), restart_unit=args.restart_unit,
-                        auth_env=args.auth_env, token_base=args.token_base, default_token=args.cookies,
-                        updates=Updates(args.checkout) if args.checkout else None)
+    settings = Settings(
+        args.config,
+        PinGate(args.pin_file),
+        restart_unit=args.restart_unit,
+        auth_env=args.auth_env,
+        token_base=args.token_base,
+        default_token=args.cookies,
+        updates=Updates(args.checkout) if args.checkout else None,
+    )
     server = make_server(settings, args.host, args.port)
     logger.info('Settings page on port %s, for %s.', args.port, os.path.abspath(args.config))
     server.serve_forever()

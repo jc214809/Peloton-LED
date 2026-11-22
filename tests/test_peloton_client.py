@@ -1,4 +1,5 @@
 """PelotonClient against a fake session: paging edge cases and bad responses."""
+
 import json
 import time
 from unittest.mock import Mock
@@ -31,6 +32,7 @@ def _w(wid, age_days=0):
 
 # make_session
 
+
 def test_make_session_sends_the_bearer_token(tmp_path):
     token = tmp_path / 'cookies.txt'
     token.write_text('  abc.def.ghi \n')
@@ -54,8 +56,8 @@ def test_close_closes_the_session():
 
 # Bad responses
 
-@pytest.mark.parametrize('method,args', [('get_me', ()), ('get_overview', ('u',)),
-                                         ('get_workouts_page', ('u', 50))])
+
+@pytest.mark.parametrize('method,args', [('get_me', ()), ('get_overview', ('u',)), ('get_workouts_page', ('u', 50))])
 @pytest.mark.parametrize('body', [[], 'text', 5])
 def test_non_object_json_is_rejected(method, args, body):
     client, _ = _client(body)
@@ -137,12 +139,12 @@ def test_workout_detail_success():
 
 # iter_workout_pages
 
+
 def _pages(client, **kwargs):
     return [(number, [w['id'] for w in rows]) for number, rows, _ in client.iter_workout_pages('u', **kwargs)]
 
 
-@pytest.mark.parametrize('kwargs', [{'page_size': 0}, {'page_size': 5, 'max_pages': 0},
-                                    {'page_size': 5, 'start_page': -1}])
+@pytest.mark.parametrize('kwargs', [{'page_size': 0}, {'page_size': 5, 'max_pages': 0}, {'page_size': 5, 'start_page': -1}])
 def test_pages_reject_bad_limits(kwargs):
     client, session = _client()
     with pytest.raises(ValueError, match='positive'):
@@ -163,12 +165,12 @@ def test_pages_empty_history_is_one_empty_page():
 
 
 def test_pages_walk_until_show_next_is_false_with_the_page_sent():
-    client, session = _client({'data': [_w('a'), _w('b')], 'show_next': True},
-                              {'data': [_w('c')], 'show_next': False})
+    client, session = _client({'data': [_w('a'), _w('b')], 'show_next': True}, {'data': [_w('c')], 'show_next': False})
     assert _pages(client, page_size=2) == [(0, ['a', 'b']), (1, ['c'])]
     assert [c.kwargs['params'] for c in session.get.call_args_list] == [
         {'joins': 'ride,ride.instructor', 'limit': 2, 'page': 0},
-        {'joins': 'ride,ride.instructor', 'limit': 2, 'page': 1}]
+        {'joins': 'ride,ride.instructor', 'limit': 2, 'page': 1},
+    ]
 
 
 def test_pages_resume_from_a_start_page():

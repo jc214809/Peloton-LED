@@ -9,12 +9,13 @@ a Legend); `2X` in gold in the bottom left corner during a double-points boost.
 Before the first score only the gem and the level show (from /api/me).
 State: peloton.feeds.club.club_page (validated again here: the cache can hold anything).
 """
+
 from functools import lru_cache
 
-from driver import graphics
-
 from display.display import get_text_width, loaded_fonts
+from driver import graphics
 from peloton.feeds.club import KINDS, gem_kind, tier_fraction, valid_club
+
 from .screen import Screen
 
 WHITE = (255, 255, 255)
@@ -23,10 +24,20 @@ BOOST = (255, 215, 0)
 BOOST_X = 2  # `2X` sits in the bottom left corner on both heights
 BAR_TRACK = (35, 35, 35)
 # Each gem's colour (from Peloton's own badges) and the level name's, a touch lighter where the gem is dark.
-GEM_COLORS = {'BRONZE': (235, 115, 35), 'SILVER': (150, 180, 215), 'GOLD': (240, 205, 0),
-              'CHAMPION': (225, 175, 245), 'LEGEND': (210, 30, 50)}
-TEXT_COLORS = {'BRONZE': (240, 140, 60), 'SILVER': (200, 215, 235), 'GOLD': (255, 215, 0),
-               'CHAMPION': (235, 190, 250), 'LEGEND': (240, 60, 75)}
+GEM_COLORS = {
+    'BRONZE': (235, 115, 35),
+    'SILVER': (150, 180, 215),
+    'GOLD': (240, 205, 0),
+    'CHAMPION': (225, 175, 245),
+    'LEGEND': (210, 30, 50),
+}
+TEXT_COLORS = {
+    'BRONZE': (240, 140, 60),
+    'SILVER': (200, 215, 235),
+    'GOLD': (255, 215, 0),
+    'CHAMPION': (235, 190, 250),
+    'LEGEND': (240, 60, 75),
+}
 # The gems, hand-drawn pixel art in Peloton's shapes: a hexagon (bronze, silver, gold), an octagon (Champion) and
 # a cut diamond (Legend). `#` is the flat top face; every other letter is a facet, named for the way it faces,
 # and lit by how much it faces the top left (FACET_SHADES). Outlines step evenly (2 across 1 down on the
@@ -53,7 +64,8 @@ GEM_ROWS = {
         '...zzzzzzzmmmmmmm...',
         '.....zzzzzmmmmm.....',
         '.......zzzmmm.......',
-        '.........zm.........'),
+        '.........zm.........',
+    ),
     ('HEX', 12): (
         '.....qp.....',
         '...qqqppp...',
@@ -66,7 +78,8 @@ GEM_ROWS = {
         'wzzzz##mmmme',
         '.zzzzzmmmmm.',
         '...zzzmmm...',
-        '.....zm.....'),
+        '.....zm.....',
+    ),
     ('OCT', 20): (
         '.....nnnnnnnnnn.....',
         '....qqnnnnnnnnpp....',
@@ -87,7 +100,8 @@ GEM_ROWS = {
         '..zzzzssssssssmmmm..',
         '...zzzssssssssmmm...',
         '....zzssssssssmm....',
-        '.....ssssssssss.....'),
+        '.....ssssssssss.....',
+    ),
     ('OCT', 12): (
         '...nnnnnn...',
         '..qnnnnnnp..',
@@ -100,7 +114,8 @@ GEM_ROWS = {
         'wzzz####mmme',
         '.zzssssssmm.',
         '..zssssssm..',
-        '...ssssss...'),
+        '...ssssss...',
+    ),
     ('DIAMOND', 20): (
         '....................',
         '....................',
@@ -121,7 +136,8 @@ GEM_ROWS = {
         '.........wm.........',
         '....................',
         '....................',
-        '....................'),
+        '....................',
+    ),
     ('DIAMOND', 12): (
         '............',
         '............',
@@ -134,7 +150,8 @@ GEM_ROWS = {
         '....wwmm....',
         '.....wm.....',
         '............',
-        '............'),
+        '............',
+    ),
 }
 SHAPE_OF = {'CHAMPION': 'OCT', 'LEGEND': 'DIAMOND'}
 # How bright each facet is against the gem's colour: up-left brightest, down-right darkest.
@@ -200,8 +217,7 @@ def next_line(state, font, width):
         return _first_fitting(font, width, ('TOP LEVEL',))
     if to_next is None:
         return ''
-    return _first_fitting(font, width, (f'{to_next:,} TO {following}', f'{to_next} TO {following}',
-                                        f'{to_next:,} TO GO', f'{to_next:,}'))
+    return _first_fitting(font, width, (f'{to_next:,} TO {following}', f'{to_next} TO {following}', f'{to_next:,} TO GO', f'{to_next:,}'))
 
 
 def fitted_level(level, fonts, width):
@@ -262,8 +278,7 @@ class ClubScreen(Screen):
         following, to_next = state['next'], state['to_next']
         if following and to_next is not None:
             # Two lines: `1,341 TO`, then the next level in its own colour.
-            _centre(matrix, fonts['stats'], TO_Y_64, WHITE,
-                    _first_fitting(fonts['stats'], 62, (f'{to_next:,} TO', f'{to_next} TO')))
+            _centre(matrix, fonts['stats'], TO_Y_64, WHITE, _first_fitting(fonts['stats'], 62, (f'{to_next:,} TO', f'{to_next} TO')))
             font, name = fitted_level(following, [fonts['stats']], 62)
             _centre(matrix, font, NEXT_Y_64, TEXT_COLORS[gem_kind(following)], name)
             bottom_left = max((matrix.width - get_text_width(font, name) + 1) // 2, 0)

@@ -4,16 +4,18 @@ earlier workouts (the workout row store), assembled as `insight_lines.board_view
 `InsightMixin` is mixed into `Dashboard` (peloton/dashboard.py). The row store and the insight caches are
 guarded by the dashboard's `_rows_lock`, the workout log by `_log_lock`, as before.
 """
+
 import logging
 import time
 
 import requests
 
 from .dashboard_fetch import INSIGHT_RETRY_SECONDS
-from .workouts.insight_lines import board_insights
 from .feeds.instructors import class_numbers
+from .workouts.insight_lines import board_insights
 from .workouts.workout_compare import DISCIPLINES as INSIGHT_DISCIPLINES
-from .workouts.workout_features import build_row, discipline as row_discipline
+from .workouts.workout_features import build_row
+from .workouts.workout_features import discipline as row_discipline
 from .workouts.workout_insights import insights, milestone_insight, with_milestone
 from .workouts.workout_log import trim
 from .workouts.workout_rows import RowStore, default_rows_path, trim_for_board
@@ -30,8 +32,7 @@ class InsightMixin:
             with self._log_lock:
                 if identity is None or not self._log.complete:
                     return None
-                return milestone_insight(class_numbers(self._log.workouts, identity, row,
-                                                       {**self._log.instructors, **names}))
+                return milestone_insight(class_numbers(self._log.workouts, identity, row, {**self._log.instructors, **names}))
         except Exception as exc:  # never fail the refresh over an insight
             logger.warning('Instructor milestone failed (%s)', type(exc).__name__)
             return None
@@ -132,8 +133,7 @@ class InsightMixin:
         cached = self._insight_views.get(identity)
         if cached and cached[0] == key:
             return cached[1]
-        views = board_insights(with_milestone(insights(store.rows[identity], store.current_rows()),
-                                              milestone)) or None
+        views = board_insights(with_milestone(insights(store.rows[identity], store.current_rows()), milestone)) or None
         if cached and cached[1] != views:
             logger.info('Workout %s insights changed', identity[:8])
         self._insight_views[identity] = (key, views)

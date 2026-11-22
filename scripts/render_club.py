@@ -6,6 +6,7 @@
 writes docs/screenshots/rotation/club.png: the club page for each case in PAGES, on a 64x64 panel (top row)
 and a 64x32 panel (bottom row), labelled like the README's other screenshots.
 """
+
 import argparse
 import os
 import sys
@@ -24,8 +25,16 @@ from scripts.render_logo import GAP, LABEL_WIDTH, SHEET_BACKGROUND, SHEET_SCALE 
 
 
 def _club(level, points, tier, marks, following, to_next, boost=False):
-    return {'level': level, 'points': points, 'tier_min': tier[0], 'tier_max': tier[1], 'marks': marks,
-            'next': following, 'to_next': to_next, 'boost_until': 1.0 if boost else None}
+    return {
+        'level': level,
+        'points': points,
+        'tier_min': tier[0],
+        'tier_max': tier[1],
+        'marks': marks,
+        'next': following,
+        'to_next': to_next,
+        'boost_until': 1.0 if boost else None,
+    }
 
 
 # Tiers as Peloton sent them on 2026-11-14: a level just reached, Gold III in a double-points boost,

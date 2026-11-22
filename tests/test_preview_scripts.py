@@ -1,4 +1,5 @@
 """The offline preview tools: render_rotation, render_demo and preview_pr."""
+
 import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -23,6 +24,7 @@ def _sheet_tiles(path, height, columns=5):
 
 # render_rotation
 
+
 @pytest.mark.parametrize('height', [32, 64])
 def test_demo_rotation_renders_every_page(tmp_path, height, capsys):
     out = tmp_path / f'demo-{height}.png'
@@ -38,22 +40,48 @@ def test_cache_rotation_with_a_rival_and_no_overlays(tmp_path, capsys):
     save_snapshot(cache, snapshot)
     save_snapshot(rival, {**snapshot, 'weekly_progress': {'workouts': 6, 'minutes': 200}})
     out = tmp_path / 'sheet.png'
-    render_rotation.main(['--cache', str(cache), '--rival', str(rival), '--rival-name', 'Jen',
-                          '--username', 'Joel', '--no-overlays', '--columns', '3', '--out', str(out)])
+    render_rotation.main(
+        [
+            '--cache',
+            str(cache),
+            '--rival',
+            str(rival),
+            '--rival-name',
+            'Jen',
+            '--username',
+            'Joel',
+            '--no-overlays',
+            '--columns',
+            '3',
+            '--out',
+            str(out),
+        ]
+    )
     _sheet_tiles(out, 32, columns=3)
     assert '-> ' + str(out) in capsys.readouterr().out
 
 
 def test_cache_rotation_reads_the_workout_log_and_config_route(tmp_path, capsys):
     from peloton.workouts.workout_log import WorkoutLog, default_log_path
+
     snapshot = {**load_snapshot_for(SimpleNamespace(demo=True)), 'last_updated': 1773496800}
     cache = tmp_path / 'joel-cache.json'
     save_snapshot(cache, snapshot)
     log = WorkoutLog(default_log_path(cache))
     log.claim('demo')
-    log.merge([{'id': f'w{i}', 'status': 'COMPLETE', 'start_time': 1773496800 - i * 86400, 'distance': 10.0,
-                'fitness_discipline': 'cycling', 'ride': {'instructor': {'id': 'jess', 'name': 'Jess Sims'}}}
-               for i in range(3)])
+    log.merge(
+        [
+            {
+                'id': f'w{i}',
+                'status': 'COMPLETE',
+                'start_time': 1773496800 - i * 86400,
+                'distance': 10.0,
+                'fitness_discipline': 'cycling',
+                'ride': {'instructor': {'id': 'jess', 'name': 'Jess Sims'}},
+            }
+            for i in range(3)
+        ]
+    )
     log.backfill['complete'] = True
     log.save()
     config = tmp_path / 'config.json'
@@ -95,6 +123,7 @@ def test_frame_times_per_page_kind():
     assert frame_times('journey', {'step_seconds': 4}, 8, 4) == [1.0, 5.0]  # 32 rows: both steps
     # The README streak screenshots' flame.
     from scripts.render_streaks import FLAME_SECONDS
+
     assert frame_times('streak', {}, 8, 4) == frame_times('streak_risk', {}, 8, 4) == [FLAME_SECONDS]
 
 
@@ -103,22 +132,24 @@ def test_preview_dashboard_celebrates_only_a_just_reached_milestone():
     assert dashboard.pending_milestones({'totals': {'Total Workouts': 258}}) == [255]
     assert dashboard.pending_milestones({'totals': {'Total Workouts': 259}}) == [255]
     # 2,000 is 123 workouts back: the board celebrated it long ago, so the preview doesn't.
-    assert render_rotation.PreviewDashboard([2000]).pending_milestones(
-        {'totals': {'Total Workouts': 2123}}) == []
+    assert render_rotation.PreviewDashboard([2000]).pending_milestones({'totals': {'Total Workouts': 2123}}) == []
     assert dashboard.pending_milestones({'totals': {}}) == []
     assert dashboard.should_celebrate_pr({'is_pr': True}) is True
 
 
 # render_demo
 
+
 def test_demo_contact_sheet(tmp_path):
     from scripts.render_demo import render_contact_sheet
+
     out = tmp_path / 'demo.png'
     render_contact_sheet(out)
     assert Image.open(out).size == (272 * 6, 294 * 3)
 
 
 # preview_pr
+
 
 def _config(tmp_path, users):
     path = tmp_path / 'config.json'
@@ -140,8 +171,7 @@ def test_token_path_without_users_is_the_default_file(tmp_path):
 
 
 def _workout(pr=False, status='COMPLETE', wid='w'):
-    workout = {'id': wid, 'status': status, 'is_total_work_personal_record': pr,
-               'fitness_discipline': 'cycling', 'created_at': 1773496800}
+    workout = {'id': wid, 'status': status, 'is_total_work_personal_record': pr, 'fitness_discipline': 'cycling', 'created_at': 1773496800}
     return workout
 
 
@@ -155,11 +185,14 @@ def test_find_latest_pr_pages_back_until_it_finds_one():
     assert workout['id'] == 'pr' and pages == 2
 
 
-@pytest.mark.parametrize('pages,expected', [
-    ([{'data': [_workout()], 'show_next': False}], 1),
-    ([{'data': []}], 1),
-    ([{'data': [_workout()], 'show_next': True}] * 3, 3),
-])
+@pytest.mark.parametrize(
+    'pages,expected',
+    [
+        ([{'data': [_workout()], 'show_next': False}], 1),
+        ([{'data': []}], 1),
+        ([{'data': [_workout()], 'show_next': True}] * 3, 3),
+    ],
+)
 def test_find_latest_pr_stops_at_the_end_of_history(pages, expected):
     client = MagicMock()
     client.get_workouts_page.side_effect = pages
@@ -188,8 +221,7 @@ def pr_setup(tmp_path):
 
 
 def _run_preview(setup, *extra):
-    with patch('peloton.api.PelotonClient', return_value=setup.client), \
-         patch('peloton.api.make_session'):
+    with patch('peloton.api.PelotonClient', return_value=setup.client), patch('peloton.api.make_session'):
         preview_pr.main(['--config', str(setup.config), *extra])
 
 
@@ -259,6 +291,7 @@ def test_preview_bad_config(tmp_path):
 def test_insight_slides_show_with_the_flag_or_the_config_switch_and_never_from_a_cache_without_it(tmp_path):
     def insight_ids(options):
         return {s['workout_id'] for s in load_snapshot_for(options)['summaries'] if 'insights' in s}
+
     assert insight_ids(SimpleNamespace(demo=True)) == set()
     assert insight_ids(SimpleNamespace(demo=True, insights=True)) == {'demo-cycling', 'demo-rowing', 'demo-strength'}
     on = tmp_path / 'on.json'
@@ -272,8 +305,7 @@ def test_insight_slides_show_with_the_flag_or_the_config_switch_and_never_from_a
     cache = tmp_path / 'cache.json'
     save_snapshot(cache, {**snapshot, 'last_updated': 1773496800})
     assert insight_ids(SimpleNamespace(demo=False, cache=str(cache))) == set()
-    assert insight_ids(SimpleNamespace(demo=False, cache=str(cache), insights=True)) == {'demo-cycling', 'demo-rowing',
-                                                                                          'demo-strength'}
+    assert insight_ids(SimpleNamespace(demo=False, cache=str(cache), insights=True)) == {'demo-cycling', 'demo-rowing', 'demo-strength'}
     # A version 2 cache's single insight is never shown, switch or no switch.
     snapshot['summaries'][0]['insight'] = {'code': 'output_up', 'lines': ['STRONG RIDE', '205 VS 180 W']}
     save_snapshot(cache, {**snapshot, 'last_updated': 1773496800})
@@ -283,6 +315,7 @@ def test_insight_slides_show_with_the_flag_or_the_config_switch_and_never_from_a
 
 
 # render_rotation: pins written before the complexity refactor (2f-G); they pass unchanged after it.
+
 
 def test_frame_times_pinned_for_every_page_kind():
     summary = load_snapshot_for(SimpleNamespace(demo=True, insights=True))['summaries'][0]
@@ -304,6 +337,7 @@ def test_frame_times_pinned_for_every_page_kind():
 
 def test_the_next_pass_celebration_is_shown_when_it_differs(tmp_path, capsys):
     import peloton_led
+
     real = peloton_led.build_rotation_pages
     render_rotation.main(['--demo', '--height', '32', '--out', str(tmp_path / 'a.png')])
     baseline = int(capsys.readouterr().out.split()[3])

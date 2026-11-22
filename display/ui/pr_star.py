@@ -1,22 +1,23 @@
 # python file: display/ui/pr_star.py
 
-from .screen import Screen
-from typing import List, Tuple
-
-from driver import graphics
 from display.display import color_dict
+from driver import graphics
 from utils import debug
+
+from .screen import Screen
 
 
 class PrStarScreen(Screen):
-    def __init__(self, color_key: str = "gold", fill: bool = True):
+    def __init__(self, color_key: str = 'gold', fill: bool = True):
         self.color_key = color_key
         self.fill = fill
 
-    def _unit_star_points(self, outer_radius: float = 0.5, inner_radius: float = 0.2, cx: float = 0.5, cy: float = 0.5) -> List[Tuple[float, float]]:
+    def _unit_star_points(
+        self, outer_radius: float = 0.5, inner_radius: float = 0.2, cx: float = 0.5, cy: float = 0.5
+    ) -> list[tuple[float, float]]:
         import math
 
-        points: List[Tuple[float, float]] = []
+        points: list[tuple[float, float]] = []
         num_points = 5
         angle_offset = -math.pi / 2
         for i in range(num_points * 2):
@@ -27,8 +28,8 @@ class PrStarScreen(Screen):
             points.append((x, y))
         return points
 
-    def _scale_points_to_matrix(self, points: List[Tuple[float, float]], width: int, height: int) -> List[Tuple[float, float]]:
-        scaled: List[Tuple[float, float]] = []
+    def _scale_points_to_matrix(self, points: list[tuple[float, float]], width: int, height: int) -> list[tuple[float, float]]:
+        scaled: list[tuple[float, float]] = []
         for x, y in points:
             px = x * (width - 1)
             py = y * (height - 1)
@@ -37,11 +38,11 @@ class PrStarScreen(Screen):
             scaled.append((px, py))
         return scaled
 
-    def _round_points(self, points: List[Tuple[float, float]]) -> List[Tuple[int, int]]:
+    def _round_points(self, points: list[tuple[float, float]]) -> list[tuple[int, int]]:
         return [(int(round(x)), int(round(y))) for x, y in points]
 
     @staticmethod
-    def _polygon_edges(poly: List[Tuple[float, float]]) -> List[Tuple[float, float, float, float]]:
+    def _polygon_edges(poly: list[tuple[float, float]]) -> list[tuple[float, float, float, float]]:
         """(y_min, y_max, x_at_ymin, slope) for every non-horizontal edge."""
         edges = []
         n = len(poly)
@@ -62,10 +63,9 @@ class PrStarScreen(Screen):
         return edges
 
     @staticmethod
-    def _crossings(edges, y: int) -> List[float]:
+    def _crossings(edges, y: int) -> list[float]:
         """Sorted x positions where the edges cross scanline y."""
-        xs = [x_at_ymin + slope * (y - y_min)
-              for y_min, y_max, x_at_ymin, slope in edges if y_min <= y < y_max]
+        xs = [x_at_ymin + slope * (y - y_min) for y_min, y_max, x_at_ymin, slope in edges if y_min <= y < y_max]
         xs.sort()
         return xs
 
@@ -80,7 +80,7 @@ class PrStarScreen(Screen):
                 except Exception:
                     pass
 
-    def _scanline_fill_polygon(self, matrix, poly: List[Tuple[float, float]], color) -> None:
+    def _scanline_fill_polygon(self, matrix, poly: list[tuple[float, float]], color) -> None:
         if not poly:
             return
         edges = self._polygon_edges(poly)
@@ -99,7 +99,7 @@ class PrStarScreen(Screen):
                 self._draw_span(matrix, y, x_start, x_end, color)
 
     def render(self, matrix, state=None):
-        color = color_dict.get(self.color_key) or color_dict.get("gold")
+        color = color_dict.get(self.color_key) or color_dict.get('gold')
 
         w, h = matrix.width, matrix.height
         min_dim = min(w, h)
@@ -134,5 +134,5 @@ class PrStarScreen(Screen):
                                 pass
             return True
         except Exception as exc:
-            debug.error("Failed to render PR star: %s", exc)
+            debug.error('Failed to render PR star: %s', exc)
             return False

@@ -1,4 +1,5 @@
 """Workout compare insights: every rule of spec section 5 on hand-made rows, each threshold just under and over."""
+
 import itertools
 
 import pytest
@@ -14,10 +15,25 @@ PLAN = {k: float(i + 1) for i, k in enumerate(compare.PLAN_KEYS)}
 
 
 def ride(days_ago, output, hr=None, eff=None, strive=None, **over):
-    row = {'id': f'w{next(_ids)}', 'start': T - days_ago * DAY, 'disc': 'cycling', 'wtype': 'class',
-           'ctype': 'Music', 'mode': 'plain', 'outdoor': False, 'dur': 1200, 'complete': True,
-           'work': {'output': output, 'heart_rate': hr}, 'eff': eff, 'strive': strive,
-           'target_missed': None, 'pace_fit': None, 'sets': None, 'plan': None, 'arms_sections': 0}
+    row = {
+        'id': f'w{next(_ids)}',
+        'start': T - days_ago * DAY,
+        'disc': 'cycling',
+        'wtype': 'class',
+        'ctype': 'Music',
+        'mode': 'plain',
+        'outdoor': False,
+        'dur': 1200,
+        'complete': True,
+        'work': {'output': output, 'heart_rate': hr},
+        'eff': eff,
+        'strive': strive,
+        'target_missed': None,
+        'pace_fit': None,
+        'sets': None,
+        'plan': None,
+        'arms_sections': 0,
+    }
     row.update(over)
     return row
 
@@ -64,11 +80,13 @@ def run_bike(target_output, peer_outputs, **target_kw):
 
 # 5.1 output against peers
 
+
 def test_output_down_at_minus_10_with_wording():
     result = run_bike(90, [100] * 5)
     assert codes(result) == ['output_down']
-    assert text(result, 'output_down') == ('Your output was down today: 90 W in the work segments against '
-                                            'your typical 100 W for rides like this.')
+    assert text(result, 'output_down') == (
+        'Your output was down today: 90 W in the work segments against your typical 100 W for rides like this.'
+    )
 
 
 def test_output_just_inside_minus_10_is_in_line():
@@ -82,8 +100,9 @@ def test_big_drop_without_rank_is_a_normal_ride():
     # -12% but the target beats 2 of 5 peers (40%)
     result = run_bike(88, [80, 85, 100, 100, 100])
     assert codes(result) == ['in_line']
-    assert text(result, 'in_line') == ('A consistent ride for you: 88 W in the work segments against your '
-                                        'typical 100 W, inside your typical range.')
+    assert text(result, 'in_line') == (
+        'A consistent ride for you: 88 W in the work segments against your typical 100 W, inside your typical range.'
+    )
 
 
 def test_output_down_when_target_beats_exactly_20_percent():
@@ -93,8 +112,7 @@ def test_output_down_when_target_beats_exactly_20_percent():
 def test_output_up_needs_80_percent_beaten():
     result = run_bike(110, [100, 100, 100, 100, 120])  # beats 4 of 5 = 80%, +10%
     assert codes(result) == ['output_up']
-    assert text(result, 'output_up') == ('Strong ride: 110 W in the work segments against your typical '
-                                         '100 W for rides like this.')
+    assert text(result, 'output_up') == ('Strong ride: 110 W in the work segments against your typical 100 W for rides like this.')
 
 
 def test_big_rise_without_rank_is_a_normal_ride():
@@ -121,15 +139,17 @@ def test_target_without_output_has_no_output_message():
 
 def test_nothing_with_five_peers_names_count():
     target = ride(0, None)
-    assert pairs(insights(target, [target] + peers_of([100] * 5))) == [
-        ('nothing', 'Nothing stood out against your 5 similar rides.')]
+    assert pairs(insights(target, [target] + peers_of([100] * 5))) == [('nothing', 'Nothing stood out against your 5 similar rides.')]
 
 
 # easier effort / cost more clauses
 
+
 def easy_down(heart_pct_hr, eff, peer_hr=None, peer_eff=None, n_hr=5):
-    peers = [ride(i + 1, 100, hr=(100 if i < n_hr else None) if peer_hr is None else peer_hr,
-                  eff=100 if peer_eff is None else peer_eff) for i in range(5)]
+    peers = [
+        ride(i + 1, 100, hr=(100 if i < n_hr else None) if peer_hr is None else peer_hr, eff=100 if peer_eff is None else peer_eff)
+        for i in range(5)
+    ]
     target = ride(0, 90, hr=heart_pct_hr, eff=eff)
     return insights(target, [target] + peers)
 
@@ -189,8 +209,9 @@ def test_efficient_clause_not_at_eff_plus_7_9():
 def test_foot_discipline_uses_pace_wording_and_mph():
     target = foot(0, 3.6)
     result = insights(target, [target] + [foot(i, 4.0) for i in range(1, 6)])
-    assert text(result, 'output_down') == ('Your pace was down today: 3.6 mph in the work segments against '
-                                           'your typical 4.0 mph for runs like this.')
+    assert text(result, 'output_down') == (
+        'Your pace was down today: 3.6 mph in the work segments against your typical 4.0 mph for runs like this.'
+    )
 
 
 def test_walking_and_bootcamp_nouns():
@@ -204,11 +225,16 @@ def test_walking_and_bootcamp_nouns():
 
 # 5.2 callouts (no peers: the callout message is the only one, so no too_few)
 
+
 @pytest.mark.parametrize('disc', ['cycling', 'bike_bootcamp'])
 def test_resistance_low_at_20_not_19(disc):
     on = ride(0, 100, disc=disc, target_missed={'resistance': 20})
-    assert pairs(insights(on, [on])) == [('resistance_low', 'Turn the resistance up in the work segments: you were '
-                                                     'under the callout range and short of its power 20% of the time.')]
+    assert pairs(insights(on, [on])) == [
+        (
+            'resistance_low',
+            'Turn the resistance up in the work segments: you were under the callout range and short of its power 20% of the time.',
+        )
+    ]
     off = ride(0, 100, disc=disc, target_missed={'resistance': 19})
     assert codes(insights(off, [off])) == ['too_few']
 
@@ -216,8 +242,12 @@ def test_resistance_low_at_20_not_19(disc):
 @pytest.mark.parametrize('disc', ['cycling', 'bike_bootcamp'])
 def test_cadence_low_at_12_not_11(disc):
     on = ride(0, 100, disc=disc, target_missed={'cadence': 12})
-    assert pairs(insights(on, [on])) == [('cadence_low', 'Pick the cadence up in the work segments: you were under '
-                                                  'the callout range and short of its power 12% of the time.')]
+    assert pairs(insights(on, [on])) == [
+        (
+            'cadence_low',
+            'Pick the cadence up in the work segments: you were under the callout range and short of its power 12% of the time.',
+        )
+    ]
     off = ride(0, 100, disc=disc, target_missed={'cadence': 11})
     assert codes(insights(off, [off])) == ['too_few']
 
@@ -230,13 +260,19 @@ def test_bike_callouts_read_the_missed_share_not_the_under_share():
     assert codes(insights(old, [old])) == ['too_few']
 
 
-@pytest.mark.parametrize('over', [
-    {'ctype': 'Warm Up Ride'}, {'ctype': 'Cool Down Ride'}, {'ctype': 'Strength Warm Up', 'disc': 'strength'},
-    {'ctype': 'OUTDOOR Cool Down Walk', 'disc': 'walking'},
-    {'ctype': 'Theme', 'title': '10 min All for One Warm Up Ride'},
-    {'ctype': 'Power Zone', 'title': '10 min FTP Warm Up Ride'},
-    {'ctype': None, 'title': '5 min Chris Stapleton Cool Down'},
-    {'ctype': 'Full Body (Tread Bootcamp)', 'disc': 'tread_bootcamp', 'title': '5 min Bootcamp warm-up'}])
+@pytest.mark.parametrize(
+    'over',
+    [
+        {'ctype': 'Warm Up Ride'},
+        {'ctype': 'Cool Down Ride'},
+        {'ctype': 'Strength Warm Up', 'disc': 'strength'},
+        {'ctype': 'OUTDOOR Cool Down Walk', 'disc': 'walking'},
+        {'ctype': 'Theme', 'title': '10 min All for One Warm Up Ride'},
+        {'ctype': 'Power Zone', 'title': '10 min FTP Warm Up Ride'},
+        {'ctype': None, 'title': '5 min Chris Stapleton Cool Down'},
+        {'ctype': 'Full Body (Tread Bootcamp)', 'disc': 'tread_bootcamp', 'title': '5 min Bootcamp warm-up'},
+    ],
+)
 def test_a_warm_up_or_cool_down_gets_no_insight(over):
     # Callouts missed and five peers far below: it would otherwise be strong with a cadence warning.
     t = ride(0, 200, target_missed={'cadence': 50, 'resistance': 50}, **over)
@@ -265,8 +301,9 @@ def test_bike_callouts_not_for_rowing():
 @pytest.mark.parametrize('disc', ['rowing', 'row_bootcamp', 'running'])
 def test_pace_low_at_35_not_34(disc):
     on = ride(0, 100, disc=disc, pace_fit=(35, 40))
-    assert pairs(insights(on, [on])) == [('pace_low', 'You were under the pace target 35% of the time: push the '
-                                               'pace, or drop a pace level if that target is too fast.')]
+    assert pairs(insights(on, [on])) == [
+        ('pace_low', 'You were under the pace target 35% of the time: push the pace, or drop a pace level if that target is too fast.')
+    ]
     off = ride(0, 100, disc=disc, pace_fit=(34, 40))
     assert codes(insights(off, [off])) == ['too_few']
 
@@ -289,6 +326,7 @@ def test_no_callout_data_is_silent():
 
 # 5.2 callouts: the best missed share in the rider's recent bike classes
 
+
 def recent(shares, metric='resistance', first_day=1, **over):
     """Bike classes 1, 2, 3 ... days back, each with one missed share for `metric`."""
     return [ride(first_day + i, 100, target_missed={metric: s}, **over) for i, s in enumerate(shares)]
@@ -296,22 +334,26 @@ def recent(shares, metric='resistance', first_day=1, **over):
 
 def best(today, history, metric='resistance', **over):
     from peloton.workouts.workout_insights import callout_best
+
     target = ride(0, 100, target_missed={metric: today}, **over)
     return callout_best(target, [target] + history)
 
 
 def test_best_fires_strictly_under_every_recent_ride():
-    assert best(11, recent([12] * 10)) == [(
-        'callout_best', 'Your best resistance in 10 rides: under the callout range and short of its power 11% of '
-                        'the time, against your usual 12%.',
-        {'metric': 'resistance', 'pct': 11, 'usual': 12, 'n': 10})]
-    assert best(12, recent([12] * 10)) == []          # a tie is not a best
-    assert best(11, recent([20] * 9 + [11])) == []    # one earlier ride already did it
+    assert best(11, recent([12] * 10)) == [
+        (
+            'callout_best',
+            'Your best resistance in 10 rides: under the callout range and short of its power 11% of the time, against your usual 12%.',
+            {'metric': 'resistance', 'pct': 11, 'usual': 12, 'n': 10},
+        )
+    ]
+    assert best(12, recent([12] * 10)) == []  # a tie is not a best
+    assert best(11, recent([20] * 9 + [11])) == []  # one earlier ride already did it
 
 
 def test_best_needs_a_usual_of_10_or_more():
     assert best(9, recent([10] * 8))
-    assert best(8, recent([9, 10] * 4)) == []         # median 9.5: no habit to change
+    assert best(8, recent([9, 10] * 4)) == []  # median 9.5: no habit to change
     assert best(0, recent([1] * 10, metric='cadence'), metric='cadence') == []
 
 
@@ -336,8 +378,15 @@ def test_best_needs_a_15_minute_class_but_counts_any_length_before_it():
 def test_best_counts_bootcamps_and_leaves_out_what_is_not_a_finished_bike_class():
     assert best(5, recent([20] * 8, disc='bike_bootcamp'))
     assert best(5, recent([20] * 8), disc='bike_bootcamp')
-    for over in ({'ctype': 'Warm Up Ride'}, {'complete': False}, {'wtype': 'freestyle'}, {'disc': 'rowing'},
-                 {'target_missed': {'cadence': 3}}, {'target_missed': None}, {'target_missed': {'resistance': 'x'}}):
+    for over in (
+        {'ctype': 'Warm Up Ride'},
+        {'complete': False},
+        {'wtype': 'freestyle'},
+        {'disc': 'rowing'},
+        {'target_missed': {'cadence': 3}},
+        {'target_missed': None},
+        {'target_missed': {'resistance': 'x'}},
+    ):
         # Seven real rides and a better one that must not count: only seven left.
         assert best(5, recent([20] * 7) + [ride(8, 100, **{'target_missed': {'resistance': 3}, **over})]) == [], over
     assert best(5, recent([20] * 8), disc='rowing') == []
@@ -362,6 +411,7 @@ def test_best_in_insights_follows_the_scolds():
 
 # 5.3 strength
 
+
 def missed_case(missed, total):
     sets = [st('Row', 'other', 20, 5, 10) for _ in range(missed)]
     sets += [st('Curl', 'other', 20, 10, 10) for _ in range(total - missed)]
@@ -377,8 +427,9 @@ def test_missed_targets_threshold(missed, total, fires):
 def test_missed_targets_wording_names_worst_movement():
     sets = [st('Row', 'other', 20, 5, 10)] * 2 + [st('Curl', 'other', 20, 5, 10)] + [st('Curl', 'other', 20, 10, 10)] * 5
     t = strength(0, sets)
-    assert pairs(strength_insights(t, [t])) == [('missed_targets', 'You came up short on 3 of 8 sets, mostly Row: '
-                                                            'drop a weight there next time.')]
+    assert pairs(strength_insights(t, [t])) == [
+        ('missed_targets', 'You came up short on 3 of 8 sets, mostly Row: drop a weight there next time.')
+    ]
 
 
 def test_rounds_holds_and_unweighted_sets_never_count():
@@ -402,7 +453,8 @@ def test_no_tracker_when_no_sets():
     for sets in (None, []):
         t = strength(0, sets)
         assert pairs(strength_insights(t, [t])) == [
-            ('no_tracker', 'No rep or weight data for this class, so only heart rate can be compared.')]
+            ('no_tracker', 'No rep or weight data for this class, so only heart rate can be compared.')
+        ]
 
 
 def test_strength_insights_ignores_other_disciplines():
@@ -417,8 +469,13 @@ def lighter(today_lb=35, done=120, target=100, earlier=(40, 40, 40), days=(10, 2
 
 
 def test_go_up_lighter_fires_at_ratio_1_2():
-    assert pairs(lighter()) == [('go_up_lighter', 'Go up a weight on Row next time: 35 lb today against your typical 40 lb '
-                                           'for heavy weights, and you beat the rep targets by 20%.')]
+    assert pairs(lighter()) == [
+        (
+            'go_up_lighter',
+            'Go up a weight on Row next time: 35 lb today against your typical 40 lb '
+            'for heavy weights, and you beat the rep targets by 20%.',
+        )
+    ]
 
 
 def test_go_up_lighter_not_at_ratio_1_19():
@@ -465,8 +522,13 @@ def test_movement_first_uses_its_own_usual():
     rows = [strength(d, [st('Row', 'heavy', 40, 10, 10), st('Press', 'heavy', 60, 10, 10)]) for d in (10, 20, 30)]
     t = strength(0, [st('Row', 'heavy', 35, 120, 100)])
     result = strength_insights(t, rows + [t])
-    assert pairs(result) == [('go_up_lighter', 'Go up a weight on Row next time: 35 lb today against your typical 40 lb '
-                                        'on that movement, and you beat the rep targets by 20%.')]
+    assert pairs(result) == [
+        (
+            'go_up_lighter',
+            'Go up a weight on Row next time: 35 lb today against your typical 40 lb '
+            'on that movement, and you beat the rep targets by 20%.',
+        )
+    ]
 
 
 def test_movement_never_mixed_across_categories():
@@ -476,8 +538,11 @@ def test_movement_never_mixed_across_categories():
 
 
 def test_movement_with_two_classes_falls_back_to_category():
-    rows = [strength(10, [st('Row', 'heavy', 40, 10, 10)]), strength(20, [st('Row', 'heavy', 40, 10, 10)]),
-            strength(30, [st('Press', 'heavy', 40, 10, 10)])]
+    rows = [
+        strength(10, [st('Row', 'heavy', 40, 10, 10)]),
+        strength(20, [st('Row', 'heavy', 40, 10, 10)]),
+        strength(30, [st('Press', 'heavy', 40, 10, 10)]),
+    ]
     t = strength(0, [st('Row', 'heavy', 35, 120, 100)])
     result = strength_insights(t, rows + [t])
     assert 'for heavy weights' in result[0][1] and 'on that movement' not in result[0][1]
@@ -500,8 +565,8 @@ def test_go_up_streak_fires_and_skips_classes_without_the_category():
     rows = streak_rows() + [strength(15, [st('Curl', 'light', 10, 10, 10)])]
     t = strength(0, [st('Row', 'heavy', 40, 12, 10)])
     assert pairs(strength_insights(t, rows + [t])) == [
-        ('go_up_streak', 'Go up from 40 lb on your heavy weights next time: 3 classes in a row you beat every '
-                         'rep target by 20% or more.')]
+        ('go_up_streak', 'Go up from 40 lb on your heavy weights next time: 3 classes in a row you beat every rep target by 20% or more.')
+    ]
 
 
 def test_go_up_streak_broken_by_a_heavier_class():
@@ -543,15 +608,20 @@ def heavier(today_lb=45, sets=None):
 
 
 def test_went_heavier_at_plus_5():
-    assert pairs(heavier()) == [('went_heavier', 'You went heavier on Row (45 lb against your typical 40 lb on '
-                                          'that movement) and still hit every target. Keep that weight.')]
+    assert pairs(heavier()) == [
+        (
+            'went_heavier',
+            'You went heavier on Row (45 lb against your typical 40 lb on that movement) and still hit every target. Keep that weight.',
+        )
+    ]
 
 
 def test_went_heavier_category_wording():
     rows = [strength(d, [st(n, 'heavy', 40, 10, 10)]) for d, n in ((10, 'A'), (20, 'B'), (30, 'C'))]
     t = strength(0, [st('Row', 'heavy', 45, 10, 10)])
-    assert strength_insights(t, rows + [t])[0][1].startswith('You went heavier on your heavy weights (45 lb against '
-                                                              'your typical 40 lb for heavy weights)')
+    assert strength_insights(t, rows + [t])[0][1].startswith(
+        'You went heavier on your heavy weights (45 lb against your typical 40 lb for heavy weights)'
+    )
 
 
 def test_went_heavier_not_at_plus_4():
@@ -564,6 +634,7 @@ def test_went_heavier_not_with_a_missed_set():
 
 # 5.4 effort
 
+
 def effort(target_strive, peer_strives, output=100, peer_output=100, **kw):
     target = ride(0, output, strive=target_strive)
     peers = [ride(i + 1, peer_output, strive=s) for i, s in enumerate(peer_strives)]
@@ -572,8 +643,10 @@ def effort(target_strive, peer_strives, output=100, peer_output=100, **kw):
 
 def test_effort_high_with_in_line():
     result = effort(20, [10, 11, 12, 13, 14])
-    assert pairs(result) == [('in_line', text(result, 'in_line')),
-                      ('effort_high', 'Hardest ride of this kind by heart rate in your last 5: Strive 20.0.')]
+    assert pairs(result) == [
+        ('in_line', text(result, 'in_line')),
+        ('effort_high', 'Hardest ride of this kind by heart rate in your last 5: Strive 20.0.'),
+    ]
 
 
 def test_effort_low():
@@ -627,6 +700,7 @@ def test_effort_strength_without_tracker_still_compares_heart_rate():
 
 # 4.1 fill-in
 
+
 def fill_rows(outputs, first_day=100):
     return [ride(first_day + i, o, ctype='Other', plan=dict(PLAN)) for i, o in enumerate(outputs)]
 
@@ -641,14 +715,17 @@ def test_fill_in_wording_with_three_real_peers():
     target, rows = fill_case(80, [100] * 3, [100] * 2)
     result = insights(target, rows)
     assert codes(result) == ['output_down']
-    assert text(result, 'output_down') == ('Your output was down today: 80 W in the work segments against your '
-                                           'typical 100 W for the closest rides you have (only 3 of this exact kind).')
+    assert text(result, 'output_down') == (
+        'Your output was down today: 80 W in the work segments against your '
+        'typical 100 W for the closest rides you have (only 3 of this exact kind).'
+    )
 
 
 def test_fill_in_in_line_wording():
     target, rows = fill_case(100, [100] * 3, [100] * 2)
     assert text(insights(target, rows), 'in_line') == (
-        'Good ride, right in line with the closest rides you have (only 3 of this exact kind): 100 W against a typical 100 W.')
+        'Good ride, right in line with the closest rides you have (only 3 of this exact kind): 100 W against a typical 100 W.'
+    )
 
 
 def test_fill_in_output_up_needs_real_peers_to_agree():
@@ -662,9 +739,11 @@ def test_fill_in_down_withheld_when_real_peers_alone_do_not_agree():
     target, rows = fill_case(60, [60, 60], [100] * 3)
     result = insights(target, rows)
     assert codes(result) == ['in_line']
-    assert text(result, 'in_line') == ('A consistent ride for you: 60 W in the work segments against your typical 100 W '
-                                       'for the closest rides you have (only 2 of this exact kind), inside your '
-                                       'typical range.')
+    assert text(result, 'in_line') == (
+        'A consistent ride for you: 60 W in the work segments against your typical 100 W '
+        'for the closest rides you have (only 2 of this exact kind), inside your '
+        'typical range.'
+    )
     target, rows = fill_case(50, [60, 60], [100] * 3)
     assert codes(insights(target, rows)) == ['output_down']
 
@@ -694,10 +773,12 @@ def test_effort_never_uses_fill_ins():
 
 # 5.5 nothing to say, caps
 
+
 def test_too_few_wording():
     target = ride(0, 100)
     assert pairs(insights(target, [target] + peers_of([100] * 3))) == [
-        ('too_few', 'Not enough rides like this one to compare yet (3 in the last two years, 5 needed).')]
+        ('too_few', 'Not enough rides like this one to compare yet (3 in the last two years, 5 needed).')
+    ]
 
 
 def test_too_few_not_added_when_a_callout_fires():
@@ -708,8 +789,7 @@ def test_too_few_not_added_when_a_callout_fires():
 def test_nothing_with_five_peers_for_strength():
     rows = [strength(i, [st('Curl', 'other', 20, 10, 10)]) for i in range(1, 6)]
     target = strength(0, [st('Curl', 'other', 20, 10, 10)])
-    assert pairs(insights(target, [target] + rows)) == [
-        ('nothing', 'Nothing stood out against your 5 similar classes.')]
+    assert pairs(insights(target, [target] + rows)) == [('nothing', 'Nothing stood out against your 5 similar classes.')]
 
 
 def test_strength_too_few_uses_class_noun():
@@ -747,8 +827,7 @@ def test_effort_tie_is_neither_hardest_nor_easiest():
 
 def test_incomplete():
     target = ride(0, 100, complete=False, target_missed={'resistance': 40})
-    assert pairs(insights(target, [target] + peers_of([100] * 5))) == [
-        ('incomplete', 'This workout was cut short, so it is not compared.')]
+    assert pairs(insights(target, [target] + peers_of([100] * 5))) == [('incomplete', 'This workout was cut short, so it is not compared.')]
 
 
 def test_unsupported():
@@ -764,16 +843,19 @@ def test_at_most_three_messages_in_order_output_callouts_effort_dropped():
 
 
 def test_at_most_three_messages_strength_before_effort():
-    earlier = [strength(d, [st('Row', 'heavy', 40, 10, 10), st('Press', 'medium', 25, 10, 10)], strive=10)
-               for d in (10, 20, 30, 40, 50)]
-    target = strength(0, [st('Row', 'heavy', 35, 12, 10), st('Press', 'medium', 20, 12, 10),
-                          st('Curl', 'other', 20, 5, 10), st('Curl', 'other', 20, 5, 10)], strive=20)
+    earlier = [strength(d, [st('Row', 'heavy', 40, 10, 10), st('Press', 'medium', 25, 10, 10)], strive=10) for d in (10, 20, 30, 40, 50)]
+    target = strength(
+        0,
+        [st('Row', 'heavy', 35, 12, 10), st('Press', 'medium', 20, 12, 10), st('Curl', 'other', 20, 5, 10), st('Curl', 'other', 20, 5, 10)],
+        strive=20,
+    )
     result = insights(target, [target] + earlier)
     assert codes(result) == ['missed_targets', 'go_up_lighter', 'go_up_lighter']
     assert 'effort_high' not in codes(result)
 
 
 # Facts: the numbers behind each sentence, so the board can never disagree with the text
+
 
 def facts_of(result, code):
     return {c: f for c, _, f in result}[code]
@@ -782,10 +864,10 @@ def facts_of(result, code):
 def test_output_facts_match_the_sentence():
     result = run_bike(124, [188] * 5)
     f = facts_of(result, 'output_down')
-    assert f == {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 5, 'real': 5,
-                 'reason': None}
-    assert f'{number(f["value"], f["unit"])} W in the work segments against your typical {number(f["usual"], f["unit"])} W' \
-        in text(result, 'output_down')
+    assert f == {'value': 124, 'usual': 188, 'unit': 'W', 'foot': False, 'noun': 'ride', 'n': 5, 'real': 5, 'reason': None}
+    assert f'{number(f["value"], f["unit"])} W in the work segments against your typical {number(f["usual"], f["unit"])} W' in text(
+        result, 'output_down'
+    )
     result = run_bike(205, [180] * 5)
     f = facts_of(result, 'output_up')
     assert (f['value'], f['usual'], f['noun']) == (205, 180, 'ride')
@@ -829,8 +911,7 @@ def test_strength_facts_match_the_sentences():
     result = lighter()
     f = result[0][2]
     assert result[0][0] == 'go_up_lighter'
-    assert f == {'movement': 'Row', 'lb': 35, 'usual': 40, 'unit': 'lb', 'category': 'heavy',
-                 'on_movement': False, 'pct': 20}
+    assert f == {'movement': 'Row', 'lb': 35, 'usual': 40, 'unit': 'lb', 'category': 'heavy', 'on_movement': False, 'pct': 20}
     assert 'on Row next time: 35 lb today against your typical 40 lb' in result[0][1] and 'by 20%' in result[0][1]
 
     rows = streak_rows()
@@ -858,12 +939,22 @@ def _missed():
 def test_effort_facts_match_the_sentence():
     result = effort(20, [10, 11, 12, 13, 14])
     # The rows' class is 1200 s, so Strive per minute is Strive / 20.
-    assert facts_of(result, 'effort_high') == {'n': 5, 'value': 20, 'noun': 'ride', 'rate': pytest.approx(1.0),
-                                               'usual_rate': pytest.approx(0.6)}
+    assert facts_of(result, 'effort_high') == {
+        'n': 5,
+        'value': 20,
+        'noun': 'ride',
+        'rate': pytest.approx(1.0),
+        'usual_rate': pytest.approx(0.6),
+    }
     assert 'last 5: Strive 20.0.' in text(result, 'effort_high')
     result = effort(5, [10, 11, 12, 13, 14])
-    assert facts_of(result, 'effort_low') == {'n': 5, 'value': 5, 'noun': 'ride', 'rate': pytest.approx(0.25),
-                                              'usual_rate': pytest.approx(0.6)}
+    assert facts_of(result, 'effort_low') == {
+        'n': 5,
+        'value': 5,
+        'noun': 'ride',
+        'rate': pytest.approx(0.25),
+        'usual_rate': pytest.approx(0.6),
+    }
 
 
 def test_effort_usual_rate_is_the_real_peers_median_per_minute():
@@ -926,12 +1017,33 @@ def test_count_facts_and_empty_facts():
 
 # --- Instructor milestones ---
 
-@pytest.mark.parametrize('n, expected', [(1, True), (2, False), (4, False), (5, True), (6, False), (10, True),
-                                         (11, False), (25, True), (50, True), (75, False), (99, False),
-                                         (100, True), (101, False), (150, False), (200, True), (400, True),
-                                         (1000, True), (0, False)])
+
+@pytest.mark.parametrize(
+    'n, expected',
+    [
+        (1, True),
+        (2, False),
+        (4, False),
+        (5, True),
+        (6, False),
+        (10, True),
+        (11, False),
+        (25, True),
+        (50, True),
+        (75, False),
+        (99, False),
+        (100, True),
+        (101, False),
+        (150, False),
+        (200, True),
+        (400, True),
+        (1000, True),
+        (0, False),
+    ],
+)
 def test_which_counts_are_milestones(n, expected):
     from peloton.workouts.workout_insights import is_milestone
+
     assert is_milestone(n) is expected
 
 
@@ -941,6 +1053,7 @@ def _numbers(*pairs):
 
 def test_a_round_number_is_a_milestone_insight():
     from peloton.workouts.workout_insights import milestone_insight
+
     code, text, facts = milestone_insight(_numbers(('Jess Sims', 200)))
     assert code == 'instructor_milestone' and text == 'Your 200th class with Jess Sims.'
     assert facts == {'n': 200, 'name': 'Jess Sims', 'since': '2019-03-02'}
@@ -948,12 +1061,13 @@ def test_a_round_number_is_a_milestone_insight():
 
 def test_a_first_class_is_a_milestone_insight():
     from peloton.workouts.workout_insights import milestone_insight
-    assert milestone_insight(_numbers(('Zacharias Niedzwiecki', 1)))[1] == \
-        'Your first class with Zacharias Niedzwiecki: welcome!'
+
+    assert milestone_insight(_numbers(('Zacharias Niedzwiecki', 1)))[1] == 'Your first class with Zacharias Niedzwiecki: welcome!'
 
 
 def test_no_milestone_for_other_counts_or_unknown_instructors():
     from peloton.workouts.workout_insights import milestone_insight
+
     assert milestone_insight(_numbers(('Jess Sims', 199))) is None
     assert milestone_insight(_numbers((None, 100), ('', 1))) is None
     assert milestone_insight([]) is None and milestone_insight(None) is None
@@ -962,11 +1076,13 @@ def test_no_milestone_for_other_counts_or_unknown_instructors():
 
 def test_with_two_instructors_the_bigger_count_wins():
     from peloton.workouts.workout_insights import milestone_insight
+
     assert milestone_insight(_numbers(('Selena', 1), ('Jess', 50)))[2]['name'] == 'Jess'
 
 
 def test_the_milestone_goes_after_the_output_insight_and_before_the_rest():
     from peloton.workouts.workout_insights import with_milestone
+
     milestone = ('instructor_milestone', '', {})
     out, call, eff = ('output_down', '', {}), ('resistance_low', '', {}), ('effort_high', '', {})
     assert with_milestone([out, call, eff], milestone) == [out, milestone, call, eff]
@@ -981,6 +1097,7 @@ def test_the_milestone_follows_a_tough_class_too():
     """A tough class takes the output insight's place, so it keeps the first slot: tough class, then milestone."""
     from peloton.workouts.insight_lines import board_insights
     from peloton.workouts.workout_insights import with_milestone
+
     milestone = ('instructor_milestone', '', {'n': 200, 'name': 'Jess Sims', 'since': '2019-03-02'})
     t = ride(0, 124, difficulty=9.1)
     tough = insights(t, [t] + [ride(1 + i, 188, difficulty=7.0) for i in range(5)])
@@ -991,6 +1108,7 @@ def test_the_milestone_follows_a_tough_class_too():
 def test_the_milestone_is_shown_beside_every_other_insight():
     from peloton.workouts.insight_lines import board_insights
     from peloton.workouts.workout_insights import with_milestone
+
     milestone = ('instructor_milestone', '', {'n': 100, 'name': 'Jess Sims', 'since': '2019-03-02'})
     messages = with_milestone([('resistance_low', '', {'pct': 30}), ('cadence_low', '', {'pct': 40})], milestone)
     assert [v['code'] for v in board_insights(messages)] == ['instructor_milestone', 'resistance_low', 'cadence_low']

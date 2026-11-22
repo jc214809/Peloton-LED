@@ -1,4 +1,5 @@
 """Line-drawn icons for disciplines without bitmap masks, and count formatting."""
+
 import unittest  # noqa: F401  (selects emulator graphics)
 
 import pytest
@@ -48,11 +49,11 @@ def test_large_counts_are_abbreviated_to_fit(height, count, expected):
     initialize_fonts(height)
     shown = []
     from display.ui import lifetime_overview
+
     original = lifetime_overview.centered
     lifetime_overview.centered = lambda m, f, text, *a: shown.append(text)
     try:
-        assert LifetimeOverviewScreen().render(ImageMatrix(height=height),
-                                               {'items': [{'icon': 'cycling', 'count': count}]})
+        assert LifetimeOverviewScreen().render(ImageMatrix(height=height), {'items': [{'icon': 'cycling', 'count': count}]})
     finally:
         lifetime_overview.centered = original
     assert shown == [expected]
@@ -93,6 +94,7 @@ def test_every_icon_stands_on_the_same_row(key):
 
 def test_render_lifetime_draws_both_panel_sizes(tmp_path, capsys):
     from scripts import render_lifetime
+
     out = tmp_path / 'lifetime.png'
     render_lifetime.main(['--out', str(out)])
     assert out.exists() and 'Wrote' in capsys.readouterr().out
@@ -100,6 +102,7 @@ def test_render_lifetime_draws_both_panel_sizes(tmp_path, capsys):
 
 def test_render_lifetime_stops_on_a_page_it_cannot_draw(monkeypatch):
     from scripts import render_lifetime
+
     monkeypatch.setattr(render_lifetime.LifetimeOverviewScreen, 'render', lambda self, matrix, state: False)
     with pytest.raises(RuntimeError):
         render_lifetime.panels(64)
@@ -110,6 +113,7 @@ def test_render_lifetime_runs_from_the_command_line(tmp_path, monkeypatch, capsy
     import runpy
     import sys
     from pathlib import Path
+
     root = str(Path(__file__).resolve().parents[1])
     out = tmp_path / 'sheet.png'
     monkeypatch.setattr(sys, 'path', [p for p in sys.path if p not in (root, '')])

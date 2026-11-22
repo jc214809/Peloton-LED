@@ -1,4 +1,5 @@
 """refresh_cookies.py's command line and remaining helpers, with Peloton mocked."""
+
 import json
 from unittest.mock import MagicMock, patch
 
@@ -6,8 +7,7 @@ import pytest
 import requests
 
 from scripts import refresh_cookies
-from scripts.refresh_cookies import (ensure_all_tokens, ensure_token, load_auth, seed_tokens,
-                                     token_status, verify_token)
+from scripts.refresh_cookies import ensure_all_tokens, ensure_token, load_auth, seed_tokens, token_status, verify_token
 
 
 @pytest.fixture(autouse=True)
@@ -23,10 +23,17 @@ def run(monkeypatch, *argv):
     refresh_cookies.main()
 
 
-@pytest.mark.parametrize('argv', [
-    ['--seed-dir', 'x', '--ensure'], ['--ensure', '--verify-only'], ['--status', '--ensure'],
-    ['--all-users'], ['--ensure', '--renew-before-hours', '-1'], ['--ensure', '--renew-before-hours', 'nan'],
-])
+@pytest.mark.parametrize(
+    'argv',
+    [
+        ['--seed-dir', 'x', '--ensure'],
+        ['--ensure', '--verify-only'],
+        ['--status', '--ensure'],
+        ['--all-users'],
+        ['--ensure', '--renew-before-hours', '-1'],
+        ['--ensure', '--renew-before-hours', 'nan'],
+    ],
+)
 def test_conflicting_flags_are_usage_errors(monkeypatch, argv, capsys):
     with pytest.raises(SystemExit) as exit_info:
         run(monkeypatch, *argv)
@@ -64,8 +71,10 @@ def test_seed_dir_without_hint_and_failure(monkeypatch, tmp_path, capsys):
 
 def test_ensure_all_users_prints_each_profile(monkeypatch, tmp_path, capsys):
     results = [('Joel', 'joel', True), ('Jen', 'jen', False)]
-    with patch.object(refresh_cookies, 'ensure_all_tokens', return_value=results), \
-         patch.object(refresh_cookies, 'report_outcome') as report:
+    with (
+        patch.object(refresh_cookies, 'ensure_all_tokens', return_value=results),
+        patch.object(refresh_cookies, 'report_outcome') as report,
+    ):
         run(monkeypatch, '--ensure', '--all-users', '--cookies', tmp_path / 'cookies.txt')
     out = capsys.readouterr().out
     assert 'Joel: token refreshed' in out and 'Jen: token already valid' in out
@@ -81,6 +90,7 @@ def test_status_all_users_reports_problems(monkeypatch, tmp_path, capsys):
 
 def test_status_expired_without_refresh_token(monkeypatch, tmp_path, capsys):
     import base64
+
     payload = base64.urlsafe_b64encode(json.dumps({'exp': 1}).encode()).decode().rstrip('=')
     token = tmp_path / 'cookies.txt'
     token.write_text(f'h.{payload}.s')
@@ -124,10 +134,15 @@ def test_load_auth_prefers_env_then_config_then_prompts(monkeypatch, tmp_path):
     assert load_auth(tmp_path / 'missing.json', interactive=False) == ('', '')
 
 
-@pytest.mark.parametrize('body,expected', [
-    ({'username': 'rider', 'email': 'e'}, 'rider'), ({'email': 'e@x'}, 'e@x'),
-    ({'id': 'u1'}, 'u1'), ({}, 'unknown'),
-])
+@pytest.mark.parametrize(
+    'body,expected',
+    [
+        ({'username': 'rider', 'email': 'e'}, 'rider'),
+        ({'email': 'e@x'}, 'e@x'),
+        ({'id': 'u1'}, 'u1'),
+        ({}, 'unknown'),
+    ],
+)
 def test_verify_token_names_the_account(tmp_path, body, expected):
     token = tmp_path / 'cookies.txt'
     token.write_text('t')
@@ -150,8 +165,10 @@ def test_verify_token_closes_the_session_on_failure(tmp_path):
 def test_ensure_server_error_is_not_treated_as_login(tmp_path):
     response = requests.Response()
     response.status_code = 503
-    with patch.object(refresh_cookies, 'verify_token', side_effect=requests.HTTPError(response=response)), \
-         patch.object(refresh_cookies, 'renew_with_refresh_token') as renew:
+    with (
+        patch.object(refresh_cookies, 'verify_token', side_effect=requests.HTTPError(response=response)),
+        patch.object(refresh_cookies, 'renew_with_refresh_token') as renew,
+    ):
         with pytest.raises(requests.HTTPError):
             ensure_token(tmp_path / 'cookies.txt', tmp_path / 'config.json')
     renew.assert_not_called()

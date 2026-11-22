@@ -1,14 +1,20 @@
 """Four separate discipline totals with larger, native pixel icons."""
-from driver import graphics
+
 from display.display import get_text_width, loaded_fonts
+from driver import graphics
+
 from .discipline_icons import DISCIPLINE_HEAD_SQUARES, DISCIPLINE_ICON_ROWS
 from .screen import Screen
 
 COLORS = {
-    'cycling': (240, 70, 25), 'running': (30, 220, 90),
-    'walking': (90, 210, 160), 'rowing': (0, 150, 255),
-    'strength': (255, 150, 0), 'stretching': (0, 210, 190),
-    'yoga': (185, 70, 230), 'meditation': (135, 110, 255),
+    'cycling': (240, 70, 25),
+    'running': (30, 220, 90),
+    'walking': (90, 210, 160),
+    'rowing': (0, 150, 255),
+    'strength': (255, 150, 0),
+    'stretching': (0, 210, 190),
+    'yoga': (185, 70, 230),
+    'meditation': (135, 110, 255),
     'cardio': (255, 65, 90),
 }
 
@@ -87,8 +93,7 @@ def _draw_bitmap(pen, rows, head):
     """Draw a bitmap icon; a head square gets its box cleared, then outlined."""
     for y, row in enumerate(rows):
         for x, value in enumerate(row):
-            inside_head_clear = head and (
-                head[0] <= x <= head[2] and head[1] <= y <= head[3])
+            inside_head_clear = head and (head[0] <= x <= head[2] and head[1] <= y <= head[3])
             if value == '#' and not inside_head_clear:
                 pen.pixel(x, y)
     if head:
@@ -178,8 +183,7 @@ def draw_icon(matrix, key, left, top, color):
 
 
 def centered(matrix, font, text, left, width, y, color):
-    graphics.DrawText(matrix, font, left + max(0, (width-get_text_width(font,text))//2),
-                      y, graphics.Color(*color), text)
+    graphics.DrawText(matrix, font, left + max(0, (width - get_text_width(font, text)) // 2), y, graphics.Color(*color), text)
 
 
 class LifetimeOverviewScreen(Screen):
@@ -193,23 +197,26 @@ class LifetimeOverviewScreen(Screen):
         font = loaded_fonts.get('stats')
         if not items or font is None:
             return False
-        white = (255,255,255)
+        white = (255, 255, 255)
         for index, item in enumerate(items[:4]):
-            left, top = (index % 2)*32, (index//2)*30
-            key = item.get('icon','')
+            left, top = (index % 2) * 32, (index // 2) * 30
+            key = item.get('icon', '')
             color = discipline_color(key)
             # Clear the icon area (labels are omitted so the icon can use
             # the full tile height) so counts remain steady across frames.
-            for y in range(top, top+24):
-                for x in range(left+3, left+29):
-                    matrix.SetPixel(x,y,0,0,0)
-            draw_icon(matrix,key,left+3,top,color)
+            for y in range(top, top + 24):
+                for x in range(left + 3, left + 29):
+                    matrix.SetPixel(x, y, 0, 0, 0)
+            draw_icon(matrix, key, left + 3, top, color)
             count = str(item['count'])
-            if get_text_width(font,count) > 30:
-                count = f"{item['count']/1000000:.1f}M" if item['count'] >= 1000000 else f"{item['count']/1000:.1f}K"
-            centered(matrix,font,count,left,32,top+29,white)
-        pages = state.get('pages',1)
+            if get_text_width(font, count) > 30:
+                count = f'{item["count"] / 1000000:.1f}M' if item['count'] >= 1000000 else f'{item["count"] / 1000:.1f}K'
+            centered(matrix, font, count, left, 32, top + 29, white)
+        pages = state.get('pages', 1)
         for index in range(pages):
-            matrix.SetPixel(32 - (pages*3)//2 + index*3,matrix.height-1,
-                            *((255,255,255) if index+1 == state.get('page',1) else (45,45,45)))
+            matrix.SetPixel(
+                32 - (pages * 3) // 2 + index * 3,
+                matrix.height - 1,
+                *((255, 255, 255) if index + 1 == state.get('page', 1) else (45, 45, 45)),
+            )
         return True

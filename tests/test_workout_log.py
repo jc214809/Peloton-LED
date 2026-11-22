@@ -1,22 +1,23 @@
 """The per-workout log: trimming, storage, parity with the old tallies, and the
 dashboard flows built on it (backfill, refresh merge, count check, re-walk)."""
+
 import json
 import logging
 import stat
 import time
+from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 import requests
-from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
+import peloton.dashboard as dashboard_module
+import peloton.dashboard_history as dashboard_history
 from peloton.feeds.goals import weekly_progress
 from peloton.feeds.instructors import merge_instructor_counts
 from peloton.stats.journey import merge_distance_totals
 from peloton.workouts.workout_log import LOG_VERSION, WorkoutLog, default_log_path, trim
-import peloton.dashboard as dashboard_module
-import peloton.dashboard_history as dashboard_history
 from tests.test_dashboard import recent_fetches, setup_dashboard
 
 NOW = time.time()
@@ -29,26 +30,57 @@ def _age_of(moment):
     return (NOW - moment.timestamp()) / DAY
 
 
-def _w(identity, age_days=0.0, status='COMPLETE', discipline='cycling', distance=None, instructor=('cody', 'Cody Rigsby'),  # noqa: PLR0913
-       total_work=None, duration=1200, **extra):
-    ride = {'fitness_discipline': discipline, 'duration': duration, 'title': f'{duration // 60} min ride',
-            'id': f'class-{identity}'}
+def _w(  # noqa: PLR0913
+    identity,
+    age_days=0.0,
+    status='COMPLETE',
+    discipline='cycling',
+    distance=None,
+    instructor=('cody', 'Cody Rigsby'),
+    total_work=None,
+    duration=1200,
+    **extra,
+):
+    ride = {'fitness_discipline': discipline, 'duration': duration, 'title': f'{duration // 60} min ride', 'id': f'class-{identity}'}
     if instructor is not None:
         identity_, name = instructor
         ride['instructor'] = {'id': identity_, 'name': name}
-    return {'id': identity, 'status': status, 'start_time': int(NOW - age_days * DAY), 'end_time': None,
-            'timezone': 'America/New_York', 'fitness_discipline': discipline, 'distance': distance,
-            'total_work': total_work, 'ride': ride, **extra}
+    return {
+        'id': identity,
+        'status': status,
+        'start_time': int(NOW - age_days * DAY),
+        'end_time': None,
+        'timezone': 'America/New_York',
+        'fitness_discipline': discipline,
+        'distance': distance,
+        'total_work': total_work,
+        'ride': ride,
+        **extra,
+    }
 
 
 # trim / as_workout
 
+
 def test_trim_keeps_the_planned_fields_and_drops_the_bulk():
-    raw = _w('w1', distance=5.4, total_work=139000, calories=333.1, is_total_work_personal_record=True,
-             effort_zones={'total_effort_points': 14.2, 'heart_rate_zone_durations': {
-                 'heart_rate_z1_duration': 60, 'heart_rate_z2_duration': 120, 'heart_rate_z3_duration': 300,
-                 'heart_rate_z4_duration': 0, 'heart_rate_z5_duration': 0}},
-             is_3p_fit_feed_workout_excluded_from_streaks=True)
+    raw = _w(
+        'w1',
+        distance=5.4,
+        total_work=139000,
+        calories=333.1,
+        is_total_work_personal_record=True,
+        effort_zones={
+            'total_effort_points': 14.2,
+            'heart_rate_zone_durations': {
+                'heart_rate_z1_duration': 60,
+                'heart_rate_z2_duration': 120,
+                'heart_rate_z3_duration': 300,
+                'heart_rate_z4_duration': 0,
+                'heart_rate_z5_duration': 0,
+            },
+        },
+        is_3p_fit_feed_workout_excluded_from_streaks=True,
+    )
     raw['ride']['instructor'].update(bio='x' * 4000, image_url='https://example.com/a.png')
     identity, row, names = trim(raw)
     assert identity == 'w1' and names == {'cody': 'Cody Rigsby'}
@@ -64,14 +96,25 @@ def test_trim_placeholders_groups_and_bad_values():
     _, placeholder, names = trim(_w('walk', instructor=(None, 'JUST WALK')))
     assert placeholder['instructor_id'] is None and names == {}
     group = _w('pair')
-    group['ride']['instructor'] = {'id': 'pair', 'name': 'Jess & Selena', 'is_instructor_group': True,
-                                   'individual_instructor_ids': ['selena', 'jess', 'jess', 7, '']}
+    group['ride']['instructor'] = {
+        'id': 'pair',
+        'name': 'Jess & Selena',
+        'is_instructor_group': True,
+        'individual_instructor_ids': ['selena', 'jess', 'jess', 7, ''],
+    }
     _, row, names = trim(group)
     assert row['group_ids'] == ['jess', 'selena'] and names == {}
     group['ride']['instructor']['individual_instructor_ids'] = 'nope'
     assert trim(group)[1]['group_ids'] == []
-    odd = {'id': 'odd', 'status': 5, 'distance': True, 'total_work': 'lots', 'ride': 'not a dict',
-           'effort_zones': [], 'name': 'Strength Workout'}
+    odd = {
+        'id': 'odd',
+        'status': 5,
+        'distance': True,
+        'total_work': 'lots',
+        'ride': 'not a dict',
+        'effort_zones': [],
+        'name': 'Strength Workout',
+    }
     _, row, _ = trim(odd)
     assert row['status'] is None and row['distance'] is None and row['total_work_j'] is None
     assert row['start'] is None and row['title'] == 'Strength Workout' and row['hr_zone_s'] is None
@@ -80,11 +123,13 @@ def test_trim_placeholders_groups_and_bad_values():
 
 
 def test_as_workout_round_trips_through_the_existing_readers():
-    history = [_w('a', 0.1, discipline='caesar', distance=2000, instructor=('alex', 'Alex Karwoski')),
-               _w('b', 1, distance=10.5, total_work=200000, duration=1800),
-               _w('c', 2, status='IN_PROGRESS', distance=3),
-               _w('d', 400, discipline='running', distance=3.1, instructor=(None, 'JUST RUN')),
-               _w('e', 3, discipline='strength', duration=600, instructor=('jess', 'Jess Sims'))]
+    history = [
+        _w('a', 0.1, discipline='caesar', distance=2000, instructor=('alex', 'Alex Karwoski')),
+        _w('b', 1, distance=10.5, total_work=200000, duration=1800),
+        _w('c', 2, status='IN_PROGRESS', distance=3),
+        _w('d', 400, discipline='running', distance=3.1, instructor=(None, 'JUST RUN')),
+        _w('e', 3, discipline='strength', duration=600, instructor=('jess', 'Jess Sims')),
+    ]
     log = WorkoutLog('unused')
     log.merge(history)
     log.backfill['complete'] = True
@@ -92,8 +137,9 @@ def test_as_workout_round_trips_through_the_existing_readers():
     assert [w['id'] for w in rebuilt] == ['a', 'b', 'c', 'e', 'd']
     for metric in (False, True):
         for since in (None, '2025-01-01'):
-            assert (merge_distance_totals({}, rebuilt, metric, since=since, tzname='America/New_York')
-                    == merge_distance_totals({}, history, metric, since=since, tzname='America/New_York'))
+            assert merge_distance_totals({}, rebuilt, metric, since=since, tzname='America/New_York') == merge_distance_totals(
+                {}, history, metric, since=since, tzname='America/New_York'
+            )
     assert merge_instructor_counts({}, {}, rebuilt) == merge_instructor_counts({}, {}, history)
     assert weekly_progress(rebuilt, 'America/New_York') == weekly_progress(history, 'America/New_York')
 
@@ -114,13 +160,14 @@ def test_derived_figures_match_the_old_tallies_and_wait_for_a_complete_log():
 
 # merge by ID
 
+
 def test_merge_overwrites_by_id_so_finishing_and_edits_count_once():
     log = WorkoutLog('unused')
     assert log.merge([_w('w1', status='IN_PROGRESS', distance=1.0)]) == ['w1']
-    assert log.merge([_w('w1', distance=5.0)]) == ['w1']          # finished
-    assert log.merge([_w('w1', distance=5.2)]) == ['w1']          # Peloton corrected it later
+    assert log.merge([_w('w1', distance=5.0)]) == ['w1']  # finished
+    assert log.merge([_w('w1', distance=5.2)]) == ['w1']  # Peloton corrected it later
     revision = log.revision
-    assert log.merge([_w('w1', distance=5.2)]) == []              # same page again: no change
+    assert log.merge([_w('w1', distance=5.2)]) == []  # same page again: no change
     assert log.revision == revision
     log.backfill['complete'] = True
     assert log.derived()['distance_totals'] == {'cycling': 5.2}
@@ -138,8 +185,8 @@ def test_walk_removes_only_rows_neither_the_walk_nor_a_refresh_saw():
     log = WorkoutLog('unused')
     log.merge([_w('kept'), _w('deleted'), _w('new')])
     log.begin_walk()
-    log.merge([_w('kept')])            # the walk's pages
-    log.merge([_w('during')])          # a refresh merges a brand-new workout mid-walk
+    log.merge([_w('kept')])  # the walk's pages
+    log.merge([_w('during')])  # a refresh merges a brand-new workout mid-walk
     assert log.end_walk(remove_unseen=True) == 2
     assert set(log.workouts) == {'kept', 'during'}
     log.begin_walk()
@@ -148,6 +195,7 @@ def test_walk_removes_only_rows_neither_the_walk_nor_a_refresh_saw():
 
 
 # storage
+
 
 def test_save_and_load_round_trip_privately(tmp_path):
     path = tmp_path / 'state' / 'cache.workouts.json'
@@ -164,17 +212,20 @@ def test_save_and_load_round_trip_privately(tmp_path):
     assert loaded.workouts == log.workouts and loaded.instructors == log.instructors
 
 
-@pytest.mark.parametrize('contents', [
-    'not json', json.dumps([1]), json.dumps({'version': 99}),
-    # A version-1 log filed workouts under their class's discipline: the rebuild corrects them.
-    json.dumps({'version': 1, 'workouts': {}, 'instructors': {}, 'backfill': {}, 'check': {}}),
-    json.dumps({'version': LOG_VERSION, 'workouts': [], 'instructors': {}, 'backfill': {}, 'check': {}}),
-    json.dumps({'version': LOG_VERSION, 'workouts': {'w': {'start': 'soon'}}, 'instructors': {},
-                'backfill': {}, 'check': {}}),
-    json.dumps({'version': LOG_VERSION, 'workouts': {}, 'instructors': {'x': 5}, 'backfill': {}, 'check': {}}),
-    json.dumps({'version': LOG_VERSION, 'workouts': {}, 'instructors': {}, 'backfill': {}, 'check': {},
-                'user_id': 7}),
-])
+@pytest.mark.parametrize(
+    'contents',
+    [
+        'not json',
+        json.dumps([1]),
+        json.dumps({'version': 99}),
+        # A version-1 log filed workouts under their class's discipline: the rebuild corrects them.
+        json.dumps({'version': 1, 'workouts': {}, 'instructors': {}, 'backfill': {}, 'check': {}}),
+        json.dumps({'version': LOG_VERSION, 'workouts': [], 'instructors': {}, 'backfill': {}, 'check': {}}),
+        json.dumps({'version': LOG_VERSION, 'workouts': {'w': {'start': 'soon'}}, 'instructors': {}, 'backfill': {}, 'check': {}}),
+        json.dumps({'version': LOG_VERSION, 'workouts': {}, 'instructors': {'x': 5}, 'backfill': {}, 'check': {}}),
+        json.dumps({'version': LOG_VERSION, 'workouts': {}, 'instructors': {}, 'backfill': {}, 'check': {}, 'user_id': 7}),
+    ],
+)
 def test_damaged_or_unknown_logs_start_over(tmp_path, contents, caplog):
     path = tmp_path / 'log.json'
     path.write_text(contents)
@@ -187,9 +238,18 @@ def test_damaged_or_unknown_logs_start_over(tmp_path, contents, caplog):
 def test_missing_log_and_odd_progress_fields_load_safely(tmp_path):
     assert WorkoutLog.load(tmp_path / 'missing.json').workouts == {}
     path = tmp_path / 'log.json'
-    path.write_text(json.dumps({'version': LOG_VERSION, 'user_id': 'u', 'workouts': {}, 'instructors': {},
-                                'backfill': {'complete': 'yes', 'next_page': 'x'},
-                                'check': {'mismatches': True, 'last_rewalk': 'never'}}))
+    path.write_text(
+        json.dumps(
+            {
+                'version': LOG_VERSION,
+                'user_id': 'u',
+                'workouts': {},
+                'instructors': {},
+                'backfill': {'complete': 'yes', 'next_page': 'x'},
+                'check': {'mismatches': True, 'last_rewalk': 'never'},
+            }
+        )
+    )
     log = WorkoutLog.load(path)
     assert not log.complete and log.backfill['next_page'] == 0
     assert log.check == {'mismatches': 0, 'last_rewalk': None}
@@ -219,6 +279,7 @@ def test_save_failure_leaves_no_temporary_file(tmp_path):
 
 
 # dashboard: backfill and refresh
+
 
 def _dashboard(tmp_path, history, **config):
     dashboard, client, token = setup_dashboard(tmp_path, config)
@@ -268,11 +329,13 @@ def test_backfill_resumes_after_a_failure_mid_download(tmp_path, caplog):
     history = _history(250)
     dashboard, client, _ = _dashboard(tmp_path, history)
     serve = client.get_workouts_page.side_effect
+
     def flaky(user_id, limit, page=0):
         if limit == 100 and page == 1 and not flaky.failed:
             flaky.failed = True
             raise requests.ConnectionError('wifi dropped')
         return serve(user_id, limit, page)
+
     flaky.failed = False
     client.get_workouts_page.side_effect = flaky
     with caplog.at_level(logging.WARNING):
@@ -293,7 +356,7 @@ def test_steady_refresh_is_one_small_page(tmp_path):
     _refresh(dashboard)
     client.reset_mock()
     _refresh(dashboard)
-    assert client.get_me.call_count == 0          # profile cached for a day
+    assert client.get_me.call_count == 0  # profile cached for a day
     assert client.get_overview.call_count == 1
     assert [c.kwargs for c in client.get_workouts_page.call_args_list] == [{'limit': 20, 'page': 0}]
 
@@ -327,16 +390,18 @@ def test_lasting_count_mismatch_rewalks_once_and_drops_deleted_workouts(tmp_path
     history = _history(150, distance=1.0)
     dashboard, client, _ = _dashboard(tmp_path, history)
     _refresh(dashboard)
-    del client.history[60]                       # deleted in Peloton, deep in history
+    del client.history[60]  # deleted in Peloton, deep in history
     walks = []
     original = dashboard_module.Dashboard._walk_history
+
     def track(self, client_, user_id, rewalk):
         walks.append(rewalk)
         return original(self, client_, user_id, rewalk)
+
     with patch.object(dashboard_module.Dashboard, '_walk_history', track), caplog.at_level(logging.WARNING):
         _refresh(dashboard)
         _refresh(dashboard)
-        assert walks == []                       # a brief lag is ridden out
+        assert walks == []  # a brief lag is ridden out
         _refresh(dashboard)
         assert walks == [True]
         assert dashboard.snapshot()['instructor_counts'] == {'cody': 149}
@@ -345,7 +410,7 @@ def test_lasting_count_mismatch_rewalks_once_and_drops_deleted_workouts(tmp_path
         del client.history[10]
         for _ in range(4):
             _refresh(dashboard)
-        assert walks == [True]                   # at most one re-walk a day
+        assert walks == [True]  # at most one re-walk a day
     assert 'has 149 workouts but Peloton reports 148 (3 refresh(es) in a row)' in caplog.text
 
 
@@ -353,7 +418,7 @@ def test_count_matches_reset_the_mismatch_streak(tmp_path):
     history = _history(30)
     dashboard, client, _ = _dashboard(tmp_path, history)
     _refresh(dashboard)
-    client.history.append(_w('old-import', 400))   # appears at the very end of history
+    client.history.append(_w('old-import', 400))  # appears at the very end of history
     _refresh(dashboard)
     assert WorkoutLog.load(dashboard.log_path).check['mismatches'] == 1
     client.history.pop()
@@ -366,8 +431,10 @@ def test_rewalk_waits_for_quiet_hours_when_a_schedule_is_set(tmp_path):
     dashboard, client, _ = _dashboard(tmp_path, _history(30), refresh_schedule=schedule)
     _refresh(dashboard)
     client.history.pop()
-    with patch.object(dashboard_history, 'in_quiet_hours', return_value=False), \
-         patch.object(dashboard_module.Dashboard, '_start_history_walk') as start:
+    with (
+        patch.object(dashboard_history, 'in_quiet_hours', return_value=False),
+        patch.object(dashboard_module.Dashboard, '_start_history_walk') as start,
+    ):
         for _ in range(4):
             dashboard.refresh()
         start.assert_not_called()
@@ -392,10 +459,8 @@ def test_downtime_gap_is_closed_on_the_next_refresh(tmp_path):
 def test_latest_day_longer_than_one_page_is_shown_whole(tmp_path):
     # Noon yesterday, New York: the 25 rides share one date at any hour (just
     # before now, they'd straddle midnight for the first half hour of a day).
-    noon = (datetime.fromtimestamp(NOW, NEW_YORK) - timedelta(days=1)).replace(
-        hour=12, minute=0, second=0, microsecond=0)
-    busy_day = [_w(f'today{i}', _age_of(noon - timedelta(minutes=i)), instructor=('jess', 'Jess Sims'))
-                for i in range(25)]
+    noon = (datetime.fromtimestamp(NOW, NEW_YORK) - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
+    busy_day = [_w(f'today{i}', _age_of(noon - timedelta(minutes=i)), instructor=('jess', 'Jess Sims')) for i in range(25)]
     dashboard, client, _ = _dashboard(tmp_path, busy_day + _history(10, start_age=3))
     client.get_perf_graph.return_value = None
     _refresh(dashboard)
@@ -406,6 +471,7 @@ def test_this_week_is_complete_before_the_backfill_finishes(tmp_path, monkeypatc
     # A frozen clock, Wednesday noon of last week: on the real one, the first
     # hour of a Monday has no room for 30 rides this week.
     import peloton.feeds.goals as goals
+
     last_week = datetime.fromtimestamp(NOW, NEW_YORK) - timedelta(days=7)
     monday = (last_week - timedelta(days=last_week.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     frozen = monday + timedelta(days=2, hours=12)
@@ -413,12 +479,11 @@ def test_this_week_is_complete_before_the_backfill_finishes(tmp_path, monkeypatc
     class FrozenDatetime(datetime):
         @classmethod
         def now(cls, tz=None):
-            return frozen.astimezone(tz or timezone.utc)
+            return frozen.astimezone(tz or UTC)
 
     monkeypatch.setattr(goals, 'datetime', FrozenDatetime)
     span = frozen - monday
-    week = [_w(f'wk{i}', _age_of(frozen - span * (i + 1) / 31), duration=600, instructor=('jess', 'Jess Sims'))
-            for i in range(30)]
+    week = [_w(f'wk{i}', _age_of(frozen - span * (i + 1) / 31), duration=600, instructor=('jess', 'Jess Sims')) for i in range(30)]
     dashboard, client, _ = _dashboard(tmp_path, week + _history(10, start_age=_age_of(monday) + 1))
     dashboard.config['timezone'] = 'America/New_York'
     with patch.object(dashboard_module.Dashboard, '_start_history_walk'):
@@ -433,9 +498,15 @@ def test_journey_start_date_change_needs_no_downloads(tmp_path):
     _refresh(dashboard)
     assert dashboard.snapshot()['distance_totals'] == {'cycling': 10.0}
     client.reset_mock()
-    dashboard.config['journey'] = {'from': 'A', 'to': 'B', 'miles': 100, 'disciplines': None,
-                                   'start_date': '2026-01-01' if time.gmtime(NOW - 500 * DAY).tm_year < 2026
-                                   else time.strftime('%Y-%m-%d', time.gmtime(NOW - 100 * DAY))}
+    dashboard.config['journey'] = {
+        'from': 'A',
+        'to': 'B',
+        'miles': 100,
+        'disciplines': None,
+        'start_date': '2026-01-01'
+        if time.gmtime(NOW - 500 * DAY).tm_year < 2026
+        else time.strftime('%Y-%m-%d', time.gmtime(NOW - 100 * DAY)),
+    }
     _refresh(dashboard)
     assert dashboard.snapshot()['distance_totals'] == {'cycling': 3.0}
     assert [c.kwargs['limit'] for c in client.get_workouts_page.call_args_list] == [20]
@@ -452,16 +523,23 @@ def test_placeholder_instructors_never_rank(tmp_path):
 
 # dashboard: profile, ownership, restart
 
+
 def test_profile_is_slim_and_fetched_daily(tmp_path, monkeypatch):
     dashboard, client, _ = _dashboard(tmp_path, _history(5))
-    client.get_me.return_value = {'id': 'demo-user', 'username': 'Rider', 'timezone': 'America/New_York',
-                                  'height_unit': 'imperial', 'email': 'rider@example.com',
-                                  'birthday': 0, 'phone_number': '555', 'weight': 180}
+    client.get_me.return_value = {
+        'id': 'demo-user',
+        'username': 'Rider',
+        'timezone': 'America/New_York',
+        'height_unit': 'imperial',
+        'email': 'rider@example.com',
+        'birthday': 0,
+        'phone_number': '555',
+        'weight': 180,
+    }
     clock = [1000.0]
     monkeypatch.setattr(dashboard_module.time, 'monotonic', lambda: clock[0])
     _refresh(dashboard)
-    assert dashboard.snapshot()['me'] == {'id': 'demo-user', 'username': 'Rider',
-                                          'timezone': 'America/New_York', 'height_unit': 'imperial'}
+    assert dashboard.snapshot()['me'] == {'id': 'demo-user', 'username': 'Rider', 'timezone': 'America/New_York', 'height_unit': 'imperial'}
     cache = json.loads(dashboard.cache_path.read_text())
     assert 'email' not in json.dumps(cache) and 'phone_number' not in json.dumps(cache)
     clock[0] += 23 * 3600
@@ -482,7 +560,7 @@ def test_old_cache_profile_is_slimmed_on_load_and_old_tally_keys_dropped(tmp_pat
     restarted = dashboard_module.Dashboard(token, {}, client_factory=lambda _: client)
     snap = restarted.snapshot()
     assert snap['me'] == {'id': 'demo', 'username': 'Rider'}
-    assert snap['instructor_counts'] == {'cody': 5}          # from the log, not the old cache
+    assert snap['instructor_counts'] == {'cody': 5}  # from the log, not the old cache
     assert 'tally_version' not in snap and 'instructor_tally_cursor' not in snap
 
 
@@ -500,7 +578,7 @@ def test_restart_shows_lifetime_figures_from_the_log_before_any_refresh(tmp_path
 def test_a_log_for_another_account_is_replaced(tmp_path, caplog):
     dashboard, client, token = _dashboard(tmp_path, _history(5))
     _refresh(dashboard)
-    token.write_text('someone-else')               # a different rider's token
+    token.write_text('someone-else')  # a different rider's token
     client.get_me.return_value = {'id': 'other-user', 'username': 'Other'}
     client.history = _history(3, instructor=('jess', 'Jess Sims'))
     with caplog.at_level(logging.WARNING):
@@ -527,11 +605,14 @@ def test_unwritable_log_is_logged_and_the_board_keeps_going(tmp_path, caplog):
 
 def test_stop_also_stops_a_running_backfill(tmp_path, monkeypatch):
     import threading
+
     dashboard, client, _ = _dashboard(tmp_path, _history(500))
     paused = threading.Event()
+
     def slow_pause(self):
         paused.set()
         return not self._stop.wait(5)
+
     monkeypatch.setattr(dashboard_module.Dashboard, '_log_pause', slow_pause)
     dashboard.refresh()
     assert paused.wait(2)
@@ -551,8 +632,7 @@ def test_walk_for_a_replaced_account_stops(tmp_path):
 
 def test_group_classes_and_unloggable_rows_through_the_log():
     group = _w('pair', instructor=None)
-    group['ride']['instructor'] = {'id': 'pair', 'is_instructor_group': True,
-                                   'individual_instructor_ids': ['jess', 'selena']}
+    group['ride']['instructor'] = {'id': 'pair', 'is_instructor_group': True, 'individual_instructor_ids': ['jess', 'selena']}
     history = [group, _w('solo', 1, instructor=('jess', 'Jess Sims')), {'status': 'COMPLETE'}]
     log = WorkoutLog('unused')
     assert log.merge(history) == ['pair', 'solo']
@@ -578,17 +658,20 @@ def test_empty_history_and_missing_total_are_handled(tmp_path):
 
 def test_refresh_during_a_walk_skips_the_count_check(tmp_path, monkeypatch):
     import threading
+
     dashboard, client, _ = _dashboard(tmp_path, _history(300))
     paused, release = threading.Event(), threading.Event()
+
     def held_pause(self):
         paused.set()
         return release.wait(5)
+
     monkeypatch.setattr(dashboard_module.Dashboard, '_log_pause', held_pause)
-    assert dashboard.wait_for_history(0)          # nothing running yet
+    assert dashboard.wait_for_history(0)  # nothing running yet
     dashboard.refresh()
     assert paused.wait(2)
     with patch.object(dashboard_module.Dashboard, '_start_history_walk') as start:
-        dashboard.refresh()                         # walk still running
+        dashboard.refresh()  # walk still running
         start.assert_not_called()
     release.set()
     assert dashboard.wait_for_history(5)
@@ -611,21 +694,26 @@ def test_older_log_figures_never_overwrite_newer_ones(tmp_path):
 def test_a_workout_is_filed_under_its_own_discipline_not_its_classs():
     # Peloton moved Walk + Run classes from Walking to Running in October 2025. The class now says
     # running, but a workout done before keeps walking, and the app's totals count it as Walking.
-    old = {'id': 'w1', 'status': 'COMPLETE', 'start_time': 1760999847, 'fitness_discipline': 'walking',
-           'ride': {'id': 'c', 'title': '20 min Walk + Run', 'fitness_discipline': 'running'}}
+    old = {
+        'id': 'w1',
+        'status': 'COMPLETE',
+        'start_time': 1760999847,
+        'fitness_discipline': 'walking',
+        'ride': {'id': 'c', 'title': '20 min Walk + Run', 'fitness_discipline': 'running'},
+    }
     new = dict(old, id='w2', fitness_discipline='running')
     classless = {'id': 'w3', 'status': 'COMPLETE', 'start_time': 1760999848, 'ride': {'fitness_discipline': 'cycling'}}
     assert trim(old)[1]['discipline'] == 'walking'
     assert trim(new)[1]['discipline'] == 'running'
-    assert trim(classless)[1]['discipline'] == 'cycling'           # no workout field: the class's
+    assert trim(classless)[1]['discipline'] == 'cycling'  # no workout field: the class's
     log = WorkoutLog('unused')
     log.merge([old, new])
-    assert {workout['id']: workout['fitness_discipline'] for workout in log.as_workouts()} == {
-        'w1': 'walking', 'w2': 'running'}
+    assert {workout['id']: workout['fitness_discipline'] for workout in log.as_workouts()} == {'w1': 'walking', 'w2': 'running'}
 
 
 def test_discipline_of_prefers_the_workouts_own_category_over_its_classs():
     from peloton.selection import discipline_of
+
     assert discipline_of({'fitness_discipline': 'walking', 'ride': {'fitness_discipline': 'running'}}) == 'walking'
     assert discipline_of({'ride': {'fitness_discipline': 'running'}}) == 'running'
     assert discipline_of({'fitness_discipline_display_name': 'Tread Bootcamp'}) == 'tread_bootcamp'

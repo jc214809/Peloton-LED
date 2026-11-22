@@ -1,4 +1,5 @@
 """Workout compare row store and daily sync (spec section 7), plus scripts/workout_insights.py."""
+
 import importlib.util
 import json
 import os
@@ -10,23 +11,28 @@ import requests
 
 from peloton.workouts import workout_rows
 from peloton.workouts.workout_features import ROW_VERSION
-from peloton.workouts.workout_rows import (LoginRequired, RawFiles, RowStore, candidate_ids, default_rows_path,
-                                  fetch_row, import_raw, sync)
+from peloton.workouts.workout_rows import LoginRequired, RawFiles, RowStore, candidate_ids, default_rows_path, fetch_row, import_raw, sync
 
 START = 1_700_000_000
 NOW = START + 10 * 86400
 
 
 def detail(wid='w1', start=START, **over):
-    base = {'id': wid, 'start_time': start, 'end_time': start + 1200, 'status': 'COMPLETE',
-            'fitness_discipline': 'cycling', 'workout_type': 'class', 'timezone': 'UTC',
-            'ride': {'id': f'ride-{wid}', 'duration': 1200}}
+    base = {
+        'id': wid,
+        'start_time': start,
+        'end_time': start + 1200,
+        'status': 'COMPLETE',
+        'fitness_discipline': 'cycling',
+        'workout_type': 'class',
+        'timezone': 'UTC',
+        'ride': {'id': f'ride-{wid}', 'duration': 1200},
+    }
     base.update(over)
     return base
 
 
-GRAPH = {'seconds_since_pedaling_start': [0, 5, 10, 15], 'duration': 20,
-         'metrics': [{'slug': 'output', 'values': [10, 20, 30, 40]}]}
+GRAPH = {'seconds_since_pedaling_start': [0, 5, 10, 15], 'duration': 20, 'metrics': [{'slug': 'output', 'values': [10, 20, 30, 40]}]}
 RIDE = {'ride': {'id': 'x', 'title': 'T'}}
 
 
@@ -86,8 +92,12 @@ class FakeClient:
 
 
 def make_client(*wids, **kw):
-    return FakeClient(details={w: detail(w, START + i) for i, w in enumerate(wids)},
-                      graphs={w: GRAPH for w in wids}, rides={f'ride-{w}': RIDE for w in wids}, **kw)
+    return FakeClient(
+        details={w: detail(w, START + i) for i, w in enumerate(wids)},
+        graphs={w: GRAPH for w in wids},
+        rides={f'ride-{w}': RIDE for w in wids},
+        **kw,
+    )
 
 
 @pytest.fixture
@@ -97,9 +107,9 @@ def raw(tmp_path):
 
 # --- RowStore ---------------------------------------------------------------------------------
 
+
 def test_default_rows_path():
-    assert default_rows_path('/x/cookies-joel-dashboard-cache.json') == \
-        Path('/x/cookies-joel-dashboard-cache.workout-rows.json')
+    assert default_rows_path('/x/cookies-joel-dashboard-cache.json') == Path('/x/cookies-joel-dashboard-cache.workout-rows.json')
 
 
 def test_load_missing_is_empty(tmp_path):
@@ -113,8 +123,7 @@ def test_load_unreadable_json_is_empty_with_warning(tmp_path, caplog):
     assert 'unreadable' in caplog.text
 
 
-@pytest.mark.parametrize('payload', [{'version': 2, 'rows': {}}, {'version': 1, 'rows': []},
-                                     {'version': 1}, [1, 2]])
+@pytest.mark.parametrize('payload', [{'version': 2, 'rows': {}}, {'version': 1, 'rows': []}, {'version': 1}, [1, 2]])
 def test_load_other_version_or_malformed_is_empty(tmp_path, payload, caplog):
     path = tmp_path / 'rows.json'
     path.write_text(json.dumps(payload))
@@ -124,8 +133,7 @@ def test_load_other_version_or_malformed_is_empty(tmp_path, payload, caplog):
 
 def test_load_drops_entries_whose_key_differs_from_id(tmp_path):
     path = tmp_path / 'rows.json'
-    path.write_text(json.dumps({'version': 1, 'rows': {
-        'a': {'id': 'a', 'v': 1}, 'b': {'id': 'other'}, 'c': 'junk', 'd': {'v': 1}}}))
+    path.write_text(json.dumps({'version': 1, 'rows': {'a': {'id': 'a', 'v': 1}, 'b': {'id': 'other'}, 'c': 'junk', 'd': {'v': 1}}}))
     assert list(RowStore.load(path).rows) == ['a']
 
 
@@ -162,6 +170,7 @@ def test_save_failure_in_dump_keeps_old_file_and_removes_temp(tmp_path, monkeypa
 
     def boom(*a, **k):
         raise OSError('disk full')
+
     monkeypatch.setattr(workout_rows.json, 'dump', boom)
     with pytest.raises(OSError):
         store.save()
@@ -181,6 +190,7 @@ def test_save_failure_in_replace_keeps_old_file_and_removes_temp(tmp_path, monke
     def boom(src, dst):
         seen.append(Path(src).name)
         raise OSError('nope')
+
     monkeypatch.setattr(workout_rows.os, 'replace', boom)
     with pytest.raises(OSError):
         store.save()
@@ -202,6 +212,7 @@ def test_save_rejects_nan_without_touching_file(tmp_path):
 
 
 # --- RawFiles ---------------------------------------------------------------------------------
+
 
 def test_raw_paths_use_training_data_layout(raw, tmp_path):
     base = tmp_path / 'raw'
@@ -251,12 +262,14 @@ def test_build_logs_and_returns_none_when_build_row_raises(raw, monkeypatch, cap
 
     def boom(*a):
         raise RuntimeError('bad')
+
     monkeypatch.setattr(workout_rows, 'build_row', boom)
     assert raw.build('w1') is None
     assert 'could not build a row' in caplog.text
 
 
 # --- import_raw -------------------------------------------------------------------------------
+
 
 def test_import_raw_builds_stale_rows_with_no_client_calls(raw, tmp_path):
     for wid in ('a', 'b'):
@@ -279,31 +292,41 @@ def test_import_raw_skips_current_and_unbuildable(raw, tmp_path):
 
 # --- candidate_ids ----------------------------------------------------------------------------
 
+
 def log_row(start, disc='cycling', status='COMPLETE'):
     return {'start': start, 'discipline': disc, 'status': status}
 
 
 def test_candidates_from_log_filtered_and_newest_first():
-    log_rows = {'old': log_row(NOW - 800 * 86400), 'a': log_row(NOW - 5), 'b': log_row(NOW - 1),
-                'yoga': log_row(NOW - 1, 'yoga'), 'prog': log_row(NOW - 1, status='IN_PROGRESS'),
-                'nostart': {'status': 'COMPLETE', 'discipline': 'cycling', 'start': None},
-                'strstart': log_row('x')}
+    log_rows = {
+        'old': log_row(NOW - 800 * 86400),
+        'a': log_row(NOW - 5),
+        'b': log_row(NOW - 1),
+        'yoga': log_row(NOW - 1, 'yoga'),
+        'prog': log_row(NOW - 1, status='IN_PROGRESS'),
+        'nostart': {'status': 'COMPLETE', 'discipline': 'cycling', 'start': None},
+        'strstart': log_row('x'),
+    }
     assert candidate_ids(log_workouts=log_rows, now=NOW) == ['b', 'a']
 
 
 def test_candidates_from_listed_rows_with_alias():
-    listed = [{'id': 'r1', 'status': 'COMPLETE', 'fitness_discipline': 'caesar', 'start_time': 5},
-              {'id': 'y', 'status': 'COMPLETE', 'fitness_discipline': 'yoga', 'start_time': 9},
-              {'id': 'p', 'status': 'IN_PROGRESS', 'fitness_discipline': 'cycling', 'start_time': 9},
-              {'status': 'COMPLETE', 'fitness_discipline': 'cycling'},
-              {'id': 'c', 'status': 'COMPLETE', 'fitness_discipline': 'cycling'}]
+    listed = [
+        {'id': 'r1', 'status': 'COMPLETE', 'fitness_discipline': 'caesar', 'start_time': 5},
+        {'id': 'y', 'status': 'COMPLETE', 'fitness_discipline': 'yoga', 'start_time': 9},
+        {'id': 'p', 'status': 'IN_PROGRESS', 'fitness_discipline': 'cycling', 'start_time': 9},
+        {'status': 'COMPLETE', 'fitness_discipline': 'cycling'},
+        {'id': 'c', 'status': 'COMPLETE', 'fitness_discipline': 'cycling'},
+    ]
     assert candidate_ids(listed=listed, now=NOW) == ['r1', 'c']
 
 
 def test_candidates_merge_and_dedupe():
     log_rows = {'a': log_row(NOW - 10), 'b': log_row(NOW - 20)}
-    listed = [{'id': 'a', 'status': 'COMPLETE', 'fitness_discipline': 'cycling', 'start_time': NOW - 10},
-              {'id': 'c', 'status': 'COMPLETE', 'fitness_discipline': 'rowing', 'start_time': NOW - 5}]
+    listed = [
+        {'id': 'a', 'status': 'COMPLETE', 'fitness_discipline': 'cycling', 'start_time': NOW - 10},
+        {'id': 'c', 'status': 'COMPLETE', 'fitness_discipline': 'rowing', 'start_time': NOW - 5},
+    ]
     assert candidate_ids(log_workouts=log_rows, listed=listed, now=NOW) == ['c', 'a', 'b']
 
 
@@ -313,15 +336,16 @@ def test_candidates_nothing():
 
 # --- fetch_row / sync -------------------------------------------------------------------------
 
+
 def test_fetch_row_saves_raw_before_building(raw, monkeypatch):
     client = make_client('w1')
     order = []
     real = workout_rows.build_row
 
     def spy(*a):
-        order.append((raw.detail_path('w1').exists(), raw.graph_path('w1').exists(),
-                      raw.ride_path('ride-w1').exists()))
+        order.append((raw.detail_path('w1').exists(), raw.graph_path('w1').exists(), raw.ride_path('ride-w1').exists()))
         return real(*a)
+
     monkeypatch.setattr(workout_rows, 'build_row', spy)
     row = fetch_row(client, raw, 'w1')
     assert order == [(True, True, True)]
@@ -443,8 +467,7 @@ def test_sync_bad_detail_skips_and_continues(raw, tmp_path):
     assert sync(client, store, raw, ['bad', 'good']) == ['good']
 
 
-@pytest.mark.parametrize('exc', [http_error(500), ValueError('bad json'), KeyError('k'), TypeError('t'),
-                                 requests.ConnectionError('down')])
+@pytest.mark.parametrize('exc', [http_error(500), ValueError('bad json'), KeyError('k'), TypeError('t'), requests.ConnectionError('down')])
 def test_sync_recoverable_error_skips_that_workout(raw, tmp_path, exc, caplog):
     client = make_client('good')
     client.details['bad'] = exc
@@ -475,6 +498,7 @@ def test_sync_stops_at_limit_newest_first(raw, tmp_path):
 
 # --- scripts/workout_insights.py --------------------------------------------------------------
 
+
 @pytest.fixture
 def script():
     path = Path(__file__).resolve().parents[1] / 'scripts' / 'workout_insights.py'
@@ -487,14 +511,12 @@ def script():
 @pytest.fixture
 def config(tmp_path):
     path = tmp_path / 'config.json'
-    path.write_text(json.dumps({'users': [
-        {'name': 'Joel', 'token_path': 'tok.txt', 'cache_path': 'joel-cache.json'}]}))
+    path.write_text(json.dumps({'users': [{'name': 'Joel', 'token_path': 'tok.txt', 'cache_path': 'joel-cache.json'}]}))
     return path
 
 
 def run(script, config, tmp_path, *extra):
-    return script.main(['--rider', 'joel', '--config', str(config), '--raw-dir', str(tmp_path / 'raw'),
-                        *extra])
+    return script.main(['--rider', 'joel', '--config', str(config), '--raw-dir', str(tmp_path / 'raw'), *extra])
 
 
 def seed_raw(tmp_path, *wids):
@@ -508,6 +530,7 @@ def seed_raw(tmp_path, *wids):
 def no_client(script, monkeypatch):
     def boom(*a, **k):
         raise AssertionError('client constructed')
+
     monkeypatch.setattr(script, 'PelotonClient', boom)
     monkeypatch.setattr(script, 'make_session', boom)
 
@@ -529,8 +552,7 @@ def test_script_dry_run_nothing_stored(script, config, tmp_path, monkeypatch, ca
 
 def test_script_run_stores_and_prints_new_workout(script, config, tmp_path, monkeypatch, capsys):
     client = make_client('cccccccc3')
-    client.listed = [{'id': 'cccccccc3', 'status': 'COMPLETE', 'fitness_discipline': 'cycling',
-                      'start_time': START}]
+    client.listed = [{'id': 'cccccccc3', 'status': 'COMPLETE', 'fitness_discipline': 'cycling', 'start_time': START}]
     monkeypatch.setattr(script, 'PelotonClient', lambda session: client)
     monkeypatch.setattr(script, 'make_session', lambda token: 'session')
     assert run(script, config, tmp_path) == 0
@@ -542,12 +564,13 @@ def test_script_run_stores_and_prints_new_workout(script, config, tmp_path, monk
 
 def test_script_uses_workout_log_user_id_and_ids(script, config, tmp_path, monkeypatch, capsys):
     import time
+
     from peloton.workouts.workout_log import WorkoutLog, default_log_path
+
     log_path = default_log_path(tmp_path / 'joel-cache.json')
     wl = WorkoutLog(log_path)
     wl.user_id = 'u9'
-    wl.workouts = {'dddddddd4': {'start': int(time.time()) - 60, 'discipline': 'cycling',
-                                 'status': 'COMPLETE'}}
+    wl.workouts = {'dddddddd4': {'start': int(time.time()) - 60, 'discipline': 'cycling', 'status': 'COMPLETE'}}
     wl.save()
     client = make_client('dddddddd4')
     monkeypatch.setattr(script, 'PelotonClient', lambda session: client)
@@ -561,7 +584,8 @@ def test_script_login_required_returns_2_and_keeps_rows(script, config, tmp_path
     client = make_client('eeeeeeee5')
     client.listed = [
         {'id': 'eeeeeeee5', 'status': 'COMPLETE', 'fitness_discipline': 'cycling', 'start_time': START + 9},
-        {'id': 'ffffffff6', 'status': 'COMPLETE', 'fitness_discipline': 'cycling', 'start_time': START + 1}]
+        {'id': 'ffffffff6', 'status': 'COMPLETE', 'fitness_discipline': 'cycling', 'start_time': START + 1},
+    ]
     client.details['ffffffff6'] = http_error(401)
     monkeypatch.setattr(script, 'PelotonClient', lambda session: client)
     monkeypatch.setattr(script, 'make_session', lambda token: 'session')
@@ -596,9 +620,12 @@ def test_script_missing_config_exits(script, tmp_path):
 
 
 def test_script_rider_paths_defaults_and_overrides(script, tmp_path):
-    config = {'users': [{'name': 'Jen Q', 'token_path': 'cookies-jen.txt'},
-                        {'name': 'Al', 'token_path': '/abs/tok.txt', 'cache_path': '/abs/c.json',
-                         'log_path': 'lg.json'}]}
+    config = {
+        'users': [
+            {'name': 'Jen Q', 'token_path': 'cookies-jen.txt'},
+            {'name': 'Al', 'token_path': '/abs/tok.txt', 'cache_path': '/abs/c.json', 'log_path': 'lg.json'},
+        ]
+    }
     cfg = tmp_path / 'config.json'
     name, token, rows, log_path = script.rider_paths(config, cfg, 'jen-q')
     assert name == 'Jen Q' and token == tmp_path / 'cookies-jen.txt'
@@ -620,12 +647,15 @@ def test_script_import_raw_rebuild_saved_on_real_run(script, config, tmp_path, m
 
 # --- the board's store: trimming, scripts/build_board_rows.py ---------------------------
 
+
 def test_trim_for_board_drops_old_and_out_of_scope_without_mutating():
-    rows = {'new': {'id': 'new', 'disc': 'cycling', 'start': NOW - 86400},
-            'edge': {'id': 'edge', 'disc': 'strength', 'start': NOW - 760 * 86400},
-            'old': {'id': 'old', 'disc': 'cycling', 'start': NOW - 761 * 86400},
-            'yoga': {'id': 'yoga', 'disc': 'yoga', 'start': NOW - 86400},
-            'nostart': {'id': 'nostart', 'disc': 'cycling'}}
+    rows = {
+        'new': {'id': 'new', 'disc': 'cycling', 'start': NOW - 86400},
+        'edge': {'id': 'edge', 'disc': 'strength', 'start': NOW - 760 * 86400},
+        'old': {'id': 'old', 'disc': 'cycling', 'start': NOW - 761 * 86400},
+        'yoga': {'id': 'yoga', 'disc': 'yoga', 'start': NOW - 86400},
+        'nostart': {'id': 'nostart', 'disc': 'cycling'},
+    }
     before = json.dumps(rows, sort_keys=True)
     kept = workout_rows.trim_for_board(rows, NOW)
     assert sorted(kept) == ['edge', 'new']
@@ -663,9 +693,19 @@ def board_script():
 def test_build_board_rows_script_list_and_out(board_script, config, tmp_path, capsys):
     # The board's file is named from the board's config, not this computer's (they differ in real use).
     board_config = tmp_path / 'board-config.json'
-    board_config.write_text(json.dumps({'users': [
-        {'name': 'Joel', 'token_path': '/var/lib/peloton-led/cookies-joel.txt',
-         'cache_path': '/var/lib/peloton-led/dashboard-cache-joel.json'}]}))
+    board_config.write_text(
+        json.dumps(
+            {
+                'users': [
+                    {
+                        'name': 'Joel',
+                        'token_path': '/var/lib/peloton-led/cookies-joel.txt',
+                        'cache_path': '/var/lib/peloton-led/dashboard-cache-joel.json',
+                    }
+                ]
+            }
+        )
+    )
     assert board_script.main(['--config', str(config), '--board-config', str(board_config), '--list']) == 0
     assert capsys.readouterr().out == 'joel\tdashboard-cache-joel.workout-rows.json\n'
     with pytest.raises(SystemExit, match='No rider named'):
@@ -674,8 +714,12 @@ def test_build_board_rows_script_list_and_out(board_script, config, tmp_path, ca
     seed_raw(tmp_path, 'aaaaaaaa1')
     out = tmp_path / 'out' / 'rows.json'
     now = START + 86400
-    assert board_script.main(['--rider', 'joel', '--config', str(config), '--raw-dir', str(tmp_path / 'raw'),
-                              '--out', str(out), '--now', str(now)]) == 0
+    assert (
+        board_script.main(
+            ['--rider', 'joel', '--config', str(config), '--raw-dir', str(tmp_path / 'raw'), '--out', str(out), '--now', str(now)]
+        )
+        == 0
+    )
     board = RowStore.load(out)
     assert list(board.rows) == ['aaaaaaaa1']
     assert stat.S_IMODE(os.stat(out).st_mode) == 0o600
@@ -694,29 +738,34 @@ def test_build_board_rows_script_argument_errors(board_script, config, tmp_path)
         board_script.main(['--config', str(empty), '--board-config', str(config), '--list'])
 
 
-def test_script_last_prints_the_newest_workouts_with_their_board_line(script, config, tmp_path, monkeypatch,
-                                                                     capsys):
+def test_script_last_prints_the_newest_workouts_with_their_board_line(script, config, tmp_path, monkeypatch, capsys):
     no_client(script, monkeypatch)
     seed_raw(tmp_path, 'aaaaaaaa1', 'bbbbbbbb2', 'cccccccc3')
     assert run(script, config, tmp_path, '--dry-run', '--last', '2') == 0
     out = capsys.readouterr().out
-    assert out.count('board: (no slide)') == 2      # too few similar workouts: the board says nothing
+    assert out.count('board: (no slide)') == 2  # too few similar workouts: the board says nothing
     assert sum(wid in out for wid in ('aaaaaaaa', 'bbbbbbbb', 'cccccccc')) == 2
 
 
 def test_script_describe_shows_the_board_slide(script):
     row = {'id': 'abcdef123', 'date': '2026-11-10', 'title': '30 min Ride', 'disc': 'cycling'}
-    messages = [('too_few', 'Not enough.', {}),
-                ('resistance_low', 'Turn the resistance up.', {'pct': 28}),
-                ('cadence_low', 'Pick the cadence up.', {'pct': 40}),
-                ('pace_low', 'Push.', {'pct': 50})]
+    messages = [
+        ('too_few', 'Not enough.', {}),
+        ('resistance_low', 'Turn the resistance up.', {'pct': 28}),
+        ('cadence_low', 'Pick the cadence up.', {'pct': 40}),
+        ('pace_low', 'Push.', {'pct': 50}),
+    ]
     script.insights = lambda target, rows: messages
     assert script.describe(row, []).splitlines() == [
-        '2026-11-10 30 min Ride (abcdef12)', '  [too_few] Not enough.',
-        '  [resistance_low] Turn the resistance up.', '  [cadence_low] Pick the cadence up.', '  [pace_low] Push.',
+        '2026-11-10 30 min Ride (abcdef12)',
+        '  [too_few] Not enough.',
+        '  [resistance_low] Turn the resistance up.',
+        '  [cadence_low] Pick the cadence up.',
+        '  [pace_low] Push.',
         '  board: RESISTANCE LOW | RESISTANCE UNDER THE CALLOUT 28% OF THE WORK: TURN IT UP.',
         '  board: CADENCE LOW | CADENCE UNDER THE CALLOUT 40% OF THE WORK: PICK IT UP.',
-        '  board: UNDER PACE | UNDER THE PACE TARGET 50% OF THE TIME: PUSH, OR DROP A LEVEL.']
+        '  board: UNDER PACE | UNDER THE PACE TARGET 50% OF THE TIME: PUSH, OR DROP A LEVEL.',
+    ]
 
 
 def test_script_last_stdout_is_pinned(script, config, tmp_path, monkeypatch, capsys):
@@ -726,4 +775,5 @@ def test_script_last_stdout_is_pinned(script, config, tmp_path, monkeypatch, cap
     too_few = '  [too_few] Not enough rides like this one to compare yet (0 in the last two years, 5 needed).\n'
     assert capsys.readouterr().out == (
         '2023-11-14 cycling (bbbbbbbb)\n' + too_few + '  board: (no slide)\n'
-        '2023-11-15 cycling (cccccccc)\n' + too_few + '  board: (no slide)\n')
+        '2023-11-15 cycling (cccccccc)\n' + too_few + '  board: (no slide)\n'
+    )

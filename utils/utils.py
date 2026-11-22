@@ -10,137 +10,132 @@ def args(argv=None):
 
     # Options for the rpi-rgb-led-matrix library
     parser.add_argument(
-        "--led-rows",
-        action="store",
-        help="Panel height, 32 or 64. (Default: config matrix section)",
+        '--led-rows',
+        action='store',
+        help='Panel height, 32 or 64. (Default: config matrix section)',
         default=None,
         type=int,
     )
     parser.add_argument(
-        "--led-cols", action="store", help="Panel columns. Typically 32 or 64. (Default: config matrix section)", default=None, type=int
+        '--led-cols', action='store', help='Panel columns. Typically 32 or 64. (Default: config matrix section)', default=None, type=int
     )
-    parser.add_argument("--led-chain", action="store", help="Daisy-chained boards. (Default: config matrix section)", default=None, type=int)
     parser.add_argument(
-        "--led-parallel",
-        action="store",
-        help="For Plus-models or RPi2: parallel chains. 1..3. (Default: config matrix section)",
+        '--led-chain', action='store', help='Daisy-chained boards. (Default: config matrix section)', default=None, type=int
+    )
+    parser.add_argument(
+        '--led-parallel',
+        action='store',
+        help='For Plus-models or RPi2: parallel chains. 1..3. (Default: config matrix section)',
         default=None,
         type=int,
     )
     parser.add_argument(
-        "--led-pwm-bits", action="store", help="Bits used for PWM. Range 1..11. (Default: config matrix section)", default=None, type=int
+        '--led-pwm-bits', action='store', help='Bits used for PWM. Range 1..11. (Default: config matrix section)', default=None, type=int
     )
     parser.add_argument(
-        "--led-brightness",
-        action="store",
-        help="Sets brightness level. Range: 1..100. (Default: config matrix section)",
+        '--led-brightness',
+        action='store',
+        help='Sets brightness level. Range: 1..100. (Default: config matrix section)',
         default=None,
         type=int,
     )
     parser.add_argument(
-        "--led-gpio-mapping",
-        help="Hardware Mapping: regular, adafruit-hat, adafruit-hat-pwm",
-        choices=["regular", "adafruit-hat", "adafruit-hat-pwm"],
+        '--led-gpio-mapping',
+        help='Hardware Mapping: regular, adafruit-hat, adafruit-hat-pwm',
+        choices=['regular', 'adafruit-hat', 'adafruit-hat-pwm'],
         type=str,
     )
     parser.add_argument(
-        "--led-scan-mode",
-        action="store",
-        help="Progressive or interlaced scan. 0 = Progressive, 1 = Interlaced. (Default: config matrix section)",
+        '--led-scan-mode',
+        action='store',
+        help='Progressive or interlaced scan. 0 = Progressive, 1 = Interlaced. (Default: config matrix section)',
         default=None,
         choices=range(2),
         type=int,
     )
     parser.add_argument(
-        "--led-pwm-lsb-nanoseconds",
-        action="store",
-        help="Base time-unit for the on-time in the lowest significant bit in nanoseconds. (Default: config matrix section)",
+        '--led-pwm-lsb-nanoseconds',
+        action='store',
+        help='Base time-unit for the on-time in the lowest significant bit in nanoseconds. (Default: config matrix section)',
         default=None,
         type=int,
     )
+    parser.add_argument('--led-show-refresh', action='store_true', default=None, help='Shows the current refresh rate of the LED panel.')
     parser.add_argument(
-        "--led-show-refresh", action="store_true", default=None, help="Shows the current refresh rate of the LED panel."
-    )
-    parser.add_argument(
-        "--led-slowdown-gpio",
-        action="store",
-        help="Slow down writing to GPIO. Range: 0..4. (Default: config matrix section)",
+        '--led-slowdown-gpio',
+        action='store',
+        help='Slow down writing to GPIO. Range: 0..4. (Default: config matrix section)',
         choices=range(5),
         type=int,
     )
-    parser.add_argument("--led-no-hardware-pulse", action="store", help="Don't use hardware pin-pulse generation.")
+    parser.add_argument('--led-no-hardware-pulse', action='store', help="Don't use hardware pin-pulse generation.")
     parser.add_argument(
-        "--led-rgb-sequence",
-        action="store",
-        help="Switch if your matrix has led colors swapped. (Default: config matrix section)",
+        '--led-rgb-sequence',
+        action='store',
+        help='Switch if your matrix has led colors swapped. (Default: config matrix section)',
         default=None,
         type=str,
     )
+    parser.add_argument('--led-pixel-mapper', action='store', help='Apply pixel mappers. e.g "Rotate:90"', default=None, type=str)
     parser.add_argument(
-        "--led-pixel-mapper", action="store", help='Apply pixel mappers. e.g "Rotate:90"', default=None, type=str
-    )
-    parser.add_argument(
-        "--led-row-addr-type",
-        action="store",
-        help="0 = default; 1 = AB-addressed panels; 2 = direct row select; 3 = ABC-addressed panels. (Default: config matrix section)",
+        '--led-row-addr-type',
+        action='store',
+        help='0 = default; 1 = AB-addressed panels; 2 = direct row select; 3 = ABC-addressed panels. (Default: config matrix section)',
         default=None,
         type=int,
         choices=[0, 1, 2, 3],
     )
     parser.add_argument(
-        "--led-multiplexing",
-        action="store",
-        help="Multiplexing type: 0 = direct; 1 = strip; 2 = checker; 3 = spiral; 4 = Z-strip; 5 = ZnMirrorZStripe;"
-        "6 = coreman; 7 = Kaler2Scan; 8 = ZStripeUneven. (Default: config matrix section)",
+        '--led-multiplexing',
+        action='store',
+        help='Multiplexing type: 0 = direct; 1 = strip; 2 = checker; 3 = spiral; 4 = Z-strip; 5 = ZnMirrorZStripe;'
+        '6 = coreman; 7 = Kaler2Scan; 8 = ZStripeUneven. (Default: config matrix section)',
         default=None,
         type=int,
     )
     parser.add_argument(
-        "--led-limit-refresh",
-        action="store",
-        help="Limit refresh rate to this frequency in Hz. Useful to keep a constant refresh rate on loaded system. "
-        "0=no limit. Default: config matrix section",
+        '--led-limit-refresh',
+        action='store',
+        help='Limit refresh rate to this frequency in Hz. Useful to keep a constant refresh rate on loaded system. '
+        '0=no limit. Default: config matrix section',
         default=None,
         type=int,
     )
     parser.add_argument(
-        "--led-pwm-dither-bits", action="store", help="Time dithering of lower bits (Default: config matrix section)", default=None, type=int,
+        '--led-pwm-dither-bits',
+        action='store',
+        help='Time dithering of lower bits (Default: config matrix section)',
+        default=None,
+        type=int,
     )
     parser.add_argument(
-        "--config",
-        action="store",
-        help="Base file name for config file. Can use relative path, e.g. config/rockies.config",
-        default="config",
+        '--config',
+        action='store',
+        help='Base file name for config file. Can use relative path, e.g. config/rockies.config',
+        default='config',
         type=str,
     )
+    parser.add_argument('--emulated', action='store_const', help='Force using emulator mode over default matrix display.', const=True)
+    parser.add_argument('--drop-privileges', action='store_true', help='Force the matrix driver to drop root privileges after setup.')
     parser.add_argument(
-        "--emulated",
-        action="store_const",
-        help="Force using emulator mode over default matrix display.",
-        const=True
-    )
-    parser.add_argument(
-        "--drop-privileges", action="store_true", help="Force the matrix driver to drop root privileges after setup."
-    )
-    parser.add_argument(
-        "--username",
-        action="store",
-        help="Override the username displayed on the board.",
+        '--username',
+        action='store',
+        help='Override the username displayed on the board.',
         default=None,
         type=str,
     )
     parser.add_argument(
-        "--display-duration",
-        action="store",
-        help="Seconds per username screen; defaults to display.duration.",
+        '--display-duration',
+        action='store',
+        help='Seconds per username screen; defaults to display.duration.',
         default=None,
         type=float,
     )
     parser.add_argument(
-        "--cookies",
-        action="store",
-        help="Path to the Peloton bearer-token file (default: cookies.txt).",
-        default="cookies.txt",
+        '--cookies',
+        action='store',
+        help='Path to the Peloton bearer-token file (default: cookies.txt).',
+        default='cookies.txt',
         type=str,
     )
     parser.add_argument('--demo', action='store_true', help='Use synthetic data without network or credentials.')
@@ -158,8 +153,7 @@ def args(argv=None):
         parser.error('--refresh-interval must be positive')
     if parsed.led_rows is not None and parsed.led_rows not in (32, 64):
         parser.error('--led-rows must be 32 or 64')
-    if any(value is not None and value <= 0
-           for value in (parsed.led_cols, parsed.led_chain, parsed.led_parallel)):
+    if any(value is not None and value <= 0 for value in (parsed.led_cols, parsed.led_chain, parsed.led_parallel)):
         parser.error('Panel dimensions and chain counts must be positive')
     return parsed
 
@@ -173,8 +167,9 @@ def matrix_settings(args, configured=None):
         flag = getattr(args, f'led_{key}', None)
         if flag is not None:
             settings[key] = flag
-    return argparse.Namespace(**{f'led_{key}': value for key, value in settings.items()},
-                              drop_privileges=getattr(args, 'drop_privileges', False))
+    return argparse.Namespace(
+        **{f'led_{key}': value for key, value in settings.items()}, drop_privileges=getattr(args, 'drop_privileges', False)
+    )
 
 
 def matrix_user():
@@ -224,20 +219,20 @@ def led_matrix_options(args, configured=None):
     try:
         options.pixel_mapper_config = args.led_pixel_mapper
     except AttributeError:
-        debug.warning("Your compiled RGB Matrix Library is out of date.")
-        debug.warning("The --led-pixel-mapper argument will not work until it is updated.")
+        debug.warning('Your compiled RGB Matrix Library is out of date.')
+        debug.warning('The --led-pixel-mapper argument will not work until it is updated.')
 
     try:
         options.pwm_dither_bits = args.led_pwm_dither_bits
     except AttributeError:
-        debug.warning("Your compiled RGB Matrix Library is out of date.")
-        debug.warning("The --led-pwm-dither-bits argument will not work until it is updated.")
+        debug.warning('Your compiled RGB Matrix Library is out of date.')
+        debug.warning('The --led-pwm-dither-bits argument will not work until it is updated.')
 
     try:
         options.limit_refresh_rate_hz = args.led_limit_refresh
     except AttributeError:
-        debug.warning("Your compiled RGB Matrix Library is out of date.")
-        debug.warning("The --led-limit-refresh argument will not work until it is updated.")
+        debug.warning('Your compiled RGB Matrix Library is out of date.')
+        debug.warning('The --led-limit-refresh argument will not work until it is updated.')
 
     if args.led_show_refresh:
         options.show_refresh_rate = 1
@@ -249,4 +244,3 @@ def led_matrix_options(args, configured=None):
         options.disable_hardware_pulsing = True
 
     return options
-

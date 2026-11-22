@@ -1,4 +1,5 @@
 """The settings page's PIN: the gate's rules, and how the panel shows it."""
+
 import os
 
 import pytest
@@ -95,6 +96,7 @@ def test_sending_is_rate_limited_and_never_while_used_up(gate):
 
     def boom(pin, left):
         raise RuntimeError('network down')
+
     assert gate.send_pin(boom) == 'failed'
     for _ in range(TRIES_PER_PIN):
         gate.try_pin('wrong')
@@ -116,6 +118,7 @@ def test_pin_file_problems_are_logged_not_raised(tmp_path, caplog):
 
 def test_pin_file_location_can_be_set_for_development(monkeypatch):
     import importlib
+
     monkeypatch.setenv('PELOTON_SETTINGS_PIN_FILE', '/tmp/dev-pin')
     try:
         assert importlib.reload(pins).PIN_FILE == '/tmp/dev-pin'
@@ -126,6 +129,7 @@ def test_pin_file_location_can_be_set_for_development(monkeypatch):
 
 
 # --- On the panel
+
 
 @pytest.fixture
 def fresh_cache(monkeypatch):
@@ -202,6 +206,7 @@ def test_the_manager_draws_the_pin_over_any_screen(monkeypatch):
 
 def test_show_and_wait_repaints_when_a_pin_appears(monkeypatch):
     import peloton_led
+
     pins_seen = iter([None] + ['5555'] * 100)
     monkeypatch.setattr(peloton_led, 'shown_pin', lambda: next(pins_seen))
 

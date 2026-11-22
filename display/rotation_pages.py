@@ -5,35 +5,50 @@ A page is (screen name, state, seconds). peloton_led.build_rotation_pages is thi
 Every page time comes from peloton.screen_times, as the settings page shows it. A screen that is off isn't
 in `display.rotation` (old configs' 0s are switched off by load_config).
 """
+
 import time
 from typing import Any, NamedTuple
 
-from peloton.workouts.activity import daily_streak_start
+from display.ui.celebration_screen import discipline_noun, milestone_noun
+from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details, stats_phase_seconds
+from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS
+from display.ui.pr_celebration import CARD_HOLD_SECONDS as PR_CARD_HOLD_SECONDS
+from display.ui.pr_celebration import SETTLE_SECONDS as PR_SETTLE_SECONDS
+from display.ui.streak_screen import streak_views
 from peloton.feeds.booked_classes import next_booking
 from peloton.feeds.challenges import shown_challenges
 from peloton.feeds.club import club_page
-from peloton.feeds.goals import (MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day,
-                           week_start)
-from peloton.stats.journey import journey_progress
+from peloton.feeds.goals import MAX_UPCOMING, UPCOMING_WITHIN, parse_milestone_key, upcoming_milestones, week_day, week_start
 from peloton.screen_times import page_seconds
 from peloton.selection import normalize_discipline
+from peloton.stats.journey import journey_progress
 from peloton.stats.totals import lifetime_overview_pages, total_workout_count
 from peloton.stats.username_facts import shown_keys, username_details
-from display.ui.celebration_screen import discipline_noun, milestone_noun
-from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details, stats_phase_seconds
-from display.ui.pr_celebration import (BURST_SECONDS as PR_BURST_SECONDS, CARD_HOLD_SECONDS as PR_CARD_HOLD_SECONDS,
-                                       SETTLE_SECONDS as PR_SETTLE_SECONDS)
-from display.ui.streak_screen import streak_views
+from peloton.workouts.activity import daily_streak_start
 
-DEFAULT_ROTATION = ('latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                    'next_milestone', 'lifetime', 'journey', 'heatmap',
-                    'milestones', 'goals', 'challenges', 'next_class', 'club')
+DEFAULT_ROTATION = (
+    'latest_workouts',
+    'username',
+    'streaks',
+    'versus',
+    'total_workouts',
+    'next_milestone',
+    'lifetime',
+    'journey',
+    'heatmap',
+    'milestones',
+    'goals',
+    'challenges',
+    'next_class',
+    'club',
+)
 # The "loading" / "no workouts yet" page that stands in for Latest workouts.
 STATUS_SECONDS = 2
 
 
 class RotationInputs(NamedTuple):
     """What every builder reads: the arguments of build_rotation_pages, and the display timezone."""
+
     snapshot: dict
     dashboard: Any
     display: dict
@@ -60,8 +75,7 @@ def _latest_workout_pages(inputs):
     for summary in snapshot['summaries']:
         # The screen intros, then cycles one stat at a time; size the page to exactly
         # one pass so every stat shows once: no cut-offs and no wrap-around repeats.
-        page_duration = detail_interval + stats_phase_seconds(
-            rotating_details(summary, inputs.matrix_height), detail_interval)
+        page_duration = detail_interval + stats_phase_seconds(rotating_details(summary, inputs.matrix_height), detail_interval)
         pages.append(('last_workout', summary, page_duration))
         if inputs.dashboard.should_celebrate_pr(summary):
             # Burst + settle animation, then the card holds one interval plus a little more.
@@ -86,8 +100,12 @@ def _streak_risk_page(inputs, streaks, duration):
     """The late-in-the-week reminder page when a weekly streak has nothing that counts yet, else None."""
     weekday = week_day(inputs.zone)
     reminder_day = inputs.display.get('streak_reminder_day', 5)
-    if (reminder_day is not None and weekday >= reminder_day
-            and inputs.snapshot.get('streak_week_workouts') == 0 and streaks.get('current_weekly', 0) > 0):
+    if (
+        reminder_day is not None
+        and weekday >= reminder_day
+        and inputs.snapshot.get('streak_week_workouts') == 0
+        and streaks.get('current_weekly', 0) > 0
+    ):
         # Late in the week with nothing that counts yet: one workout keeps the streak.
         return ('streak_risk', {'current': streaks['current_weekly'], 'days_left': 7 - weekday}, duration)
     return None
@@ -106,9 +124,12 @@ def _streak_pages(inputs):
     state = dict(streaks)
     if streaks.get('current_daily', 0) > 0:
         today = week_start(inputs.zone)[1].date()
-        state.update(today=today.isoformat(), daily_start=daily_streak_start(
-            streaks['current_daily'], today, snapshot.get('activity_days'),
-            streaks.get('start_date_of_current_daily'), inputs.zone).isoformat())
+        state.update(
+            today=today.isoformat(),
+            daily_start=daily_streak_start(
+                streaks['current_daily'], today, snapshot.get('activity_days'), streaks.get('start_date_of_current_daily'), inputs.zone
+            ).isoformat(),
+        )
     # One streak per pass: weekly, then daily on the next pass.
     views = streak_views(state)
     state['view'] = views[inputs.pass_index % len(views)][0]
@@ -120,6 +141,7 @@ def _versus_pages(inputs):
     if not inputs.rivals or len(inputs.rivals) < 2:
         return []
     from display.ui.versus_screen import STATS
+
     duration = inputs.seconds('versus')
     state = {'riders': inputs.rivals, 'weekday': week_day(inputs.zone)}
     if inputs.matrix_height < 64:
@@ -133,8 +155,19 @@ def _total_workouts_pages(inputs):
     total = total_workout_count(inputs.snapshot['totals'])
     if total is None:
         return []
-    return [('discipline', {'discipline': 'Total Workouts', 'count': total, 'color_key': inputs.display['color'],
-                            'number_font_key': 'big', 'number_color_key': 'gold'}, inputs.seconds('lifetime'))]
+    return [
+        (
+            'discipline',
+            {
+                'discipline': 'Total Workouts',
+                'count': total,
+                'color_key': inputs.display['color'],
+                'number_font_key': 'big',
+                'number_color_key': 'gold',
+            },
+            inputs.seconds('lifetime'),
+        )
+    ]
 
 
 def _next_milestone_pages(inputs):
@@ -143,24 +176,39 @@ def _next_milestone_pages(inputs):
     snapshot, display, height = inputs.snapshot, inputs.display, inputs.matrix_height
     pages = []
     for upcoming in upcoming_milestones(
-            total_workout_count(snapshot['totals']), display.get('milestones', []), display.get('milestone_step', 0),
-            snapshot.get('totals'), within=display.get('milestone_within', UPCOMING_WITHIN),
-            limit=display.get('milestone_pages', MAX_UPCOMING)):
+        total_workout_count(snapshot['totals']),
+        display.get('milestones', []),
+        display.get('milestone_step', 0),
+        snapshot.get('totals'),
+        within=display.get('milestone_within', UPCOMING_WITHIN),
+        limit=display.get('milestone_pages', MAX_UPCOMING),
+    ):
         # 2,200TH WORKOUT on 64 rows; TO 2,200 / WORKOUTS on 32.
         title = upcoming['label'] if upcoming['discipline'] or height < 64 else 'Workout'
-        pages.append(('countdown', {
-            'total': upcoming['count'], 'target': upcoming['target'], 'previous': upcoming['previous'],
-            'title': title, 'discipline': upcoming['discipline']}, inputs.seconds('next_milestone')))
+        pages.append(
+            (
+                'countdown',
+                {
+                    'total': upcoming['count'],
+                    'target': upcoming['target'],
+                    'previous': upcoming['previous'],
+                    'title': title,
+                    'discipline': upcoming['discipline'],
+                },
+                inputs.seconds('next_milestone'),
+            )
+        )
     return pages
 
 
 def _lifetime_pages(inputs):
     """Lifetime by discipline: the all-time totals, a few disciplines per page (4 on 64 rows, 2 on 32)."""
-    overview_pages = lifetime_overview_pages(inputs.snapshot['totals'],
-                                             page_size=4 if inputs.matrix_height >= 64 else 2)
+    overview_pages = lifetime_overview_pages(inputs.snapshot['totals'], page_size=4 if inputs.matrix_height >= 64 else 2)
     duration = inputs.seconds('lifetime')
-    return [('lifetime', {'items': items, 'page': index + 1, 'pages': len(overview_pages)}, duration)
-            for index, items in enumerate(overview_pages)]
+    return [
+        ('lifetime', {'items': items, 'page': index + 1, 'pages': len(overview_pages)}, duration)
+        for index, items in enumerate(overview_pages)
+    ]
 
 
 def _journey_pages(inputs):
@@ -169,6 +217,7 @@ def _journey_pages(inputs):
     if not (progress and progress['miles'] > 0):
         return []
     from display.ui.journey_screen import journey_steps
+
     # 32 rows show the trip, then the miles by type: the page's time shared, each once.
     steps = journey_steps(progress, inputs.matrix_height)
     duration = inputs.seconds('journey', steps)
@@ -182,26 +231,27 @@ def _heatmap_pages(inputs):
     if not inputs.snapshot.get('activity_days'):
         return []
     from peloton.workouts.activity import HEATMAP_WEEKS
+
     today = week_start(inputs.zone)[1].date().isoformat()
-    return [('heatmap', {'days': inputs.snapshot['activity_days'], 'today': today, 'weeks': HEATMAP_WEEKS},
-             inputs.seconds('heatmap'))]
+    return [('heatmap', {'days': inputs.snapshot['activity_days'], 'today': today, 'weeks': HEATMAP_WEEKS}, inputs.seconds('heatmap'))]
 
 
 def _goal_pages(inputs):
     """Weekly goals: a page per goal with a target above 0."""
     duration = inputs.seconds('goals')
     progress = inputs.snapshot.get('weekly_progress', {})
-    return [('goal', {'title': 'Weekly Goal', 'current': progress.get(key, 0), 'target': target,
-                      'unit': key.replace('_', ' ')}, duration)
-            for key, target in inputs.display.get('weekly_goals', {}).items() if target > 0]
+    return [
+        ('goal', {'title': 'Weekly Goal', 'current': progress.get(key, 0), 'target': target, 'unit': key.replace('_', ' ')}, duration)
+        for key, target in inputs.display.get('weekly_goals', {}).items()
+        if target > 0
+    ]
 
 
 def _challenge_pages(inputs):
     """Challenges: a page per running challenge with progress and a tier still to reach (the cache is
     validated)."""
     duration = inputs.seconds('challenges')
-    return [('challenge', challenge, duration)
-            for challenge in shown_challenges(inputs.snapshot.get('challenges'), time.time())]
+    return [('challenge', challenge, duration) for challenge in shown_challenges(inputs.snapshot.get('challenges'), time.time())]
 
 
 def _next_class_pages(inputs):
@@ -211,8 +261,7 @@ def _next_class_pages(inputs):
     booking = next_booking(inputs.snapshot.get('booked_classes'), now)
     if booking is None:
         return []
-    return [('next_class', {'booking': booking, 'now': now, 'timezone': inputs.zone},
-             inputs.seconds('next_class'))]
+    return [('next_class', {'booking': booking, 'now': now, 'timezone': inputs.zone}, inputs.seconds('next_class'))]
 
 
 def _club_pages(inputs):
@@ -229,13 +278,13 @@ def _celebration_pages(inputs):
     if display.get('milestones') or display.get('milestone_step'):
         pending = dashboard.pending_milestones(snapshot)
         if pending:
-            candidates.append({'number': pending[-1], 'noun': milestone_noun(None),
-                               'subtitle': inputs.username, 'milestone': pending[-1]})
+            candidates.append({'number': pending[-1], 'noun': milestone_noun(None), 'subtitle': inputs.username, 'milestone': pending[-1]})
     labels = {normalize_discipline(label): label for label in snapshot.get('totals', {})}
     for key in dashboard.pending_discipline_milestones(snapshot):
         discipline, target = parse_milestone_key(key)
-        candidates.append({'number': target, 'noun': discipline_noun(discipline, labels.get(discipline)),
-                           'subtitle': inputs.username, 'milestone': key})
+        candidates.append(
+            {'number': target, 'noun': discipline_noun(discipline, labels.get(discipline)), 'subtitle': inputs.username, 'milestone': key}
+        )
     if not candidates:
         return []
     return [('celebration', candidates[inputs.pass_index % len(candidates)], inputs.seconds('milestones'))]

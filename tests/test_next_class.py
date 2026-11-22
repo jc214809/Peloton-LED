@@ -1,5 +1,6 @@
 """The next-class page (ROADMAP item 19): Peloton's reservations and scheduled classes, the fetch, the cache, the
 rotation, the words, and the screen on both heights against everything each line can show."""
+
 import json
 import time
 from unittest.mock import Mock
@@ -8,14 +9,35 @@ import pytest
 import requests
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.next_class_screen import (COLUMN_LEFT, LINE_WIDTH, PULSE_FLOOR, PULSE_FRAME_SECONDS, PULSE_PERIOD,
-                                          PULSE_WINDOW, TAG_COLORS, NextClassScreen, fitted, pulse_level, pulses)
+from display.ui.next_class_screen import (
+    COLUMN_LEFT,
+    LINE_WIDTH,
+    PULSE_FLOOR,
+    PULSE_FRAME_SECONDS,
+    PULSE_PERIOD,
+    PULSE_WINDOW,
+    TAG_COLORS,
+    NextClassScreen,
+    fitted,
+    pulse_level,
+    pulses,
+)
 from peloton import dashboard as dashboard_module
 from peloton import dashboard_fetch
-from peloton.feeds.booked_classes import (NOUNS, SHOWN_AFTER_START, class_lines, day_word, instructor_lines,
-                                    next_booking, reservation_ids, slim_class, valid_booking, when)
 from peloton.cache import load_snapshot, save_snapshot
 from peloton.config import DEFAULTS
+from peloton.feeds.booked_classes import (
+    NOUNS,
+    SHOWN_AFTER_START,
+    class_lines,
+    day_word,
+    instructor_lines,
+    next_booking,
+    reservation_ids,
+    slim_class,
+    valid_booking,
+    when,
+)
 from peloton_led import _tick_seconds, build_rotation_pages
 from scripts.render_demo import ImageMatrix
 from tests.test_dashboard import setup_dashboard
@@ -25,23 +47,40 @@ NOW = 1794762000.0  # Sunday 2026-11-15, 12:00 PM in New York
 HOUR = 3600
 
 
-def scheduled(identity='p1', start=NOW + 22 * HOUR, live=True, encore=False, discipline='cycling',
-              duration=1200, instructor='Ben Alldis'):
+def scheduled(identity='p1', start=NOW + 22 * HOUR, live=True, encore=False, discipline='cycling', duration=1200, instructor='Ben Alldis'):
     """GET /api/peloton/{id}?joins=ride,ride.instructor, shaped like the real response (docs/PELOTON-API.md)."""
-    return {'id': identity, 'scheduled_start_time': start, 'status': 'PRE_START', 'is_live': live,
-            'is_encore': encore, 'start_time': None, 'countdown': None, 'total_home_reservations': 812,
-            'ride': {'title': 'Countdown to TB Full Body: W3 D4', 'fitness_discipline': discipline,
-                     'duration': duration, 'instructor': {'name': instructor} if instructor else None}}
+    return {
+        'id': identity,
+        'scheduled_start_time': start,
+        'status': 'PRE_START',
+        'is_live': live,
+        'is_encore': encore,
+        'start_time': None,
+        'countdown': None,
+        'total_home_reservations': 812,
+        'ride': {
+            'title': 'Countdown to TB Full Body: W3 D4',
+            'fitness_discipline': discipline,
+            'duration': duration,
+            'instructor': {'name': instructor} if instructor else None,
+        },
+    }
 
 
 def reservations(*ids):
-    return {'data': [{'id': i, 'user_id': 'u', 'peloton_id': i} for i in ids], 'total': len(ids),
-            'show_next': False}
+    return {'data': [{'id': i, 'user_id': 'u', 'peloton_id': i} for i in ids], 'total': len(ids), 'show_next': False}
 
 
 def booking(**overrides):
-    return {'id': 'p1', 'start': NOW + 22 * HOUR, 'tag': 'LIVE', 'discipline': 'cycling', 'minutes': 20,
-            'instructor': 'Ben Alldis', **overrides}
+    return {
+        'id': 'p1',
+        'start': NOW + 22 * HOUR,
+        'tag': 'LIVE',
+        'discipline': 'cycling',
+        'minutes': 20,
+        'instructor': 'Ben Alldis',
+        **overrides,
+    }
 
 
 # ---- parsing ---------------------------------------------------------------------------------------------------
@@ -73,20 +112,38 @@ def test_live_encore_and_untagged_classes_and_peloton_disciplines():
     assert slim_class(scheduled(), 'from-reservations')['id'] == 'from-reservations'
 
 
-@pytest.mark.parametrize('damage', [
-    {'scheduled_start_time': None}, {'scheduled_start_time': True}, {'scheduled_start_time': 'soon'},
-    {'ride': None}, {'ride': {'fitness_discipline': 'cycling'}},
-    {'ride': {'fitness_discipline': '', 'duration': 600}}, {'ride': {'fitness_discipline': 'yoga', 'duration': -5}},
-])
+@pytest.mark.parametrize(
+    'damage',
+    [
+        {'scheduled_start_time': None},
+        {'scheduled_start_time': True},
+        {'scheduled_start_time': 'soon'},
+        {'ride': None},
+        {'ride': {'fitness_discipline': 'cycling'}},
+        {'ride': {'fitness_discipline': '', 'duration': 600}},
+        {'ride': {'fitness_discipline': 'yoga', 'duration': -5}},
+    ],
+)
 def test_a_class_that_cannot_be_shown_is_dropped(damage):
     assert slim_class({**scheduled(), **damage}) is None
     assert slim_class('junk') is None
 
 
-@pytest.mark.parametrize('damage', [
-    {'start': 'x'}, {'start': float('nan')}, {'tag': 'PREMIERE'}, {'discipline': ''}, {'minutes': 0},
-    {'minutes': 2.5}, {'minutes': True}, {'minutes': 5000}, {'instructor': None}, {'id': 3},
-])
+@pytest.mark.parametrize(
+    'damage',
+    [
+        {'start': 'x'},
+        {'start': float('nan')},
+        {'tag': 'PREMIERE'},
+        {'discipline': ''},
+        {'minutes': 0},
+        {'minutes': 2.5},
+        {'minutes': True},
+        {'minutes': 5000},
+        {'instructor': None},
+        {'id': 3},
+    ],
+)
 def test_a_damaged_booking_is_not_valid(damage):
     assert not valid_booking(booking(**damage))
 
@@ -102,8 +159,7 @@ def test_the_next_booking_is_the_soonest_until_it_has_been_going_ten_minutes():
 # ---- the words -------------------------------------------------------------------------------------------------
 def test_the_class_line_is_the_length_and_a_noun_or_the_noun_alone():
     assert class_lines(booking()) == ['20 MIN RIDE', 'RIDE']
-    assert class_lines(booking(discipline='tread_bootcamp', minutes=45)) == ['45 MIN TREAD BOOTCAMP',
-                                                                            'TREAD BOOTCAMP']
+    assert class_lines(booking(discipline='tread_bootcamp', minutes=45)) == ['45 MIN TREAD BOOTCAMP', 'TREAD BOOTCAMP']
     assert class_lines(booking(discipline='new_thing'))[-1] == 'NEW THING'
 
 
@@ -115,19 +171,22 @@ def test_the_instructor_is_the_first_name_or_a_shared_one_in_full():
     assert instructor_lines('') == [] and instructor_lines('   ') == []
 
 
-@pytest.mark.parametrize('starts_in, mode, minutes, day', [
-    (22 * HOUR, 'clock', None, 'TOMORROW'),
-    (HOUR + 1, 'clock', None, 'TODAY'),
-    (HOUR, 'minutes', 60, 'TODAY'),
-    (45 * 60, 'minutes', 45, 'TODAY'),
-    (44 * 60 + 1, 'minutes', 45, 'TODAY'),  # rounded up: never says 0 before the start
-    (1, 'minutes', 1, 'TODAY'),
-    (0, 'now', None, 'TODAY'),
-    (-300, 'now', None, 'TODAY'),
-    (3 * 24 * HOUR, 'clock', None, 'WEDNESDAY'),
-    (6 * 24 * HOUR, 'clock', None, 'SATURDAY'),
-    (7 * 24 * HOUR, 'clock', None, 'NOV 22'),
-])
+@pytest.mark.parametrize(
+    'starts_in, mode, minutes, day',
+    [
+        (22 * HOUR, 'clock', None, 'TOMORROW'),
+        (HOUR + 1, 'clock', None, 'TODAY'),
+        (HOUR, 'minutes', 60, 'TODAY'),
+        (45 * 60, 'minutes', 45, 'TODAY'),
+        (44 * 60 + 1, 'minutes', 45, 'TODAY'),  # rounded up: never says 0 before the start
+        (1, 'minutes', 1, 'TODAY'),
+        (0, 'now', None, 'TODAY'),
+        (-300, 'now', None, 'TODAY'),
+        (3 * 24 * HOUR, 'clock', None, 'WEDNESDAY'),
+        (6 * 24 * HOUR, 'clock', None, 'SATURDAY'),
+        (7 * 24 * HOUR, 'clock', None, 'NOV 22'),
+    ],
+)
 def test_when_the_class_starts(starts_in, mode, minutes, day):
     moment = when(booking(start=NOW + starts_in), NOW, ZONE)
     assert moment['mode'] == mode and moment['day'] == day
@@ -150,6 +209,7 @@ def test_times_are_in_the_boards_zone():
 def test_day_words_count_calendar_days_not_hours():
     from datetime import datetime
     from zoneinfo import ZoneInfo
+
     zone = ZoneInfo(ZONE)
     late = datetime(2026, 11, 15, 23, 50, tzinfo=zone)
     assert day_word(datetime(2026, 11, 16, 0, 10, tzinfo=zone), late) == 'TOMORROW'
@@ -159,6 +219,7 @@ def test_day_words_count_calendar_days_not_hours():
 # ---- the client and the fetch ----------------------------------------------------------------------------------
 def test_the_client_asks_for_reservations_and_each_class():
     from peloton.api import BASE, PelotonClient
+
     session = Mock()
     session.get.return_value.status_code = 200
     session.get.return_value.json.return_value = reservations('a')
@@ -177,8 +238,7 @@ def booking_dashboard(tmp_path, monkeypatch, config=None, ids=('p1', 'p2')):
     monkeypatch.setattr(dashboard_module.time, 'monotonic', lambda: clock['now'])
     dashboard, client, token = setup_dashboard(tmp_path, config)
     client.get_reservations.return_value = reservations(*ids)
-    classes = {'p1': scheduled('p1', start=NOW + 22 * HOUR), 'p2': scheduled('p2', start=NOW + HOUR,
-                                                                             discipline='yoga', duration=600)}
+    classes = {'p1': scheduled('p1', start=NOW + 22 * HOUR), 'p2': scheduled('p2', start=NOW + HOUR, discipline='yoga', duration=600)}
     client.get_scheduled_class.side_effect = lambda identity: classes.get(identity)
     return dashboard, client, clock
 
@@ -196,9 +256,14 @@ def test_reservations_every_refresh_and_each_class_once(tmp_path, monkeypatch):
     assert [b['id'] for b in load_snapshot(dashboard.cache_path)['booked_classes']] == ['p1']
 
 
-@pytest.mark.parametrize('failure', [
-    requests.HTTPError(response=Mock(status_code=500)), requests.ConnectionError('offline'), ValueError('bad'),
-])
+@pytest.mark.parametrize(
+    'failure',
+    [
+        requests.HTTPError(response=Mock(status_code=500)),
+        requests.ConnectionError('offline'),
+        ValueError('bad'),
+    ],
+)
 def test_a_failed_reservations_fetch_keeps_the_last_list(tmp_path, monkeypatch, failure):
     dashboard, client, _ = booking_dashboard(tmp_path, monkeypatch)
     dashboard.refresh()
@@ -209,10 +274,15 @@ def test_a_failed_reservations_fetch_keeps_the_last_list(tmp_path, monkeypatch, 
     assert snapshot['booked_classes'] == before and snapshot['status'] == 'ready', 'the refresh still succeeds'
 
 
-@pytest.mark.parametrize('failure', [
-    requests.HTTPError(response=Mock(status_code=500)), requests.ConnectionError('offline'), ValueError('bad'),
-    None,  # 404: the class is gone
-])
+@pytest.mark.parametrize(
+    'failure',
+    [
+        requests.HTTPError(response=Mock(status_code=500)),
+        requests.ConnectionError('offline'),
+        ValueError('bad'),
+        None,  # 404: the class is gone
+    ],
+)
 def test_a_class_without_details_is_asked_for_again_after_an_hour(tmp_path, monkeypatch, failure):
     dashboard, client, clock = booking_dashboard(tmp_path, monkeypatch, ids=('p1',))
 
@@ -220,6 +290,7 @@ def test_a_class_without_details_is_asked_for_again_after_an_hour(tmp_path, monk
         if failure is not None:
             raise failure
         return None
+
     client.get_scheduled_class.side_effect = details
     dashboard.refresh()
     assert dashboard.snapshot()['booked_classes'] == []
@@ -265,8 +336,7 @@ def test_the_demo_has_a_booked_class():
 # ---- cache and rotation ----------------------------------------------------------------------------------------
 def test_the_cache_keeps_bookings_and_drops_a_damaged_list(tmp_path):
     path = tmp_path / 'cache.json'
-    save_snapshot(path, {'me': {'id': 'u'}, 'totals': {}, 'summaries': [], 'last_updated': 1.0,
-                         'booked_classes': [booking()]})
+    save_snapshot(path, {'me': {'id': 'u'}, 'totals': {}, 'summaries': [], 'last_updated': 1.0, 'booked_classes': [booking()]})
     assert load_snapshot(path)['booked_classes'] == [booking()]
     for damaged in ({'a': 1}, [booking(), {'id': 'half'}], 'text', None):
         payload = json.loads(path.read_text())
@@ -278,15 +348,13 @@ def test_the_cache_keeps_bookings_and_drops_a_damaged_list(tmp_path):
 
 def test_one_page_for_the_next_booked_class(monkeypatch):
     import peloton_led
+
     monkeypatch.setattr(peloton_led.time, 'time', lambda: NOW)
-    display = {**DEFAULTS, 'rotation': ['goals', 'next_class'], 'screen_durations': {'next_class': 7},
-               'timezone': ZONE}
+    display = {**DEFAULTS, 'rotation': ['goals', 'next_class'], 'screen_durations': {'next_class': 7}, 'timezone': ZONE}
     over = booking(id='over', start=NOW - SHOWN_AFTER_START)
-    snapshot = {'summaries': [], 'status': 'ready', 'totals': {},
-                'booked_classes': [booking(), booking(id='soon', start=NOW + HOUR), over]}
+    snapshot = {'summaries': [], 'status': 'ready', 'totals': {}, 'booked_classes': [booking(), booking(id='soon', start=NOW + HOUR), over]}
     pages = build_rotation_pages(snapshot, None, display, 'Joel', 64)
-    assert pages == [('next_class', {'booking': booking(id='soon', start=NOW + HOUR), 'now': NOW,
-                                     'timezone': ZONE}, 7)]
+    assert pages == [('next_class', {'booking': booking(id='soon', start=NOW + HOUR), 'now': NOW, 'timezone': ZONE}, 7)]
     for empty in ([], [over], 'junk', None):
         assert build_rotation_pages({**snapshot, 'booked_classes': empty}, None, display, 'Joel', 64) == []
 
@@ -294,6 +362,7 @@ def test_one_page_for_the_next_booked_class(monkeypatch):
 def test_next_class_is_a_rotation_screen_on_by_default(tmp_path):
     from peloton.config import load_config
     from settings_page.form import SCREEN_NAMES
+
     assert 'next_class' in DEFAULTS['rotation'] and 'next_class' in SCREEN_NAMES
     path = tmp_path / 'config.json'
     path.write_text('{"display": {"rotation": ["next_class"], "screen_durations": {"next_class": 6}}}')
@@ -303,6 +372,7 @@ def test_next_class_is_a_rotation_screen_on_by_default(tmp_path):
 # ---- the screen ------------------------------------------------------------------------------------------------
 class EdgeMatrix(ImageMatrix):
     """Counts lit pixels drawn off the panel (ImageMatrix drops them silently)."""
+
     def Clear(self):
         super().Clear()
         self.off_panel = 0
@@ -334,9 +404,22 @@ def lit_columns(matrix):
 # longest instructor names among the 57 in GET /api/instructor (2026-11-14), with the four shared first names.
 DISCIPLINES = sorted(NOUNS)
 LENGTHS = (5, 10, 15, 20, 30, 45, 60, 75, 90, 120)
-INSTRUCTORS = ('Charlotte Weidenbach', 'Christine D\'Ercole', 'Robin Arzón', 'Mariana Fernández', 'Ben Alldis',
-               'Alex Toussaint', 'Alex Karwoski', 'Hannah Frankson', 'Hannah Corbin', 'Jess Sims', 'Jess King',
-               'Marcel Dinkins', 'Marcel Maurer', '')
+INSTRUCTORS = (
+    'Charlotte Weidenbach',
+    "Christine D'Ercole",
+    'Robin Arzón',
+    'Mariana Fernández',
+    'Ben Alldis',
+    'Alex Toussaint',
+    'Alex Karwoski',
+    'Hannah Frankson',
+    'Hannah Corbin',
+    'Jess Sims',
+    'Jess King',
+    'Marcel Dinkins',
+    'Marcel Maurer',
+    '',
+)
 # Every start from NOW through the last hour, then every half hour across a week.
 STARTS = [-SHOWN_AFTER_START + 1, 0] + [m * 60 for m in range(1, 61)] + [HOUR + h * 1800 for h in range(0, 336)]
 WIDEST = booking(tag='ENCORE', discipline='tread_bootcamp', minutes=120, instructor='Hannah Frankson')
@@ -369,18 +452,26 @@ def test_64_rows_fit_every_class_and_instructor(discipline):
 def test_the_class_line_drops_the_length_only_where_it_must():
     initialize_fonts(64)
     small = loaded_fonts['stats']
-    alone = {(d, m) for d in DISCIPLINES for m in LENGTHS
-             if fitted(small, class_lines(booking(discipline=d, minutes=m)), LINE_WIDTH) == NOUNS[d]}
+    alone = {
+        (d, m) for d in DISCIPLINES for m in LENGTHS if fitted(small, class_lines(booking(discipline=d, minutes=m)), LINE_WIDTH) == NOUNS[d]
+    }
     assert {d for d, _ in alone} == {'bike_bootcamp', 'tread_bootcamp', 'row_bootcamp', 'meditation', 'strength'}
     assert {m for d, m in alone if d == 'strength'} == {120}
-    assert all((d, m) in alone for d in ('bike_bootcamp', 'tread_bootcamp', 'row_bootcamp', 'meditation')
-               for m in LENGTHS)
+    assert all((d, m) in alone for d in ('bike_bootcamp', 'tread_bootcamp', 'row_bootcamp', 'meditation') for m in LENGTHS)
 
 
 def test_every_shared_first_name_fits_in_full():
     initialize_fonts(64)
-    for name in ('Alex Toussaint', 'Alex Karwoski', 'Hannah Frankson', 'Hannah Corbin', 'Jess Sims', 'Jess King',
-                 'Marcel Dinkins', 'Marcel Maurer'):
+    for name in (
+        'Alex Toussaint',
+        'Alex Karwoski',
+        'Hannah Frankson',
+        'Hannah Corbin',
+        'Jess Sims',
+        'Jess King',
+        'Marcel Dinkins',
+        'Marcel Maurer',
+    ):
         assert get_text_width(loaded_fonts['stats'], name.upper()) <= LINE_WIDTH, name
 
 
@@ -424,8 +515,18 @@ def test_a_discipline_with_no_icon_draws_none(height):
     assert not lit_rows(matrix) & set(range(0, 22)) if height == 64 else not lit_columns(matrix) & set(range(26))
 
 
-@pytest.mark.parametrize('state', [None, 'junk', {}, {'booking': booking()}, {'booking': booking(), 'now': True},
-                                   {'booking': booking(minutes=0), 'now': NOW}, {'booking': 'x', 'now': NOW}])
+@pytest.mark.parametrize(
+    'state',
+    [
+        None,
+        'junk',
+        {},
+        {'booking': booking()},
+        {'booking': booking(), 'now': True},
+        {'booking': booking(minutes=0), 'now': NOW},
+        {'booking': 'x', 'now': NOW},
+    ],
+)
 def test_a_page_with_nothing_to_draw_says_so(state):
     initialize_fonts(64)
     assert NextClassScreen().render(EdgeMatrix(height=64), state) is False
@@ -441,6 +542,7 @@ def test_fitted_cuts_only_as_a_last_resort():
 
 def test_render_next_class_draws_both_panel_sizes(tmp_path, capsys):
     from scripts import render_next_class
+
     out = tmp_path / 'next.png'
     render_next_class.main(['--out', str(out)])
     assert out.exists() and 'Wrote' in capsys.readouterr().out
@@ -448,6 +550,7 @@ def test_render_next_class_draws_both_panel_sizes(tmp_path, capsys):
 
 def test_render_next_class_stops_on_a_page_it_cannot_draw(monkeypatch):
     from scripts import render_next_class
+
     monkeypatch.setattr(render_next_class, 'PAGES', [booking(minutes=0)])
     with pytest.raises(RuntimeError):
         render_next_class.panels(64)
@@ -470,9 +573,21 @@ def entered(state, height=64):
     return screen
 
 
-@pytest.mark.parametrize('starts_in, expected', [
-    (22 * HOUR, False), (HOUR, False), (PULSE_WINDOW + 60, False), (PULSE_WINDOW + 1, False),
-    (PULSE_WINDOW, True), (60, True), (1, True), (0, True), (-300, True), (-SHOWN_AFTER_START, True)])
+@pytest.mark.parametrize(
+    'starts_in, expected',
+    [
+        (22 * HOUR, False),
+        (HOUR, False),
+        (PULSE_WINDOW + 60, False),
+        (PULSE_WINDOW + 1, False),
+        (PULSE_WINDOW, True),
+        (60, True),
+        (1, True),
+        (0, True),
+        (-300, True),
+        (-SHOWN_AFTER_START, True),
+    ],
+)
 def test_only_the_last_ten_minutes_animate(starts_in, expected):
     assert entered(page(starts_in)).animated is expected
     assert pulses(page(starts_in)) is expected
@@ -481,8 +596,14 @@ def test_only_the_last_ten_minutes_animate(starts_in, expected):
 def test_a_page_with_no_tag_or_no_time_never_animates():
     assert PULSE_WINDOW == 600
     assert not entered(page(60, tag=None)).animated
-    for state in (None, 'junk', {}, {'booking': booking(start=NOW + 60)}, {'booking': booking(), 'now': True},
-                  {'booking': booking(minutes=0, start=NOW), 'now': NOW}):
+    for state in (
+        None,
+        'junk',
+        {},
+        {'booking': booking(start=NOW + 60)},
+        {'booking': booking(), 'now': True},
+        {'booking': booking(minutes=0, start=NOW), 'now': NOW},
+    ):
         assert pulses(state) is False
 
 
@@ -574,7 +695,9 @@ def test_a_still_page_stays_still_whatever_the_elapsed_time(height):
 
 def test_render_next_class_writes_the_pulse_gifs(tmp_path, capsys):
     from PIL import Image
+
     from scripts import render_next_class
+
     render_next_class.main(['--gifs', str(tmp_path)])
     out = capsys.readouterr().out
     for height in (64, 32):
@@ -585,4 +708,5 @@ def test_render_next_class_writes_the_pulse_gifs(tmp_path, capsys):
 
 def test_the_rotation_preview_draws_the_next_class_page_at_full_brightness():
     from scripts.render_rotation import frame_times
+
     assert frame_times('next_class', {}, 7, 4.0) == [0.0]

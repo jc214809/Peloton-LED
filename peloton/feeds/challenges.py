@@ -4,16 +4,27 @@ Raw entries come from GET /api/user/{id}/challenges/current?has_joined=true (doc
 the challenges page draws is kept, so the cache stays small and an odd response can't reach the screen.
 No imports from the app, so the cache can validate with it.
 """
+
 import math
 import re
 
 # Peloton's units, as the page writes them.
-UNITS = {'min': 'MIN', 'minutes': 'MIN', 'workouts': 'CLASSES', 'classes': 'CLASSES', 'days': 'DAYS',
-         'miles': 'MILES', 'mi': 'MILES', 'km': 'KM', 'meters': 'METERS', 'm': 'METERS', 'reps': 'REPS'}
+UNITS = {
+    'min': 'MIN',
+    'minutes': 'MIN',
+    'workouts': 'CLASSES',
+    'classes': 'CLASSES',
+    'days': 'DAYS',
+    'miles': 'MILES',
+    'mi': 'MILES',
+    'km': 'KM',
+    'meters': 'METERS',
+    'm': 'METERS',
+    'reps': 'REPS',
+}
 # Before the first tier Peloton calls the current tier this.
 UNEARNED = 'UNEARNED'
-_MONTH_NAMES = ('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
-                'November', 'December')
+_MONTH_NAMES = ('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December')
 _MONTHS = '|'.join(_MONTH_NAMES)
 # 'NOV': what a monthly challenge's title keeps of its month (the screens never drop it when a title is too long).
 MONTH_ABBREVIATIONS = {name.upper(): name[:3].upper() for name in _MONTH_NAMES}
@@ -31,7 +42,7 @@ def short_title(title):
     text = re.sub(r'^countdown\s+to\s+', '', text, flags=re.I)
     month = re.search(rf'\b({_MONTHS})\s+\d{{4}}\b\s*', text, flags=re.I)
     if month:  # '<Month> <Year>' wherever it sits: out of the text, in front as the abbreviation
-        text = text[:month.start()] + text[month.end():]
+        text = text[: month.start()] + text[month.end() :]
     text = re.sub(r'\s+challenge$', '', text.strip(), flags=re.I)
     if month:
         text = f'{MONTH_ABBREVIATIONS[month.group(1).upper()]} {text}'.strip()
@@ -80,12 +91,19 @@ def slim_challenge(entry):
     unit = str(progress.get('metric_display_unit') or '').strip().lower()
     following = _tier(progress.get('next_tier'))
     end = _number(summary.get('end_time'))
-    challenge = {'id': str(summary.get('id') or '')[:64], 'title': title, 'end_time': end, 'value': value,
-                 'shown': _shown(progress.get('metric_display_value'), value),
-                 'unit': UNITS.get(unit, unit.upper()[:12]), 'tier': tier, 'next': following, 'to_next': None}
+    challenge = {
+        'id': str(summary.get('id') or '')[:64],
+        'title': title,
+        'end_time': end,
+        'value': value,
+        'shown': _shown(progress.get('metric_display_value'), value),
+        'unit': UNITS.get(unit, unit.upper()[:12]),
+        'tier': tier,
+        'next': following,
+        'to_next': None,
+    }
     if following:
-        challenge['to_next'] = _shown(progress.get('metric_display_value_to_next_tier'),
-                                      max(0.0, following['value'] - value))
+        challenge['to_next'] = _shown(progress.get('metric_display_value_to_next_tier'), max(0.0, following['value'] - value))
     return challenge
 
 
@@ -105,18 +123,22 @@ def parse_challenges(payload):
 
 
 def _valid_tier(tier):
-    return (isinstance(tier, dict) and isinstance(tier.get('title'), str) and tier['title']
-            and _number(tier.get('value')) is not None)
+    return isinstance(tier, dict) and isinstance(tier.get('title'), str) and tier['title'] and _number(tier.get('value')) is not None
 
 
 def valid_challenge(challenge):
     """A kept challenge the page can draw: the cache can hold anything."""
-    return (isinstance(challenge, dict) and isinstance(challenge.get('title'), str) and challenge['title']
-            and isinstance(challenge.get('shown'), str) and isinstance(challenge.get('unit'), str)
-            and _number(challenge.get('value')) is not None and _valid_tier(challenge.get('tier'))
-            and (challenge.get('next') is None or (_valid_tier(challenge['next'])
-                                                   and isinstance(challenge.get('to_next'), str)))
-            and (challenge.get('end_time') is None or _number(challenge['end_time']) is not None))
+    return (
+        isinstance(challenge, dict)
+        and isinstance(challenge.get('title'), str)
+        and challenge['title']
+        and isinstance(challenge.get('shown'), str)
+        and isinstance(challenge.get('unit'), str)
+        and _number(challenge.get('value')) is not None
+        and _valid_tier(challenge.get('tier'))
+        and (challenge.get('next') is None or (_valid_tier(challenge['next']) and isinstance(challenge.get('to_next'), str)))
+        and (challenge.get('end_time') is None or _number(challenge['end_time']) is not None)
+    )
 
 
 def shown_challenges(challenges, now):
@@ -125,8 +147,11 @@ def shown_challenges(challenges, now):
     classes) would only show an empty ring."""
     if not isinstance(challenges, list):
         return []
-    shown = [c for c in challenges if valid_challenge(c) and c['next'] is not None and c['value'] > 0
-             and (c['end_time'] is None or c['end_time'] > now)]
+    shown = [
+        c
+        for c in challenges
+        if valid_challenge(c) and c['next'] is not None and c['value'] > 0 and (c['end_time'] is None or c['end_time'] > now)
+    ]
     return sorted(shown, key=lambda c: c['end_time'] if c['end_time'] is not None else math.inf)
 
 

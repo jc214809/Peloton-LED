@@ -1,5 +1,6 @@
 """peloton_led.main(): the startup order is load-bearing (the service starts as root and drops privileges right
 after RGBMatrix(...)), so these pin it, plus the config overrides and the logo choice."""
+
 import logging
 import sys
 from unittest.mock import patch
@@ -22,12 +23,14 @@ def fake_matrix(monkeypatch):
 
 def test_startup_order_drops_privileges_right_after_the_matrix_is_built(monkeypatch, tmp_path, fake_matrix):
     from display.ui.manager import ScreenManager
+
     events = []
 
     def record(name, real=None):
         def wrapper(*a, **k):
             events.append(name)
             return real(*a, **k) if real else None
+
         return wrapper
 
     def build_matrix(self, options=None):
@@ -59,17 +62,46 @@ def test_startup_order_drops_privileges_right_after_the_matrix_is_built(monkeypa
 
     monkeypatch.setattr(ScreenManager, 'register', register)
     _main(monkeypatch, '--demo', '--config', _config(tmp_path, {'show_logo': True, 'logo_duration': 3}))
-    assert events == ['config', 'matrix', 'drop', 'clear', 'fonts', 'profiles', 'clear',
-                      'start', 'show', 'loop', 'stop', 'clear']  # the 3rd 'clear' is ScreenManager's
-    assert registered == ['username', 'discipline', 'lifetime', 'last_workout', 'pr', 'celebration', 'status',
-                          'goal', 'streak', 'versus', 'countdown', 'journey', 'heatmap', 'streak_risk',
-                          'wifi_setup', 'challenge', 'next_class', 'club', 'logo']
+    assert events == [
+        'config',
+        'matrix',
+        'drop',
+        'clear',
+        'fonts',
+        'profiles',
+        'clear',
+        'start',
+        'show',
+        'loop',
+        'stop',
+        'clear',
+    ]  # the 3rd 'clear' is ScreenManager's
+    assert registered == [
+        'username',
+        'discipline',
+        'lifetime',
+        'last_workout',
+        'pr',
+        'celebration',
+        'status',
+        'goal',
+        'streak',
+        'versus',
+        'countdown',
+        'journey',
+        'heatmap',
+        'streak_risk',
+        'wifi_setup',
+        'challenge',
+        'next_class',
+        'club',
+        'logo',
+    ]
 
 
 def test_command_line_overrides_and_debug_flag_reach_the_display_config(monkeypatch, tmp_path, fake_matrix):
     with patch.object(peloton_led, 'run_multi_user_loop') as loop:
-        _main(monkeypatch, '--demo', '--config', _config(tmp_path, debug=True),
-              '--display-duration', '7', '--refresh-interval', '99')
+        _main(monkeypatch, '--demo', '--config', _config(tmp_path, debug=True), '--display-duration', '7', '--refresh-interval', '99')
     display = loop.call_args.args[2]
     assert display['duration'] == 7 and display['refresh_interval'] == 99
     assert logging.getLogger('peloton-led').level == logging.DEBUG
@@ -80,6 +112,7 @@ def test_command_line_overrides_and_debug_flag_reach_the_display_config(monkeypa
 
 def test_startup_logo_shows_for_its_duration_and_falls_back_to_the_pixel_mask(monkeypatch, tmp_path, fake_matrix):
     from display.ui.logo_mask_screen import LogoMaskScreen
+
     seen = []
 
     def show(manager, name, state, duration, dashboard=None, **kwargs):
@@ -94,6 +127,7 @@ def test_startup_logo_shows_for_its_duration_and_falls_back_to_the_pixel_mask(mo
 
 def test_display_loop_naps_between_rotations_when_every_page_has_no_time(monkeypatch):
     from types import SimpleNamespace
+
     naps = []
     monkeypatch.setattr(peloton_led.time, 'sleep', naps.append)
     monkeypatch.setattr(peloton_led, 'build_rotation_pages', lambda *a, **k: [('status', 'loading', 0)])

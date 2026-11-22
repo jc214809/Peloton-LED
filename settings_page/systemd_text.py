@@ -1,4 +1,5 @@
 """Parsers for what `systemctl show` prints (times and timespans), for the settings page."""
+
 import re
 
 
@@ -17,8 +18,7 @@ def unix_time(value):
 
 
 # systemd's timespan units ("1d 2h 3min 4.5s"), in seconds.
-TIMESPAN_UNITS = {'y': 31557600, 'M': 2629800, 'w': 604800, 'd': 86400, 'h': 3600, 'min': 60, 's': 1,
-                  'ms': 1e-3, 'us': 1e-6, 'μs': 1e-6}
+TIMESPAN_UNITS = {'y': 31557600, 'M': 2629800, 'w': 604800, 'd': 86400, 'h': 3600, 'min': 60, 's': 1, 'ms': 1e-3, 'us': 1e-6, 'μs': 1e-6}
 TIMESPAN_PART = re.compile(r'(\d+(?:\.\d+)?)\s*(min|ms|us|μs|[yMwdhs])(?![a-z])')
 
 

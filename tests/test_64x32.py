@@ -1,4 +1,5 @@
 """64x32 panel layout: everything must fit in 32 rows without collisions."""
+
 from unittest.mock import Mock
 
 import pytest
@@ -32,9 +33,16 @@ def frame(summary, elapsed, height=32):
     return matrix
 
 
-STRENGTH = {'discipline': 'Strength', 'title': '30 min Full Body Strength',
-            'duration_min': 30, 'strive_score': 11.3, 'hr_max': 142,
-            'hr_avg': 109, 'calories': 162, 'instructor': 'Matty Maggiacomo'}
+STRENGTH = {
+    'discipline': 'Strength',
+    'title': '30 min Full Body Strength',
+    'duration_min': 30,
+    'strive_score': 11.3,
+    'hr_max': 142,
+    'hr_avg': 109,
+    'calories': 162,
+    'instructor': 'Matty Maggiacomo',
+}
 
 
 def demo_summaries():
@@ -52,8 +60,7 @@ def test_32_row_page_duration_includes_the_instructor_turn():
     dashboard = Mock()
     dashboard.should_celebrate_pr.return_value = False
     snapshot = {'summaries': [{**STRENGTH, 'workout_id': 'one'}], 'totals': {}, 'status': 'ready'}
-    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
-               'last_workout_detail_interval': 4, 'overview_duration': 4}
+    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15, 'last_workout_detail_interval': 4, 'overview_duration': 4}
     assert build_rotation_pages(snapshot, dashboard, display, 'R', 32)[0][2] == 4 * (1 + 3)
     assert build_rotation_pages(snapshot, dashboard, display, 'R', 64)[0][2] == 4 * (1 + 2)
 
@@ -121,8 +128,15 @@ def test_32_row_stats_show_label_value_and_bar_without_overlap():
 
 def test_32_row_comma_in_a_long_row_distance_leaves_a_blank_row_above_the_bar():
     # 6x9's comma hangs below the baseline; the value is lifted a row so it doesn't touch the bar.
-    summary = {'discipline': 'Rowing', 'title': '45 min Row', 'duration_min': 45, 'distance': 3929.83,
-               'distance_unit': 'm', 'calories': 300, 'hr_avg': 130}
+    summary = {
+        'discipline': 'Rowing',
+        'title': '45 min Row',
+        'duration_min': 45,
+        'distance': 3929.83,
+        'distance_unit': 'm',
+        'calories': 300,
+        'hr_avg': 130,
+    }
     turn = [d['label'] for d in rotating_details(summary, 32)].index('distance')
     matrix = frame(summary, 4 * (turn + 1) + 0.5)
     value = [y for y in rows_of(matrix, WHITE, range(12, 52)) if rows_of(matrix, GREY)[-1] < y < BAR_TOP]
@@ -136,8 +150,7 @@ def test_32_row_long_instructor_name_keeps_caption_and_drops_bar():
     assert rows_of(matrix, HEART) == []
 
 
-@pytest.mark.parametrize('flag, columns', [('login_required', range(55, 64)),
-                                           ('data_stale', range(0, 9))])
+@pytest.mark.parametrize('flag, columns', [('login_required', range(55, 64)), ('data_stale', range(0, 9))])
 def test_32_row_bottom_title_line_clears_corner_icons(flag, columns):
     summary = {**STRENGTH, 'title': '45 min Advanced Power Zone Endurance Ride', flag: True}
     matrix = frame(summary, 0.5)
@@ -161,11 +174,11 @@ def test_32_row_output_pr_star_stays_on_the_panel():
 
 def test_32_row_username_detail_lines_have_a_blank_row_between_them():
     from display.ui.username import UsernameScreen
+
     matrix = ImageMatrix(height=32)
     initialize_fonts(32)
     screen = UsernameScreen()
-    state = {'username': 'Joel', 'details': [
-        {'label': 'THIS WEEK', 'lines': ['2 WORKOUTS', '35 MINUTES']}]}
+    state = {'username': 'Joel', 'details': [{'label': 'THIS WEEK', 'lines': ['2 WORKOUTS', '35 MINUTES']}]}
     screen.on_enter(matrix, state)
     screen.update(0.5)
     assert screen.render(matrix, state)
@@ -179,11 +192,11 @@ def test_32_row_username_detail_lines_have_a_blank_row_between_them():
 @pytest.mark.parametrize('total, big', [('2,126', True), ('123,456,789', False)])
 def test_username_total_workouts_is_big_and_gold_when_it_fits(height, total, big):
     from display.ui.username import UsernameScreen
+
     matrix = ImageMatrix(height=height)
     initialize_fonts(height)
     screen = UsernameScreen()
-    state = {'username': 'Joel', 'details': [
-        {'label': 'TOTAL WORKOUTS', 'lines': [total], 'font_key': 'big', 'color_key': 'gold'}]}
+    state = {'username': 'Joel', 'details': [{'label': 'TOTAL WORKOUTS', 'lines': [total], 'font_key': 'big', 'color_key': 'gold'}]}
     screen.on_enter(matrix, state)
     screen.update(0.5)
     assert screen.render(matrix, state)
@@ -195,10 +208,10 @@ def test_username_total_workouts_is_big_and_gold_when_it_fits(height, total, big
 
 def test_32_row_two_line_discipline_name_clears_the_count():
     from display.ui.discipline_page import DisciplinePageScreen
+
     matrix = ImageMatrix(height=32)
     initialize_fonts(32)
-    assert DisciplinePageScreen().render(matrix, {'discipline': 'Tread Bootcamp', 'count': 112,
-                                                  'color_key': 'white'})
+    assert DisciplinePageScreen().render(matrix, {'discipline': 'Tread Bootcamp', 'count': 112, 'color_key': 'white'})
     lit = rows_of(matrix, WHITE)
     # The wrapped name's descenders ("p") used to sit one row above the count.
     gaps = [b - a - 1 for a, b in zip(lit, lit[1:]) if b - a > 1]
@@ -209,12 +222,19 @@ def test_32_row_two_line_discipline_name_clears_the_count():
 def test_32_row_goal_screen_says_what_it_counts(unit):
     state = {'title': 'Weekly Goal', 'current': 2, 'target': 5, 'unit': unit}
     from display.ui.goal_screen import GoalScreen
+
     matrix = ImageMatrix(height=32)
     initialize_fonts(32)
     assert GoalScreen().render(matrix, state)
     # The unit is drawn in the small font on its own band; find its rows.
-    lit = sorted({y for y in range(32) for x in range(64) if matrix.image.getpixel((x, y)) != (0, 0, 0)
-                  and matrix.image.getpixel((x, y)) != (35, 35, 35)})
+    lit = sorted(
+        {
+            y
+            for y in range(32)
+            for x in range(64)
+            if matrix.image.getpixel((x, y)) != (0, 0, 0) and matrix.image.getpixel((x, y)) != (35, 35, 35)
+        }
+    )
     bands = [[lit[0]]]
     for y in lit[1:]:
         (bands[-1].append(y) if y - bands[-1][-1] == 1 else bands.append([y]))
@@ -224,19 +244,17 @@ def test_32_row_goal_screen_says_what_it_counts(unit):
 
 
 def test_32_row_workout_without_stats_shows_hr_in_intro():
-    summary = {'discipline': 'Meditation', 'title': '10 min Calm', 'duration_min': 10,
-               'hr_avg': 70, 'calories': 20}
+    summary = {'discipline': 'Meditation', 'title': '10 min Calm', 'duration_min': 10, 'hr_avg': 70, 'calories': 20}
     assert rotating_details(summary, 32) == []
     assert rows_of(frame(summary, 0.5), HEART)
 
 
 def test_32_row_lifetime_uses_icon_pages_of_two():
     from display.ui.lifetime_overview import LifetimeOverviewScreen
-    totals = {'Total Workouts': 100, 'Cycling': 40, 'Running': 30, 'Strength': 20, 'Yoga': 10,
-              'Rowing': 5}
+
+    totals = {'Total Workouts': 100, 'Cycling': 40, 'Running': 30, 'Strength': 20, 'Yoga': 10, 'Rowing': 5}
     snapshot = {'summaries': [], 'totals': totals, 'status': 'ready'}
-    display = {'rotation': ['lifetime'], 'last_workout_duration': 15, 'overview_duration': 5,
-               'color': 'white'}
+    display = {'rotation': ['lifetime'], 'last_workout_duration': 15, 'overview_duration': 5, 'color': 'white'}
     pages = build_rotation_pages(snapshot, Mock(), display, 'R', 32)
     assert [name for name, _, _ in pages] == ['lifetime'] * 3
     assert [len(state['items']) for _, state, _ in pages] == [2, 2, 1]
@@ -261,26 +279,32 @@ def test_pr_is_marked_with_a_trophy_on_both_boards(height):
     assert rows_of(later, base) == []
 
 
-@pytest.mark.parametrize('title,expected', [
-    ('60 min 11 sec Just Walk', 'Just Walk'),           # was "11 sec Just Walk"
-    ('41 sec Just Walk', 'Just Walk'),                  # was left whole
-    ('162 min 49 sec Outdoor Walking', 'Outdoor Walking'),
-    ('20 min HIIT Ride', 'HIIT Ride'),
-    ('45 Min Power Zone Endurance Ride', 'Power Zone Endurance Ride'),
-    ('30 minutes Full Body', 'Full Body'),
-    ('10 min', '10 min'),                               # nothing but the length: kept
-    ('Minimalist Flow', 'Minimalist Flow'),
-    ('5 Minute Mindset', 'Mindset'),                    # the old pattern left "ute Mindset"
-    ('', ''), (None, ''),
-])
+@pytest.mark.parametrize(
+    'title,expected',
+    [
+        ('60 min 11 sec Just Walk', 'Just Walk'),  # was "11 sec Just Walk"
+        ('41 sec Just Walk', 'Just Walk'),  # was left whole
+        ('162 min 49 sec Outdoor Walking', 'Outdoor Walking'),
+        ('20 min HIIT Ride', 'HIIT Ride'),
+        ('45 Min Power Zone Endurance Ride', 'Power Zone Endurance Ride'),
+        ('30 minutes Full Body', 'Full Body'),
+        ('10 min', '10 min'),  # nothing but the length: kept
+        ('Minimalist Flow', 'Minimalist Flow'),
+        ('5 Minute Mindset', 'Mindset'),  # the old pattern left "ute Mindset"
+        ('', ''),
+        (None, ''),
+    ],
+)
 def test_titles_lose_the_length_the_page_shows(title, expected):
     from display.ui.last_workout.text import title_without_length
+
     assert title_without_length(title) == expected
 
 
 # ---- the workout title runs edge to edge (Joel, 2026-11-16) ------------------------------------------------
 class EdgeMatrix(ImageMatrix):
     """Counts lit pixels drawn off the panel (ImageMatrix drops them silently)."""
+
     def Clear(self):
         super().Clear()
         self.off_panel = 0
@@ -294,14 +318,17 @@ class EdgeMatrix(ImageMatrix):
 def white_text(monkeypatch, summary, height, elapsed=0.5):
     """The (x, text) of every white string the page draws, checking nothing lands off the panel."""
     import sys
+
     from display.ui.last_workout.colors import _WHITE
     from display.ui.last_workout.text import _draw_text as draw
+
     drawn = []
 
     def spy(matrix, font, x, y, color, text):
         if color is _WHITE:
             drawn.append((x, text))
         return draw(matrix, font, x, y, color, text)
+
     # Each module of the page binds _draw_text itself, so the spy goes on every one that draws with it.
     for name, module in list(sys.modules.items()):
         if name.startswith('display.ui.last_workout.') and getattr(module, '_draw_text', None) is draw:
@@ -326,16 +353,21 @@ def test_a_title_that_fills_the_width_is_not_cut(monkeypatch, height):
 
 
 # The longest titles in the riders' logs, plus the widest discipline header.
-LONG_TITLES = ['45 min Advanced Power Zone Endurance Ride', '20 min Arms & Shoulders Strength',
-               '33 min Post-Ride Stretch: Imagine Dragons', '10 min HiLit+: Lower Body Strength W2 D5',
-               '30 min Spring Cross-Training Core: W1 D3', '10 min Foam Rolling: Quads & Hamstrings',
-               '20 min Best Case of the Mondays Meditation', '15 min Teacher Appreciation Bodyweight',
-               '20 min Bad Boy Entertainment Full Body']
+LONG_TITLES = [
+    '45 min Advanced Power Zone Endurance Ride',
+    '20 min Arms & Shoulders Strength',
+    '33 min Post-Ride Stretch: Imagine Dragons',
+    '10 min HiLit+: Lower Body Strength W2 D5',
+    '30 min Spring Cross-Training Core: W1 D3',
+    '10 min Foam Rolling: Quads & Hamstrings',
+    '20 min Best Case of the Mondays Meditation',
+    '15 min Teacher Appreciation Bodyweight',
+    '20 min Bad Boy Entertainment Full Body',
+]
 
 
 @pytest.mark.parametrize('height', [32, 64])
-@pytest.mark.parametrize('flags', [{}, {'login_required': True}, {'data_stale': True},
-                                   {'login_required': True, 'data_stale': True}])
+@pytest.mark.parametrize('flags', [{}, {'login_required': True}, {'data_stale': True}, {'login_required': True, 'data_stale': True}])
 @pytest.mark.parametrize('title', LONG_TITLES)
 def test_long_titles_stay_on_the_panel_and_clear_the_icons(monkeypatch, height, flags, title):
     summary = {**STRENGTH, 'discipline': 'Tread Bootcamp', 'title': title, **flags}
@@ -352,8 +384,7 @@ def test_long_titles_stay_on_the_panel_and_clear_the_icons(monkeypatch, height, 
 # ---- 64x64 intro, top to bottom: the instructor caption goes first when room runs out (Joel, 2026-11-17) ----
 @pytest.mark.parametrize('discipline', ['Tread Bootcamp', 'Bike Bootcamp'])  # one- and two-line headers
 def test_64_row_two_line_instructor_keeps_its_caption_under_a_one_line_title(discipline):
-    summary = {**STRENGTH, 'discipline': discipline, 'title': '30 min Walking Bootcamp',
-               'instructor': 'Kirsten Ferguson'}
+    summary = {**STRENGTH, 'discipline': discipline, 'title': '30 min Walking Bootcamp', 'instructor': 'Kirsten Ferguson'}
     matrix = frame(summary, 0.5, 64)
     caption = rows_of(matrix, GREY)
     heart = rows_of(matrix, HEART)
@@ -368,8 +399,7 @@ def test_64_row_two_line_instructor_keeps_its_caption_under_a_one_line_title(dis
 @pytest.mark.parametrize('discipline', ['Strength', 'Bike Bootcamp'])  # one- and two-line headers
 def test_64_row_two_line_title_and_instructor_keep_the_caption_and_drop_the_heart_rate_row(monkeypatch, discipline):
     # Caption and name don't clear the heart-rate row under a two-line title: the intro goes without the row.
-    summary = {**STRENGTH, 'discipline': discipline, 'title': '20 min Full Body Strength',
-               'instructor': 'Matty Maggiacomo'}
+    summary = {**STRENGTH, 'discipline': discipline, 'title': '20 min Full Body Strength', 'instructor': 'Matty Maggiacomo'}
     matrix = frame(summary, 0.5, 64)
     caption = rows_of(matrix, GREY)
     assert caption, 'INSTRUCTOR caption missing'

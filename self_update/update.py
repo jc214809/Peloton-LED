@@ -15,6 +15,7 @@ once its CI has passed. An update:
    loop), and the settings page answers. Pass: it joins the good commits. Fail, or any step
    erroring: roll back (the old commit, the freeze, config.json, restart) and say why by Pushover.
 """
+
 import logging
 import os
 import re
@@ -24,8 +25,10 @@ import time
 from dataclasses import dataclass
 
 from peloton import notify
-from self_update import github, state as states
+from self_update import github
+from self_update import state as states
 from self_update.board import CommandFailed
+
 # Eager, never inside _pushover: the updater runs from the checkout, so an import after a checkout
 # would load the new version's modules next to the old ones already in memory (a failed rollback's
 # alert would then die on ImportError).
@@ -34,36 +37,36 @@ from utils import heartbeat
 
 logger = logging.getLogger('peloton-led.update')
 
-RELEASES, BETA = "releases", "beta"
+RELEASES, BETA = 'releases', 'beta'
 CHANNELS = (RELEASES, BETA)
-BETA_BRANCH = "develop-beta"
-RELEASE_BRANCH = "main"
+BETA_BRANCH = 'develop-beta'
+RELEASE_BRANCH = 'main'
 # The first release scripts/auto_tag.py makes (no tags before it) is the first with the updater.
 MIN_RELEASE = (0, 1, 0)
 # Present in every version the updater may install.
-UPDATER_FILE = "self_update/__init__.py"
+UPDATER_FILE = 'self_update/__init__.py'
 # Either changing means pip runs (the installer installs requirements-auth.txt on a board with
 # browser login).
-REQUIREMENTS = ("requirements.txt", "requirements-auth.txt")
+REQUIREMENTS = ('requirements.txt', 'requirements-auth.txt')
 REQUIRED_FREE_BYTES = 300 * 1024 * 1024
 # The firmware's "now" flags: under-voltage, frequency capped, throttled, soft temperature limit.
 # (The since-boot flags, bits 16-19, would block every update until a reboot.)
 THROTTLED_NOW = 0xF
-APP_UNIT = "peloton-led.service"
-SETTINGS_UNIT = "peloton-settings.service"
+APP_UNIT = 'peloton-led.service'
+SETTINGS_UNIT = 'peloton-settings.service'
 SETTINGS_PORT = 8080
 # The display's config when the checkout has none (peloton-install.sh's $CONFIG_DIR/config.json).
-INSTALLED_CONFIG = "/etc/peloton-led/config.json"
+INSTALLED_CONFIG = '/etc/peloton-led/config.json'
 # Where the Pushover keys live (peloton/notify.py reads them from the environment).
-AUTH_ENV = "/etc/peloton-led/auth.env"
-PUSHOVER_KEYS = ("PUSHOVER_APP_TOKEN", "PUSHOVER_USER_KEY")
+AUTH_ENV = '/etc/peloton-led/auth.env'
+PUSHOVER_KEYS = ('PUSHOVER_APP_TOKEN', 'PUSHOVER_USER_KEY')
 HEALTH_WINDOW_S = 5 * 60
 HEALTH_POLL_S = 5
 
 # Outcome results.
 # WAITING: nothing to install yet, but there's something newer (beta's tip, before its CI passes).
-UPDATED, CURRENT, BLOCKED, WOULD_UPDATE, WAITING = "updated", "current", "blocked", "would_update", "waiting"
-ROLLED_BACK, ROLLBACK_FAILED, NOTHING_TO_UNDO = "rolled_back", "rollback_failed", "nothing_to_undo"
+UPDATED, CURRENT, BLOCKED, WOULD_UPDATE, WAITING = 'updated', 'current', 'blocked', 'would_update', 'waiting'
+ROLLED_BACK, ROLLBACK_FAILED, NOTHING_TO_UNDO = 'rolled_back', 'rollback_failed', 'nothing_to_undo'
 SUCCESSES = (UPDATED, CURRENT, WOULD_UPDATE, WAITING, ROLLED_BACK)
 
 
@@ -89,13 +92,13 @@ class Outcome:
 
 def parse_version(text):
     """(major, minor, patch) from "v2.1.0" or "2.1.0", or None."""
-    found = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(text).strip())
+    found = re.fullmatch(r'v?(\d+)\.(\d+)\.(\d+)', str(text).strip())
     return tuple(int(n) for n in found.groups()) if found else None
 
 
 # What version.py gives (git describe without the "v"): "2.1.0", "2.1.5-beta", or either with
 # "-3-g1a2b3c4" for three commits past it.
-DESCRIBED = re.compile(r"v?(\d+)\.(\d+)\.(\d+)(-beta)?(?:-\d+-g[0-9a-f]+)?")
+DESCRIBED = re.compile(r'v?(\d+)\.(\d+)\.(\d+)(-beta)?(?:-\d+-g[0-9a-f]+)?')
 
 
 def installed_number(text):
@@ -106,9 +109,9 @@ def installed_number(text):
 
 
 def beta_number(text):
-    """"2.1.5" for exactly the Beta v2.1.5-beta (not a commit past it), else None."""
+    """ "2.1.5" for exactly the Beta v2.1.5-beta (not a commit past it), else None."""
     found = DESCRIBED.fullmatch(str(text).strip())
-    return ".".join(found.groups()[:3]) if found and found.group(4) and found.group(0).endswith("-beta") else None
+    return '.'.join(found.groups()[:3]) if found and found.group(4) and found.group(0).endswith('-beta') else None
 
 
 def release_of(text):
@@ -118,7 +121,7 @@ def release_of(text):
     if not found:
         return str(text)
     major, minor, patch, beta = found.groups()
-    return f"{major}.{minor}.0" if beta else f"{major}.{minor}.{patch}"
+    return f'{major}.{minor}.0' if beta else f'{major}.{minor}.{patch}'
 
 
 def newest_release(tags, installed):
@@ -131,9 +134,9 @@ def newest_release(tags, installed):
 def channel_of(board, sha, branch, record):
     """The channel a commit came from: RELEASES on a release tag or the release branch, the channel
     of the update (state.json's record) that installed it, else BETA (develop-beta, or a commit off it)."""
-    to = record.get("to") if isinstance(record.get("to"), dict) else {}
+    to = record.get('to') if isinstance(record.get('to'), dict) else {}
     if not sha:
-        return to.get("channel") if to.get("channel") in CHANNELS else RELEASES
+        return to.get('channel') if to.get('channel') in CHANNELS else RELEASES
     try:
         tagged = any(parse_version(tag) for tag in board.tags_at(sha))
     except CommandFailed as e:
@@ -141,31 +144,43 @@ def channel_of(board, sha, branch, record):
         tagged = False
     if tagged or branch == RELEASE_BRANCH:
         return RELEASES
-    if to.get("sha") == sha and to.get("channel") in CHANNELS:
-        return to["channel"]
+    if to.get('sha') == sha and to.get('channel') in CHANNELS:
+        return to['channel']
     return BETA
 
 
 def name_of(old):
     """A rollback point (state.json's "from") as people read it: a Beta by its number when it was
     exactly one, else by its commit; a release by its version and commit."""
-    sha = str(old.get("sha") or "?")[:7]
-    if old.get("channel") == BETA:
-        return f"Beta {beta_number(old.get('version')) or sha}"
-    return f"{old.get('version')} ({sha})"
+    sha = str(old.get('sha') or '?')[:7]
+    if old.get('channel') == BETA:
+        return f'Beta {beta_number(old.get("version")) or sha}'
+    return f'{old.get("version")} ({sha})'
 
 
 def live_config(app_dir):
     """The config.json the display reads: the checkout's when it has one (the installer binds it over
     INSTALLED_CONFIG), else INSTALLED_CONFIG."""
-    checkout = os.path.join(app_dir, "config.json")
+    checkout = os.path.join(app_dir, 'config.json')
     return checkout if os.path.isfile(checkout) else INSTALLED_CONFIG
 
 
 class Updater:
-    def __init__(self, board, state=None, gh=github, installed_version=None, config_path=None,  # noqa: PLR0913
-                 heartbeat_path=None, notify=None, auth_env=AUTH_ENV, clock=time.time, sleep=time.sleep):
+    def __init__(  # noqa: PLR0913
+        self,
+        board,
+        state=None,
+        gh=github,
+        installed_version=None,
+        config_path=None,
+        heartbeat_path=None,
+        notify=None,
+        auth_env=AUTH_ENV,
+        clock=time.time,
+        sleep=time.sleep,
+    ):
         from version import version
+
         self.board, self.state, self.gh = board, state or states.State(), gh
         self.installed_version = installed_version or version(board.app_dir)
         self.config_path = config_path or live_config(board.app_dir)
@@ -179,14 +194,16 @@ class Updater:
         problems = []
         free = self.board.free_bytes()
         if free < REQUIRED_FREE_BYTES:
-            problems.append(f"only {free // 2**20} MB free; an update needs {REQUIRED_FREE_BYTES // 2**20} MB")
+            problems.append(f'only {free // 2**20} MB free; an update needs {REQUIRED_FREE_BYTES // 2**20} MB')
         flags = self.board.throttled()
         if flags and flags & THROTTLED_NOW:
-            problems.append(f"the Pi is under-voltage or throttled right now ({flags:#x}): fix its power or cooling first")
+            problems.append(f'the Pi is under-voltage or throttled right now ({flags:#x}): fix its power or cooling first')
         changes = self.board.changes()
         if changes:
-            problems.append(f"the checkout has changes: {', '.join(c.strip() for c in changes[:3])}"
-                            + (f" and {len(changes) - 3} more" if len(changes) > 3 else ""))
+            problems.append(
+                f'the checkout has changes: {", ".join(c.strip() for c in changes[:3])}'
+                + (f' and {len(changes) - 3} more' if len(changes) > 3 else '')
+            )
         return problems
 
     def plan(self, channel):
@@ -195,7 +212,7 @@ class Updater:
         if channel == RELEASES:
             tag = newest_release(self.gh.releases(), self.installed_version)
             if not tag:
-                return None, Outcome(CURRENT, f"no release newer than {self.installed_version}")
+                return None, Outcome(CURRENT, f'no release newer than {self.installed_version}')
             return Target(RELEASES, tag), None
         sha = self.gh.branch_tip(BETA_BRANCH)
         if sha == self.board.head():
@@ -208,12 +225,12 @@ class Updater:
     def _resolve(self, target):
         """Fetch, and fill in target.sha. Returns the Outcome if it can't (or needn't) be installed, else None."""
         self.board.fetch()
-        sha = self.board.commit_of(f"refs/tags/{target.ref}" if target.channel == RELEASES else target.sha)
+        sha = self.board.commit_of(f'refs/tags/{target.ref}' if target.channel == RELEASES else target.sha)
         if not sha:
             return Outcome(BLOCKED, f"{target.ref} isn't in the fetched checkout")
         target.sha = sha
         if sha == self.board.head():
-            return Outcome(CURRENT, f"already on {target.ref} ({sha[:7]})")
+            return Outcome(CURRENT, f'already on {target.ref} ({sha[:7]})')
         if self.board.file_at(sha, UPDATER_FILE) is None:
             return Outcome(BLOCKED, f"{target.ref} ({sha[:7]}) predates the updater: it couldn't update or roll back again")
         return None
@@ -223,7 +240,7 @@ class Updater:
     def update(self, channel, dry_run=False):
         """Update on channel, or (dry_run) only say what it would do, changing nothing but the fetch."""
         if channel not in CHANNELS:
-            raise ValueError(f"channel must be one of {CHANNELS}")
+            raise ValueError(f'channel must be one of {CHANNELS}')
         if dry_run:
             return self._update(channel, dry_run=True)
         try:
@@ -234,9 +251,10 @@ class Updater:
 
     def _update(self, channel, dry_run=False):
         record = self.state.load()
-        if record["phase"] in states.UNFINISHED:
-            return Outcome(BLOCKED, f"an earlier update didn't finish (it stopped at {record['phase']}): "
-                                    "roll it back first (sudo peloton-rollback)")
+        if record['phase'] in states.UNFINISHED:
+            return Outcome(
+                BLOCKED, f"an earlier update didn't finish (it stopped at {record['phase']}): roll it back first (sudo peloton-rollback)"
+            )
         problems = self.preflight()
         target = None
         try:
@@ -244,7 +262,7 @@ class Updater:
         except github.GitHubError as e:
             problems.append(str(e))
         if problems:
-            return Outcome(BLOCKED, "; ".join(problems))
+            return Outcome(BLOCKED, '; '.join(problems))
         if target is None:
             return nothing
         try:
@@ -254,19 +272,19 @@ class Updater:
         if stop:
             return stop
         if dry_run:
-            return Outcome(WOULD_UPDATE, f"would update to {target.ref} ({target.sha[:7]})", target=target)
+            return Outcome(WOULD_UPDATE, f'would update to {target.ref} ({target.sha[:7]})', target=target)
         try:
             record = self._take_rollback_point(record, target)
         except (CommandFailed, OSError) as e:
             return Outcome(BLOCKED, f"couldn't take a rollback point, so nothing changed: {e}")
-        logger.info("Updating from %s to %s (%s).", record["from"]["sha"][:7], target.ref, target.sha[:7])
+        logger.info('Updating from %s to %s (%s).', record['from']['sha'][:7], target.ref, target.sha[:7])
         problem = self._switch_and_check(record, target)
         if problem is None:
             states.remember_good(record, target.sha)
             self.state.set_phase(record, states.UPDATED, reason=None)
-            logger.info("Updated to %s (%s); it passed its health check.", target.ref, target.sha[:7])
-            return Outcome(UPDATED, f"updated to {target.ref} ({target.sha[:7]})")
-        logger.error("The update to %s (%s) failed: %s. Rolling back.", target.ref, target.sha[:7], problem)
+            logger.info('Updated to %s (%s); it passed its health check.', target.ref, target.sha[:7])
+            return Outcome(UPDATED, f'updated to {target.ref} ({target.sha[:7]})')
+        logger.error('The update to %s (%s) failed: %s. Rolling back.', target.ref, target.sha[:7], problem)
         undone = self._roll_back(record, problem)
         return Outcome(undone.result, undone.message, ok=False)  # back where it was, but not updated
 
@@ -275,34 +293,43 @@ class Updater:
         try:
             self.board.checkout(target.sha)
             self.state.set_phase(record, states.SWITCHED)
-            self.board.install(skip_requirements=not record["from"]["requirements_changed"])
+            self.board.install(skip_requirements=not record['from']['requirements_changed'])
             self.state.set_phase(record, states.INSTALLED)
             self.state.set_phase(record, states.CHECKING)
-            problem = self._restart_and_check(record["from"]["display_running"])
+            problem = self._restart_and_check(record['from']['display_running'])
         except CommandFailed as e:
             problem = str(e)
         except Exception as e:  # anything at all: the board mustn't be left half-updated
-            logger.exception("The update failed unexpectedly.")
-            problem = f"the update failed unexpectedly: {e}"
+            logger.exception('The update failed unexpectedly.')
+            problem = f'the update failed unexpectedly: {e}'
         return problem
 
     def _take_rollback_point(self, record, target):
         head = self.board.head()
         freeze = self.board.pip_freeze()
         os.makedirs(self.state.folder, mode=0o700, exist_ok=True)
-        with open(self.state.freeze_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(freeze) + "\n")
+        with open(self.state.freeze_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(freeze) + '\n')
         has_config = os.path.isfile(self.config_path)
         if has_config:
             shutil.copy2(self.config_path, self.state.config_path)
         branch = self.board.branch()
         record.update(
-            {"from": {"sha": head, "branch": branch, "version": self.installed_version,
-                      "channel": channel_of(self.board, head, branch, record),
-                      "requirements_changed": any(self.board.changed(head, target.sha, path) for path in REQUIREMENTS),
-                      "config_saved": has_config, "display_running": self.board.active(APP_UNIT)},
-             "to": {"sha": target.sha, "ref": target.ref, "channel": target.channel},
-             "started_at": self.clock(), "reason": None})
+            {
+                'from': {
+                    'sha': head,
+                    'branch': branch,
+                    'version': self.installed_version,
+                    'channel': channel_of(self.board, head, branch, record),
+                    'requirements_changed': any(self.board.changed(head, target.sha, path) for path in REQUIREMENTS),
+                    'config_saved': has_config,
+                    'display_running': self.board.active(APP_UNIT),
+                },
+                'to': {'sha': target.sha, 'ref': target.ref, 'channel': target.channel},
+                'started_at': self.clock(),
+                'reason': None,
+            }
+        )
         return self.state.set_phase(record, states.READY)
 
     def _restart_and_check(self, display):
@@ -327,7 +354,7 @@ class Updater:
             if restarts_before is not None:
                 restarts = self.board.restarts(APP_UNIT) - restarts_before
                 if restarts > 0:
-                    return f"the display crashed: systemd restarted it {restarts} time{'s' if restarts > 1 else ''}"
+                    return f'the display crashed: systemd restarted it {restarts} time{"s" if restarts > 1 else ""}'
             problem = self._health_problem(since, restarts_before is not None, settings)
             if problem is None or self.clock() >= deadline:
                 return problem
@@ -338,7 +365,7 @@ class Updater:
             if not self.board.active(APP_UNIT):
                 return "the display isn't running"
             beat = heartbeat.read(self.heartbeat_path)
-            if not beat or beat["at"] < since:
+            if not beat or beat['at'] < since:
                 return "the display hasn't finished a screen since it restarted"
         if settings and not self.board.port_answers(SETTINGS_PORT):
             return f"the settings page doesn't answer on port {SETTINGS_PORT}"
@@ -346,12 +373,12 @@ class Updater:
 
     # undoing
 
-    def rollback(self, reason="rolled back by hand"):
+    def rollback(self, reason='rolled back by hand'):
         """Undo the last update (finished or not), back to its rollback point."""
         try:
             with self.state.lock():
                 record = self.state.load()
-                if not record.get("from") or record["phase"] in (states.IDLE, states.ROLLED_BACK):
+                if not record.get('from') or record['phase'] in (states.IDLE, states.ROLLED_BACK):
                     return Outcome(NOTHING_TO_UNDO, "there's no update to undo")
                 return self._roll_back(record, reason)
         except states.Busy as e:
@@ -363,50 +390,50 @@ class Updater:
         try:
             with self.state.lock():
                 record = self.state.load()
-                if record["phase"] not in states.UNFINISHED or not record.get("from"):
-                    return Outcome(NOTHING_TO_UNDO, f"no unfinished update (last: {record['phase']})")
-                logger.warning("An update stopped midway (at %s): rolling it back.", record["phase"])
-                return self._roll_back(record, f"the update stopped midway (at {record['phase']}), "
-                                               "probably a power cut")
+                if record['phase'] not in states.UNFINISHED or not record.get('from'):
+                    return Outcome(NOTHING_TO_UNDO, f'no unfinished update (last: {record["phase"]})')
+                logger.warning('An update stopped midway (at %s): rolling it back.', record['phase'])
+                return self._roll_back(record, f'the update stopped midway (at {record["phase"]}), probably a power cut')
         except states.Busy as e:
             return Outcome(BLOCKED, str(e))
 
     def _roll_back(self, record, reason):
         self.state.set_phase(record, states.ROLLING_BACK, reason=reason)
-        old = record["from"]
+        old = record['from']
         try:
-            branch = old.get("branch")
-            if branch and self.board.commit_of(f"refs/heads/{branch}") == old["sha"]:
+            branch = old.get('branch')
+            if branch and self.board.commit_of(f'refs/heads/{branch}') == old['sha']:
                 self.board.checkout(branch, detach=False)
             else:
-                self.board.checkout(old["sha"])
+                self.board.checkout(old['sha'])
             self.board.install(skip_requirements=True)  # the old installer: the old code into /opt and its units
-            if old.get("requirements_changed") or not self.board.installer_skips_requirements():
+            if old.get('requirements_changed') or not self.board.installer_skips_requirements():
                 self.board.pip_install(self.state.freeze_path)
-            if old.get("config_saved") and os.path.isfile(self.state.config_path):
+            if old.get('config_saved') and os.path.isfile(self.state.config_path):
                 shutil.copyfile(self.state.config_path, self.config_path)  # into the old file: keeps its owner
             # A rollback point from before display_running was kept: check the display if it's up.
-            display = old.get("display_running", self.board.active(APP_UNIT))
+            display = old.get('display_running', self.board.active(APP_UNIT))
             problem = self._restart_and_check(display)
         except CommandFailed as e:
             problem = str(e)
         except Exception as e:
-            logger.exception("The rollback failed unexpectedly.")
-            problem = f"the rollback failed unexpectedly: {e}"
-        bad = (record.get("to") or {}).get("sha")
-        record["good"] = [sha for sha in record.get("good", []) if sha != bad]
+            logger.exception('The rollback failed unexpectedly.')
+            problem = f'the rollback failed unexpectedly: {e}'
+        bad = (record.get('to') or {}).get('sha')
+        record['good'] = [sha for sha in record.get('good', []) if sha != bad]
         name = name_of(old)
         if problem is None:
             self.state.set_phase(record, states.ROLLED_BACK)
-            logger.warning("Rolled back to %s: %s.", name, reason)
-            self.notify("Update rolled back", f"Back on {name}. Why: {reason}.")
-            return Outcome(ROLLED_BACK, f"rolled back to {name}: {reason}")
+            logger.warning('Rolled back to %s: %s.', name, reason)
+            self.notify('Update rolled back', f'Back on {name}. Why: {reason}.')
+            return Outcome(ROLLED_BACK, f'rolled back to {name}: {reason}')
         self.state.set_phase(record, states.ROLLBACK_FAILED, rollback_problem=problem)
-        logger.error("Rolling back to %s failed: %s.", name, problem)
-        self.notify("Update rollback FAILED",
-                    f"Couldn't get back to {name}: {problem}. The update had failed because: {reason}. "
-                    "Over SSH: sudo peloton-rollback")
-        return Outcome(ROLLBACK_FAILED, f"rolling back to {name} failed: {problem} (the update failed: {reason})")
+        logger.error('Rolling back to %s failed: %s.', name, problem)
+        self.notify(
+            'Update rollback FAILED',
+            f"Couldn't get back to {name}: {problem}. The update had failed because: {reason}. Over SSH: sudo peloton-rollback",
+        )
+        return Outcome(ROLLBACK_FAILED, f'rolling back to {name} failed: {problem} (the update failed: {reason})')
 
     def _pushover(self, title, message):
         """Pushover the news with auth.env's keys (peloton/notify.py, which logs and never raises;
@@ -414,5 +441,5 @@ class Updater:
         for name, value in read_auth_env(self.auth_env).items():
             if name in PUSHOVER_KEYS and value:
                 os.environ.setdefault(name, value)
-        board = socket.gethostname().split(".")[0]
-        notify.send_pushover(f"{board}: {title}", message)
+        board = socket.gethostname().split('.')[0]
+        notify.send_pushover(f'{board}: {title}', message)

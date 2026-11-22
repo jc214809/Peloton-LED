@@ -7,6 +7,7 @@ writes docs/screenshots/rotation/lifetime.png: the lifetime pages for TOTALS (bi
 page on a 64x64 panel (top row) and two on a 64x32 panel (bottom row), labelled like the README's other
 screenshots.
 """
+
 import argparse
 import os
 import sys
@@ -24,9 +25,18 @@ from scripts.render_logo import GAP, LABEL_WIDTH, SHEET_BACKGROUND, SHEET_SCALE 
 
 # A real rider's totals, biggest first, the order the board shows them.
 TOTALS = [
-    ('cycling', 664), ('strength', 484), ('walking', 426), ('stretching', 195),
-    ('running', 156), ('tread_bootcamp', 116), ('bike_bootcamp', 47), ('cardio', 41),
-    ('meditation', 29), ('rowing', 18), ('row_bootcamp', 8), ('yoga', 4),
+    ('cycling', 664),
+    ('strength', 484),
+    ('walking', 426),
+    ('stretching', 195),
+    ('running', 156),
+    ('tread_bootcamp', 116),
+    ('bike_bootcamp', 47),
+    ('cardio', 41),
+    ('meditation', 29),
+    ('rowing', 18),
+    ('row_bootcamp', 8),
+    ('yoga', 4),
 ]
 
 
@@ -34,12 +44,11 @@ def panels(height, scale=SHEET_SCALE):
     """Every lifetime page for TOTALS on a 64 x `height` panel, each pixel `scale` wide."""
     initialize_fonts(height)
     per_page = 4 if height >= 64 else 2
-    pages = [TOTALS[i:i + per_page] for i in range(0, len(TOTALS), per_page)]
+    pages = [TOTALS[i : i + per_page] for i in range(0, len(TOTALS), per_page)]
     images = []
     for number, page in enumerate(pages, 1):
         matrix = ImageMatrix(64, height)
-        state = {'items': [{'icon': key, 'count': count} for key, count in page],
-                 'page': number, 'pages': len(pages)}
+        state = {'items': [{'icon': key, 'count': count} for key, count in page], 'page': number, 'pages': len(pages)}
         if not LifetimeOverviewScreen().render(matrix, state):
             raise RuntimeError(f'lifetime page drew nothing for {page}')
         images.append(matrix.image.resize((64 * scale, height * scale), Image.NEAREST))

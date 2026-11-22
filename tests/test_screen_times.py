@@ -1,11 +1,13 @@
 """Screen times (peloton/screen_times.py): never 0, shared out across a page's frames, and the settings
 page's figures are the board's."""
+
 import copy
 import json
 import logging
 import re
 
 import pytest
+from test_settings_form import posted
 
 from peloton import screen_times
 from peloton.config import DEFAULTS, ROTATION_SECTIONS, load_config
@@ -16,10 +18,10 @@ from scripts.render_demo import ImageMatrix
 from settings_page import page
 from settings_page.form import apply_form, number_text
 
-from test_settings_form import posted
-
-RIVALS = [{'name': 'Joel', 'workouts': 5, 'minutes': 245, 'output_kj': 1234},
-          {'name': 'Jen', 'workouts': 4, 'minutes': 190, 'output_kj': 612}]
+RIVALS = [
+    {'name': 'Joel', 'workouts': 5, 'minutes': 245, 'output_kj': 1234},
+    {'name': 'Jen', 'workouts': 4, 'minutes': 190, 'output_kj': 612},
+]
 
 
 def _retire(display):
@@ -30,6 +32,7 @@ def _retire(display):
 def test_the_shared_numbers_match_the_screens_and_config_they_stand_for():
     from display.ui import username, versus_screen
     from display.ui.celebration_screen import INTRO_SECONDS, MIN_CARD_SECONDS
+
     assert screen_times.VERSUS_STATS == len(versus_screen.STATS)
     assert screen_times.HIGHLIGHT_SECONDS == username.DETAIL_INTERVAL_SECONDS
     assert screen_times.FRAME_SECONDS == versus_screen.DETAIL_INTERVAL_SECONDS
@@ -42,15 +45,24 @@ def test_the_journeys_two_steps_need_4_seconds_each():
     assert screen_times.least_seconds('journey', 32) == screen_times.least_seconds('journey', 64) == 1
     display = {**DEFAULTS, 'screen_durations': {'journey': 3}}
     assert page.shows_for('journey', display, 32) == (
-        '3 s. With miles of more than one type, the trip then the miles by type, 4 s each (8 s in all).')
+        '3 s. With miles of more than one type, the trip then the miles by type, 4 s each (8 s in all).'
+    )
     assert page.shows_for('journey', display, 64) == '3 s.'
 
 
 def test_an_old_zero_is_the_switch_it_meant():
-    display, changed = _retire({'rotation': ['username', 'goals', 'lifetime', 'total_workouts', 'versus'],
-                                'screen_durations': {'goals': 0, 'versus': 12}, 'logo_duration': 0})
-    assert display == {'rotation': ['username', 'lifetime', 'total_workouts', 'versus'],
-                       'screen_durations': {'versus': 12}, 'show_logo': False}
+    display, changed = _retire(
+        {
+            'rotation': ['username', 'goals', 'lifetime', 'total_workouts', 'versus'],
+            'screen_durations': {'goals': 0, 'versus': 12},
+            'logo_duration': 0,
+        }
+    )
+    assert display == {
+        'rotation': ['username', 'lifetime', 'total_workouts', 'versus'],
+        'screen_durations': {'versus': 12},
+        'show_logo': False,
+    }
     assert changed and any('goals' in line for line in changed)
 
 
@@ -72,8 +84,7 @@ def test_a_config_without_zeros_is_left_alone():
 
 def test_an_old_config_with_zeros_still_loads_and_says_what_it_switched_off(tmp_path, caplog):
     path = tmp_path / 'config.json'
-    path.write_text(json.dumps({'display': {'rotation': ['username', 'heatmap'], 'logo_duration': 0,
-                                            'screen_durations': {'heatmap': 0}}}))
+    path.write_text(json.dumps({'display': {'rotation': ['username', 'heatmap'], 'logo_duration': 0, 'screen_durations': {'heatmap': 0}}}))
     with caplog.at_level(logging.WARNING, logger='peloton-led.config'):
         display = load_config(path)['display']
     assert display['rotation'] == ['username'] and display['show_logo'] is False
@@ -82,18 +93,23 @@ def test_an_old_config_with_zeros_still_loads_and_says_what_it_switched_off(tmp_
 
 
 def test_more_time_on_the_name_page_means_longer_highlights_not_a_repeat():
-    snapshot = {'summaries': [], 'status': 'ready', 'totals': {'Total Workouts': 600, 'Cycling': 400},
-                'weekly_progress': {'workouts': 3, 'minutes': 90}}
+    snapshot = {
+        'summaries': [],
+        'status': 'ready',
+        'totals': {'Total Workouts': 600, 'Cycling': 400},
+        'weekly_progress': {'workouts': 3, 'minutes': 90},
+    }
     display = {**DEFAULTS, 'rotation': ['username'], 'screen_durations': {'username': 24}}
-    (_, state, duration), = build_rotation_pages(snapshot, None, display, 'Joel', 64)
+    ((_, state, duration),) = build_rotation_pages(snapshot, None, display, 'Joel', 64)
     assert len(state['details']) == 2 and duration == 24 and state['detail_seconds'] == 12
     display['screen_durations']['username'] = 5  # under 5 s a highlight: raised, never cut short
-    (_, state, duration), = build_rotation_pages(snapshot, None, display, 'Joel', 64)
+    ((_, state, duration),) = build_rotation_pages(snapshot, None, display, 'Joel', 64)
     assert duration == 10 and state['detail_seconds'] == 5
 
 
 def _frame(screen, state, height, at):
     from display.display import initialize_fonts
+
     initialize_fonts(height)
     matrix = ImageMatrix(height=height)
     screen.on_enter(matrix, state)
@@ -104,6 +120,7 @@ def _frame(screen, state, height, at):
 
 def test_the_name_page_holds_its_last_highlight_instead_of_starting_over():
     from display.ui.username import UsernameScreen
+
     details = [{'label': f'FACT {i}', 'lines': [f'LINE {i}']} for i in range(3)]
     state = {'username': 'Joel', 'details': details, 'detail_seconds': 8}
     first, last = (_frame(UsernameScreen('info'), state, 64, at) for at in (1, 17))
@@ -114,29 +131,47 @@ def test_the_name_page_holds_its_last_highlight_instead_of_starting_over():
 
 def test_head_to_head_on_32_rows_shares_its_time_across_the_stats():
     from display.ui.versus_screen import VersusScreen
+
     display = {**DEFAULTS, 'rotation': ['versus'], 'screen_durations': {'versus': 24}}
     snapshot = {'summaries': [], 'status': 'ready', 'totals': {}}
-    (_, state, duration), = build_rotation_pages(snapshot, None, display, 'Joel', 32, rivals=RIVALS)
+    ((_, state, duration),) = build_rotation_pages(snapshot, None, display, 'Joel', 32, rivals=RIVALS)
     assert duration == 24 and state['stat_seconds'] == 8
     first, last = (_frame(VersusScreen(), state, 32, at) for at in (1, 17))
     assert first != last and _frame(VersusScreen(), state, 32, 25) == last
-    (_, state, duration), = build_rotation_pages(snapshot, None, display, 'Joel', 64, rivals=RIVALS)
+    ((_, state, duration),) = build_rotation_pages(snapshot, None, display, 'Joel', 64, rivals=RIVALS)
     assert duration == 24 and 'stat_seconds' not in state  # 64 rows: one page with every stat
 
 
 # The board's page names, by the rotation screen that makes them.
-SECTION_OF = {'username': 'username', 'streak': 'streaks', 'streak_risk': 'streaks', 'versus': 'versus',
-              'discipline': 'total_workouts', 'lifetime': 'lifetime', 'countdown': 'next_milestone',
-              'journey': 'journey', 'heatmap': 'heatmap', 'goal': 'goals', 'celebration': 'milestones',
-              'challenge': 'challenges', 'next_class': 'next_class'}
+SECTION_OF = {
+    'username': 'username',
+    'streak': 'streaks',
+    'streak_risk': 'streaks',
+    'versus': 'versus',
+    'discipline': 'total_workouts',
+    'lifetime': 'lifetime',
+    'countdown': 'next_milestone',
+    'journey': 'journey',
+    'heatmap': 'heatmap',
+    'goal': 'goals',
+    'celebration': 'milestones',
+    'challenge': 'challenges',
+    'next_class': 'next_class',
+}
 
 
 @pytest.mark.parametrize('rows', [32, 64])
 def test_the_settings_page_says_the_times_the_board_plays(tmp_path, rows):
     """Every screen's page, built by the board from demo data, lasts what the settings page's line says."""
-    display = {**DEFAULTS, 'rotation': list(DEFAULTS['rotation']), 'weekly_goals': {'workouts': 5, 'minutes': 150},
-               'milestones': [100, 2000], 'milestone_within': 50, 'overview_duration': 3,
-               'screen_durations': {'versus': 7, 'lifetime': 2, 'username': 30, 'goals': 6}}
+    display = {
+        **DEFAULTS,
+        'rotation': list(DEFAULTS['rotation']),
+        'weekly_goals': {'workouts': 5, 'minutes': 150},
+        'milestones': [100, 2000],
+        'milestone_within': 50,
+        'overview_duration': 3,
+        'screen_durations': {'versus': 7, 'lifetime': 2, 'username': 30, 'goals': 6},
+    }
     dashboard = Dashboard(tmp_path / 'missing-token', display, demo=True)
     snapshot = dashboard.snapshot()
     pages = build_rotation_pages(snapshot, dashboard, display, 'Joel', rows, rivals=RIVALS)
@@ -153,8 +188,7 @@ def test_the_settings_page_says_the_times_the_board_plays(tmp_path, rows):
             assert f'({number_text(round(duration, 1))} s in all)' in line, line
         elif section != 'username':  # its line gives the rule (it depends on the day's highlights)
             assert line.startswith(f'{number_text(round(duration, 1))} s'), (section, line)
-    assert {'username', 'versus', 'total_workouts', 'lifetime', 'goals', 'journey', 'challenges',
-            'next_class'} <= seen
+    assert {'username', 'versus', 'total_workouts', 'lifetime', 'goals', 'journey', 'challenges', 'next_class'} <= seen
 
 
 def _rotation_row(html, name):
@@ -163,8 +197,7 @@ def _rotation_row(html, name):
 
 @pytest.mark.parametrize('rows', [32, 64])
 def test_latest_workouts_has_no_seconds_box_its_pages_last_every_stat_once(rows):
-    config = {'matrix': {'rows': rows, 'cols': 64},
-              'display': {'screen_durations': {'latest_workouts': 15}, 'compact_workout_pages': True}}
+    config = {'matrix': {'rows': rows, 'cols': 64}, 'display': {'screen_durations': {'latest_workouts': 15}, 'compact_workout_pages': True}}
     row = _rotation_row(page.settings_page(config), 'latest_workouts')
     assert 'name="duration_latest_workouts"' not in row and 'Every stat' in row
     assert 'every stat once: 4 s each' in row
@@ -173,16 +206,20 @@ def test_latest_workouts_has_no_seconds_box_its_pages_last_every_stat_once(rows)
 def test_each_seconds_box_starts_at_what_its_screen_needs():
     for rows, versus in ((64, '1'), (32, '12')):
         html = page.settings_page({'matrix': {'rows': rows, 'cols': 64}, 'display': {}})
-        mins = dict(re.findall(r'id="duration_(\w+)" name="duration_\w+" value="[^"]*" inputmode="decimal" '
-                               r'step="any" min="([^"]+)"', html))
+        mins = dict(
+            re.findall(
+                r'id="duration_(\w+)" name="duration_\w+" value="[^"]*" inputmode="decimal" '
+                r'step="any" min="([^"]+)"',
+                html,
+            )
+        )
         assert mins['lifetime'] == '5' and mins['milestones'] == '5.8' and mins['username'] == '5'
         assert mins['versus'] == versus and mins['goals'] == '1'
         assert re.search(r'id="logo_duration" [^>]*min="1"', html)
 
 
 def test_a_saved_time_under_the_minimum_shows_and_saves_as_the_board_plays_it():
-    config = {'matrix': {'rows': 32, 'cols': 64},
-              'display': {'screen_durations': {'lifetime': 3.2, 'versus': 5}}}
+    config = {'matrix': {'rows': 32, 'cols': 64}, 'display': {'screen_durations': {'lifetime': 3.2, 'versus': 5}}}
     html = page.settings_page(config)
     assert 'id="duration_lifetime" name="duration_lifetime" value="5"' in html
     assert 'id="duration_versus" name="duration_versus" value="12"' in html
@@ -192,9 +229,11 @@ def test_a_saved_time_under_the_minimum_shows_and_saves_as_the_board_plays_it():
 
 def test_a_time_under_the_minimum_is_refused_with_how_to_hide_the_screen():
     config = {'matrix': {'rows': 32, 'cols': 64}, 'display': {}}
-    for field, value, message in (('duration_versus', '8', 'Head to head needs at least 12 seconds'),
-                                  ('duration_lifetime', '0', 'Lifetime by discipline needs at least 5 seconds'),
-                                  ('logo_duration', '0', 'Logo needs at least 1 second. To hide the logo')):
+    for field, value, message in (
+        ('duration_versus', '8', 'Head to head needs at least 12 seconds'),
+        ('duration_lifetime', '0', 'Lifetime by discipline needs at least 5 seconds'),
+        ('logo_duration', '0', 'Logo needs at least 1 second. To hide the logo'),
+    ):
         _, problems = apply_form(config, posted(config, **{field: value}))
         assert problems and problems[0].startswith(message), problems
 
@@ -214,8 +253,7 @@ def test_the_logo_has_a_switch_and_an_old_zero_shows_it_off():
 
 
 def test_an_old_zero_shows_its_screen_switched_off():
-    html = page.settings_page({'display': {'rotation': ['username', 'heatmap'],
-                                           'screen_durations': {'heatmap': 0}}})
+    html = page.settings_page({'display': {'rotation': ['username', 'heatmap'], 'screen_durations': {'heatmap': 0}}})
     assert 'name="rotation_on_heatmap"' in html
     assert 'id="rotation_on_heatmap" name="rotation_on_heatmap" aria-label' in html  # not checked
     assert 'value="0"' not in _rotation_row(html, 'heatmap')

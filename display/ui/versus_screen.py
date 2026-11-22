@@ -1,7 +1,8 @@
 """Two riders side by side for the current week: workouts, minutes, output."""
-from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
+from driver import graphics
+
 from .last_workout.sprites import _TROPHY_W, _draw_trophy
 from .screen import Screen
 

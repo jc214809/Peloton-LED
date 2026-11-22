@@ -6,6 +6,7 @@ refetch: `<raw>/<rider>/<id>.workout.json` (detail), `<raw>/<rider>/<id>.json` (
 `<raw>/rides/<ride_id>.json` (class details). Standard library only apart from the API client the
 caller passes in.
 """
+
 import json
 import logging
 import os
@@ -69,9 +70,11 @@ def _write_json(path, payload):
 def trim_for_board(rows, now):
     """{id: row} of the in-scope rows from the last BOARD_DAYS days. Pure: `rows` is not changed."""
     since = now - BOARD_DAYS * DAY
-    return {k: row for k, row in rows.items()
-            if row.get('disc') in DISCIPLINES and isinstance(row.get('start'), (int, float))
-            and row['start'] >= since}
+    return {
+        k: row
+        for k, row in rows.items()
+        if row.get('disc') in DISCIPLINES and isinstance(row.get('start'), (int, float)) and row['start'] >= since
+    }
 
 
 def current_board_rows(rows, now):
@@ -94,8 +97,7 @@ class RowStore:
         payload = _read_json(store.path)
         if payload is None:
             return store
-        if not isinstance(payload, dict) or payload.get('version') != STORE_VERSION \
-                or not isinstance(payload.get('rows'), dict):
+        if not isinstance(payload, dict) or payload.get('version') != STORE_VERSION or not isinstance(payload.get('rows'), dict):
             log.warning('Row store %s is another version or malformed; starting empty', store.path)
             return store
         store.rows = {k: v for k, v in payload['rows'].items() if isinstance(v, dict) and v.get('id') == k}
@@ -161,8 +163,7 @@ class RawFiles:
     def workout_ids(self):
         if not self.folder.is_dir():
             return []
-        return sorted(p.name[:-len('.workout.json')] for p in self.folder.iterdir()
-                      if p.name.endswith('.workout.json'))
+        return sorted(p.name[: -len('.workout.json')] for p in self.folder.iterdir() if p.name.endswith('.workout.json'))
 
     def build(self, workout_id):
         """The row from saved files, or None when the detail is missing, unreadable or incomplete."""
@@ -217,12 +218,15 @@ def candidate_ids(log_workouts=None, listed=None, now=0):
         since = now - WINDOW_DAYS * DAY
         for workout_id, row in log_workouts.items():
             start = row.get('start')
-            if (row.get('status') == 'COMPLETE' and row.get('discipline') in DISCIPLINES
-                    and isinstance(start, (int, float)) and start >= since):
+            if (
+                row.get('status') == 'COMPLETE'
+                and row.get('discipline') in DISCIPLINES
+                and isinstance(start, (int, float))
+                and start >= since
+            ):
                 found.append((start, workout_id))
     for workout in listed or []:
-        if (workout.get('id') and workout.get('status') == 'COMPLETE'
-                and discipline(workout.get('fitness_discipline')) in DISCIPLINES):
+        if workout.get('id') and workout.get('status') == 'COMPLETE' and discipline(workout.get('fitness_discipline')) in DISCIPLINES:
             found.append((workout.get('start_time') or 0, workout['id']))
     seen = set()
     ordered = []
@@ -289,8 +293,7 @@ def sync(client, store, raw, ids, limit=MAX_PER_RUN):
         except LoginRequired:
             raise
         except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
-            log.warning('Workout %s skipped (%s: %s); will try again next run', workout_id,
-                        type(exc).__name__, exc)
+            log.warning('Workout %s skipped (%s: %s); will try again next run', workout_id, type(exc).__name__, exc)
             continue
         if row:
             store.upsert(row)

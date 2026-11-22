@@ -1,5 +1,6 @@
 """Shared timestamp handling. Date-only values never imply an exact instant."""
-from datetime import date, datetime, timezone
+
+from datetime import UTC, date, datetime
 from math import isfinite
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -27,7 +28,7 @@ def parse_timestamp(value, tzname=None):
         if not isfinite(number):
             return None
         try:
-            return datetime.fromtimestamp(number / 1000 if abs(number) >= 1e12 else number, timezone.utc)
+            return datetime.fromtimestamp(number / 1000 if abs(number) >= 1e12 else number, UTC)
         except (ValueError, OverflowError, OSError):
             return None
     if isinstance(value, str):
@@ -39,7 +40,7 @@ def parse_timestamp(value, tzname=None):
             if result.tzinfo is None:
                 zone = display_timezone(tzname)
                 result = result.replace(tzinfo=zone) if zone else result.astimezone()
-            return result.astimezone(timezone.utc)
+            return result.astimezone(UTC)
         except ValueError:
             pass
     return None

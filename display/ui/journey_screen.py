@@ -11,11 +11,12 @@ pulses gently, and the groups come in one after another
 (64 rows: each row slides in from the left; 32 rows: the split bar grows a colour at a time, each
 row appearing as its colour lands). Everything settles within INTRO_SECONDS of the step starting.
 """
+
 import math
 
+from display.display import get_text_width, loaded_fonts
 from driver import graphics
 
-from display.display import get_text_width, loaded_fonts
 from .screen import Screen
 
 TRACK_COLOR = (30, 30, 38)
@@ -34,14 +35,14 @@ MAX_GROUPS = 3
 
 # The animation, in seconds from the start of a step. A 32-row step has at least 4 s (FRAME_SECONDS),
 # so the intro leaves 3 s of still page.
-FILL_SECONDS = 1.0           # the bar fills and the miles count up
-ROW_START_SECONDS = 0.3      # 64 rows: the first group row starts sliding in
-ROW_GAP_SECONDS = 0.15       # ... and each next one this much later
-ROW_SLIDE_SECONDS = 0.25     # ... taking this long to arrive
-SPLIT_GROW_SECONDS = 0.8     # 32 rows: the split bar grows to full width
-INTRO_SECONDS = 1.0          # all of the above are done by now (a test checks)
-PULSE_SECONDS = 2.0          # the bar's tip: bright to dim and back
-PULSE_LOW = 0.35             # the tip's dimmest, as a share of full brightness
+FILL_SECONDS = 1.0  # the bar fills and the miles count up
+ROW_START_SECONDS = 0.3  # 64 rows: the first group row starts sliding in
+ROW_GAP_SECONDS = 0.15  # ... and each next one this much later
+ROW_SLIDE_SECONDS = 0.25  # ... taking this long to arrive
+SPLIT_GROW_SECONDS = 0.8  # 32 rows: the split bar grows to full width
+INTRO_SECONDS = 1.0  # all of the above are done by now (a test checks)
+PULSE_SECONDS = 2.0  # the bar's tip: bright to dim and back
+PULSE_LOW = 0.35  # the tip's dimmest, as a share of full brightness
 
 
 def _fit(font, text, width):
@@ -81,7 +82,7 @@ def group_figure(cents, fits=lambda text: True):
 
 def percent(progress):
     """Whole percent of this leg, rounded down so it never says 100% short of the destination."""
-    return f"{min(99, int(progress['fraction'] * 100))}%"
+    return f'{min(99, int(progress["fraction"] * 100))}%'
 
 
 def journey_text(progress, fits=lambda text: True, miles_fit=lambda text: True):
@@ -121,8 +122,12 @@ def at_moment(progress, t):
     if grown >= 1:
         return progress
     leg = progress['leg_miles'] * grown
-    return {**progress, 'leg_miles': leg, 'miles': progress['miles'] - progress['leg_miles'] + leg,
-            'fraction': progress['fraction'] * grown}
+    return {
+        **progress,
+        'leg_miles': leg,
+        'miles': progress['miles'] - progress['leg_miles'] + leg,
+        'fraction': progress['fraction'] * grown,
+    }
 
 
 def counted_miles(progress, t, miles_fit=lambda text: True):
@@ -161,6 +166,7 @@ def _right(matrix, font, right, y, color, text):
 
 class JourneyScreen(Screen):
     """state: the dict from peloton.stats.journey.journey_progress(), plus step_seconds on 32 rows."""
+
     animated = True
     atomic_frames = True
     frame_seconds = 0.05  # 20 fps, smooth enough for the fill and the slide
@@ -184,8 +190,18 @@ class JourneyScreen(Screen):
         big = loaded_fonts.get('big') or small
         if matrix.height >= 64:
             # Heading, miles, status and bar take the top 40 rows; the split fills the rest.
-            self._trip(matrix, progress, small, (big, loaded_fonts.get('bold') or small), self.elapsed,
-                       miles_y=24, status_y=32, bar_y=36, bar_h=4, trip_y=40)
+            self._trip(
+                matrix,
+                progress,
+                small,
+                (big, loaded_fonts.get('bold') or small),
+                self.elapsed,
+                miles_y=24,
+                status_y=32,
+                bar_y=36,
+                bar_h=4,
+                trip_y=40,
+            )
             self._legend(matrix, progress, small, self.elapsed)
             return True
         step, since = 0, self.elapsed
@@ -198,8 +214,18 @@ class JourneyScreen(Screen):
             matrix.Clear()  # a board without frame canvases keeps the last step's pixels otherwise
             self._step = step
         if step == 0:
-            self._trip(matrix, progress, small, (big, loaded_fonts.get('countdown') or small), since,
-                       miles_y=17, status_y=23, bar_y=27, bar_h=3, trip_y=31)
+            self._trip(
+                matrix,
+                progress,
+                small,
+                (big, loaded_fonts.get('countdown') or small),
+                since,
+                miles_y=17,
+                status_y=23,
+                bar_y=27,
+                bar_h=3,
+                trip_y=31,
+            )
         else:
             self._split(matrix, progress, small, since)
         return True
@@ -215,11 +241,13 @@ class JourneyScreen(Screen):
 
         def big_font(text):
             return next((f for f in big_fonts if 2 + get_text_width(f, text) + 2 + unit_w <= w - 2), None)
+
         # One decimal if a big font has room for it beside MI, else none.
         miles = journey_text(progress, miles_fit=lambda text: big_font(text) is not None)[0]
         font = big_font(miles) or small
-        shown, status, pct = trip_text(progress, t, fits=lambda text: get_text_width(small, text) <= room,
-                                       miles_fit=lambda text: big_font(text) is not None)
+        shown, status, pct = trip_text(
+            progress, t, fits=lambda text: get_text_width(small, text) <= room, miles_fit=lambda text: big_font(text) is not None
+        )
         graphics.DrawText(matrix, font, 2, miles_y, _WHITE, shown)
         graphics.DrawText(matrix, small, 2 + get_text_width(font, miles) + 2, miles_y, _WHITE, 'MI')
         graphics.DrawText(matrix, small, 2, status_y, _ORANGE, _fit(small, status, room))
@@ -227,7 +255,7 @@ class JourneyScreen(Screen):
         # This leg's progress; past the first leg, the trip number shortens the bar.
         bar_end = w - 3
         if progress.get('trip', 1) > 1:
-            tag = f"TRIP {progress['trip']}"
+            tag = f'TRIP {progress["trip"]}'
             _right(matrix, small, w - 2, trip_y, _GREY, tag)
             bar_end = w - 2 - get_text_width(small, tag) - 3
         _rect(matrix, 2, bar_end, bar_y, bar_h, TRACK_COLOR)
@@ -256,8 +284,13 @@ class JourneyScreen(Screen):
             _rect(matrix, 2 + dx, 4 + dx, y - 4, 3, color)
             name = str(group.get('label', ''))
             # Two decimals unless the whole label then wouldn't fit beside them (WALK/RUN at 100+ miles).
-            value = group_figure(cents[row], lambda text: 7 + get_text_width(small, name) + 3  # noqa: B023  called within the iteration: group_figure calls it at once
-                                 <= w - 2 - get_text_width(small, text))
+            value = group_figure(
+                cents[row],
+                lambda text: (
+                    7 + get_text_width(small, name) + 3  # noqa: B023  called within the iteration: group_figure calls it at once
+                    <= w - 2 - get_text_width(small, text)
+                ),
+            )
             label = _fit(small, name, w - 2 - get_text_width(small, value) - 3 - 7)
             graphics.DrawText(matrix, small, 7 + dx, y, graphics.Color(*color), label)
             _right(matrix, small, w - 2 + dx, y, _WHITE, value)
@@ -283,8 +316,13 @@ class JourneyScreen(Screen):
                 continue  # this colour hasn't landed: its row waits
             y = 17 + row * 7
             name = str(group.get('label', ''))
-            value = group_figure(cents[row], lambda text: 2 + get_text_width(small, name) + 3  # noqa: B023  called within the iteration: group_figure calls it at once
-                                 <= w - 2 - get_text_width(small, text))
+            value = group_figure(
+                cents[row],
+                lambda text: (
+                    2 + get_text_width(small, name) + 3  # noqa: B023  called within the iteration: group_figure calls it at once
+                    <= w - 2 - get_text_width(small, text)
+                ),
+            )
             label = _fit(small, name, w - 4 - get_text_width(small, value) - 3)
             graphics.DrawText(matrix, small, 2, y, graphics.Color(*color), label)
             _right(matrix, small, w - 2, y, _WHITE, value)

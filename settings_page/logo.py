@@ -4,6 +4,7 @@ over a heart-rate zone bar, on a 36x36 pixel grid with room for rounded corners.
 As SVG for the page header and the browser tab (inline, so no request), and as a PNG for a phone's
 home screen (/apple-touch-icon.png: iOS won't take an SVG there).
 """
+
 import functools
 import io
 from urllib.parse import quote
@@ -21,16 +22,15 @@ def pixels():
     """Each lit pixel as ((x, y), rgb)."""
     found = [(xy, PELOTON_RED) for xy in mark_pixels(*MARK_AT)]
     left, top = BAR_AT
-    found += [((left + i, top + j), zone_color(i, BAR_WIDTH))
-              for i in range(BAR_WIDTH) for j in range(BAR_HEIGHT)]
+    found += [((left + i, top + j), zone_color(i, BAR_WIDTH)) for i in range(BAR_WIDTH) for j in range(BAR_HEIGHT)]
     return found
 
 
 def _hex(rgb):
-    return '#%02x%02x%02x' % rgb
+    return '#{:02x}{:02x}{:02x}'.format(*rgb)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def svg(rounded=False):
     """The icon as SVG, one rect per run of same-coloured pixels in a row. rounded: its own rounded
     background, for the browser tab (the page header rounds it with CSS)."""
@@ -47,9 +47,10 @@ def svg(rounded=False):
                 rects.append(f'<rect x="{start}" y="{y}" width="{x - start + 1}" height="1" fill="{_hex(row[x])}"/>')
                 start = following
     corner = ' rx="7"' if rounded else ''
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SIZE} {SIZE}" shape-rendering="crispEdges" '
-            f'aria-hidden="true"><rect width="{SIZE}" height="{SIZE}"{corner} fill="{_hex(BACKGROUND)}"/>'
-            + ''.join(rects) + '</svg>')
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SIZE} {SIZE}" shape-rendering="crispEdges" '
+        f'aria-hidden="true"><rect width="{SIZE}" height="{SIZE}"{corner} fill="{_hex(BACKGROUND)}"/>' + ''.join(rects) + '</svg>'
+    )
 
 
 def favicon_href():
@@ -57,7 +58,7 @@ def favicon_href():
     return 'data:image/svg+xml,' + quote(svg(rounded=True))
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def touch_icon_png():
     """The home-screen icon: a square PNG (the phone rounds its corners), each pixel 5x5."""
     from PIL import Image  # only this route needs Pillow

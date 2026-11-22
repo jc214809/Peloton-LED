@@ -1,4 +1,5 @@
 """Pins what load_snapshot accepts, rejects and repairs: the cache holds anything."""
+
 import json
 
 import pytest
@@ -27,22 +28,34 @@ def test_unreadable_files_load_as_none(tmp_path):
     assert load_snapshot(binary) is None
 
 
-@pytest.mark.parametrize('payload', [[], 'text', {'snapshot': {}}, {'version': 2, 'snapshot': {}},
-                                     {'version': 1, 'snapshot': []}, {'version': 1}])
+@pytest.mark.parametrize(
+    'payload', [[], 'text', {'snapshot': {}}, {'version': 2, 'snapshot': {}}, {'version': 1, 'snapshot': []}, {'version': 1}]
+)
 def test_wrong_envelope_is_rejected(tmp_path, payload):
     path = tmp_path / 'cache.json'
     path.write_text(json.dumps(payload), encoding='utf-8')
     assert load_snapshot(path) is None
 
 
-@pytest.mark.parametrize('change', [
-    {'summaries': {}}, {'summaries': None}, {'totals': []}, {'totals': None},
-    {'me': 'rider'}, {'me': []},
-    {'celebrated_pr_ids': 'x'}, {'celebrated_pr_ids': [1]},
-    {'celebrated_milestones': 'x'}, {'celebrated_milestones': ['1']},
-    {'weekly_progress': []},
-    {'last_updated': None}, {'last_updated': True}, {'last_updated': '1'},
-])
+@pytest.mark.parametrize(
+    'change',
+    [
+        {'summaries': {}},
+        {'summaries': None},
+        {'totals': []},
+        {'totals': None},
+        {'me': 'rider'},
+        {'me': []},
+        {'celebrated_pr_ids': 'x'},
+        {'celebrated_pr_ids': [1]},
+        {'celebrated_milestones': 'x'},
+        {'celebrated_milestones': ['1']},
+        {'weekly_progress': []},
+        {'last_updated': None},
+        {'last_updated': True},
+        {'last_updated': '1'},
+    ],
+)
 def test_damaged_required_fields_reject_the_whole_cache(tmp_path, change):
     assert load_snapshot(write(tmp_path, {**base(), **change})) is None
 
@@ -55,8 +68,15 @@ def test_missing_required_fields_reject_the_whole_cache(tmp_path):
 
 
 def test_valid_snapshot_keeps_only_persisted_keys(tmp_path):
-    snapshot = {**base(), 'me': {'id': 'u'}, 'celebrated_pr_ids': ['a'], 'celebrated_milestones': [100],
-                'weekly_progress': {'x': 1}, 'last_updated': 1.5, 'stray': 'dropped'}
+    snapshot = {
+        **base(),
+        'me': {'id': 'u'},
+        'celebrated_pr_ids': ['a'],
+        'celebrated_milestones': [100],
+        'weekly_progress': {'x': 1},
+        'last_updated': 1.5,
+        'stray': 'dropped',
+    }
     assert load_snapshot(write(tmp_path, snapshot)) == {k: v for k, v in snapshot.items() if k != 'stray'}
 
 
@@ -82,7 +102,11 @@ BAD = {
     'personal_records': ['x', {'cycling': 'w'}, {'cycling': {'workout_id': 1}}],
     'streaks': ['x', {'current': 'x'}, {'current': True}, {'current': 1.5}],
     'milestone_shown_at': ['x', {'abc': 5}, {'100': 'x'}, {'100': True}],
-    'pr_shown_at': ['x', {'w': 'x'}, {'w': True}, ],
+    'pr_shown_at': [
+        'x',
+        {'w': 'x'},
+        {'w': True},
+    ],
     'celebrated_discipline_milestones': ['x', ['bogus'], [5], ['strength:x']],
     'discipline_milestone_shown_at': ['x', {'bogus': 5}, {'strength:500': 'x'}, {'strength:500': True}],
     'challenges': ['x', ['junk'], [{}]],
@@ -100,9 +124,17 @@ def test_damaged_optional_entries_are_dropped_not_the_cache(tmp_path, key, value
 
 
 def test_null_optional_entries_stay_null(tmp_path):
-    snapshot = {**base(), 'personal_records': None, 'streaks': None, 'milestone_shown_at': None,
-                'pr_shown_at': None, 'celebrated_discipline_milestones': None,
-                'discipline_milestone_shown_at': None, 'challenges': None, 'club': None}
+    snapshot = {
+        **base(),
+        'personal_records': None,
+        'streaks': None,
+        'milestone_shown_at': None,
+        'pr_shown_at': None,
+        'celebrated_discipline_milestones': None,
+        'discipline_milestone_shown_at': None,
+        'challenges': None,
+        'club': None,
+    }
     restored = load_snapshot(write(tmp_path, snapshot))
     for key in snapshot:
         assert key in restored
@@ -110,21 +142,23 @@ def test_null_optional_entries_stay_null(tmp_path):
 
 @pytest.mark.parametrize('passes,shown', [(2, {'fact': 3}), (0, {})])
 def test_name_facts_cool_down_is_kept_when_sound(tmp_path, passes, shown):
-    restored = load_snapshot(write(tmp_path, {**base(), 'name_facts_passes': passes,
-                                              'name_facts_shown': shown}))
+    restored = load_snapshot(write(tmp_path, {**base(), 'name_facts_passes': passes, 'name_facts_shown': shown}))
     assert restored['name_facts_passes'] == passes and restored['name_facts_shown'] == shown
 
 
-@pytest.mark.parametrize('damage', [
-    {'name_facts_passes': True, 'name_facts_shown': {}},
-    {'name_facts_passes': 'x', 'name_facts_shown': {}},
-    {'name_facts_passes': -1, 'name_facts_shown': {}},
-    {'name_facts_passes': 1, 'name_facts_shown': []},
-    {'name_facts_passes': 1, 'name_facts_shown': {'f': True}},
-    {'name_facts_passes': 1, 'name_facts_shown': {'f': 'x'}},
-    {'name_facts_passes': 1},
-    {'name_facts_shown': {}},
-])
+@pytest.mark.parametrize(
+    'damage',
+    [
+        {'name_facts_passes': True, 'name_facts_shown': {}},
+        {'name_facts_passes': 'x', 'name_facts_shown': {}},
+        {'name_facts_passes': -1, 'name_facts_shown': {}},
+        {'name_facts_passes': 1, 'name_facts_shown': []},
+        {'name_facts_passes': 1, 'name_facts_shown': {'f': True}},
+        {'name_facts_passes': 1, 'name_facts_shown': {'f': 'x'}},
+        {'name_facts_passes': 1},
+        {'name_facts_shown': {}},
+    ],
+)
 def test_damaged_name_facts_cool_down_drops_both_halves(tmp_path, damage):
     restored = load_snapshot(write(tmp_path, {**base(), **damage}))
     assert restored is not None

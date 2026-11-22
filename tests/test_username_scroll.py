@@ -1,8 +1,9 @@
 """A name page line wider than the panel scrolls (hold, glide, hold, and back if there's time)."""
+
 import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.username import (MARGIN, SCROLL_HOLD_END, SCROLL_HOLD_START, SCROLL_SPEED, UsernameScreen)
+from display.ui.username import MARGIN, SCROLL_HOLD_END, SCROLL_HOLD_START, SCROLL_SPEED, UsernameScreen
 from scripts.render_demo import ImageMatrix
 
 LONG = 'CHELSEA JACKSON ROBERTS'
@@ -14,10 +15,10 @@ def _offsets(overflow, interval, step=0.1):
 
 def test_the_line_holds_glides_to_the_end_and_holds_within_a_four_second_highlight():
     offsets = _offsets(32, 4.0)
-    assert offsets[0] == 0 and offsets[int(SCROLL_HOLD_START * 10)] == 0       # holds first
-    assert offsets == sorted(offsets)                                           # never goes back
-    assert offsets[-1] == 32 and max(offsets) == 32                             # the whole name was shown
-    assert offsets[int((4.0 - SCROLL_HOLD_END) * 10)] == 32                    # and rests at the end
+    assert offsets[0] == 0 and offsets[int(SCROLL_HOLD_START * 10)] == 0  # holds first
+    assert offsets == sorted(offsets)  # never goes back
+    assert offsets[-1] == 32 and max(offsets) == 32  # the whole name was shown
+    assert offsets[int((4.0 - SCROLL_HOLD_END) * 10)] == 32  # and rests at the end
     # It never moves faster than a few times the nominal speed, so it stays readable.
     assert max(b - a for a, b in zip(offsets, offsets[1:])) <= SCROLL_SPEED * 0.1 * 1.6
 
@@ -26,8 +27,8 @@ def test_with_time_to_spare_it_glides_back_and_ends_where_it_began():
     offsets = _offsets(32, 10.0)
     assert max(offsets) == 32 and offsets[0] == 0 and offsets[-1] == 0
     peak = offsets.index(32)
-    assert offsets[:peak + 1] == sorted(offsets[:peak + 1])                  # glides out
-    assert offsets[peak:] == sorted(offsets[peak:], reverse=True)            # holds, then glides back
+    assert offsets[: peak + 1] == sorted(offsets[: peak + 1])  # glides out
+    assert offsets[peak:] == sorted(offsets[peak:], reverse=True)  # holds, then glides back
 
 
 def test_a_short_overflow_or_a_short_highlight_never_divides_by_zero_or_overshoots():
@@ -86,8 +87,8 @@ def test_wrap_two_lines_prefers_the_longest_first_line_and_refuses_what_cannot_f
     assert UsernameScreen.wrap_two_lines(font, 'CHELSEA JACKSON ROBERTS', 60) == ['CHELSEA JACKSON', 'ROBERTS']
     assert UsernameScreen.wrap_two_lines(font, 'JOSLYN THOMPSON RULE', 60) == ['JOSLYN THOMPSON', 'RULE']
     assert UsernameScreen.wrap_two_lines(font, 'JERMAINE JOHNSON', 60) == ['JERMAINE', 'JOHNSON']
-    assert UsernameScreen.wrap_two_lines(font, 'JESS', 60) is None                      # one word
-    assert UsernameScreen.wrap_two_lines(font, 'A B C D E F G H I J K L M N O P Q R S T', 60) is None   # needs three lines
+    assert UsernameScreen.wrap_two_lines(font, 'JESS', 60) is None  # one word
+    assert UsernameScreen.wrap_two_lines(font, 'A B C D E F G H I J K L M N O P Q R S T', 60) is None  # needs three lines
 
 
 def test_a_32_row_panel_runs_a_64_px_name_edge_to_edge_and_still_scrolls_longer_ones():
@@ -95,9 +96,9 @@ def test_a_32_row_panel_runs_a_64_px_name_edge_to_edge_and_still_scrolls_longer_
     font = loaded_fonts['info']
     assert get_text_width(font, 'JERMAINE JOHNSON') == 64 and get_text_width(font, 'CALLIE GULLICKSON') == 68
     still = {_frame(32, ['JERMAINE JOHNSON', '12 CLASSES'], at).tobytes() for at in (0.4, 1.5, 3.9)}
-    assert len(still) == 1                                  # no scrolling
+    assert len(still) == 1  # no scrolling
     image = _frame(32, ['JERMAINE JOHNSON', '12 CLASSES'], 2.0)
-    assert any(image.getpixel((0, y)) != (0, 0, 0) for y in range(19, 24))      # reaches the left edge
+    assert any(image.getpixel((0, y)) != (0, 0, 0) for y in range(19, 24))  # reaches the left edge
     # The name page keeps its three rows: label, name, count.
     assert _bands(image)[2:] == [(12, 16), (19, 23), (26, 30)]
     # 68 px is 8 px over the room: it slides out and back, so a few of these frames differ.
@@ -109,7 +110,7 @@ def test_a_32_row_panel_runs_a_64_px_name_edge_to_edge_and_still_scrolls_longer_
 def test_a_long_line_moves_a_short_one_stays_and_the_margins_stay_blank(height):
     initialize_fonts(height)
     room = 64 - 2 * MARGIN
-    long = LONG if height < 64 else 'SUPERCALIFRAGILISTIC'      # 64 rows wrap any name that can split
+    long = LONG if height < 64 else 'SUPERCALIFRAGILISTIC'  # 64 rows wrap any name that can split
     assert get_text_width(loaded_fonts['info'], long) > room
     lines_y = (24, 31) if height < 64 else (50, 59)
 
@@ -118,7 +119,7 @@ def test_a_long_line_moves_a_short_one_stays_and_the_margins_stay_blank(height):
 
     moving = [frame([long, '12 CLASSES'], at).tobytes() for at in (0.4, 1.2, 2.4, 3.6)]
     assert len(set(moving)) == 4
-    assert frame([long, '12 CLASSES'], 2.4).tobytes() == frame([long, '12 CLASSES'], 2.4).tobytes()   # settled frames repeat
+    assert frame([long, '12 CLASSES'], 2.4).tobytes() == frame([long, '12 CLASSES'], 2.4).tobytes()  # settled frames repeat
     # A line that fits is where it always was.
     still = {frame(['JESS SIMS', '9 CLASSES'], at).tobytes() for at in (0.4, 1.2, 2.4, 3.6)}
     assert len(still) == 1
@@ -142,6 +143,7 @@ def test_every_name_in_a_top_three_can_be_read_in_full_within_the_highlight():
 @pytest.mark.parametrize('height', (64, 32))
 def test_accented_letters_draw_plain_since_the_small_fonts_o_acute_reads_as_a_6(height):
     """Regression (2026-11-12): ROBIN ARZÓN drew as ROBIN ARZ6N; label and lines both come out plain."""
+
     def draw(label, line):
         initialize_fonts(height)
         matrix, screen = ImageMatrix(height=height), UsernameScreen()
@@ -150,11 +152,13 @@ def test_accented_letters_draw_plain_since_the_small_fonts_o_acute_reads_as_a_6(
         screen.update(1.0)
         screen.render(matrix, state)
         return matrix.image.tobytes()
+
     assert draw('LAST CLASS WITH', 'Robin Arzón') == draw('LAST CLASS WITH', 'ROBIN ARZON')
     assert draw('ÉLAN', 'x') == draw('ELAN', 'x')
 
 
 def test_plain_letters_keeps_what_has_no_plain_form():
     from display.display import plain_letters
+
     assert plain_letters('ROBIN ARZÓN, Zoë, Ñ') == 'ROBIN ARZON, Zoe, N'
     assert plain_letters('Ø ß 1,067') == 'Ø ß 1,067'

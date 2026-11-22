@@ -2,13 +2,14 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
+
 
 class Screen(ABC):
     """Abstract screen interface for all renderers."""
 
     @abstractmethod
-    def render(self, matrix, state: Optional[Any] = None) -> bool:
+    def render(self, matrix, state: Any | None = None) -> bool:
         """Draw current view to matrix. `state` can be any context (user/workout)."""
         pass
 
@@ -16,7 +17,7 @@ class Screen(ABC):
         """Optional animation update called on tick; dt is seconds since last call."""
         return
 
-    def on_enter(self, matrix, state: Optional[Any] = None) -> None:
+    def on_enter(self, matrix, state: Any | None = None) -> None:
         """Called when this screen becomes active. Default no-op.
 
         Override to perform setup. Matrix is provided for convenience.
@@ -29,4 +30,4 @@ class Screen(ABC):
         try:
             matrix.Clear()
         except Exception:
-            logging.getLogger(__name__).exception("Failed to clear the matrix in on_exit")
+            logging.getLogger(__name__).exception('Failed to clear the matrix in on_exit')

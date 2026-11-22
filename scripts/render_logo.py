@@ -6,6 +6,7 @@
 writes docs/logo.png (the README's wordmark: the mark, PELOTON LED and the zone bar) and
 docs/screenshots/rotation/logo.png (the startup logo on a 64x64 and a 64x32 panel).
 """
+
 import argparse
 import os
 import sys

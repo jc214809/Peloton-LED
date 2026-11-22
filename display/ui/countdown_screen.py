@@ -1,13 +1,15 @@
-"""Next milestone: 3 TO GO / TILL YOUR / 600TH / RIDE, or NEXT ONE / IS YOUR / 600TH / RIDE when one is left, with a progress bar (32 rows: 3 AWAY FROM / YOUR 600TH / RIDE, no bar).
+"""Next milestone: 3 TO GO / TILL YOUR / 600TH / RIDE, or NEXT ONE / IS YOUR / 600TH / RIDE when one is left,
+with a progress bar (32 rows: 3 AWAY FROM / YOUR 600TH / RIDE, no bar).
 
 One page per target within a few workouts, the total's or a discipline's.
 state: {'total': 597, 'target': 600, 'previous': 500, 'title': 'Cycling', 'discipline': 'cycling'};
 previous is where the bar starts. The name is drawn in the discipline's Lifetime-page colour
 (discipline None, the total: the default one).
 """
-from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
+from driver import graphics
+
 from .celebration_screen import _cap_height, discipline_noun, ordinal_line
 from .lifetime_overview import discipline_color
 from .screen import Screen
@@ -45,11 +47,11 @@ def _draw_runs(matrix, runs, baseline):
 # between the words, 2 if it must (TREAD BOOTCAMP is 64 columns edge to edge), and BOO 2 px right of where
 # it falls, closing the hole before the T. Every width counts the font's blank column after each word.
 WORD_GAPS = (3, 2)
-KERNS = {'BOOTCAMP': 3}     # word: where to split it, so BOO can be drawn on its own
+KERNS = {'BOOTCAMP': 3}  # word: where to split it, so BOO can be drawn on its own
 WORD_NUDGE = {'TREAD': -1}  # first word: px its second word moves (TREAD BOOTCAMP: BOOTCAMP 1 px left)
-B_SHIFT = {'BIKE': 1}       # a word whose first letter is drawn this many px right (BIKE: the gap after its B)
-WORD_SHIFT = {'BIKE': 1}    # a first word drawn this many px right, its second word staying put
-BOO_SHIFT = 2               # BOO is drawn 2 px right of where it falls, TCAMP and the rest where they were
+B_SHIFT = {'BIKE': 1}  # a word whose first letter is drawn this many px right (BIKE: the gap after its B)
+WORD_SHIFT = {'BIKE': 1}  # a first word drawn this many px right, its second word staying put
+BOO_SHIFT = 2  # BOO is drawn 2 px right of where it falls, TCAMP and the rest where they were
 
 
 # Where the lit pixels of the bootcamp names fall when drawn from x = 0: (first lit column, lit width). Measured
@@ -63,8 +65,8 @@ NAME_INK = {'ROW BOOTCAMP': (0, 56), 'BIKE BOOTCAMP': (2, 59), 'TREAD BOOTCAMP':
 # start with a blank column. Measured once, like NAME_INK (test_countdown_line_edge_ink re-checks it).
 LINE_TRAILING_BLANK = 1
 LEAD_DIGIT_BLANK = {'0': 1, '1': 1}
-LEAD_WORD_GAP = 3   # px added between the top line's words (the 5x8 space is wider than it needs)
-_COUNT = _GOLD   # 32 rows: the count is gold like the milestone (Joel, 2026-11-14: it was cyan)
+LEAD_WORD_GAP = 3  # px added between the top line's words (the 5x8 space is wider than it needs)
+_COUNT = _GOLD  # 32 rows: the count is gold like the milestone (Joel, 2026-11-14: it was cyan)
 
 
 def _lit_centre_x(matrix, runs, lead_blank=0):
@@ -99,11 +101,11 @@ def tight_name_runs(name, font, color, room):
     for gap in WORD_GAPS:
         runs = _word_runs(words[0], font, color, gap - 1) + _word_runs(words[1], font, color, 0)
         for i, run in enumerate(runs):
-            if run[1] == 'BOO' and i:   # BOO 2 px right: the gap before it grows, the one after it shrinks
+            if run[1] == 'BOO' and i:  # BOO 2 px right: the gap before it grows, the one after it shrinks
                 runs[i - 1] = runs[i - 1][:3] + (runs[i - 1][3] + BOO_SHIFT,)
                 runs[i] = run[:3] + (run[3] - BOO_SHIFT,)
-        if sum(get_text_width(f, t) + g for f, t, _, g in runs) - len(words) <= room:   # each word's blank column
-            nudge = WORD_NUDGE.get(words[0], 0)   # after the fit, so the gap chosen is the one that fits
+        if sum(get_text_width(f, t) + g for f, t, _, g in runs) - len(words) <= room:  # each word's blank column
+            nudge = WORD_NUDGE.get(words[0], 0)  # after the fit, so the gap chosen is the one that fits
             if nudge:
                 runs[0] = runs[0][:3] + (runs[0][3] + nudge,)
             return runs
@@ -116,7 +118,6 @@ def _fit(text, fonts, room):
 
 
 class CountdownScreen(Screen):
-
     @staticmethod
     def _render_short(matrix, left_to_go, target, name, color, bold):
         """32 rows: 3 AWAY FROM / YOUR 600TH / RIDE, no bar. The top line in 5x8 (the count gold, the words
@@ -128,12 +129,10 @@ class CountdownScreen(Screen):
         lead_font = (_fonts('discipline') or [bold])[0]
         raise_by = (_cap_height(bold) - _cap_height(small)) // 2
         tight = name in NAME_INK and tight_name_runs(name, loaded_fonts.get('discipline'), color, matrix.width)
-        name_font = None if tight else _fit(name, [bold] + _fonts('discipline', 'info'),
-                                                          matrix.width + LINE_TRAILING_BLANK)
+        name_font = None if tight else _fit(name, [bold] + _fonts('discipline', 'info'), matrix.width + LINE_TRAILING_BLANK)
         top, number_y, name_y = (9, 21, 32) if name_font is bold else (10, 21, 29)
         count = str(left_to_go)
-        lead = [(lead_font, count, _COUNT, LEAD_WORD_GAP), (lead_font, 'AWAY', _WHITE, LEAD_WORD_GAP),
-                (lead_font, 'FROM', _WHITE, 0)]
+        lead = [(lead_font, count, _COUNT, LEAD_WORD_GAP), (lead_font, 'AWAY', _WHITE, LEAD_WORD_GAP), (lead_font, 'FROM', _WHITE, 0)]
         blank = LEAD_DIGIT_BLANK.get(count[0], 0) if lead_font is loaded_fonts.get('discipline') else 0
         _draw_runs_at(matrix, lead, top, _lit_centre_x(matrix, lead, blank) - blank)
         your = get_text_width(small, 'YOUR') + 2
@@ -152,10 +151,10 @@ class CountdownScreen(Screen):
                 x += your
             for font, part_x, y, part_color, text in parts:
                 graphics.DrawText(matrix, font, x + part_x - first, y, part_color, text)
-        if tight:   # drawn as on 64 rows: 5x8 with the tight space and kerning
+        if tight:  # drawn as on 64 rows: 5x8 with the tight space and kerning
             left, lit = NAME_INK[name]
             _draw_runs_at(matrix, tight, name_y, (matrix.width - lit + 1) // 2 - left)
-        else:   # discipline_noun always gives a word
+        else:  # discipline_noun always gives a word
             runs = [(name_font, name, color, 0)]
             _draw_runs_at(matrix, runs, name_y, _lit_centre_x(matrix, runs))
         return True
@@ -163,8 +162,7 @@ class CountdownScreen(Screen):
     def render(self, matrix, state=None):
         state = state if isinstance(state, dict) else {}
         total, target, previous = state.get('total'), state.get('target'), state.get('previous', 0)
-        if (not all(isinstance(v, int) and not isinstance(v, bool) for v in (total, target, previous))
-                or target <= total):
+        if not all(isinstance(v, int) and not isinstance(v, bool) for v in (total, target, previous)) or target <= total:
             return False
         big, bold = _fonts('big'), _fonts('bold', 'big')
         if not big or not bold:
@@ -183,7 +181,7 @@ class CountdownScreen(Screen):
         titles = loaded_fonts.get('titles')
         # Four lines and the bar, spaced evenly: 3 TO GO / TILL YOUR / 600TH / RIDE, or with one left
         # (the next workout is the milestone) NEXT ONE / IS YOUR / 600TH / RIDE in the same places.
-        lead, link = (([(bold, 'NEXT ONE', _WHITE, 0)], 'IS YOUR') if target - total == 1 else (more, 'TILL YOUR'))
+        lead, link = ([(bold, 'NEXT ONE', _WHITE, 0)], 'IS YOUR') if target - total == 1 else (more, 'TILL YOUR')
         _draw_runs(matrix, lead, 16)
         _draw_runs(matrix, [(_fonts('stats', 'info')[0], link, _GREY, 0)], 25)
         number_y, name_y, bar_top, bar_height = 42, 54, 58, 3

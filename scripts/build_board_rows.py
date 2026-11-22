@@ -11,6 +11,7 @@ from the board's config (`--board-config`, default config.json, the Pi's): its c
 rows from the last 760 days, and writes the store (0600).
 Used by scripts/push_workout_rows.sh.
 """
+
 import argparse
 import logging
 import sys
@@ -21,9 +22,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'scripts'))
 
+from workout_insights import rider_paths  # noqa: E402
+
 from peloton.config import load_config, user_slug  # noqa: E402
 from peloton.workouts.workout_rows import RawFiles, RowStore, board_store, import_raw  # noqa: E402
-from workout_insights import rider_paths  # noqa: E402
 
 log = logging.getLogger('build-board-rows')
 
@@ -34,8 +36,9 @@ def main(argv=None):
     parser.add_argument('--config', default='config.json')
     parser.add_argument('--raw-dir', default=str(ROOT / 'training-data'))
     parser.add_argument('--out')
-    parser.add_argument('--board-config', default='config.json',
-                        help="the board's config (for --list): its cache paths name the board's files")
+    parser.add_argument(
+        '--board-config', default='config.json', help="the board's config (for --list): its cache paths name the board's files"
+    )
     parser.add_argument('--list', action='store_true', help='print each rider and its board file name')
     parser.add_argument('--now', type=float, default=None, help='epoch seconds (tests)')
     options = parser.parse_args(argv)

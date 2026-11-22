@@ -1,5 +1,6 @@
 """The Club Peloton page (ROADMAP item 25): parsing the members-score response, the fetch and its timing, the
 cache, the rotation and the screen on both heights."""
+
 import json
 from unittest.mock import Mock
 
@@ -7,16 +8,29 @@ import pytest
 import requests
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.club_screen import (BAR_LEFT, BAR_RIGHT, BAR_TRACK, BOOST, FACET_SHADES, GEM_32, GEM_64,
-                                    GEM_COLORS, GEM_ROWS, SHAPE_OF, TEXT_COLORS, ClubScreen, gem_pixels, next_line,
-                                    points_line)
+from display.ui.club_screen import (
+    BAR_LEFT,
+    BAR_RIGHT,
+    BAR_TRACK,
+    BOOST,
+    FACET_SHADES,
+    GEM_32,
+    GEM_64,
+    GEM_COLORS,
+    GEM_ROWS,
+    SHAPE_OF,
+    TEXT_COLORS,
+    ClubScreen,
+    gem_pixels,
+    next_line,
+    points_line,
+)
 from peloton import dashboard as dashboard_module
 from peloton import dashboard_fetch
 from peloton.cache import load_snapshot, save_snapshot
-from peloton.feeds.club import (LEVELS, NOT_A_MEMBER, club_page, gem_kind, level_from_me, parse_score, tier_fraction,
-                          valid_club)
 from peloton.config import DEFAULTS
 from peloton.demo import demo_club
+from peloton.feeds.club import LEVELS, NOT_A_MEMBER, club_page, gem_kind, level_from_me, parse_score, tier_fraction, valid_club
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 from tests.test_dashboard import setup_dashboard
@@ -32,30 +46,62 @@ def segment(label, low, high, following):
 def score(level='Gold III', points=13659, base=2000, top=15000, segments=None, ignore=False, boost=None):
     """A members-score v2 response, shaped like the real one (docs/PELOTON-API.md), minus the media URLs."""
     if segments is None:
-        segments = [segment('Gold I', 2000, 4000, 'Gold II'), segment('Gold II', 4000, 6000, 'Gold III'),
-                    segment('Gold III', 6000, 15000, 'Champion')]
-    return {'badge_level_name': level, 'total_earned_points': points, 'previous_total_earned_points': points - 5,
-            'points_since_last_visit': 5, 'level_slug': 8, 'boost': boost, 'earn_points': [],
-            'progress_bar': {'badge_level_name': level, 'score': points, 'end_label': None,
-                             'ignore_segments_on_profile': ignore, 'segment_tiers_max_points': segments,
-                             'tier_base_points': base, 'tier_max_points': top}}
+        segments = [
+            segment('Gold I', 2000, 4000, 'Gold II'),
+            segment('Gold II', 4000, 6000, 'Gold III'),
+            segment('Gold III', 6000, 15000, 'Champion'),
+        ]
+    return {
+        'badge_level_name': level,
+        'total_earned_points': points,
+        'previous_total_earned_points': points - 5,
+        'points_since_last_visit': 5,
+        'level_slug': 8,
+        'boost': boost,
+        'earn_points': [],
+        'progress_bar': {
+            'badge_level_name': level,
+            'score': points,
+            'end_label': None,
+            'ignore_segments_on_profile': ignore,
+            'segment_tiers_max_points': segments,
+            'tier_base_points': base,
+            'tier_max_points': top,
+        },
+    }
 
 
 ACTIVE = {'boost_id': 'x', 'status': 'active', 'expires_at': BOOST_ENDS, 'title': 'Double points'}
 # A Champion's response: the segments are the whole ladder, with odd mins, and not drawn on the profile.
-CHAMPION = score('Champion', 15666, 15000, 30000, ignore=True, segments=[
-    segment('Bronze', 50, 100, 'Silver I'), segment('Silver', 900, 2000, 'Gold I'),
-    segment('Gold', 6000, 15000, 'Champion'), segment('Champion', 15000, 30000, 'Legend'),
-    segment('Legend', 30000, None, '')])
-LEGEND = score('Legend', 31205, 30000, None, ignore=True, segments=CHAMPION['progress_bar'][
-    'segment_tiers_max_points'])
+CHAMPION = score(
+    'Champion',
+    15666,
+    15000,
+    30000,
+    ignore=True,
+    segments=[
+        segment('Bronze', 50, 100, 'Silver I'),
+        segment('Silver', 900, 2000, 'Gold I'),
+        segment('Gold', 6000, 15000, 'Champion'),
+        segment('Champion', 15000, 30000, 'Legend'),
+        segment('Legend', 30000, None, ''),
+    ],
+)
+LEGEND = score('Legend', 31205, 30000, None, ignore=True, segments=CHAMPION['progress_bar']['segment_tiers_max_points'])
 
 
 # ---- parsing --------------------------------------------------------------------------------------------------
 def test_a_score_keeps_what_the_page_draws():
     assert parse_score(score(boost=ACTIVE), NOW) == {
-        'level': 'GOLD III', 'points': 13659, 'tier_min': 2000, 'tier_max': 15000, 'marks': [4000, 6000],
-        'next': 'CHAMPION', 'to_next': 1341, 'boost_until': 1_796_101_140.0}
+        'level': 'GOLD III',
+        'points': 13659,
+        'tier_min': 2000,
+        'tier_max': 15000,
+        'marks': [4000, 6000],
+        'next': 'CHAMPION',
+        'to_next': 1341,
+        'boost_until': 1_796_101_140.0,
+    }
 
 
 def test_a_champion_goes_for_legend_with_no_marks():
@@ -76,24 +122,30 @@ def test_a_level_the_segments_dont_name_uses_the_one_its_points_are_in():
 
 
 def test_with_no_segment_the_tier_top_is_the_target():
-    club = parse_score(score(segments=[{'label': 'Other', 'min_points': 0, 'max_points': 10,
-                                        'next_level_name': 'X'}, 'junk']), NOW)
+    club = parse_score(score(segments=[{'label': 'Other', 'min_points': 0, 'max_points': 10, 'next_level_name': 'X'}, 'junk']), NOW)
     assert (club['next'], club['to_next'], club['marks']) == (None, None, [])
     club = parse_score(score(segments=[segment('Gold III', 6000, None, 'Champion')]), NOW)
     assert (club['next'], club['to_next']) == ('CHAMPION', 1341), 'the tier top when the segment has none'
 
 
-@pytest.mark.parametrize('boost', [
-    None, {**ACTIVE, 'status': 'expired'}, {**ACTIVE, 'expires_at': '2026-11-01T00:00:00Z'},
-    {**ACTIVE, 'expires_at': 'soon'}, {**ACTIVE, 'expires_at': None}, 'yes', {'status': 'active'},
-])
+@pytest.mark.parametrize(
+    'boost',
+    [
+        None,
+        {**ACTIVE, 'status': 'expired'},
+        {**ACTIVE, 'expires_at': '2026-11-01T00:00:00Z'},
+        {**ACTIVE, 'expires_at': 'soon'},
+        {**ACTIVE, 'expires_at': None},
+        'yes',
+        {'status': 'active'},
+    ],
+)
 def test_only_a_running_boost_counts(boost):
     assert parse_score(score(boost=boost), NOW)['boost_until'] is None
 
 
 def test_a_boost_with_no_zone_is_utc():
-    assert parse_score(score(boost={**ACTIVE, 'expires_at': '2026-12-01T04:59:00'}), NOW)['boost_until'] == \
-        1_796_101_140.0
+    assert parse_score(score(boost={**ACTIVE, 'expires_at': '2026-12-01T04:59:00'}), NOW)['boost_until'] == 1_796_101_140.0
 
 
 def test_odd_tier_figures_are_made_safe():
@@ -104,27 +156,49 @@ def test_odd_tier_figures_are_made_safe():
     club = parse_score(score(points=13659.7, base='2000', top=True), NOW)
     assert (club['points'], club['tier_min'], club['tier_max']) == (13659, 0, None)
     club = parse_score({**score(), 'total_earned_points': None}, NOW)
-    assert club['points'] == 13659, 'the bar\'s score when the total is missing'
+    assert club['points'] == 13659, "the bar's score when the total is missing"
     club = parse_score({**score(), 'badge_level_name': None}, NOW)
-    assert club['level'] == 'GOLD III', 'the bar\'s level name when the top one is missing'
+    assert club['level'] == 'GOLD III', "the bar's level name when the top one is missing"
 
 
-@pytest.mark.parametrize('payload', [
-    None, [], {'progress_bar': None}, {'badge_level_name': 'Gold III', 'total_earned_points': 5},
-    {**score(), 'badge_level_name': '', 'progress_bar': {**score()['progress_bar'], 'badge_level_name': None}},
-    {**score(), 'total_earned_points': -1, 'progress_bar': {**score()['progress_bar'], 'score': 'lots'}},
-])
+@pytest.mark.parametrize(
+    'payload',
+    [
+        None,
+        [],
+        {'progress_bar': None},
+        {'badge_level_name': 'Gold III', 'total_earned_points': 5},
+        {**score(), 'badge_level_name': '', 'progress_bar': {**score()['progress_bar'], 'badge_level_name': None}},
+        {**score(), 'total_earned_points': -1, 'progress_bar': {**score()['progress_bar'], 'score': 'lots'}},
+    ],
+)
 def test_a_response_that_is_not_a_score_raises(payload):
     with pytest.raises(ValueError):
         parse_score(payload, NOW)
 
 
-@pytest.mark.parametrize('damage', [
-    {'level': ''}, {'level': 5}, {'points': -1}, {'points': 'many'}, {'points': True}, {'tier_min': None},
-    {'tier_min': 20000}, {'tier_max': 1000}, {'tier_max': 'x'}, {'marks': None}, {'marks': ['a']},
-    {'next': ''}, {'next': 5}, {'to_next': -3}, {'next': None, 'to_next': 5}, {'boost_until': 'later'},
-    {'boost_until': float('nan')},
-])
+@pytest.mark.parametrize(
+    'damage',
+    [
+        {'level': ''},
+        {'level': 5},
+        {'points': -1},
+        {'points': 'many'},
+        {'points': True},
+        {'tier_min': None},
+        {'tier_min': 20000},
+        {'tier_max': 1000},
+        {'tier_max': 'x'},
+        {'marks': None},
+        {'marks': ['a']},
+        {'next': ''},
+        {'next': 5},
+        {'to_next': -3},
+        {'next': None, 'to_next': 5},
+        {'boost_until': 'later'},
+        {'boost_until': float('nan')},
+    ],
+)
 def test_a_damaged_record_is_not_valid(damage):
     assert not valid_club({**parse_score(score(), NOW), **damage})
 
@@ -133,18 +207,27 @@ def test_not_a_member_and_non_records():
     assert valid_club(NOT_A_MEMBER) and not valid_club(None) and not valid_club('GOLD')
 
 
-@pytest.mark.parametrize('me, level', [
-    ({'badge_level': 8}, 'GOLD III'), ({'badge_level': 0}, 'BRONZE I'), ({'badge_level': 10}, 'LEGEND'),
-    ({'badge_level': 11}, None), ({'badge_level': -1}, None), ({'badge_level': True}, None),
-    ({'badge_level': '8'}, None), ({}, None), (None, None), ('me', None),
-])
+@pytest.mark.parametrize(
+    'me, level',
+    [
+        ({'badge_level': 8}, 'GOLD III'),
+        ({'badge_level': 0}, 'BRONZE I'),
+        ({'badge_level': 10}, 'LEGEND'),
+        ({'badge_level': 11}, None),
+        ({'badge_level': -1}, None),
+        ({'badge_level': True}, None),
+        ({'badge_level': '8'}, None),
+        ({}, None),
+        (None, None),
+        ('me', None),
+    ],
+)
 def test_the_level_from_the_profile(me, level):
     assert level_from_me(me) == level
 
 
 def test_gem_kinds():
-    assert [gem_kind(level) for level in LEVELS] == ['BRONZE'] * 3 + ['SILVER'] * 3 + ['GOLD'] * 3 + [
-        'CHAMPION', 'LEGEND']
+    assert [gem_kind(level) for level in LEVELS] == ['BRONZE'] * 3 + ['SILVER'] * 3 + ['GOLD'] * 3 + ['CHAMPION', 'LEGEND']
     assert gem_kind('PLATINUM') == 'GOLD' and gem_kind('') == 'GOLD' and gem_kind(None) == 'GOLD'
 
 
@@ -153,8 +236,7 @@ def test_the_page_state():
     page = club_page(club, {'badge_level': 2}, NOW)
     assert page['boost'] and page['kind'] == 'GOLD' and page['points'] == 13659, 'the score beats the profile'
     assert club_page(club, None, 1_796_101_140)['boost'] is False, 'a boost ends on time'
-    assert club_page(None, {'badge_level': 9}, NOW) == {'level': 'CHAMPION', 'kind': 'CHAMPION', 'points': None,
-                                                         'boost': False}
+    assert club_page(None, {'badge_level': 9}, NOW) == {'level': 'CHAMPION', 'kind': 'CHAMPION', 'points': None, 'boost': False}
     assert club_page({'level': 'junk'}, {'badge_level': 9}, NOW)['points'] is None
     assert club_page(NOT_A_MEMBER, {'badge_level': 9}, NOW) is None, 'no score: no page'
     assert club_page(None, {}, NOW) is None
@@ -174,11 +256,11 @@ def test_the_demo_club_is_a_valid_record():
 # ---- the client ------------------------------------------------------------------------------------------------
 def client_with(status, body=None):
     from peloton.api import PelotonClient
+
     session = Mock()
     session.get.return_value.status_code = status
     session.get.return_value.json.return_value = body
-    session.get.return_value.raise_for_status.side_effect = (
-        requests.HTTPError(response=Mock(status_code=status)) if status >= 400 else None)
+    session.get.return_value.raise_for_status.side_effect = requests.HTTPError(response=Mock(status_code=status)) if status >= 400 else None
     return PelotonClient(session), session
 
 
@@ -241,10 +323,17 @@ def test_a_new_workout_asks_again_at_once(tmp_path, monkeypatch):
     assert client.get_club_score.call_count == 2, 'the same newest workout: no ask'
 
 
-@pytest.mark.parametrize('failure', [
-    requests.HTTPError(response=Mock(status_code=401)), requests.HTTPError(response=Mock(status_code=500)),
-    requests.HTTPError(response=None), requests.ConnectionError('offline'), ValueError('bad JSON'), None,
-])
+@pytest.mark.parametrize(
+    'failure',
+    [
+        requests.HTTPError(response=Mock(status_code=401)),
+        requests.HTTPError(response=Mock(status_code=500)),
+        requests.HTTPError(response=None),
+        requests.ConnectionError('offline'),
+        ValueError('bad JSON'),
+        None,
+    ],
+)
 def test_a_failed_fetch_keeps_the_last_figures_and_retries_sooner(tmp_path, monkeypatch, failure):
     dashboard, client, clock = club_dashboard(tmp_path, monkeypatch)
     dashboard.refresh()
@@ -285,6 +374,7 @@ def test_no_fetch_while_the_page_is_off(tmp_path, monkeypatch):
 
 def test_a_new_token_fetches_the_score_again(tmp_path, monkeypatch):
     import os
+
     dashboard, client, _ = club_dashboard(tmp_path, monkeypatch)
     dashboard.refresh()
     token = dashboard.token_path
@@ -304,6 +394,7 @@ def test_the_profile_keeps_the_badge_level(tmp_path, monkeypatch):
 
 def test_the_demo_dashboard_has_a_club(tmp_path):
     from peloton.dashboard import Dashboard
+
     dashboard = Dashboard(tmp_path / 'token', {}, demo=True)
     assert valid_club(dashboard.snapshot()['club'])
 
@@ -329,16 +420,15 @@ def test_the_cache_keeps_the_club_and_drops_a_damaged_record(tmp_path):
 # ---- rotation ----------------------------------------------------------------------------------------------
 def club_pages(snapshot, monkeypatch, now=NOW):
     import peloton_led
+
     monkeypatch.setattr(peloton_led.time, 'time', lambda: now)
     display = {**DEFAULTS, 'rotation': ['goals', 'club'], 'screen_durations': {'club': 7}}
-    return build_rotation_pages({'summaries': [], 'status': 'ready', 'totals': {}, **snapshot}, None, display,
-                                'Joel', 64)
+    return build_rotation_pages({'summaries': [], 'status': 'ready', 'totals': {}, **snapshot}, None, display, 'Joel', 64)
 
 
 def test_one_club_page(monkeypatch):
     pages = club_pages({'club': parse_score(score(boost=ACTIVE), NOW), 'me': {'badge_level': 2}}, monkeypatch)
-    assert [(name, state['level'], state['boost'], seconds) for name, state, seconds in pages] == [
-        ('club', 'GOLD III', True, 7)]
+    assert [(name, state['level'], state['boost'], seconds) for name, state, seconds in pages] == [('club', 'GOLD III', True, 7)]
 
 
 def test_the_profile_level_until_the_score_arrives(monkeypatch):
@@ -355,6 +445,7 @@ def test_club_is_a_rotation_screen_on_by_default(tmp_path):
     from peloton.config import load_config
     from settings_page.form import SCREEN_NAMES
     from settings_page.page import shows_for
+
     assert 'club' in DEFAULTS['rotation'] and 'club' in SCREEN_NAMES
     path = tmp_path / 'config.json'
     path.write_text('{"display": {"rotation": ["club"], "screen_durations": {"club": 6}}}')
@@ -366,6 +457,7 @@ def test_club_is_a_rotation_screen_on_by_default(tmp_path):
 # ---- the screen --------------------------------------------------------------------------------------------
 class EdgeMatrix(ImageMatrix):
     """Counts lit pixels drawn off the panel (ImageMatrix drops them silently)."""
+
     def Clear(self):
         super().Clear()
         self.off_panel = 0
@@ -386,13 +478,25 @@ def draw(state, height):
 
 def lit(matrix, color=None, rows=None, columns=None):
     pixels = matrix.image.load()
-    return {(x, y) for x in (columns or range(matrix.width)) for y in (rows or range(matrix.height))
-            if pixels[x, y] != (0, 0, 0) and (color is None or pixels[x, y] == color)}
+    return {
+        (x, y)
+        for x in (columns or range(matrix.width))
+        for y in (rows or range(matrix.height))
+        if pixels[x, y] != (0, 0, 0) and (color is None or pixels[x, y] == color)
+    }
 
 
 def record(level, points, tier, marks, following, to_next, boost=True):
-    return {'level': level, 'points': points, 'tier_min': tier[0], 'tier_max': tier[1], 'marks': marks,
-            'next': following, 'to_next': to_next, 'boost_until': NOW + 1 if boost else None}
+    return {
+        'level': level,
+        'points': points,
+        'tier_min': tier[0],
+        'tier_max': tier[1],
+        'marks': marks,
+        'next': following,
+        'to_next': to_next,
+        'boost_until': NOW + 1 if boost else None,
+    }
 
 
 # Every level, the widest names (`SILVER III`, `CHAMPION`), the biggest figures (6-digit points, 5-digit
@@ -529,12 +633,18 @@ def test_the_gems_are_crisp_flat_facets():
             assert len({tuple(p[2:]) for p in gem_pixels(kind, size)}) <= len(facets)
 
 
-@pytest.mark.parametrize('state', [
-    None, {}, 'GOLD', {'level': 'GOLD III', 'kind': 'GOLD', 'points': None},
-    {'level': 'GOLD III', 'kind': 'RUBY', 'points': None, 'boost': False},
-    {'level': '', 'kind': 'GOLD', 'points': None, 'boost': False},
-    {'level': 'GOLD III', 'kind': 'GOLD', 'points': 5, 'boost': False},
-])
+@pytest.mark.parametrize(
+    'state',
+    [
+        None,
+        {},
+        'GOLD',
+        {'level': 'GOLD III', 'kind': 'GOLD', 'points': None},
+        {'level': 'GOLD III', 'kind': 'RUBY', 'points': None, 'boost': False},
+        {'level': '', 'kind': 'GOLD', 'points': None, 'boost': False},
+        {'level': 'GOLD III', 'kind': 'GOLD', 'points': 5, 'boost': False},
+    ],
+)
 def test_a_page_with_nothing_to_draw_says_so(state):
     initialize_fonts(64)
     assert ClubScreen().render(EdgeMatrix(height=64), state) is False
@@ -545,6 +655,7 @@ def test_render_club_draws_both_panel_sizes(tmp_path, capsys):
     from PIL import Image
 
     from scripts import render_club, render_logo
+
     out = tmp_path / 'club.png'
     render_club.main(['--out', str(out)])
     sheet = Image.open(out).convert('RGB')
@@ -564,6 +675,7 @@ def test_render_club_draws_both_panel_sizes(tmp_path, capsys):
 
 def test_render_club_stops_on_a_page_it_cannot_draw(monkeypatch):
     from scripts import render_club
+
     monkeypatch.setattr(render_club, 'PAGES', [None])
     with pytest.raises(RuntimeError, match='drew nothing'):
         render_club.panels(64)

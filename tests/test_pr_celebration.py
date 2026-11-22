@@ -1,4 +1,5 @@
 import pytest
+
 from display.display import initialize_fonts
 from display.ui.pr_celebration import BURST_SECONDS, PrCelebrationScreen, pr_card_lines
 from scripts.render_demo import ImageMatrix
@@ -21,22 +22,27 @@ def _rows(pixels, color):
 
 
 def test_card_lines_for_each_pr_kind():
-    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412.4,
-                          'previous_best_kj': 398}) == ('OUTPUT PR', '412 KJ', '+14 KJ')
+    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412.4, 'previous_best_kj': 398}) == (
+        'OUTPUT PR',
+        '412 KJ',
+        '+14 KJ',
+    )
     # Joel's real 20 min row PR: 150.9 kJ beat 150.1 kJ.
-    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 150.9,
-                          'previous_best_kj': 150.1})[1:] == ('151 KJ', '+0.8 KJ')
+    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 150.9, 'previous_best_kj': 150.1})[1:] == (
+        '151 KJ',
+        '+0.8 KJ',
+    )
     # Jen's real 5 min ride: the graph rounds 25.4 kJ to 25, which would hide the gain.
-    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 25.0,
-                          'total_work_kj': 25.4, 'previous_best_kj': 25.0})[1:] == ('25 KJ', '+0.4 KJ')
+    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 25.0, 'total_work_kj': 25.4, 'previous_best_kj': 25.0})[
+        1:
+    ] == ('25 KJ', '+0.4 KJ')
     # The card shows the app's Total Output (189 kJ), not round(188.5), which Python sends
     # to the even 188; and the gain rounds (6.6 -> 7) instead of truncating to 6.
-    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 189.0,
-                          'total_work_kj': 188.5, 'previous_best_kj': 181.9})[1:] == ('189 KJ', '+7 KJ')
-    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412}) == (
-        'OUTPUT PR', '412 KJ', None)
-    assert pr_card_lines({'is_pr': True, 'is_splits_pr': True, 'row_split_sec_per_500m': 128}) == (
-        'SPLITS PR', '2:08/500', None)
+    assert pr_card_lines(
+        {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 189.0, 'total_work_kj': 188.5, 'previous_best_kj': 181.9}
+    )[1:] == ('189 KJ', '+7 KJ')
+    assert pr_card_lines({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412}) == ('OUTPUT PR', '412 KJ', None)
+    assert pr_card_lines({'is_pr': True, 'is_splits_pr': True, 'row_split_sec_per_500m': 128}) == ('SPLITS PR', '2:08/500', None)
     # A PR flag without a usable value still celebrates, rather than crashing.
     assert pr_card_lines({'is_pr': True, 'is_output_pr': True}) == ('NEW PR', '', None)
     assert pr_card_lines({'is_pr': False}) is None
@@ -71,6 +77,7 @@ def test_card_shows_value_gain_and_class_length(previous):
 
 def _client(pages):
     from unittest.mock import Mock
+
     client = Mock()
     client.get_workouts_page.side_effect = pages
     return client
@@ -78,32 +85,45 @@ def _client(pages):
 
 def test_preview_finds_newest_completed_pr_across_pages():
     from scripts.preview_pr import find_latest_pr
-    client = _client([
-        {'data': [{'id': 'a', 'status': 'COMPLETE'},
-                  {'id': 'b', 'status': 'IN_PROGRESS', 'is_total_work_personal_record': True}],
-         'show_next': True},
-        {'data': [{'id': 'c', 'status': 'COMPLETE', 'is_total_work_personal_record': True},
-                  {'id': 'd', 'status': 'COMPLETE', 'is_total_work_personal_record': True}],
-         'show_next': True},
-    ])
+
+    client = _client(
+        [
+            {
+                'data': [{'id': 'a', 'status': 'COMPLETE'}, {'id': 'b', 'status': 'IN_PROGRESS', 'is_total_work_personal_record': True}],
+                'show_next': True,
+            },
+            {
+                'data': [
+                    {'id': 'c', 'status': 'COMPLETE', 'is_total_work_personal_record': True},
+                    {'id': 'd', 'status': 'COMPLETE', 'is_total_work_personal_record': True},
+                ],
+                'show_next': True,
+            },
+        ]
+    )
     workout, pages = find_latest_pr(client, 'u', max_pages=5)
     assert workout['id'] == 'c' and pages == 2
     assert client.get_workouts_page.call_count == 2
 
 
-@pytest.mark.parametrize('pages,expected_pages', [
-    ([{'data': [{'id': 'a'}], 'show_next': False}], 1),
-    ([{'data': []}], 1),
-    ([{'data': [{'id': 'a'}], 'show_next': True}] * 3, 3),
-])
+@pytest.mark.parametrize(
+    'pages,expected_pages',
+    [
+        ([{'data': [{'id': 'a'}], 'show_next': False}], 1),
+        ([{'data': []}], 1),
+        ([{'data': [{'id': 'a'}], 'show_next': True}] * 3, 3),
+    ],
+)
 def test_preview_reports_no_pr_without_overrunning_history(pages, expected_pages):
     from scripts.preview_pr import find_latest_pr
+
     workout, read = find_latest_pr(_client(pages), 'u', max_pages=3)
     assert workout is None and read == expected_pages
 
 
 def test_preview_rejects_malformed_page():
     from scripts.preview_pr import find_latest_pr
+
     with pytest.raises(ValueError):
         find_latest_pr(_client([{'data': 'oops'}]), 'u', max_pages=1)
 
@@ -111,6 +131,7 @@ def test_preview_rejects_malformed_page():
 def _render_32(summary, card_t, detail_interval=4.0):
     """The 32-row page card_t seconds after the card settles."""
     from display.ui.pr_celebration import SETTLE_SECONDS
+
     matrix = ImageMatrix(height=32)
     initialize_fonts(32)
     screen = PrCelebrationScreen(detail_interval=detail_interval)
@@ -136,6 +157,7 @@ def test_32_row_card_fits_panel_with_star_badges_beside_headline():
 
 def test_32_row_badges_step_aside_for_a_headline_too_wide_for_them(monkeypatch):
     import display.ui.pr_celebration as pr
+
     monkeypatch.setattr(pr, 'get_text_width', lambda font, text: 50 if text.endswith('PR') else 20)
     pixels = _render_32({'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412}, 1.0)
     assert not any(x < 7 or x > 56 for x, _ in _points(pixels, GOLD))  # 7 px margins: no star fits
@@ -146,8 +168,14 @@ def _bottom(pixels, color):
 
 
 def test_32_row_bottom_line_takes_turns_between_gain_class_length_and_discipline():
-    summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'previous_best_kj': 398,
-               'duration_min': 30, 'discipline': 'Tread Bootcamp'}
+    summary = {
+        'is_pr': True,
+        'is_output_pr': True,
+        'total_output_kj': 412,
+        'previous_best_kj': 398,
+        'duration_min': 30,
+        'discipline': 'Tread Bootcamp',
+    }
     # Default 4 s interval: the card is up 6 s, 2 s a turn.
     turns = [_render_32(summary, i * 2.0 + 0.5) for i in range(3)]
     assert _bottom(turns[0], GREEN) and not _bottom(turns[0], BLUE) and not _bottom(turns[0], WHITE)
@@ -161,16 +189,26 @@ def test_32_row_bottom_line_takes_turns_between_gain_class_length_and_discipline
 
 
 @pytest.mark.parametrize('detail_interval', [2.0, 4.0, 7.0])
-@pytest.mark.parametrize('previous, expected', [
-    (398, [GREEN, BLUE, (240, 70, 25)]),  # gain, class length, cycling
-    (None, [BLUE, (240, 70, 25)]),
-])
+@pytest.mark.parametrize(
+    'previous, expected',
+    [
+        (398, [GREEN, BLUE, (240, 70, 25)]),  # gain, class length, cycling
+        (None, [BLUE, (240, 70, 25)]),
+    ],
+)
 def test_32_row_turns_share_the_card_and_never_come_back_as_it_ends(detail_interval, previous, expected):
     """Regression: 2 s turns looped from the end of the burst, so the gain came back for the card's
     last 0.3 s and flickered just before the page changed (Joel, 2026-11-19)."""
     from display.ui.pr_celebration import CARD_HOLD_SECONDS
-    summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'previous_best_kj': previous,
-               'duration_min': 30, 'discipline': 'Cycling'}
+
+    summary = {
+        'is_pr': True,
+        'is_output_pr': True,
+        'total_output_kj': 412,
+        'previous_best_kj': previous,
+        'duration_min': 30,
+        'discipline': 'Cycling',
+    }
     shown = detail_interval + CARD_HOLD_SECONDS  # how long build_rotation_pages leaves the settled card up
     share = shown / len(expected)
     for index, color in enumerate(expected):
@@ -184,22 +222,24 @@ def test_32_row_turns_share_the_card_and_never_come_back_as_it_ends(detail_inter
 
 def test_compact_turn_holds_the_last_turn_and_survives_a_missing_interval():
     from display.ui.pr_celebration import SETTLE_SECONDS, compact_turn
-    assert [compact_turn(SETTLE_SECONDS + t, 3, 4.0) for t in (0.0, 1.99, 2.01, 4.01, 5.99, 6.3, 60)] == [
-        0, 0, 1, 2, 2, 2, 2]
+
+    assert [compact_turn(SETTLE_SECONDS + t, 3, 4.0) for t in (0.0, 1.99, 2.01, 4.01, 5.99, 6.3, 60)] == [0, 0, 1, 2, 2, 2, 2]
     assert compact_turn(0.0, 2, 4.0) == 0  # still settling
     assert PrCelebrationScreen(detail_interval=None).detail_interval == 4.0
 
 
-@pytest.mark.parametrize('discipline, color', [
-    ('Cycling', (240, 70, 25)),  # its icon colour, as on the lifetime pages
-    ('Bike Bootcamp', (240, 70, 25)),  # a bootcamp takes its machine's
-    ('Outdoor Walking', (200, 200, 235)),  # no icon colour of its own: the default
-    ('Rowing', WHITE),  # icon blue is too close to the class length's
-    ('Running', WHITE),  # icon green is too close to the gain's
-])
+@pytest.mark.parametrize(
+    'discipline, color',
+    [
+        ('Cycling', (240, 70, 25)),  # its icon colour, as on the lifetime pages
+        ('Bike Bootcamp', (240, 70, 25)),  # a bootcamp takes its machine's
+        ('Outdoor Walking', (200, 200, 235)),  # no icon colour of its own: the default
+        ('Rowing', WHITE),  # icon blue is too close to the class length's
+        ('Running', WHITE),  # icon green is too close to the gain's
+    ],
+)
 def test_32_row_discipline_takes_its_icon_colour_unless_it_clashes(discipline, color):
-    summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'duration_min': 30,
-               'discipline': discipline}
+    summary = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'duration_min': 30, 'discipline': discipline}
     assert _bottom(_render_32(summary, 5.5), color)  # the second of two turns
 
 
@@ -213,36 +253,50 @@ def test_32_row_plain_pr_names_the_discipline_and_fits_the_widest():
     assert not _points(_render_32({'is_pr': True, 'discipline': None}, 1.0), WHITE)
 
 
-@pytest.mark.parametrize('summary', [
-    {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 1234, 'previous_best_kj': 1233.2, 'duration_min': 120,
-     'discipline': 'Outdoor Walking'},
-    {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 51, 'duration_min': 10, 'discipline': 'Tread Bootcamp'},
-    {'is_pr': True, 'is_splits_pr': True, 'row_split_sec_per_500m': 128, 'duration_min': 120,
-     'discipline': 'Rowing'},
-    {'is_pr': True, 'discipline': 'Outdoor Walking', 'duration_min': 120},
-])
+@pytest.mark.parametrize(
+    'summary',
+    [
+        {
+            'is_pr': True,
+            'is_output_pr': True,
+            'total_output_kj': 1234,
+            'previous_best_kj': 1233.2,
+            'duration_min': 120,
+            'discipline': 'Outdoor Walking',
+        },
+        {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 51, 'duration_min': 10, 'discipline': 'Tread Bootcamp'},
+        {'is_pr': True, 'is_splits_pr': True, 'row_split_sec_per_500m': 128, 'duration_min': 120, 'discipline': 'Rowing'},
+        {'is_pr': True, 'discipline': 'Outdoor Walking', 'duration_min': 120},
+    ],
+)
 def test_32_row_sparkles_never_touch_text(summary):
     sparkle_colors = {(255, 255, 200), (150, 130, 40), (0, 0, 0)}
     for tick in range(36):
         pixels = _render_32(summary, tick * 0.25)
         sparkle = _points(pixels, (255, 255, 200)) | _points(pixels, (150, 130, 40))
         for x, y in sparkle:
-            near = {pixels[x + dx, y + dy] for dx in (-1, 0, 1) for dy in (-1, 0, 1)
-                    if 0 <= x + dx < 64 and 0 <= y + dy < 32}
+            near = {pixels[x + dx, y + dy] for dx in (-1, 0, 1) for dy in (-1, 0, 1) if 0 <= x + dx < 64 and 0 <= y + dy < 32}
             assert near <= sparkle_colors, (x, y, tick)  # anything else is text or a badge
 
 
 def test_rotation_gives_pr_card_one_interval_and_the_extra_hold_after_the_burst():
     from unittest.mock import Mock
+
     from display.ui.pr_celebration import CARD_HOLD_SECONDS, SETTLE_SECONDS
     from peloton_led import build_rotation_pages
+
     dashboard = Mock()
     dashboard.should_celebrate_pr.return_value = True
-    summary = {'workout_id': 'w', 'discipline': 'Cycling', 'is_pr': True, 'is_output_pr': True,
-               'total_output_kj': 412}
+    summary = {'workout_id': 'w', 'discipline': 'Cycling', 'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412}
     snapshot = {'me': {}, 'summaries': [summary], 'totals': {}, 'status': 'ready'}
-    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
-               'last_workout_detail_interval': 3, 'overview_duration': 4, 'duration': 4, 'color': 'white'}
+    display = {
+        'rotation': ['latest_workouts'],
+        'last_workout_duration': 15,
+        'last_workout_detail_interval': 3,
+        'overview_duration': 4,
+        'duration': 4,
+        'color': 'white',
+    }
     pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
     assert [p[0] for p in pages] == ['last_workout', 'pr']
     assert pages[1][1] is summary
@@ -251,18 +305,27 @@ def test_rotation_gives_pr_card_one_interval_and_the_extra_hold_after_the_burst(
 
 def test_records_parse_skips_unset_lengths_and_converts_to_kj():
     from peloton.stats.records import parse_personal_records
-    overview = {'personal_records': [
-        {'slug': 'caesar', 'records': [
-            {'name': '45 min', 'raw_value': 225595.0, 'workout_id': 'row', 'workout_date': '2026-04-19'},
-            {'name': '60 min', 'raw_value': -1, 'workout_id': None, 'workout_date': None}]},
-        {'slug': 'cycling', 'records': 'oops'}, 'junk']}
-    assert parse_personal_records(overview) == {
-        'caesar|45 min': {'value_kj': 225.6, 'workout_id': 'row', 'workout_date': '2026-04-19'}}
+
+    overview = {
+        'personal_records': [
+            {
+                'slug': 'caesar',
+                'records': [
+                    {'name': '45 min', 'raw_value': 225595.0, 'workout_id': 'row', 'workout_date': '2026-04-19'},
+                    {'name': '60 min', 'raw_value': -1, 'workout_id': None, 'workout_date': None},
+                ],
+            },
+            {'slug': 'cycling', 'records': 'oops'},
+            'junk',
+        ]
+    }
+    assert parse_personal_records(overview) == {'caesar|45 min': {'value_kj': 225.6, 'workout_id': 'row', 'workout_date': '2026-04-19'}}
     assert parse_personal_records({}) == {} and parse_personal_records(None) == {}
 
 
 def test_records_merge_keeps_what_each_new_record_replaced():
     from peloton.stats.records import merge_personal_records, previous_best_kj
+
     old = {'value_kj': 250.0, 'workout_id': 'a', 'workout_date': 'd1'}
     new = {'value_kj': 262.0, 'workout_id': 'b', 'workout_date': 'd2'}
     other = {'value_kj': 90.0, 'workout_id': 'z', 'workout_date': 'd0'}

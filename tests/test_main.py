@@ -1,4 +1,5 @@
 """peloton_led.main(): startup, shutdown and failure paths, on an in-memory matrix."""
+
 import json
 import sys
 from pathlib import Path
@@ -17,6 +18,7 @@ FAST = {'show_logo': False}
 
 class FakeMatrix(ImageMatrix):
     """Stands in for RGBMatrix so no emulator server starts."""
+
     instances = []
 
     def __init__(self, options=None):
@@ -51,8 +53,20 @@ def _main(monkeypatch, *argv):
 @pytest.mark.parametrize('rows', [32, 64])
 def test_demo_runs_one_rotation_and_cleans_up(monkeypatch, tmp_path, fake_matrix, rows, instant_clock):
     config = _config(tmp_path, {'show_logo': True})
-    _main(monkeypatch, '--demo', '--cycles', '1', '--config', config, '--led-rows', rows,
-          '--display-duration', '0', '--refresh-interval', '60')
+    _main(
+        monkeypatch,
+        '--demo',
+        '--cycles',
+        '1',
+        '--config',
+        config,
+        '--led-rows',
+        rows,
+        '--display-duration',
+        '0',
+        '--refresh-interval',
+        '60',
+    )
     matrix = fake_matrix.instances[-1]
     assert matrix.height == rows
     assert matrix.cleared >= 2  # at startup and at shutdown
@@ -71,6 +85,7 @@ def test_matrix_that_cannot_clear_is_a_startup_error(monkeypatch, tmp_path, fake
         if hasattr(self, 'image'):  # after construction, like a driver that loses the GPIO
             raise RuntimeError('no GPIO access')
         ImageMatrix.Clear(self)
+
     monkeypatch.setattr(FakeMatrix, 'Clear', broken)
     with pytest.raises(SystemExit, match='Could not initialize the matrix: no GPIO access'):
         _main(monkeypatch, '--demo', '--cycles', '1', '--config', _config(tmp_path))
@@ -79,16 +94,17 @@ def test_matrix_that_cannot_clear_is_a_startup_error(monkeypatch, tmp_path, fake
 def test_configured_logo_image_is_used(monkeypatch, tmp_path, fake_matrix):
     logo = ROOT / 'prepared_logos' / 'peloton_64x64_auto.png'
     assert logo.exists()
-    with patch('display.ui.logo_screen.LogoScreen.__init__', return_value=None) as screen, \
-         patch.object(peloton_led, 'run_multi_user_loop'):
+    with patch('display.ui.logo_screen.LogoScreen.__init__', return_value=None) as screen, patch.object(peloton_led, 'run_multi_user_loop'):
         _main(monkeypatch, '--demo', '--config', _config(tmp_path, {'logo_path': str(logo)}))
     assert screen.call_args.args == (str(logo),)
 
 
 def test_ctrl_c_stops_every_dashboard(monkeypatch, tmp_path, fake_matrix, caplog):
-    with patch.object(peloton_led, 'run_multi_user_loop', side_effect=KeyboardInterrupt), \
-         patch.object(Dashboard, 'stop', return_value=False) as stop, \
-         caplog.at_level('INFO', logger='peloton-led'):
+    with (
+        patch.object(peloton_led, 'run_multi_user_loop', side_effect=KeyboardInterrupt),
+        patch.object(Dashboard, 'stop', return_value=False) as stop,
+        caplog.at_level('INFO', logger='peloton-led'),
+    ):
         _main(monkeypatch, '--demo', '--config', _config(tmp_path))
     stop.assert_called()
     assert 'Stopping Peloton display' in caplog.text
@@ -107,14 +123,21 @@ def test_finite_real_run_waits_for_the_first_refresh(monkeypatch, tmp_path, fake
 
 def test_configured_profiles_apply_per_rider_settings(tmp_path):
     from types import SimpleNamespace
-    options = SimpleNamespace(config=str(tmp_path / 'config.json'), demo=True,
-                              demo_login_needed=False, cookies='cookies.txt', username=None)
+
+    options = SimpleNamespace(
+        config=str(tmp_path / 'config.json'), demo=True, demo_login_needed=False, cookies='cookies.txt', username=None
+    )
     display = {'refresh_interval': 300}
     users = [
-        {'name': 'Joel', 'username': 'JC', 'weekly_goals': {'workouts': 4}, 'milestones': [500],
-         'journey': {'miles': 1000}, 'cache_path': 'caches/joel.json'},
-        {'name': 'Jen', 'token_path': '/var/lib/peloton-led/jen.txt', 'cache_path': '/tmp/jen.json',
-         'log_path': 'logs/jen.json'},
+        {
+            'name': 'Joel',
+            'username': 'JC',
+            'weekly_goals': {'workouts': 4},
+            'milestones': [500],
+            'journey': {'miles': 1000},
+            'cache_path': 'caches/joel.json',
+        },
+        {'name': 'Jen', 'token_path': '/var/lib/peloton-led/jen.txt', 'cache_path': '/tmp/jen.json', 'log_path': 'logs/jen.json'},
         {'name': 'Kid'},
     ]
     joel, jen, kid = peloton_led.configured_profiles({'display': display, 'users': users}, options)

@@ -3,6 +3,7 @@
 "Similar" is a set of hard rules, not a score. Works on the rows of peloton/workouts/workout_features.py.
 Standard library only.
 """
+
 import math
 import statistics
 
@@ -13,16 +14,24 @@ FALLBACK_DAYS = 730
 LENGTH_RATIO = 0.7
 ARMS_SECTIONS_GAP = 1  # rule 4b: bike arms rides within this many arms sections of each other
 DAY = 86400
-DISCIPLINES = ('cycling', 'bike_bootcamp', 'rowing', 'row_bootcamp', 'running', 'walking',
-               'tread_bootcamp', 'strength')
+DISCIPLINES = ('cycling', 'bike_bootcamp', 'rowing', 'row_bootcamp', 'running', 'walking', 'tread_bootcamp', 'strength')
 BIKE = ('cycling', 'bike_bootcamp')
 # Fill-in (section 4.1): bike only in version 1. A discipline joins only by passing the same
 # measured check as the bike did, not by being added here.
 FILL_IN_DISCIPLINES = BIKE
 FILL_IN_MIN_REAL = 2
 FILL_IN_DAYS = 730
-PLAN_KEYS = ('ride_min', 'arms_min', 'planned_watts', 'planned_watts_high', 'effort_share',
-             'efforts_per_10min', 'effort_length_s', 'cadence_mean', 'resistance_mean')
+PLAN_KEYS = (
+    'ride_min',
+    'arms_min',
+    'planned_watts',
+    'planned_watts_high',
+    'effort_share',
+    'efforts_per_10min',
+    'effort_length_s',
+    'cadence_mean',
+    'resistance_mean',
+)
 
 
 # A warm-up or cool-down class is never compared, nor compared with (Joel, 2026-11-15). Matched on the class
@@ -32,7 +41,7 @@ WARM_UP_COOL_DOWN = ('warm up', 'warm-up', 'warmup', 'cool down', 'cool-down', '
 
 
 def is_warm_up_or_cool_down(row):
-    text = f"{row.get('ctype') or ''} {row.get('title') or ''}".lower()
+    text = f'{row.get("ctype") or ""} {row.get("title") or ""}'.lower()
     return any(word in text for word in WARM_UP_COOL_DOWN)
 
 
@@ -50,9 +59,14 @@ def is_peer(target, row):
         return False
     if target['wtype'] != 'class' or not target['ctype']:
         return False  # freestyle and untyped classes have no peers in version 1
-    if not (row['disc'] == target['disc'] and row['wtype'] == 'class'
-            and row['ctype'] == target['ctype'] and row['mode'] == target['mode']
-            and row['outdoor'] == target['outdoor'] and _near_length(target, row)):
+    if not (
+        row['disc'] == target['disc']
+        and row['wtype'] == 'class'
+        and row['ctype'] == target['ctype']
+        and row['mode'] == target['mode']
+        and row['outdoor'] == target['outdoor']
+        and _near_length(target, row)
+    ):
         return False
     if target['disc'] in BIKE and target['mode'] == 'arms':
         gap = abs((row.get('arms_sections') or 0) - (target.get('arms_sections') or 0))
@@ -85,9 +99,13 @@ def stat(target_value, peer_values):
     median = statistics.median(values)
     if not median:
         return None
-    return {'value': target_value, 'median': median, 'n': len(values),
-            'pct': round(100 * (target_value / median - 1), 1),
-            'below': sum(1 for v in values if v < target_value)}
+    return {
+        'value': target_value,
+        'median': median,
+        'n': len(values),
+        'pct': round(100 * (target_value / median - 1), 1),
+        'below': sum(1 for v in values if v < target_value),
+    }
 
 
 def standardise(plans, keys=PLAN_KEYS):
@@ -111,21 +129,29 @@ def fill_in(target, rows, real):
 
     Returns copies flagged `fill_in: True`, nearest first; [] when the rule does not apply.
     """
-    if (target['disc'] not in FILL_IN_DISCIPLINES or not target.get('plan')
-            or not FILL_IN_MIN_REAL <= len(real) < MIN_PEERS):
+    if target['disc'] not in FILL_IN_DISCIPLINES or not target.get('plan') or not FILL_IN_MIN_REAL <= len(real) < MIN_PEERS:
         return []
     taken = {r['id'] for r in real}
     start = target['start'] - FILL_IN_DAYS * DAY
-    candidates = [r for r in rows
-                  if start <= r['start'] < target['start'] and r['id'] != target['id']
-                  and r['id'] not in taken and r['complete'] and r.get('plan')
-                  and r['disc'] == target['disc'] and r['wtype'] == 'class'
-                  and r['mode'] == target['mode'] and _near_length(target, r) and not is_warm_up_or_cool_down(r)]
+    candidates = [
+        r
+        for r in rows
+        if start <= r['start'] < target['start']
+        and r['id'] != target['id']
+        and r['id'] not in taken
+        and r['complete']
+        and r.get('plan')
+        and r['disc'] == target['disc']
+        and r['wtype'] == 'class'
+        and r['mode'] == target['mode']
+        and _near_length(target, r)
+        and not is_warm_up_or_cool_down(r)
+    ]
     if not candidates:
         return []
     z = standardise([target['plan']] + [r['plan'] for r in candidates])
     ranked = sorted(zip(candidates, z[1:]), key=lambda pair: (distance(z[0], pair[1]), -pair[0]['start']))
-    return [dict(row, fill_in=True) for row, _ in ranked[:MIN_PEERS - len(real)]]
+    return [dict(row, fill_in=True) for row, _ in ranked[: MIN_PEERS - len(real)]]
 
 
 def comparison_group(target, rows):

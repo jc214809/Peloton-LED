@@ -2,10 +2,11 @@
 
 Pure functions (no locks, no network): `Dashboard.__init__` calls them and publishes what they return.
 """
+
 import time
 
-from .feeds.challenges import parse_challenges
 from .demo import demo_bookings, demo_club, demo_data
+from .feeds.challenges import parse_challenges
 from .feeds.goals import weekly_progress
 from .stats.summaries import summarize_workout
 from .stats.totals import extract_discipline_totals, parse_streaks
@@ -30,38 +31,65 @@ def with_demo_insight(summary, data, config):
 
 def initial_data():
     """A fresh snapshot dict: nothing fetched yet."""
-    return {'me': None, 'totals': {}, 'summaries': [], 'login_required': False,
-            'status': 'loading', 'refresh_in_progress': False,
-            'last_attempt': None, 'last_updated': None,
-            'last_refresh_duration': None, 'last_error': None,
-            'next_refresh_at': None, 'generation': 0,
-            'data_stale': False, 'cache_loaded': False,
-            'consecutive_failures': 0,
-            'celebrated_pr_ids': [], 'pr_shown_at': {}, 'celebrated_milestones': [],
-            'milestone_shown_at': {}, 'name_facts_passes': 0, 'name_facts_shown': {},
-            'celebrated_discipline_milestones': [], 'discipline_milestone_shown_at': {},
-            'weekly_progress': {'workouts': 0, 'minutes': 0},
-            'instructor_counts': {}, 'instructor_names': {}, 'streaks': {},
-            'distance_totals': {}, 'personal_records': {},
-            'streak_week_workouts': None, 'activity_days': {},
-            'time_frames': {}, 'events': {}, 'challenges': [], 'booked_classes': [], 'club': None}
+    return {
+        'me': None,
+        'totals': {},
+        'summaries': [],
+        'login_required': False,
+        'status': 'loading',
+        'refresh_in_progress': False,
+        'last_attempt': None,
+        'last_updated': None,
+        'last_refresh_duration': None,
+        'last_error': None,
+        'next_refresh_at': None,
+        'generation': 0,
+        'data_stale': False,
+        'cache_loaded': False,
+        'consecutive_failures': 0,
+        'celebrated_pr_ids': [],
+        'pr_shown_at': {},
+        'celebrated_milestones': [],
+        'milestone_shown_at': {},
+        'name_facts_passes': 0,
+        'name_facts_shown': {},
+        'celebrated_discipline_milestones': [],
+        'discipline_milestone_shown_at': {},
+        'weekly_progress': {'workouts': 0, 'minutes': 0},
+        'instructor_counts': {},
+        'instructor_names': {},
+        'streaks': {},
+        'distance_totals': {},
+        'personal_records': {},
+        'streak_week_workouts': None,
+        'activity_days': {},
+        'time_frames': {},
+        'events': {},
+        'challenges': [],
+        'booked_classes': [],
+        'club': None,
+    }
 
 
 def demo_values(config, demo_login_needed):
     """The fields a demo dashboard publishes at construction."""
     data = demo_data()
     zone = config.get('timezone') or data['me'].get('timezone')
-    return dict(me=data['me'], totals=extract_discipline_totals(data['overview']),
-                streaks=parse_streaks(data['overview']),
-                distance_totals=data['distance_totals'],
-                summaries=[with_demo_insight(summarize_workout(w, data['performance'][w['id']]), data, config)
-                           for w in data['workouts']],
-                weekly_progress=weekly_progress(data['workouts'], zone),
-                challenges=parse_challenges(data['challenges']),
-                booked_classes=demo_bookings(time.time()),
-                club=demo_club(time.time()),
-                login_required=demo_login_needed, status='ready', last_updated=time.time(),
-                generation=1)
+    return dict(
+        me=data['me'],
+        totals=extract_discipline_totals(data['overview']),
+        streaks=parse_streaks(data['overview']),
+        distance_totals=data['distance_totals'],
+        summaries=[with_demo_insight(summarize_workout(w, data['performance'][w['id']]), data, config) for w in data['workouts']],
+        weekly_progress=weekly_progress(data['workouts'], zone),
+        challenges=parse_challenges(data['challenges']),
+        booked_classes=demo_bookings(time.time()),
+        club=demo_club(time.time()),
+        login_required=demo_login_needed,
+        status='ready',
+        last_updated=time.time(),
+        generation=1,
+    )
 
 
 def prepare_cached(cached, config):

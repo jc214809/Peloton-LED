@@ -1,6 +1,6 @@
 # Code health: plan
 
-Status: phase 1 and phase 2 done (2026-11-18/19): guardrails, 2a–2e, and 2f in three waves (parts A–H). Every `C901`, `PLR0912` and `PLR0915` baseline entry is gone; what's left are the `PLR0913` (too many arguments) entries, signature changes kept on purpose. Phase 3 planned. Roadmap item 33. Structural `noqa`s now: `C901` 0, `PLR0912` 0, `PLR0913` 12, `PLR0915` 0.
+Status: phase 1 and phase 2 done (2026-11-18/19): guardrails, 2a–2e, and 2f in three waves (parts A–H). Every `C901`, `PLR0912` and `PLR0915` baseline entry is gone; what's left are the `PLR0913` (too many arguments) entries, signature changes kept on purpose. Phase 3 done (2026-11-21: #150 `peloton/` subpackages, #151 overlays). Later items done 2026-11-21: `UP` rules, `E501` at 140, `ruff format` (single quotes) and `I`, in one PR; the format commit is in `.git-blame-ignore-revs`, and `tests/test_file_length.py`'s caps were re-measured after it. Left: type checking. Roadmap item 33 closed. Structural `noqa`s now: `C901` 0, `PLR0912` 0, `PLR0913` 12, `PLR0915` 0.
 
 CI checks behavior (pytest, 90% coverage) but nothing checks shape: no linter, no
 complexity limit, no file-size limit, no rule on which package may import which. So
@@ -297,11 +297,10 @@ Release notes: none for boards, but say in the PR that the next update moves fil
 
 ## Later, Joel's call
 
-- **`ruff format` and import sorting (`I`) across the repo.** One mechanical PR,
-  done when no other branch is open, plus a `.git-blame-ignore-revs` file so
-  `git blame` skips it. It stops style arguments for good but rewrites 183 files.
-- **Line length.** `E501` at 120 columns is 153 lines to fix; at 140, 19.
-- **`UP` rules** (`list[...]` for `List[...]`, `datetime.UTC`): about 170 automatic
-  fixes, safe on 3.11.
+- **Done 2026-11-21, one PR:** `UP` rules (182 automatic fixes, 2 by hand), `E501`
+  at 140 (19 lines; the formatter wraps at 140 too), then `ruff format` with
+  `quote-style = "single"` (the codebase's style; "double" rewrote twice the lines)
+  and `I` over 227 files. CI's `lint` job and pre-commit check the format. The
+  reflow pushed four more files past 600 lines, so their caps were re-measured.
 - **Type checking** (mypy or pyright) on `peloton/` only, to start. A larger job;
   worth sizing after phase 3.

@@ -1,4 +1,5 @@
 """Validate user configuration before initializing hardware or making requests."""
+
 import json
 import logging
 import os
@@ -6,62 +7,138 @@ import re
 from datetime import date
 from pathlib import Path
 
+from .config_rules import (
+    Rule,
+    int_in,
+    is_bool,
+    is_env_name,
+    is_iso_date,
+    is_nonblank_str,
+    is_str,
+    is_time_of_day,
+    is_timezone,
+    non_negative_number,
+    or_none,
+    positive_number,
+    run,
+    whole_number,
+)
 from .feeds.booked_classes import TAKEOVER_MAX_MINUTES
-from .config_rules import (Rule, int_in, is_bool, is_env_name, is_iso_date, is_nonblank_str, is_str, is_time_of_day,
-                           is_timezone, non_negative_number, or_none, positive_number, run, whole_number)
-from .stats.journey import DEFAULT_JOURNEY, DISTANCE_DISCIPLINES
 from .screen_times import retire_zero_times
 from .selection import normalize_discipline
+from .stats.journey import DEFAULT_JOURNEY, DISTANCE_DISCIPLINES
 
 logger = logging.getLogger('peloton-led.config')
 
-DEFAULTS = {'font': 'stats', 'color': 'white', 'duration': 4, 'overview_duration': 4,
-            'per_workout_duration': 4, 'last_workout_duration': 30, 'logo_duration': 5, 'show_logo': True,
-            'last_workout_detail_interval': 4.0,
-            'refresh_interval': 300, 'history_batch_size': 100, 'recent_fetch_size': 20,
-            'performance_cache_size': 32,
-            'rotation': ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                         'next_milestone', 'lifetime', 'journey',
-                         'heatmap', 'milestones', 'goals', 'challenges', 'next_class', 'club'],
-            'screen_durations': {},
-            'weekly_goals': {'workouts': 0, 'minutes': 0},
-            'milestones': [],
-            'milestone_step': 100,
-            # The Next Milestone page counts down to a target this close, the total's or a discipline's
-            # (25, 50, 100, then every 100), at most this many pages.
-            'milestone_within': 5,
-            'milestone_pages': 3,
-            # A PR older than this many days isn't celebrated; None celebrates any not yet shown.
-            'pr_max_age_days': None,
-            # The Next class page takes over the panel this many minutes before a booked class starts
-            # (0 is off, up to TAKEOVER_MAX_MINUTES); only with next_class in rotation.
-            'next_class_takeover_minutes': 5,
-            # Workout compare: the latest-workout page ends with one insight against similar earlier workouts.
-            'workout_insights': False,
-            'streak_reminder_day': 5,
-            'journey': DEFAULT_JOURNEY,
-            'brightness_schedule': None,
-            'refresh_schedule': None}
+DEFAULTS = {
+    'font': 'stats',
+    'color': 'white',
+    'duration': 4,
+    'overview_duration': 4,
+    'per_workout_duration': 4,
+    'last_workout_duration': 30,
+    'logo_duration': 5,
+    'show_logo': True,
+    'last_workout_detail_interval': 4.0,
+    'refresh_interval': 300,
+    'history_batch_size': 100,
+    'recent_fetch_size': 20,
+    'performance_cache_size': 32,
+    'rotation': [
+        'latest_workouts',
+        'username',
+        'streaks',
+        'versus',
+        'total_workouts',
+        'next_milestone',
+        'lifetime',
+        'journey',
+        'heatmap',
+        'milestones',
+        'goals',
+        'challenges',
+        'next_class',
+        'club',
+    ],
+    'screen_durations': {},
+    'weekly_goals': {'workouts': 0, 'minutes': 0},
+    'milestones': [],
+    'milestone_step': 100,
+    # The Next Milestone page counts down to a target this close, the total's or a discipline's
+    # (25, 50, 100, then every 100), at most this many pages.
+    'milestone_within': 5,
+    'milestone_pages': 3,
+    # A PR older than this many days isn't celebrated; None celebrates any not yet shown.
+    'pr_max_age_days': None,
+    # The Next class page takes over the panel this many minutes before a booked class starts
+    # (0 is off, up to TAKEOVER_MAX_MINUTES); only with next_class in rotation.
+    'next_class_takeover_minutes': 5,
+    # Workout compare: the latest-workout page ends with one insight against similar earlier workouts.
+    'workout_insights': False,
+    'streak_reminder_day': 5,
+    'journey': DEFAULT_JOURNEY,
+    'brightness_schedule': None,
+    'refresh_schedule': None,
+}
 
 # Panel/driver settings, one per --led-* flag (flag name minus "led-"). Flags win.
-MATRIX_DEFAULTS = {'rows': 64, 'cols': 64, 'chain': 1, 'parallel': 1, 'pwm_bits': 11,
-                   'brightness': 100, 'gpio_mapping': None, 'scan_mode': 1,
-                   'pwm_lsb_nanoseconds': 130, 'show_refresh': False, 'slowdown_gpio': None,
-                   'no_hardware_pulse': False, 'rgb_sequence': 'RGB', 'pixel_mapper': '',
-                   'row_addr_type': 0, 'multiplexing': 0, 'limit_refresh': 0, 'pwm_dither_bits': 0}
+MATRIX_DEFAULTS = {
+    'rows': 64,
+    'cols': 64,
+    'chain': 1,
+    'parallel': 1,
+    'pwm_bits': 11,
+    'brightness': 100,
+    'gpio_mapping': None,
+    'scan_mode': 1,
+    'pwm_lsb_nanoseconds': 130,
+    'show_refresh': False,
+    'slowdown_gpio': None,
+    'no_hardware_pulse': False,
+    'rgb_sequence': 'RGB',
+    'pixel_mapper': '',
+    'row_addr_type': 0,
+    'multiplexing': 0,
+    'limit_refresh': 0,
+    'pwm_dither_bits': 0,
+}
 GPIO_MAPPINGS = ('regular', 'adafruit-hat', 'adafruit-hat-pwm')
 
 # Settings the workout log replaced (docs/WORKOUT-LOG-PLAN.md). Still accepted
 # so older config files load, but they no longer do anything.
-RETIRED_DISPLAY_KEYS = ('history_days', 'history_limit', 'history_page_size',
-                        'history_max_pages', 'instructor_tally_max_pages')
+RETIRED_DISPLAY_KEYS = ('history_days', 'history_limit', 'history_page_size', 'history_max_pages', 'instructor_tally_max_pages')
 
-ROTATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'total_workouts',
-                     'next_milestone', 'lifetime', 'journey', 'heatmap',
-                     'milestones', 'goals', 'challenges', 'next_class', 'club'}
-DURATION_SECTIONS = {'latest_workouts', 'username', 'streaks', 'versus', 'next_milestone',
-                     'lifetime', 'journey', 'heatmap', 'milestones', 'goals', 'challenges',
-                     'next_class', 'club'}
+ROTATION_SECTIONS = {
+    'latest_workouts',
+    'username',
+    'streaks',
+    'versus',
+    'total_workouts',
+    'next_milestone',
+    'lifetime',
+    'journey',
+    'heatmap',
+    'milestones',
+    'goals',
+    'challenges',
+    'next_class',
+    'club',
+}
+DURATION_SECTIONS = {
+    'latest_workouts',
+    'username',
+    'streaks',
+    'versus',
+    'next_milestone',
+    'lifetime',
+    'journey',
+    'heatmap',
+    'milestones',
+    'goals',
+    'challenges',
+    'next_class',
+    'club',
+}
 
 
 def user_slug(name):
@@ -133,9 +210,14 @@ JOURNEY_REQUIRED_KEYS = {'from', 'to', 'miles'}
 BRIGHTNESS_SCHEDULE_KEYS = {'day', 'night', 'day_start', 'night_start'}
 REFRESH_SCHEDULE_KEYS = {'quiet_start', 'quiet_end', 'quiet_interval'}  # and an optional 'timezone'
 
+
 def _is_rotation(value):
-    return (isinstance(value, list) and all(isinstance(item, str) for item in value)
-            and len(value) == len(set(value)) and set(value) <= ROTATION_SECTIONS)
+    return (
+        isinstance(value, list)
+        and all(isinstance(item, str) for item in value)
+        and len(value) == len(set(value))
+        and set(value) <= ROTATION_SECTIONS
+    )
 
 
 def _names_only_screens(value):
@@ -167,8 +249,7 @@ def _has_journey_keys(value):
 
 
 def _is_discipline_list(value):
-    return (isinstance(value, list) and bool(value)
-            and all(isinstance(name, str) and normalize_discipline(name) for name in value))
+    return isinstance(value, list) and bool(value) and all(isinstance(name, str) and normalize_discipline(name) for name in value)
 
 
 def _is_brightness_schedule(value):
@@ -193,6 +274,7 @@ def _is_rgb_sequence(value):
 
 # Row builders for the shapes the display table repeats.
 
+
 def _display_duration(key):
     return Rule(key, positive_number, f'display.{key} must be a number above 0 (switch a screen off to hide it)')
 
@@ -216,6 +298,7 @@ def _matrix_whole_number(key, low, high=None):
 
 # Steps that don't fit a row: cross-field rules, warnings, and values rewritten while checked.
 
+
 def _normalize_milestones(path, section, prefix):
     section['milestones'] = sorted(set(section['milestones']))
 
@@ -228,8 +311,9 @@ def _migrate_legacy_font(path, display, prefix):
 def _warn_retired_keys(path, display, prefix):
     retired = [key for key in RETIRED_DISPLAY_KEYS if key in display]
     if retired:
-        logger.warning('%s: display.%s no longer do anything (the workout log replaced them); '
-                       'they can be removed', path, ', display.'.join(retired))
+        logger.warning(
+            '%s: display.%s no longer do anything (the workout log replaced them); they can be removed', path, ', display.'.join(retired)
+        )
 
 
 def _warn_unknown_disciplines(path, journey, prefix):
@@ -238,8 +322,13 @@ def _warn_unknown_disciplines(path, journey, prefix):
     known = {normalize_discipline(d) for d in DISTANCE_DISCIPLINES}
     for name in journey['disciplines']:
         if normalize_discipline(name) not in known:
-            logger.warning('%s: %sjourney.disciplines: %r has no distance and adds no miles; distance comes from %s',
-                           path, prefix, name, ', '.join(DISTANCE_DISCIPLINES))
+            logger.warning(
+                '%s: %sjourney.disciplines: %r has no distance and adds no miles; distance comes from %s',
+                path,
+                prefix,
+                name,
+                ', '.join(DISTANCE_DISCIPLINES),
+            )
 
 
 def _require_user_name(path, user, prefix):
@@ -285,9 +374,13 @@ def _validate_journey(path, section, prefix):
     journey = section['journey']
     run(_JOURNEY_RULES, path, journey, prefix)
     start = journey.get('start_date')
-    section['journey'] = {**journey, 'from': journey['from'].strip(), 'to': journey['to'].strip(),
-                          'disciplines': journey.get('disciplines'),
-                          'start_date': None if start is None else date.fromisoformat(start.strip()).isoformat()}
+    section['journey'] = {
+        **journey,
+        'from': journey['from'].strip(),
+        'to': journey['to'].strip(),
+        'disciplines': journey.get('disciplines'),
+        'start_date': None if start is None else date.fromisoformat(start.strip()).isoformat(),
+    }
 
 
 # Every check validate_config makes is a row in one of these tables, in the order its error is
@@ -297,8 +390,7 @@ def _validate_journey(path, section, prefix):
 # what the settings page shows and tests/test_config_validation_messages.py pins them.
 
 _WEEKLY_GOALS_RULES = [
-    Rule('weekly_goals', _names_only_goal_keys,
-          '{prefix}weekly_goals must contain only workouts, minutes and active_days'),
+    Rule('weekly_goals', _names_only_goal_keys, '{prefix}weekly_goals must contain only workouts, minutes and active_days'),
     Rule('weekly_goals', _all_goals_whole, '{prefix}weekly_goals values must be non-negative integers'),
     Rule('weekly_goals', _active_days_at_most_7, '{prefix}weekly_goals.active_days can be at most 7'),
 ]
@@ -314,8 +406,7 @@ _JOURNEY_RULES = [
     Rule('from', is_nonblank_str, '{prefix}journey.from must be a non-empty string'),
     Rule('to', is_nonblank_str, '{prefix}journey.to must be a non-empty string'),
     Rule('miles', positive_number, '{prefix}journey.miles must be a positive number'),
-    Rule('disciplines', or_none(_is_discipline_list),
-          '{prefix}journey.disciplines must be a non-empty list of discipline names'),
+    Rule('disciplines', or_none(_is_discipline_list), '{prefix}journey.disciplines must be a non-empty list of discipline names'),
     _warn_unknown_disciplines,
     Rule('start_date', or_none(is_iso_date), '{prefix}journey.start_date must be a YYYY-MM-DD date'),
 ]
@@ -350,10 +441,12 @@ _MATRIX_RULES = [
     _matrix_whole_number('multiplexing', 0),
     _matrix_whole_number('limit_refresh', 0),
     _matrix_whole_number('pwm_dither_bits', 0),
-    Rule('slowdown_gpio', or_none(whole_number(0, 4)),
-          'matrix.slowdown_gpio must be a whole number from 0 to 4, or null'),
-    Rule('gpio_mapping', or_none(lambda value: value in GPIO_MAPPINGS),
-          f'matrix.gpio_mapping must be one of {", ".join(GPIO_MAPPINGS)}, or null'),
+    Rule('slowdown_gpio', or_none(whole_number(0, 4)), 'matrix.slowdown_gpio must be a whole number from 0 to 4, or null'),
+    Rule(
+        'gpio_mapping',
+        or_none(lambda value: value in GPIO_MAPPINGS),
+        f'matrix.gpio_mapping must be one of {", ".join(GPIO_MAPPINGS)}, or null',
+    ),
     Rule('show_refresh', is_bool, 'matrix.show_refresh must be true or false'),
     Rule('no_hardware_pulse', is_bool, 'matrix.no_hardware_pulse must be true or false'),
     Rule('rgb_sequence', _is_rgb_sequence, 'matrix.rgb_sequence must be an ordering of R, G and B, e.g. "RBG"'),
@@ -361,8 +454,11 @@ _MATRIX_RULES = [
 ]
 
 _BRIGHTNESS_SCHEDULE_SHAPE = [
-    Rule('brightness_schedule', or_none(_is_brightness_schedule),
-          'display.brightness_schedule requires day, night, day_start, and night_start'),
+    Rule(
+        'brightness_schedule',
+        or_none(_is_brightness_schedule),
+        'display.brightness_schedule requires day, night, day_start, and night_start',
+    ),
 ]
 
 # Rows for the schedule's own keys (the schedule is the section here, so no {prefix}).
@@ -374,10 +470,8 @@ _BRIGHTNESS_SCHEDULE_RULES = [
 ]
 
 _REFRESH_SCHEDULE_SHAPE = [
-    Rule('refresh_schedule', or_none(_is_refresh_schedule),
-          'display.refresh_schedule requires quiet_start, quiet_end, and quiet_interval'),
-    Rule('refresh_schedule', or_none(_has_no_other_refresh_keys),
-          'display.refresh_schedule has unsupported keys'),
+    Rule('refresh_schedule', or_none(_is_refresh_schedule), 'display.refresh_schedule requires quiet_start, quiet_end, and quiet_interval'),
+    Rule('refresh_schedule', or_none(_has_no_other_refresh_keys), 'display.refresh_schedule has unsupported keys'),
 ]
 
 _REFRESH_SCHEDULE_RULES = [
@@ -414,22 +508,25 @@ _DISPLAY_RULES = [
     _display_string('log_path'),
     Rule('rotation', _is_rotation, 'display.rotation must contain unique supported screen names'),
     Rule('screen_durations', _names_only_screens, 'display.screen_durations contains an unsupported screen name'),
-    Rule('screen_durations', _all_durations_positive,
-          'display.screen_durations values must be numbers above 0 (switch a screen off to hide it)'),
+    Rule(
+        'screen_durations',
+        _all_durations_positive,
+        'display.screen_durations values must be numbers above 0 (switch a screen off to hide it)',
+    ),
     *_WEEKLY_GOALS_RULES,
     *_MILESTONES_RULES,
     _validate_journey,
-    Rule('streak_reminder_day', or_none(whole_number(0, 6)),
-          'display.streak_reminder_day must be 0 (Monday) to 6 (Sunday), or null'),
+    Rule('streak_reminder_day', or_none(whole_number(0, 6)), 'display.streak_reminder_day must be 0 (Monday) to 6 (Sunday), or null'),
     Rule('milestone_step', whole_number(0), 'display.milestone_step must be a non-negative integer'),
-    Rule('pr_max_age_days', or_none(whole_number(1)),
-          'display.pr_max_age_days must be a whole number of days of at least 1, or null'),
+    Rule('pr_max_age_days', or_none(whole_number(1)), 'display.pr_max_age_days must be a whole number of days of at least 1, or null'),
     Rule('workout_insights', is_bool, 'display.workout_insights must be true or false'),
     _display_at_least('milestone_within', 1),
     _display_at_least('milestone_pages', 1),
-    Rule('next_class_takeover_minutes', whole_number(0, TAKEOVER_MAX_MINUTES),
-          'display.next_class_takeover_minutes must be a whole number of minutes '
-          f'from 0 (off) to {TAKEOVER_MAX_MINUTES}'),
+    Rule(
+        'next_class_takeover_minutes',
+        whole_number(0, TAKEOVER_MAX_MINUTES),
+        f'display.next_class_takeover_minutes must be a whole number of minutes from 0 (off) to {TAKEOVER_MAX_MINUTES}',
+    ),
     _check_brightness_schedule,
     _check_refresh_schedule,
 ]
@@ -500,8 +597,9 @@ def validate_config(config, path='config.json'):
     # 0 seconds used to mean "don't show"; it's now the screen's switch (or show_logo).
     switched = retire_zero_times(config.get('display'), ROTATION_SECTIONS, DEFAULTS['rotation'])
     if switched:
-        logger.warning('%s: a time of 0 now means switched off (%s); saving the settings page writes '
-                       'it that way', path, '; '.join(switched))
+        logger.warning(
+            '%s: a time of 0 now means switched off (%s); saving the settings page writes it that way', path, '; '.join(switched)
+        )
     display = {**DEFAULTS, **config.get('display', {})}
     run(_DISPLAY_RULES, path, display, 'display.')
     config['display'] = display

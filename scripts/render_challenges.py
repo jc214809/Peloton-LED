@@ -8,6 +8,7 @@ writes docs/screenshots/rotation/challenges.png: the challenges page for each ca
 (after its intro). `write_gifs(folder)` (from Python) writes challenge-intro-64.gif and -32.gif: the intro of the
 first page in PAGES, 6x larger.
 """
+
 import argparse
 import os
 import sys
@@ -26,9 +27,16 @@ from scripts.render_logo import GAP, LABEL_WIDTH, SHEET_BACKGROUND, SHEET_SCALE 
 
 
 def _page(title, value, shown, unit, tier, following, to_next):
-    return {'title': short_title(title), 'end_time': None, 'value': float(value), 'shown': shown, 'unit': unit,
-            'tier': {'title': tier[0], 'value': float(tier[1])},
-            'next': {'title': following[0], 'value': float(following[1])}, 'to_next': to_next}
+    return {
+        'title': short_title(title),
+        'end_time': None,
+        'value': float(value),
+        'shown': shown,
+        'unit': unit,
+        'tier': {'title': tier[0], 'value': float(tier[1])},
+        'next': {'title': following[0], 'value': float(following[1])},
+        'to_next': to_next,
+    }
 
 
 # Real titles and figures from 2026-11-14, titles shortened by short_title as on the board: a numbered tier,
@@ -88,8 +96,7 @@ def write_gifs(folder, state=None):
     for height in (64, 32):
         frames = intro_frames(height, state or PAGES[0])
         path = os.path.join(folder, f'challenge-intro-{height}.gif')
-        frames[0].save(path, save_all=True, append_images=frames[1:], duration=int(ChallengeScreen.frame_seconds * 1000),
-                       loop=0)
+        frames[0].save(path, save_all=True, append_images=frames[1:], duration=int(ChallengeScreen.frame_seconds * 1000), loop=0)
         print(f'Wrote {path}')
 
 

@@ -1,5 +1,6 @@
 """The board's logo: the startup screen, the settings page's icons and the docs images, all drawn
 from display/ui/logo_art.py."""
+
 import io
 import re
 
@@ -89,7 +90,7 @@ def test_the_settings_icon_svg_has_every_pixel_once():
     assert lit == {xy for xy, _ in logo.pixels()}
     colours = dict(logo.pixels())
     for x, y, _, fill in re.findall(r'<rect x="(\d+)" y="(\d+)" width="(\d+)" height="1" fill="(#\w+)"/>', svg):
-        assert fill == '#%02x%02x%02x' % colours[(int(x), int(y))]
+        assert fill == '#{:02x}{:02x}{:02x}'.format(*colours[(int(x), int(y))])
     assert all(0 <= x < logo.SIZE and 0 <= y < logo.SIZE for x, y in lit)
     assert 'rx=' not in svg and 'rx="7"' in logo.svg(rounded=True)
 

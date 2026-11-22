@@ -6,6 +6,7 @@ BOARD_DAYS. The count is kept until the file changes, so the page doesn't re-rea
 It also lists the last RECENT_DAYS' workouts that were saved without all their data (`missing`), so a
 failed fetch shows; older rows are left out, since Peloton sent less before and the board has caught up.
 """
+
 import json
 import logging
 import time
@@ -43,22 +44,29 @@ def incomplete_workouts(rows, now):
     """[{'id', 'start', 'date', 'disc', 'title', 'missing'}], newest first, of the rows from the last
     RECENT_DAYS that miss data (missing_data)."""
     since = now - RECENT_DAYS * DAY
-    found = [{'id': row['id'], 'start': row['start'], 'date': row.get('date'), 'disc': row.get('disc'),
-              'title': row.get('title'), 'missing': missing_data(row)}
-             for row in rows if row['start'] >= since]
+    found = [
+        {
+            'id': row['id'],
+            'start': row['start'],
+            'date': row.get('date'),
+            'disc': row.get('disc'),
+            'title': row.get('title'),
+            'missing': missing_data(row),
+        }
+        for row in rows
+        if row['start'] >= since
+    ]
     return sorted((w for w in found if w['missing']), key=lambda w: w['start'], reverse=True)
 
 
 def rows_paths(config, config_dir, default_token):
     """[(name, row store path)] for each rider, as the display names them (peloton_led.configured_profiles)."""
     users = config.get('users')
-    users = [u for u in users if isinstance(u, dict) and isinstance(u.get('name'), str)] \
-        if isinstance(users, list) else []
+    users = [u for u in users if isinstance(u, dict) and isinstance(u.get('name'), str)] if isinstance(users, list) else []
     if users:
         return [(user['name'], default_rows_path(user_cache_path(user, config_dir))) for user in users]
     display = config.get('display') if isinstance(config.get('display'), dict) else {}
-    name = display.get('username') if isinstance(display.get('username'), str) and display['username'] \
-        else 'This board'
+    name = display.get('username') if isinstance(display.get('username'), str) and display['username'] else 'This board'
     configured = display.get('cache_path')
     if isinstance(configured, str) and configured:
         cache = Path(configured).expanduser()
@@ -90,8 +98,12 @@ def _count(path, now):
     else:
         current = current_board_rows(rows, now)
         # Rows of an older ROW_VERSION are ignored on the board: it has no raw files to rebuild them.
-        result = {'state': READY if current else (OLD if rows else MISSING), 'workouts': len(current),
-                  'updated': stat.st_mtime, 'incomplete': incomplete_workouts(current, now)}
+        result = {
+            'state': READY if current else (OLD if rows else MISSING),
+            'workouts': len(current),
+            'updated': stat.st_mtime,
+            'incomplete': incomplete_workouts(current, now),
+        }
     _counted[path] = (stamp, result)
     return result
 
@@ -107,7 +119,5 @@ def rider_histories(config, config_dir, default_token, now=None):
         counted = _count(Path(path), now)
         # The count is kept until the file changes, so drop what has since aged out of RECENT_DAYS.
         since = now - RECENT_DAYS * DAY
-        histories.append({'name': name, **counted,
-                          'incomplete': [w for w in counted['incomplete'] if w['start'] >= since]})
+        histories.append({'name': name, **counted, 'incomplete': [w for w in counted['incomplete'] if w['start'] >= since]})
     return histories
-

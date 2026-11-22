@@ -7,7 +7,8 @@ A class taught by several instructors ("Jess & Selena") counts once for each
 of them; a member whose name hasn't been seen on a solo class yet is counted
 by ID and shows up once their name is known.
 """
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..selection import is_completed
@@ -52,8 +53,7 @@ def merge_instructor_counts(counts, names, workouts):
 
 def top_instructors(counts, names, limit=3):
     """Return the top named instructors as [(name, count), ...], most-taken first."""
-    named = [(names[identity], count) for identity, count in (counts or {}).items()
-             if (names or {}).get(identity)]
+    named = [(names[identity], count) for identity, count in (counts or {}).items() if (names or {}).get(identity)]
     ranked = sorted(named, key=lambda item: (-item[1], item[0].lower()))
     return ranked[:limit]
 
@@ -68,9 +68,9 @@ def _members(row):
 
 def _date(stamp, zone_name):
     try:
-        zone = ZoneInfo(zone_name) if zone_name else timezone.utc
+        zone = ZoneInfo(zone_name) if zone_name else UTC
     except (ZoneInfoNotFoundError, ValueError, OSError):
-        zone = timezone.utc
+        zone = UTC
     return datetime.fromtimestamp(stamp, zone).date().isoformat()
 
 
@@ -96,5 +96,6 @@ def class_numbers(rows, workout_id, row, names):
         for member in members & _members(other):
             count[member] += 1
             first[member] = min(first[member], stamp)
-    return [{'id': m, 'name': (names or {}).get(m) or None, 'n': count[m], 'since': _date(first[m], row.get('tz'))}
-            for m in sorted(members)]
+    return [
+        {'id': m, 'name': (names or {}).get(m) or None, 'n': count[m], 'since': _date(first[m], row.get('tz'))} for m in sorted(members)
+    ]

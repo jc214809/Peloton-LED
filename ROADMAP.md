@@ -18,7 +18,6 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 30 Weekly goals from Peloton's Activity Goals ── independent; targets only (Peloton's week turns at UTC midnight)
 31 Redraw the 64x32 contact sheets ── independent
 32 Judge the bike on output against the class plan ── after the missed-callout rule; reshapes 25-27 and the CADENCE/RESISTANCE LOW flags
-33 Code health: lint, complexity and import checks, then splits ── phase 1 first; phase 3 (subpackages) alone, with no other branch open
 ```
 
 Suggested order: 1, then the remaining items. Item 1 adds frames to a screen that shares its page time across frames (`peloton/screen_times.py`), so more stats mean a longer minimum page. Icon touch-ups (22) whenever Joel has time.
@@ -331,17 +330,6 @@ The bars were set on 2026-11-15 from the past year (cadence 12, resistance 20: t
 
 ### 31. Redraw the 64x32 contact sheets
 `docs/screenshots/64x32/` (`joel-rotation.png`, `jen-rotation.png`, `demo-rotation.png`; `docs/64x32-NOTES.md` points readers to them) was last drawn on 2026-10-18, before the challenges, next-class and Club Peloton pages and the workout insights, so it no longer shows the whole 32-row rotation. Redraw all three with `scripts/render_rotation.py --height 32` (the demo one with `--demo --insights`; Joel's and Jen's from their caches with `--config config.local.json`, never committing the caches), check every page against the 64x64 sheets, and fix anything that looks wrong as its own item. Found 2026-11-15 while redrawing the challenges screenshot. Depends on: nothing.
-
-### 33. Code health: lint, complexity and import checks, then the big-file splits
-Joel's words, 2026-11-17, as he said them:
-
-> Is this reallt the best practice when it comes to structuring a Python project like this? I mean, there's just a crap ton of files under each folder.
-
-> What the right thing to do and are there python principles that we should be following to make sure that things like this occur automatically or that it is always checking for things like this?
-
-In short: the many small modules are fine; what's missing is anything that checks shape. Add ruff (complexity, branches, statements, arguments), a 600-line file limit and import-linter layer contracts to CI, with today's offenders recorded as a baseline that can only shrink. Then split the big files (`settings_page/page.py`, `last_workout_screen.py`, `dashboard.py`, `validate_config`), then group `peloton/` into subpackages. Run as Sonnet agents, one PR each. Plan, measured baseline and agent briefs: `docs/CODE-HEALTH-PLAN.md`.
-
-- Depends on: nothing for phase 1; phase 2 after phase 1; phase 3 with no other branch open.
 
 ## Joel, by hand
 

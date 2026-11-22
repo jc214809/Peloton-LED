@@ -1,12 +1,21 @@
 """The weekly-goal page: big value, readable labels, 1 px margin on the longest goals."""
+
 import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui.goal_screen import MAX_VALUE_WIDTH, GoalScreen, value_font
 from scripts.render_demo import ImageMatrix
 
-CASES = [('workouts', 0, 5), ('workouts', 12, 7), ('minutes', 30, 300), ('minutes', 135, 300),
-         ('minutes', 300, 300), ('minutes', 1200, 1500), ('active days', 3, 5), ('active days', 7, 7)]
+CASES = [
+    ('workouts', 0, 5),
+    ('workouts', 12, 7),
+    ('minutes', 30, 300),
+    ('minutes', 135, 300),
+    ('minutes', 300, 300),
+    ('minutes', 1200, 1500),
+    ('active days', 3, 5),
+    ('active days', 7, 7),
+]
 
 
 def render(height, unit, current, target):
@@ -54,6 +63,7 @@ def test_value_font_falls_back_to_the_smallest_when_nothing_fits():
 @pytest.mark.parametrize('height', [64, 32])
 def test_no_fonts_draws_nothing(height, monkeypatch):
     import display.ui.goal_screen as goal_screen
+
     monkeypatch.setattr(goal_screen, 'loaded_fonts', {})
     assert value_font('1/5') is None
     assert GoalScreen().render(ImageMatrix(height=height), {'current': 1, 'target': 5, 'unit': 'workouts'}) is False

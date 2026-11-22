@@ -1,7 +1,8 @@
 """Weekend reminder: one workout keeps the weekly streak alive."""
-from driver import graphics
 
 from display.display import get_text_width, loaded_fonts
+from driver import graphics
+
 from .screen import Screen
 from .streak_screen import FLAME_H, FLAME_W, FlickeringFlame, draw_flame
 

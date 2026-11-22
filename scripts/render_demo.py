@@ -1,17 +1,21 @@
 """Render synthetic screens to a PNG contact sheet, with no server or API calls."""
+
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # Importing unittest selects the emulator graphics without initializing a matrix.
 import unittest  # noqa: F401  side effect: selects the emulator graphics
+
 from PIL import Image, ImageDraw
+
 from display.display import initialize_fonts
-from display.ui.last_workout.screen import LastWorkoutScreen
 from display.ui.discipline_page import DisciplinePageScreen
+from display.ui.last_workout.screen import LastWorkoutScreen
 from display.ui.lifetime_overview import LifetimeOverviewScreen
-from display.ui.username import UsernameScreen
-from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS, PrCelebrationScreen
 from display.ui.manager import ScreenManager
+from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS, PrCelebrationScreen
+from display.ui.username import UsernameScreen
 from peloton.demo import demo_data
 from peloton.stats.summaries import summarize_workout
 from peloton.stats.totals import extract_discipline_totals, lifetime_overview_pages
@@ -36,16 +40,21 @@ def render_contact_sheet(destination):
     for height in (64, 32):
         initialize_fonts(height)
         matrix = ImageMatrix(height=height)
-        samples = [(w['ride']['fitness_discipline'], LastWorkoutScreen(),
-                    summarize_workout(w, data['performance'][w['id']])) for w in data['workouts']]
-        samples += [('Login needed', LastWorkoutScreen(), samples[0][2]),
-                    ('Username', UsernameScreen('info'), 'Demo Rider'),
-                    ('PR', PrCelebrationScreen(), next(s for _, _, s in samples if s.get('is_pr')))]
+        samples = [
+            (w['ride']['fitness_discipline'], LastWorkoutScreen(), summarize_workout(w, data['performance'][w['id']]))
+            for w in data['workouts']
+        ]
+        samples += [
+            ('Login needed', LastWorkoutScreen(), samples[0][2]),
+            ('Username', UsernameScreen('info'), 'Demo Rider'),
+            ('PR', PrCelebrationScreen(), next(s for _, _, s in samples if s.get('is_pr'))),
+        ]
         if height == 64:
             lifetime = lifetime_overview_pages(extract_discipline_totals(data['overview']))
-            samples += [(f'Lifetime {index + 1}', LifetimeOverviewScreen(),
-                         {'items': items, 'page': index + 1, 'pages': len(lifetime)})
-                        for index, items in enumerate(lifetime)]
+            samples += [
+                (f'Lifetime {index + 1}', LifetimeOverviewScreen(), {'items': items, 'page': index + 1, 'pages': len(lifetime)})
+                for index, items in enumerate(lifetime)
+            ]
         else:
             samples += [('Totals', DisciplinePageScreen(), {'discipline': 'Bike Bootcamp', 'count': 1234})]
         for label, screen, state in samples:

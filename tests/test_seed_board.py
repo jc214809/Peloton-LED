@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'scripts' / 'seed_board.sh'
 
-FAKE_SSH = '''#!/usr/bin/env bash
+FAKE_SSH = """#!/usr/bin/env bash
 # Stand-in for ssh: "mktemp -d" makes the board's temp dir, -O exit closes the
 # shared connection, anything else is logged as the remote command.
 echo "ssh $*" >> "$FAKE_LOG"
@@ -20,18 +20,18 @@ if [[ "$last" == "mktemp -d" ]]; then
 fi
 printf '%s\\n' "$last" > "$FAKE_REMOTE/command"
 exit "${FAKE_SSH_STATUS:-0}"
-'''
+"""
 
-FAKE_SCP = '''#!/usr/bin/env bash
+FAKE_SCP = """#!/usr/bin/env bash
 # Stand-in for scp: copy the local files into the "remote" path after host:.
 echo "scp $*" >> "$FAKE_LOG"
 args=(); for arg in "$@"; do args+=("$arg"); done
 target="${args[${#args[@]}-1]}"; target="${target#*:}"
 for arg in "${args[@]}"; do [[ -f "$arg" ]] && cp "$arg" "$target"; done
 exit 0
-'''
+"""
 
-FAKE_PYTHON = '''#!/usr/bin/env bash
+FAKE_PYTHON = """#!/usr/bin/env bash
 # Stand-in for refresh_cookies.py --seed-dir DIR: write two riders' pairs.
 echo "python $*" >> "$FAKE_LOG"
 [[ -n "${FAKE_SEED_FAIL:-}" ]] && { echo "Seeding failed: login" >&2; exit 1; }
@@ -40,7 +40,7 @@ for rider in joel jen; do
     echo token > "$dir/cookies-$rider.txt"
     echo '{"refresh_token": "r"}' > "$dir/cookies-$rider.refresh.json"
 done
-'''
+"""
 
 
 def _run(tmp_path, **env):
@@ -58,10 +58,18 @@ def _run(tmp_path, **env):
     config.write_text('{}')
     result = subprocess.run(
         ['bash', str(SCRIPT), 'admin@board.local', '--config', str(config)],
-        capture_output=True, text=True,
-        env={**os.environ, 'PATH': f'{bin_dir}:{os.environ["PATH"]}', 'TMPDIR': str(local_tmp),
-             'PELOTON_PYTHON': str(bin_dir / 'fake-python'), 'FAKE_LOG': str(tmp_path / 'log'),
-             'FAKE_REMOTE': str(remote), **env})
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            'PATH': f'{bin_dir}:{os.environ["PATH"]}',
+            'TMPDIR': str(local_tmp),
+            'PELOTON_PYTHON': str(bin_dir / 'fake-python'),
+            'FAKE_LOG': str(tmp_path / 'log'),
+            'FAKE_REMOTE': str(remote),
+            **env,
+        },
+    )
     return result, local_tmp, remote, (tmp_path / 'log').read_text() if (tmp_path / 'log').exists() else ''
 
 
@@ -77,7 +85,7 @@ def test_seed_board_copies_installs_and_cleans_up_both_sides(tmp_path):
     # The board's copies go whether or not install worked, before the status check.
     assert command.index(f"rm -rf '{remote / 'seed'}'") < command.index('--status --all-users')
     # The status check runs as peloton-led, which can't read admin's temp dir.
-    assert command.index("cd /") < command.index('sudo -u peloton-led')
+    assert command.index('cd /') < command.index('sudo -u peloton-led')
     assert ' -t ' in log  # sudo on the board can prompt for a password.
     # One shared connection, closed at the end; no local copies left behind.
     assert all('ControlPath=' in line for line in log.splitlines() if line.startswith(('ssh', 'scp')))

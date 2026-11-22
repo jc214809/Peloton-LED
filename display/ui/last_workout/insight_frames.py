@@ -1,21 +1,21 @@
 """The workout-compare frames: the 64x64 card and bars, the 64x32 bars and sentence pages."""
-from typing import List
 
 from display.display import get_text_width, loaded_fonts
+
+from ..username import MARGIN as SCROLL_MARGIN
+from ..username import UsernameScreen
 from .colors import _INSIGHT_DIM, _INSIGHT_GOLD, _INSIGHT_TEXT, _LABEL_GREY, _USUAL_BAR, _disc_rgb
-from .insight_data import ARROW_PART, INSIGHT_KINDS, TYPICAL_LABEL, _ARROW_ROWS, _parts_layout, insight_views
+from .insight_data import _ARROW_ROWS, ARROW_PART, INSIGHT_KINDS, TYPICAL_LABEL, _parts_layout, insight_views
 from .rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, detail_at, detail_hold_seconds, rotating_details
 from .sprites import _draw_bulb, _rect
 from .text import _centred, _draw_words, _words_width, _write
-from ..username import MARGIN as SCROLL_MARGIN, UsernameScreen
 
 
 def _rich_line(matrix, font, y: int, line: str, numbers, highlight=()) -> None:
     """A centred sentence line whose words with a digit (or in `highlight`: FIRST) take `numbers` (the
     insight's colour), the rest white."""
     x = max((matrix.width - _words_width(font, line)) // 2, 0)
-    _draw_words(matrix, font, x, y, line,
-                lambda word: numbers if word in highlight or any(ch.isdigit() for ch in word) else _INSIGHT_TEXT)
+    _draw_words(matrix, font, x, y, line, lambda word: numbers if word in highlight or any(ch.isdigit() for ch in word) else _INSIGHT_TEXT)
 
 
 def _reason_line(matrix, font, y: int, text: str, phase: float, hold: float) -> None:
@@ -26,15 +26,14 @@ def _reason_line(matrix, font, y: int, text: str, phase: float, hold: float) -> 
     if overflow <= 0:
         _centred(matrix, font, y, _INSIGHT_TEXT, text)
         return
-    _write(matrix, font, SCROLL_MARGIN - UsernameScreen.scroll_offset(overflow, phase, hold), y,
-           _INSIGHT_TEXT, text)
+    _write(matrix, font, SCROLL_MARGIN - UsernameScreen.scroll_offset(overflow, phase, hold), y, _INSIGHT_TEXT, text)
     height = getattr(font, 'height', 8)
     for row in range(y - height, min(y + 3, matrix.height)):
         for x in list(range(0, SCROLL_MARGIN)) + list(range(w - SCROLL_MARGIN, w)):
             matrix.SetPixel(x, row, 0, 0, 0)
 
 
-def _parts_line(matrix, font, y: int, parts: List[str], colour) -> None:
+def _parts_line(matrix, font, y: int, parts: list[str], colour) -> None:
     """The bars frame's bottom line drawn in parts from column 1, with an ARROW_PART between: the text before
     the arrow (the class rating) and the arrow in the insight's colour, the text after it soft white. The arrow
     sits on the text's rows (y-5 to y-1), centred between the inks (`_parts_layout`; Joel, 2026-11-12)."""
@@ -85,9 +84,10 @@ def _bars_tall(matrix, figure: dict, colour) -> None:
     if kind == 'bars':
         top = _bars_top(figure)
         usual_label = figure.get('usual_label') or TYPICAL_LABEL
-        for y, label, value, text, rgb, bar in ((32, 'TODAY', figure['today'], figure['today_text'], colour, colour),
-                                                (45, usual_label, figure['usual'], figure['usual_text'], _LABEL_GREY,
-                                                 _USUAL_BAR)):
+        for y, label, value, text, rgb, bar in (
+            (32, 'TODAY', figure['today'], figure['today_text'], colour, colour),
+            (45, usual_label, figure['usual'], figure['usual_text'], _LABEL_GREY, _USUAL_BAR),
+        ):
             unit = figure.get('unit', '')
             # Weights read as one word, 40LB, as in the sentence; watts and mph keep their space.
             text = f'{text}{unit}' if unit == 'LB' else f'{text} {unit}'.strip()
@@ -111,7 +111,7 @@ def _bars_tall(matrix, figure: dict, colour) -> None:
             x = x0 + i * (size + gap)
             _rect(matrix, x, 34, x + size - 1, 34 + size - 1, colour if i < figure['lit'] else _INSIGHT_DIM)
         if figure.get('label'):
-            _centred(matrix, stats, 34 + size + 9, _LABEL_GREY, f"{figure['lit']} {figure['label']}")
+            _centred(matrix, stats, 34 + size + 9, _LABEL_GREY, f'{figure["lit"]} {figure["label"]}')
 
 
 def _block_size(total: int, room: int, sizes):
@@ -126,8 +126,10 @@ def _bars_short(matrix, figure: dict, colour) -> None:
     kind = figure['kind']
     if kind == 'bars':
         top = _bars_top(figure)
-        for y, value, text, rgb, bar in ((13, figure['today'], figure['today_text'], colour, colour),
-                                         (21, figure['usual'], figure['usual_text'], _LABEL_GREY, _USUAL_BAR)):
+        for y, value, text, rgb, bar in (
+            (13, figure['today'], figure['today_text'], colour, colour),
+            (21, figure['usual'], figure['usual_text'], _LABEL_GREY, _USUAL_BAR),
+        ):
             _rect(matrix, 1, y - 4, 1 + round(40 * min(value, top) / top), y, bar)
             _write(matrix, stats, 63 - get_text_width(stats, text), y, rgb, text)
     elif kind == 'share':
@@ -144,8 +146,7 @@ def _bars_short(matrix, figure: dict, colour) -> None:
             _rect(matrix, x, 11, x + size - 1, 11 + size - 1, colour if i < figure['lit'] else _INSIGHT_DIM)
 
 
-def _draw_insight_bars(matrix, view: dict, discipline: str, index: int, count: int,
-                       phase: float, hold: float) -> None:
+def _draw_insight_bars(matrix, view: dict, discipline: str, index: int, count: int, phase: float, hold: float) -> None:
     """The headline in its colour, the figure, and the reason line underneath."""
     stats = loaded_fonts['stats']
     colour = tuple(view['colour'])
