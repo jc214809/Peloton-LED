@@ -7,6 +7,7 @@ writes docs/screenshots/rotation/milestones.png: the celebration at each time in
 rising, then the text), on a 64x64 panel (top row) and a 64x32 panel (bottom row), labelled like the README's
 other screenshots.
 """
+
 import argparse
 import os
 import sys

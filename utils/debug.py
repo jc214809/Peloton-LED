@@ -2,7 +2,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-logger = logging.getLogger("peloton-led")
+logger = logging.getLogger('peloton-led')
 
 # Determine the base directory path dynamically
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,11 +20,7 @@ logger.addHandler(console_handler)
 
 try:
     os.makedirs(LOG_DIR, exist_ok=True)
-    file_handler = RotatingFileHandler(
-        os.path.join(LOG_DIR, 'app.log'),
-        maxBytes=5 * 1024 * 1024,
-        backupCount=10
-    )
+    file_handler = RotatingFileHandler(os.path.join(LOG_DIR, 'app.log'), maxBytes=5 * 1024 * 1024, backupCount=10)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 except OSError as exc:

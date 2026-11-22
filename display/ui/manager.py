@@ -1,18 +1,25 @@
 # python file: display/ui/manager.py
 
 import time
-from typing import Any
 from collections.abc import Callable
-from .screen import Screen
-from .overlays.login_indicator import draw_login_indicator
-from .overlays.stale_indicator import draw_stale_indicator
-from .overlays.settings_pin import draw_if_pin_shown
+from typing import Any
+
 from utils import debug
 
+from .overlays.login_indicator import draw_login_indicator
+from .overlays.settings_pin import draw_if_pin_shown
+from .overlays.stale_indicator import draw_stale_indicator
+from .screen import Screen
+
+
 class ScreenManager:
-    def __init__(self, matrix, initial: Screen | None = None,
-                 login_required: Callable[[], bool] | None = None,
-                 stale_data: Callable[[], bool] | None = None):
+    def __init__(
+        self,
+        matrix,
+        initial: Screen | None = None,
+        login_required: Callable[[], bool] | None = None,
+        stale_data: Callable[[], bool] | None = None,
+    ):
         self.matrix = matrix
         self.current: Screen | None = initial
         self.current_name: str | None = None
@@ -27,25 +34,25 @@ class ScreenManager:
             if self.current is not None:
                 self.current.on_enter(self.matrix, None)
         except Exception:
-            debug.exception("Error during on_enter of initial screen")
+            debug.exception('Error during on_enter of initial screen')
         try:
             self.matrix.Clear()
         except Exception:
-            debug.exception("Failed to clear matrix during manager init")
+            debug.exception('Failed to clear matrix during manager init')
 
     def register(self, name: str, screen: Screen):
         self.screens[name] = screen
 
     def show(self, name: str, state: Any | None = None):
         if name not in self.screens:
-            debug.error("Screen %s not registered", name)
+            debug.error('Screen %s not registered', name)
             return
 
         try:
             if self.current is not None:
                 self.current.on_exit(self.matrix)
         except Exception:
-            debug.exception("Error during on_exit of %s", getattr(self.current, "__class__", "?"))
+            debug.exception('Error during on_exit of %s', getattr(self.current, '__class__', '?'))
 
         self.current = self.screens[name]
         self.current_name = name
@@ -54,7 +61,7 @@ class ScreenManager:
         try:
             self.current.on_enter(self.matrix, state)
         except Exception:
-            debug.exception("Error during on_enter of %s", name)
+            debug.exception('Error during on_enter of %s', name)
 
     def tick(self, state: Any | None = None):
         now = time.time()
@@ -63,10 +70,12 @@ class ScreenManager:
         needs_login = self.login_required()
         is_stale = self.stale_data()
         if isinstance(state, dict):
-            state = {**state, "login_required": needs_login, "data_stale": is_stale}
-        atomic = (getattr(self.current, 'atomic_frames', False) is True
-                  and callable(getattr(self.matrix, 'CreateFrameCanvas', None))
-                  and callable(getattr(self.matrix, 'SwapOnVSync', None)))
+            state = {**state, 'login_required': needs_login, 'data_stale': is_stale}
+        atomic = (
+            getattr(self.current, 'atomic_frames', False) is True
+            and callable(getattr(self.matrix, 'CreateFrameCanvas', None))
+            and callable(getattr(self.matrix, 'SwapOnVSync', None))
+        )
         target = self.matrix
         try:
             if atomic:
@@ -78,7 +87,7 @@ class ScreenManager:
                 self.current.update(dt)
                 self.current.render(target, state)
         except Exception:
-            debug.exception("Error while rendering screen %s", self.current_name)
+            debug.exception('Error while rendering screen %s', self.current_name)
         if needs_login:
             draw_login_indicator(target)
         if is_stale:

@@ -6,6 +6,7 @@
 Pages back through workout history (newest first) until it finds a PR, so it
 costs 1 profile call + 1 call per 50 workouts searched + 1 performance call.
 """
+
 import argparse
 import json
 import logging
@@ -27,13 +28,15 @@ def parse_options(argv=None):
     parser.add_argument('--max-pages', type=int, default=20, help='History pages of 50 to search')
     parser.add_argument('--png', help='Save preview frames to this PNG instead of opening the emulator')
     parser.add_argument('--replay', type=float, default=6.0, help='Seconds before the animation restarts')
-    parser.add_argument('--previous-best', type=float, metavar='KJ',
-                        help='Old record to show the gain against (preview only; the app learns this itself)')
+    parser.add_argument(
+        '--previous-best', type=float, metavar='KJ', help='Old record to show the gain against (preview only; the app learns this itself)'
+    )
     return parser.parse_args(argv)
 
 
 def token_path_for(config, config_path, user_name=None):
     from peloton.config import default_token_path
+
     users = config.get('users') or []
     if not users:
         return ROOT / 'cookies.txt', 'default'
@@ -41,7 +44,7 @@ def token_path_for(config, config_path, user_name=None):
     if user_name:
         matches = [u for u in users if u['name'].strip().casefold() == user_name.strip().casefold()]
         if not matches:
-            raise SystemExit(f"No user named {user_name!r}; configured: {', '.join(u['name'] for u in users)}")
+            raise SystemExit(f'No user named {user_name!r}; configured: {", ".join(u["name"] for u in users)}')
         user = matches[0]
     path = Path(user.get('token_path') or default_token_path(user['name'])).expanduser()
     if not path.is_absolute():
@@ -51,8 +54,9 @@ def token_path_for(config, config_path, user_name=None):
 
 def find_latest_pr(client, user_id, max_pages, page_size=50):
     """Newest completed PR workout and the number of history pages read."""
-    from peloton.stats.records import is_pr_workout
     from peloton.selection import is_completed
+    from peloton.stats.records import is_pr_workout
+
     for page_number in range(max_pages):
         page = client.get_workouts_page(user_id, limit=page_size, page=page_number)
         rows = page.get('data') or []
@@ -68,10 +72,13 @@ def find_latest_pr(client, user_id, max_pages, page_size=50):
 
 def save_frames(summary, destination):
     import unittest  # noqa: F401  (selects emulator graphics without a matrix)
+
     from PIL import Image
+
     from display.display import initialize_fonts
     from display.ui.pr_celebration import PrCelebrationScreen
     from scripts.render_demo import ImageMatrix
+
     initialize_fonts(64)
     tiles = []
     for elapsed in (0.2, 0.8, 1.35, 2.5):
@@ -90,11 +97,12 @@ def save_frames(summary, destination):
 def play_in_emulator(summary, replay):
     # The driver picks emulator vs hardware from the app's own CLI flags.
     sys.argv = [sys.argv[0], '--emulated', '--led-rows', '64', '--led-cols', '64']
-    from driver import RGBMatrix
-    from utils.utils import args, led_matrix_options
     from display.display import initialize_fonts
     from display.ui.manager import ScreenManager
     from display.ui.pr_celebration import PrCelebrationScreen
+    from driver import RGBMatrix
+    from utils.utils import args, led_matrix_options
+
     matrix = RGBMatrix(options=led_matrix_options(args()))
     initialize_fonts(matrix.height)
     manager = ScreenManager(matrix)
@@ -117,6 +125,7 @@ def main(argv=None):
     from peloton.api import PelotonClient, make_session
     from peloton.config import load_config, load_dotenv
     from peloton.stats.summaries import summarize_workout
+
     load_dotenv(ROOT / '.env')
     try:
         config = load_config(options.config)
@@ -137,8 +146,7 @@ def main(argv=None):
             raise SystemExit('Peloton profile response had no user ID')
         workout, pages = find_latest_pr(client, user_id, options.max_pages)
         if workout is None:
-            raise SystemExit(f'No PR found for {name} in the last {pages * 50} workouts '
-                             f'(try a larger --max-pages)')
+            raise SystemExit(f'No PR found for {name} in the last {pages * 50} workouts (try a larger --max-pages)')
         summary = summarize_workout(workout, client.get_perf_graph(workout['id']))
     except Exception as exc:
         response = getattr(exc, 'response', None)
@@ -151,10 +159,27 @@ def main(argv=None):
     if options.previous_best is not None:
         summary['previous_best_kj'] = options.previous_best
     logger.info('%s: latest PR after %d history page(s), %d API calls total', name, pages, pages + 2)
-    logger.info(json.dumps({k: summary.get(k) for k in (
-        'date_time', 'discipline', 'title', 'instructor', 'duration_min', 'total_output_kj',
-        'total_work_kj', 'previous_best_kj', 'row_split_sec_per_500m', 'is_output_pr',
-        'is_splits_pr')}, indent=2))
+    logger.info(
+        json.dumps(
+            {
+                k: summary.get(k)
+                for k in (
+                    'date_time',
+                    'discipline',
+                    'title',
+                    'instructor',
+                    'duration_min',
+                    'total_output_kj',
+                    'total_work_kj',
+                    'previous_best_kj',
+                    'row_split_sec_per_500m',
+                    'is_output_pr',
+                    'is_splits_pr',
+                )
+            },
+            indent=2,
+        )
+    )
     if options.png:
         save_frames(summary, options.png)
         logger.info('Saved frames to %s', options.png)

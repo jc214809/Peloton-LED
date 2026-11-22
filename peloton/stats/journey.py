@@ -1,4 +1,5 @@
 """Lifetime distance as a trip between two places (default: Columbus to Disney World)."""
+
 from datetime import date
 from math import isfinite
 
@@ -11,17 +12,24 @@ M_TO_MI = 1 / 1609.344
 METER_DISCIPLINES = {'rowing', 'row_bootcamp'}
 
 # disciplines None counts every workout with a distance (see DISTANCE_DISCIPLINES).
-DEFAULT_JOURNEY = {'from': 'Columbus', 'to': 'Disney World', 'miles': 880,
-                   'disciplines': None, 'start_date': None}
+DEFAULT_JOURNEY = {'from': 'Columbus', 'to': 'Disney World', 'miles': 880, 'disciplines': None, 'start_date': None}
 # Peloton reports distance for these; everything else (strength, yoga, cardio,
 # stretching, meditation, ...) has none, so it never adds miles.
-DISTANCE_DISCIPLINES = ('Cycling', 'Bike Bootcamp', 'Running', 'Outdoor Run', 'Tread Bootcamp',
-                        'Walking', 'Outdoor Walk', 'Rowing', 'Row Bootcamp')
+DISTANCE_DISCIPLINES = (
+    'Cycling',
+    'Bike Bootcamp',
+    'Running',
+    'Outdoor Run',
+    'Tread Bootcamp',
+    'Walking',
+    'Outdoor Walk',
+    'Rowing',
+    'Row Bootcamp',
+)
 # The journey page splits the miles three ways, by how they were covered. Anything not on the
 # bike or the rower (tread, outdoor, hiking, a discipline Peloton adds later) is walk/run, so
 # every mile lands in a row the page shows.
-MILE_GROUPS = (('bike', 'BIKE', frozenset({'cycling', 'bike_bootcamp'})),
-               ('row', 'ROW', frozenset({'rowing', 'row_bootcamp'})))
+MILE_GROUPS = (('bike', 'BIKE', frozenset({'cycling', 'bike_bootcamp'})), ('row', 'ROW', frozenset({'rowing', 'row_bootcamp'})))
 FOOT_GROUP = ('walk_run', 'WALK/RUN')
 
 
@@ -87,15 +95,25 @@ def journey_progress(distance_totals, journey):
         return None
     chosen = journey.get('disciplines')
     wanted = None if chosen is None else {normalize_discipline(d) for d in chosen}
-    counted = {k: v for k, v in distance_totals.items()
-               if (wanted is None or k in wanted) and isinstance(v, (int, float)) and not isinstance(v, bool)}
+    counted = {
+        k: v
+        for k, v in distance_totals.items()
+        if (wanted is None or k in wanted) and isinstance(v, (int, float)) and not isinstance(v, bool)
+    }
     miles = sum(counted.values())
     groups = {}
     for discipline, value in counted.items():
         key, label = mile_group(discipline)
         groups.setdefault(key, {'key': key, 'label': label, 'miles': 0})['miles'] += value
     leg, into = divmod(miles, route)
-    return {'from': str(journey.get('from') or 'Start'), 'to': str(journey.get('to') or 'Finish'),
-            'route_miles': route, 'miles': miles, 'trip': int(leg) + 1,
-            'leg_miles': into, 'fraction': into / route, 'returning': int(leg) % 2 == 1,
-            'groups': sorted((g for g in groups.values() if g['miles'] > 0), key=lambda g: (-g['miles'], g['key']))}
+    return {
+        'from': str(journey.get('from') or 'Start'),
+        'to': str(journey.get('to') or 'Finish'),
+        'route_miles': route,
+        'miles': miles,
+        'trip': int(leg) + 1,
+        'leg_miles': into,
+        'fraction': into / route,
+        'returning': int(leg) % 2 == 1,
+        'groups': sorted((g for g in groups.values() if g['miles'] > 0), key=lambda g: (-g['miles'], g['key'])),
+    }

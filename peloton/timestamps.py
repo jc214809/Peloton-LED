@@ -1,5 +1,6 @@
 """Shared timestamp handling. Date-only values never imply an exact instant."""
-from datetime import date, datetime, UTC
+
+from datetime import UTC, date, datetime
 from math import isfinite
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 

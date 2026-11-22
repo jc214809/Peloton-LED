@@ -1,4 +1,5 @@
 """Each bad config.json produces a specific, readable error instead of a crash later."""
+
 import json
 
 import pytest
@@ -12,50 +13,55 @@ def _load(tmp_path, config):
     return load_config(path)
 
 
-@pytest.mark.parametrize('config,message', [
-    ({'users': 'Joel'}, 'users must be a non-empty list'),
-    ({'users': []}, 'users must be a non-empty list'),
-    ({'users': ['Joel']}, r'users\[0\] must be an object'),
-    ({'users': [{'name': ' '}]}, r'users\[0\] requires a name'),
-    ({'users': [{'name': 'Joel', 'token_path': ''}]}, 'token_path must be a non-empty string'),
-    ({'users': [{'name': 'Joel'}, {'name': 'joel'}]}, 'names and token paths must be unique'),
-    ({'users': [{'name': 'A', 'token_path': 't.txt'}, {'name': 'B', 'token_path': 't.txt'}]},
-     'names and token paths must be unique'),
-    ({'users': [{'name': 'Joel', 'username': 5}]}, r'users\[0\].username must be a string'),
-    ({'users': [{'name': 'A', 'cache_path': 'c.json'}, {'name': 'B', 'cache_path': 'c.json'}]},
-     'cache and log paths must be unique'),
-    ({'users': [{'name': 'A', 'log_path': 'l.json'}, {'name': 'B', 'log_path': 'l.json'}]},
-     'cache and log paths must be unique'),
-    ({'users': [{'name': 'A', 'cache_path': 'x.json'}, {'name': 'B', 'log_path': 'x.json'}]},
-     'cache and log paths must be unique'),
-    ({'users': [{'name': 'A', 'log_path': 5}]}, r'users\[0\].log_path must be a string'),
-    ({'display': {'log_path': 5}}, 'display.log_path must be a string'),
-    ({'users': [{'name': 'Joel', 'email_env': 'lower-case'}]}, 'must be an environment variable name'),
-    ({'users': [{'name': 'Joel', 'weekly_goals': {'workouts': -1}}]}, 'weekly_goals values must be non-negative'),
-    ({'display': {'weekly_goals': {'workouts': True}}}, 'weekly_goals values must be non-negative'),
-    ({'display': {'weekly_goals': {'active_days': 8}}}, 'weekly_goals.active_days can be at most 7'),
-    ({'users': [{'name': 'Joel', 'weekly_goals': {'active_days': -1}}]}, 'weekly_goals values must be non-negative'),
-    ({'display': {'font': 'comic-sans'}}, 'unsupported display.font'),
-    ({'display': {'color': 'plaid'}}, 'unsupported display.color'),
-    ({'display': {'timezone': 'Mars/Olympus'}}, 'invalid display.timezone'),
-    ({'display': {'username': 7}}, 'display.username must be a string'),
-    ({'display': {'rotation': ['username', 'username']}}, 'display.rotation must contain unique'),
-    ({'display': {'rotation': ['karaoke']}}, 'display.rotation must contain unique'),
-    ({'display': {'screen_durations': {'karaoke': 5}}}, 'unsupported screen name'),
-    ({'display': {'screen_durations': {'username': -1}}}, 'values must be numbers above 0'),
-    ({'display': {'overview_duration': -1}}, 'overview_duration must be a number above 0'),
-    ({'display': {'show_logo': 'yes'}}, 'show_logo must be true or false'),
-    ({'display': {'workout_insights': 'yes'}}, 'workout_insights must be true or false'),
-    ({'display': {'milestone_step': -5}}, 'milestone_step must be a non-negative integer'),
-    ({'display': {'brightness_schedule': {'day': 80}}}, 'brightness_schedule requires'),
-    ({'display': {'brightness_schedule': {'day': 0, 'night': 20, 'day_start': '07:00', 'night_start': '21:00'}}},
-     'brightness day must be from 1 to 100'),
-    ({'display': {'brightness_schedule': {'day': 80, 'night': 20, 'day_start': '7am', 'night_start': '21:00'}}},
-     'brightness day_start must use HH:MM'),
-    ({'display': {'refresh_schedule': {'quiet_start': '23:00', 'quiet_end': '06:00', 'quiet_interval': 3600,
-                                       'timezone': 5}}}, 'refresh_schedule.timezone must be a string'),
-    ({'matrix': {'pixel_mapper': 3}}, 'matrix.pixel_mapper must be a string'),
-])
+@pytest.mark.parametrize(
+    'config,message',
+    [
+        ({'users': 'Joel'}, 'users must be a non-empty list'),
+        ({'users': []}, 'users must be a non-empty list'),
+        ({'users': ['Joel']}, r'users\[0\] must be an object'),
+        ({'users': [{'name': ' '}]}, r'users\[0\] requires a name'),
+        ({'users': [{'name': 'Joel', 'token_path': ''}]}, 'token_path must be a non-empty string'),
+        ({'users': [{'name': 'Joel'}, {'name': 'joel'}]}, 'names and token paths must be unique'),
+        ({'users': [{'name': 'A', 'token_path': 't.txt'}, {'name': 'B', 'token_path': 't.txt'}]}, 'names and token paths must be unique'),
+        ({'users': [{'name': 'Joel', 'username': 5}]}, r'users\[0\].username must be a string'),
+        ({'users': [{'name': 'A', 'cache_path': 'c.json'}, {'name': 'B', 'cache_path': 'c.json'}]}, 'cache and log paths must be unique'),
+        ({'users': [{'name': 'A', 'log_path': 'l.json'}, {'name': 'B', 'log_path': 'l.json'}]}, 'cache and log paths must be unique'),
+        ({'users': [{'name': 'A', 'cache_path': 'x.json'}, {'name': 'B', 'log_path': 'x.json'}]}, 'cache and log paths must be unique'),
+        ({'users': [{'name': 'A', 'log_path': 5}]}, r'users\[0\].log_path must be a string'),
+        ({'display': {'log_path': 5}}, 'display.log_path must be a string'),
+        ({'users': [{'name': 'Joel', 'email_env': 'lower-case'}]}, 'must be an environment variable name'),
+        ({'users': [{'name': 'Joel', 'weekly_goals': {'workouts': -1}}]}, 'weekly_goals values must be non-negative'),
+        ({'display': {'weekly_goals': {'workouts': True}}}, 'weekly_goals values must be non-negative'),
+        ({'display': {'weekly_goals': {'active_days': 8}}}, 'weekly_goals.active_days can be at most 7'),
+        ({'users': [{'name': 'Joel', 'weekly_goals': {'active_days': -1}}]}, 'weekly_goals values must be non-negative'),
+        ({'display': {'font': 'comic-sans'}}, 'unsupported display.font'),
+        ({'display': {'color': 'plaid'}}, 'unsupported display.color'),
+        ({'display': {'timezone': 'Mars/Olympus'}}, 'invalid display.timezone'),
+        ({'display': {'username': 7}}, 'display.username must be a string'),
+        ({'display': {'rotation': ['username', 'username']}}, 'display.rotation must contain unique'),
+        ({'display': {'rotation': ['karaoke']}}, 'display.rotation must contain unique'),
+        ({'display': {'screen_durations': {'karaoke': 5}}}, 'unsupported screen name'),
+        ({'display': {'screen_durations': {'username': -1}}}, 'values must be numbers above 0'),
+        ({'display': {'overview_duration': -1}}, 'overview_duration must be a number above 0'),
+        ({'display': {'show_logo': 'yes'}}, 'show_logo must be true or false'),
+        ({'display': {'workout_insights': 'yes'}}, 'workout_insights must be true or false'),
+        ({'display': {'milestone_step': -5}}, 'milestone_step must be a non-negative integer'),
+        ({'display': {'brightness_schedule': {'day': 80}}}, 'brightness_schedule requires'),
+        (
+            {'display': {'brightness_schedule': {'day': 0, 'night': 20, 'day_start': '07:00', 'night_start': '21:00'}}},
+            'brightness day must be from 1 to 100',
+        ),
+        (
+            {'display': {'brightness_schedule': {'day': 80, 'night': 20, 'day_start': '7am', 'night_start': '21:00'}}},
+            'brightness day_start must use HH:MM',
+        ),
+        (
+            {'display': {'refresh_schedule': {'quiet_start': '23:00', 'quiet_end': '06:00', 'quiet_interval': 3600, 'timezone': 5}}},
+            'refresh_schedule.timezone must be a string',
+        ),
+        ({'matrix': {'pixel_mapper': 3}}, 'matrix.pixel_mapper must be a string'),
+    ],
+)
 def test_bad_config_names_the_problem(tmp_path, config, message):
     with pytest.raises(ValueError, match=message):
         _load(tmp_path, config)
@@ -80,15 +86,21 @@ def test_legacy_font_names_still_load(tmp_path, legacy):
 
 
 def test_valid_brightness_and_refresh_schedules_load(tmp_path):
-    config = _load(tmp_path, {'display': {
-        'brightness_schedule': {'day': 80, 'night': 20, 'day_start': '07:00', 'night_start': '21:00'},
-        'refresh_schedule': {'quiet_start': '23:00', 'quiet_end': '06:00', 'quiet_interval': 3600,
-                             'timezone': 'America/New_York'}}})
+    config = _load(
+        tmp_path,
+        {
+            'display': {
+                'brightness_schedule': {'day': 80, 'night': 20, 'day_start': '07:00', 'night_start': '21:00'},
+                'refresh_schedule': {'quiet_start': '23:00', 'quiet_end': '06:00', 'quiet_interval': 3600, 'timezone': 'America/New_York'},
+            }
+        },
+    )
     assert config['display']['brightness_schedule']['day'] == 80
 
 
 def test_settings_the_workout_log_replaced_still_load_with_a_warning(tmp_path, caplog):
     import logging
+
     with caplog.at_level(logging.WARNING):
         display = _load(tmp_path, {'display': {'history_days': 90, 'instructor_tally_max_pages': 200}})['display']
     assert 'display.history_days, display.instructor_tally_max_pages no longer do anything' in caplog.text
@@ -102,6 +114,7 @@ def test_settings_the_workout_log_replaced_still_load_with_a_warning(tmp_path, c
 def test_shipped_example_configs_load_without_retired_settings(tmp_path, caplog):
     import logging
     from pathlib import Path
+
     root = Path(__file__).resolve().parents[1]
     for name in ('config.json-example', 'packaging/config.pi.json'):
         # load_config reads config.json beside the given path, so load a copy.
@@ -116,6 +129,7 @@ def test_shipped_example_configs_load_without_retired_settings(tmp_path, caplog)
 
 def test_validate_config_checks_a_dict_without_a_file():
     from peloton.config import validate_config
+
     config = {'display': {'rotation': ['goals']}}
     checked = validate_config(config, 'from the settings page')
     assert checked['display']['rotation'] == ['goals'] and checked['matrix']['rows'] == 64
@@ -125,6 +139,7 @@ def test_validate_config_checks_a_dict_without_a_file():
 
 def test_logo_shows_for_five_seconds_by_default(tmp_path):
     from pathlib import Path
+
     assert _load(tmp_path, {'display': {}})['display']['logo_duration'] == 5
     root = Path(__file__).resolve().parents[1]
     for template in ('config.json-example', 'packaging/config.pi.json'):

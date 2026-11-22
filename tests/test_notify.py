@@ -26,6 +26,7 @@ def _response(status, body):
 
 # plan_alert: the rate-limiting rules.
 
+
 def test_single_failure_waits_for_a_second_run():
     alert, state = plan_alert({}, 'offline', 0)
     assert alert is None
@@ -57,14 +58,14 @@ def test_success_after_an_unalerted_blip_is_silent():
     assert plan_alert({}, None, HOUR) == (None, {})
 
 
-@pytest.mark.parametrize('state', [{'failures': 'x', 'last_alert_at': 'yesterday'},
-                                   {'failures': True, 'last_alert_at': True}])
+@pytest.mark.parametrize('state', [{'failures': 'x', 'last_alert_at': 'yesterday'}, {'failures': True, 'last_alert_at': True}])
 def test_garbage_state_is_treated_as_fresh(state):
     alert, new_state = plan_alert(state, 'offline', 0)
     assert alert is None and new_state['failures'] == 1
 
 
 # send_pushover: never raises, reports acceptance.
+
 
 def test_send_without_configuration_skips_the_network(monkeypatch):
     monkeypatch.delenv('PUSHOVER_APP_TOKEN', raising=False)
@@ -78,8 +79,7 @@ def test_send_posts_the_message(pushover_env):
     with patch('peloton.notify.requests.post', return_value=_response(200, {'status': 1})) as post:
         assert send_pushover('title', 'message') is True
     assert post.call_args.args == (notify.PUSHOVER_URL,)
-    assert post.call_args.kwargs['data'] == {'token': 'app-synthetic', 'user': 'user-synthetic',
-                                             'title': 'title', 'message': 'message'}
+    assert post.call_args.kwargs['data'] == {'token': 'app-synthetic', 'user': 'user-synthetic', 'title': 'title', 'message': 'message'}
     assert post.call_args.kwargs['timeout'] > 0
 
 
@@ -90,12 +90,18 @@ def test_send_truncates_to_pushover_limits(pushover_env):
     assert len(post.call_args.kwargs['data']['message']) == 1024
 
 
-@pytest.mark.parametrize('outcome', [
-    requests.ConnectionError('offline'), requests.Timeout('slow'),
-    _response(200, b'<html>not json</html>'), _response(200, {'status': 0}),
-    _response(200, []), _response(400, {'status': 0, 'errors': ['user key is invalid']}),
-    _response(500, b''),
-])
+@pytest.mark.parametrize(
+    'outcome',
+    [
+        requests.ConnectionError('offline'),
+        requests.Timeout('slow'),
+        _response(200, b'<html>not json</html>'),
+        _response(200, {'status': 0}),
+        _response(200, []),
+        _response(400, {'status': 0, 'errors': ['user key is invalid']}),
+        _response(500, b''),
+    ],
+)
 def test_send_failures_return_false(pushover_env, outcome):
     kwargs = {'side_effect': outcome} if isinstance(outcome, Exception) else {'return_value': outcome}
     with patch('peloton.notify.requests.post', **kwargs):
@@ -103,6 +109,7 @@ def test_send_failures_return_false(pushover_env, outcome):
 
 
 # report_outcome: state file round trips.
+
 
 def test_report_outcome_alerts_once_then_recovers(tmp_path, pushover_env):
     state = tmp_path / 'token-alert-state.json'
@@ -155,16 +162,20 @@ def test_report_outcome_never_raises(tmp_path, pushover_env):
 
 def test_ensure_reports_failure_and_success_to_the_alert_state(tmp_path, monkeypatch):
     from scripts import refresh_cookies
+
     token = tmp_path / 'cookies.txt'
-    monkeypatch.setattr('sys.argv', ['refresh_cookies.py', '--ensure', '--cookies', str(token),
-                                     '--config', str(tmp_path / 'config.json')])
-    with patch('scripts.refresh_cookies.ensure_token', side_effect=RuntimeError('boom')), \
-         patch('scripts.refresh_cookies.report_outcome') as report:
+    monkeypatch.setattr('sys.argv', ['refresh_cookies.py', '--ensure', '--cookies', str(token), '--config', str(tmp_path / 'config.json')])
+    with (
+        patch('scripts.refresh_cookies.ensure_token', side_effect=RuntimeError('boom')),
+        patch('scripts.refresh_cookies.report_outcome') as report,
+    ):
         with pytest.raises(SystemExit):
             refresh_cookies.main()
     assert report.call_args.args[0] == tmp_path / 'token-alert-state.json'
     assert report.call_args.args[1] == 'boom'
-    with patch('scripts.refresh_cookies.ensure_token', return_value=('demo', False)), \
-         patch('scripts.refresh_cookies.report_outcome') as report:
+    with (
+        patch('scripts.refresh_cookies.ensure_token', return_value=('demo', False)),
+        patch('scripts.refresh_cookies.report_outcome') as report,
+    ):
         refresh_cookies.main()
     assert report.call_args.args[1] is None

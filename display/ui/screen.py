@@ -4,6 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
+
 class Screen(ABC):
     """Abstract screen interface for all renderers."""
 
@@ -29,4 +30,4 @@ class Screen(ABC):
         try:
             matrix.Clear()
         except Exception:
-            logging.getLogger(__name__).exception("Failed to clear the matrix in on_exit")
+            logging.getLogger(__name__).exception('Failed to clear the matrix in on_exit')

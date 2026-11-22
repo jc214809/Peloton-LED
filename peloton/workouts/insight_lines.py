@@ -7,14 +7,15 @@ wraps by character count and imports nothing. Only a movement name on the reason
 
 `workout_insights`, `demo` and the dashboard import this module, so it must not import any of them back.
 """
+
 LINE_MAX = 15
-LINES_64 = 5               # sentence lines on the 64x64 card
-LINES_32 = 3               # sentence lines on one 64x32 page
+LINES_64 = 5  # sentence lines on the 64x64 card
+LINES_32 = 3  # sentence lines on one 64x32 page
 PAGES_32 = 2
 # The board shows every insight (Joel, 2026-11-15: a third was dropped on only 6 workouts in a year): the rules'
 # workout_insights.MAX_MESSAGES (3) plus an instructor milestone. Kept as a cap since the cache can hold anything.
 MAX_BOARD_INSIGHTS = 4
-MAX_BLOCKS = 30            # more counted sets than this are drawn as this many blocks, scaled
+MAX_BLOCKS = 30  # more counted sets than this are drawn as this many blocks, scaled
 # The words standing in for "usual" (swap them here). IN_LINE_WORD heads and leads an insight within the
 # usual range; TYPICAL_WORD names the usual figure (the median of the similar workouts) in sentences. The bars frame's
 # label is display/ui/last_workout_screen.py's TYPICAL_LABEL.
@@ -26,10 +27,23 @@ GOLD = (255, 200, 0)
 AMBER = (255, 140, 0)
 GREEN = (60, 220, 110)
 RED = (230, 40, 40)
-SOFT_WHITE = (200, 205, 215)   # not 255: full white is glaring on the panel
-COLOURS = {'output_down': AMBER, 'missed_targets': AMBER, 'resistance_low': AMBER, 'cadence_low': AMBER,
-           'pace_low': AMBER, 'output_up': GREEN, 'go_up_lighter': GREEN, 'go_up_streak': GREEN,
-           'went_heavier': GREEN, 'tough_class': GREEN, 'callout_best': GREEN, 'effort_low': GREEN, 'effort_high': RED, 'in_line': SOFT_WHITE}
+SOFT_WHITE = (200, 205, 215)  # not 255: full white is glaring on the panel
+COLOURS = {
+    'output_down': AMBER,
+    'missed_targets': AMBER,
+    'resistance_low': AMBER,
+    'cadence_low': AMBER,
+    'pace_low': AMBER,
+    'output_up': GREEN,
+    'go_up_lighter': GREEN,
+    'go_up_streak': GREEN,
+    'went_heavier': GREEN,
+    'tough_class': GREEN,
+    'callout_best': GREEN,
+    'effort_low': GREEN,
+    'effort_high': RED,
+    'in_line': SOFT_WHITE,
+}
 OUTPUT_CODES = ('output_down', 'output_up', 'in_line')
 CALLOUT_CODES = ('resistance_low', 'cadence_low', 'pace_low')
 STRENGTH_CODES = ('go_up_lighter', 'went_heavier', 'go_up_streak', 'missed_targets')
@@ -79,8 +93,14 @@ def _similar(facts):
 
 
 def _bars(today, usual, unit):
-    return {'kind': 'bars', 'today': today, 'usual': usual, 'today_text': number(today, unit),
-            'usual_text': number(usual, unit), 'unit': 'MPH' if unit == 'mph' else unit.upper()}
+    return {
+        'kind': 'bars',
+        'today': today,
+        'usual': usual,
+        'today_text': number(today, unit),
+        'usual_text': number(usual, unit),
+        'unit': 'MPH' if unit == 'mph' else unit.upper(),
+    }
 
 
 # The strong workout's line when it got more out of each heartbeat than typical (reason 'efficient'): "same
@@ -97,8 +117,10 @@ def _figures(a, b, unit, space=' '):
 
 def _parts(*choices):
     """The first tuple of parts (each starts a line) that wraps to LINES_64 lines, else the last."""
+
     def lines(parts):
         return sum(len(wrap(part)) for part in parts if part)
+
     chosen = next((c for c in choices[:-1] if lines(c) <= LINES_64), choices[-1])
     return tuple(part for part in chosen if part)
 
@@ -112,11 +134,13 @@ def _output(code, facts):
     extra, why = '', None
     if code == 'output_down':
         headline = 'PACE DOWN' if facts['foot'] else 'OUTPUT DOWN'
-        extra, why = {'easier': ('HR LOWER TOO: AN EASIER DAY.', 'AN EASIER DAY'),
-                      'cost_more': ('HR NOT LOWER: LESS PER HEARTBEAT.', 'LESS PER BEAT')}.get(reason, ('', None))
+        extra, why = {
+            'easier': ('HR LOWER TOO: AN EASIER DAY.', 'AN EASIER DAY'),
+            'cost_more': ('HR NOT LOWER: LESS PER HEARTBEAT.', 'LESS PER BEAT'),
+        }.get(reason, ('', None))
         lead = headline
     elif code == 'output_up':
-        headline = lead = f"STRONG {facts['noun'].upper()}"
+        headline = lead = f'STRONG {facts["noun"].upper()}'
         if reason == 'efficient':
             foot = unit == 'mph'
             if facts.get('same_hr'):
@@ -131,15 +155,17 @@ def _output(code, facts):
         # The headline already says "in your range", so the bars frame's line says by how much.
         headline, lead = 'IN YOUR RANGE', f'IN YOUR {TYPICAL_WORD} RANGE'
         gap = facts['value'] - facts['usual']
-        why = f"{number(abs(gap), unit)} {u} {'UNDER' if gap < 0 else 'OVER'}" if number(gap, unit).strip('-0.') \
-            else 'RIGHT IN LINE'
+        why = f'{number(abs(gap), unit)} {u} {"UNDER" if gap < 0 else "OVER"}' if number(gap, unit).strip('-0.') else 'RIGHT IN LINE'
     if code == 'in_line':
         sentence = (lead, figures)
     else:
         # The figures on a line of their own, as the in-line insight has them.
-        sentence = _parts((f'{lead} VS YOUR {TYPICAL_WORD}', figures, extra),
-                          (f'{lead} VS {TYPICAL_WORD}', figures, extra),
-                          (lead, figures, extra), (lead, figures))
+        sentence = _parts(
+            (f'{lead} VS YOUR {TYPICAL_WORD}', figures, extra),
+            (f'{lead} VS {TYPICAL_WORD}', figures, extra),
+            (lead, figures, extra),
+            (lead, figures),
+        )
     figure = _bars(facts['value'], facts['usual'], unit if unit == 'mph' else 'W')
     return headline, sentence, figure, why, _similar(facts)
 
@@ -155,7 +181,7 @@ ARROW = 'arrow'
 # The tough class is against the rider's usual (their last 12 classes in the discipline), not similar classes, so
 # it says USUAL where the others say TYPICAL (Joel, 2026-11-13), on the card and the bars' label alike.
 USUAL_WORD = 'USUAL'
-RATING_TOP = 10            # the rating bars are drawn on Peloton's 0-10 scale
+RATING_TOP = 10  # the rating bars are drawn on Peloton's 0-10 scale
 
 
 def _usual_footer(facts):
@@ -168,7 +194,7 @@ def _usual_footer(facts):
 
 
 def _tough(code, facts):
-    mine, usual = f"{facts['difficulty']:.1f}", f"{facts['usual_difficulty']:.1f}"
+    mine, usual = f'{facts["difficulty"]:.1f}', f'{facts["usual_difficulty"]:.1f}'
     ratings = wrap(f'{mine} CLASS, YOUR {USUAL_WORD} IS {usual}.')
     if len(ratings) > 2:  # a 10.0 class: '10.0 CLASS, YOUR' would run past the line
         ratings = wrap(f'{mine} CLASS. {USUAL_WORD} {usual}.')
@@ -176,14 +202,22 @@ def _tough(code, facts):
     sentence = {'lines64': lines, 'pages32': [list(CHEER_32)], 'text': ' '.join(lines)}
     if facts.get('value') is None:
         # No output insight behind it (too few similar classes, or strength): the two ratings are the bars.
-        figure = {'kind': 'bars', 'today': facts['difficulty'], 'usual': facts['usual_difficulty'],
-                  'today_text': mine, 'usual_text': usual, 'unit': '', 'top': RATING_TOP, 'usual_label': USUAL_WORD}
+        figure = {
+            'kind': 'bars',
+            'today': facts['difficulty'],
+            'usual': facts['usual_difficulty'],
+            'today_text': mine,
+            'usual_text': usual,
+            'unit': '',
+            'top': RATING_TOP,
+            'usual_label': USUAL_WORD,
+        }
         return 'TOUGH CLASS', sentence, figure, 'CLASS RATING', _usual_footer(facts)
     unit = facts['unit'].lower()
     figure = {**_bars(facts['value'], facts['usual'], unit if unit == 'mph' else 'W'), 'usual_label': USUAL_WORD}
     # `text` is the bottom line as words (for logs); `parts` is how the screen draws it, the arrow between.
     # A 10.0 class draws `10` on the bottom line: `10.0 → USUALLY 9.0` would be 67 px of the 63 it has.
-    short = mine if len(mine) <= 3 else f"{facts['difficulty']:.0f}"
+    short = mine if len(mine) <= 3 else f'{facts["difficulty"]:.0f}'
     reason = {'text': f'{mine} TO USUALLY {usual}', 'parts': [short, ARROW, f'USUALLY {usual}']}
     return 'TOUGH CLASS', sentence, figure, reason, _usual_footer(facts)
 
@@ -191,9 +225,15 @@ def _tough(code, facts):
 def _effort(code, facts):
     word = 'HARDEST' if code == 'effort_high' else 'EASIEST'
     n = facts['n']
-    sentence = f"{word} {facts['noun'].upper()} OF YOUR LAST {n} BY HEART RATE."
-    figure = {'kind': 'bars', 'today': facts['rate'], 'usual': facts['usual_rate'],
-              'today_text': f"{facts['rate']:.2f}", 'usual_text': f"{facts['usual_rate']:.2f}", 'unit': ''}
+    sentence = f'{word} {facts["noun"].upper()} OF YOUR LAST {n} BY HEART RATE.'
+    figure = {
+        'kind': 'bars',
+        'today': facts['rate'],
+        'usual': facts['usual_rate'],
+        'today_text': f'{facts["rate"]:.2f}',
+        'usual_text': f'{facts["usual_rate"]:.2f}',
+        'unit': '',
+    }
     # The bars are Strive per minute of class, which needs saying: the card and sentence say 'of your last n'.
     return f'{word} BY HR', sentence, figure, 'STRIVE PER MIN', _similar(facts)
 
@@ -201,11 +241,9 @@ def _effort(code, facts):
 def _callout(code, facts):
     pct = int(round(facts['pct']))
     headline, sentence, why = {
-        'resistance_low': ('RESISTANCE LOW', f'RESISTANCE UNDER THE CALLOUT {pct}% OF THE WORK: TURN IT UP.',
-                           'TURN IT UP'),
+        'resistance_low': ('RESISTANCE LOW', f'RESISTANCE UNDER THE CALLOUT {pct}% OF THE WORK: TURN IT UP.', 'TURN IT UP'),
         'cadence_low': ('CADENCE LOW', f'CADENCE UNDER THE CALLOUT {pct}% OF THE WORK: PICK IT UP.', 'PICK IT UP'),
-        'pace_low': ('UNDER PACE', f'UNDER THE PACE TARGET {pct}% OF THE TIME: PUSH, OR DROP A LEVEL.',
-                     'PUSH THE PACE'),
+        'pace_low': ('UNDER PACE', f'UNDER THE PACE TARGET {pct}% OF THE TIME: PUSH, OR DROP A LEVEL.', 'PUSH THE PACE'),
     }[code]
     return headline, sentence, {'kind': 'share', 'pct': max(0, min(100, pct))}, why, 'VS THE CALLOUTS'
 
@@ -220,43 +258,60 @@ def _best(code, facts):
     headline = BEST_HEADLINES[facts['metric']]
     if isinstance(n, bool) or not isinstance(n, int) or n < 1:
         raise ValueError('bad ride count')
-    pct, usual = f"{facts['pct']:.0f}", f"{facts['usual']:.0f}"
-    sentence = (f'YOUR BEST {what} IN {n} RIDES', f'{pct}% MISSED',f'USUALLY {usual}%.')
-    figure = {'kind': 'bars', 'today': facts['pct'], 'usual': facts['usual'], 'today_text': f'{pct}%',
-              'usual_text': f'{usual}%', 'unit': '', 'usual_label': USUAL_WORD}
+    pct, usual = f'{facts["pct"]:.0f}', f'{facts["usual"]:.0f}'
+    sentence = (f'YOUR BEST {what} IN {n} RIDES', f'{pct}% MISSED', f'USUALLY {usual}%.')
+    figure = {
+        'kind': 'bars',
+        'today': facts['pct'],
+        'usual': facts['usual'],
+        'today_text': f'{pct}%',
+        'usual_text': f'{usual}%',
+        'unit': '',
+        'usual_label': USUAL_WORD,
+    }
     return headline, sentence, figure, 'TIME MISSED', f'LAST {n} RIDES'
 
 
 def _strength(code, facts):
     if code == 'go_up_streak':
         lb, n, cat = number(facts['lb'], 'lb'), facts['n'], facts['category'].upper()
-        sentence = _fitting(f'GO UP FROM {lb}LB ON {cat}: {n} CLASSES IN A ROW OVER TARGET.',
-                            f'GO UP FROM {lb}LB ON {cat}: {n} IN A ROW OVER TARGET.')
-        return (f'GO UP: {cat}', sentence, {'kind': 'blocks', 'total': n, 'lit': n, 'label': 'IN A ROW'},
-                f'FROM {lb}LB', 'VS PAST CLASSES')
+        sentence = _fitting(
+            f'GO UP FROM {lb}LB ON {cat}: {n} CLASSES IN A ROW OVER TARGET.', f'GO UP FROM {lb}LB ON {cat}: {n} IN A ROW OVER TARGET.'
+        )
+        return (f'GO UP: {cat}', sentence, {'kind': 'blocks', 'total': n, 'lit': n, 'label': 'IN A ROW'}, f'FROM {lb}LB', 'VS PAST CLASSES')
     if code == 'missed_targets':
         missed, sets, name = facts['missed'], facts['sets'], facts['movement'].upper()
-        sentence = _fitting(f'SHORT ON {missed} OF {sets} SETS, MOSTLY {name}: DROP A WEIGHT.',
-                            f'SHORT ON {missed} OF {sets} SETS: DROP A WEIGHT.')
+        sentence = _fitting(
+            f'SHORT ON {missed} OF {sets} SETS, MOSTLY {name}: DROP A WEIGHT.', f'SHORT ON {missed} OF {sets} SETS: DROP A WEIGHT.'
+        )
         total, lit = sets, missed
         if total > MAX_BLOCKS:
             total, lit = MAX_BLOCKS, round(missed * MAX_BLOCKS / sets)
-        return ('DROP A WEIGHT', sentence, {'kind': 'blocks', 'total': total, 'lit': lit, 'label': ''},
-                f'{missed} OF {sets} SHORT', 'VS PAST CLASSES')
+        return (
+            'DROP A WEIGHT',
+            sentence,
+            {'kind': 'blocks', 'total': total, 'lit': lit, 'label': ''},
+            f'{missed} OF {sets} SHORT',
+            'VS PAST CLASSES',
+        )
     lb, usual = number(facts['lb'], 'lb'), number(facts['usual'], 'lb')
     figures = _figures(lb, usual, 'LB', space='')
     on = facts['movement'].upper()
     if code == 'went_heavier' and not facts.get('on_movement', True):
-        on = f"{facts['category'].upper()} WEIGHTS"
+        on = f'{facts["category"].upper()} WEIGHTS'
     # The weights on a line of their own; a name too long to fit leaves the sentence (the bars frame's
     # reason line shows it).
     if code == 'go_up_lighter':
-        sentence = _parts((f'GO UP A WEIGHT ON {on}', figures, f"REPS +{facts['pct']}%."),
-                          (f'GO UP A WEIGHT ON {on}', figures), ('GO UP A WEIGHT', figures))
+        sentence = _parts(
+            (f'GO UP A WEIGHT ON {on}', figures, f'REPS +{facts["pct"]}%.'),
+            (f'GO UP A WEIGHT ON {on}', figures),
+            ('GO UP A WEIGHT', figures),
+        )
         headline = 'GO UP A WEIGHT'
     else:
-        sentence = _parts((f'HEAVIER ON {on}', figures, 'EVERY TARGET HIT.'), (f'HEAVIER ON {on}', figures),
-                          ('WENT HEAVIER', figures, 'KEEP IT.'))
+        sentence = _parts(
+            (f'HEAVIER ON {on}', figures, 'EVERY TARGET HIT.'), (f'HEAVIER ON {on}', figures), ('WENT HEAVIER', figures, 'KEEP IT.')
+        )
         headline = 'HEAVIER: KEEP'
     return headline, sentence, _bars(facts['lb'], facts['usual'], 'lb'), on, 'VS PAST CLASSES'
 
@@ -278,7 +333,7 @@ def _rule(code):
 
 
 # Instructor milestones (peloton/workouts/workout_insights.milestone_insight): words only, no figure, gold.
-EDGE_MAX = 16              # the 64x32 page's lines run edge to edge (as on the name page)
+EDGE_MAX = 16  # the 64x32 page's lines run edge to edge (as on the name page)
 MONTHS = ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
 WELCOME_FOOTER = 'WELCOME!'
 NO_DATE_FOOTER = 'KEEP IT UP!'  # a round number whose first class has no date (Joel, 2026-11-12)
@@ -308,10 +363,19 @@ def _milestone_view(facts):
     lines32 = [f'YOUR {word} CLASS'] + wrap(f'WITH {name}!', EDGE_MAX)
     if len(lines32[0]) > EDGE_MAX:  # a 1000th class: the 64x64 wording
         lines32 = lines
-    pages = [lines32[i:i + LINES_32] for i in range(0, min(len(lines32), LINES_32 * PAGES_32), LINES_32)]
-    return {'code': 'instructor_milestone', 'colour': list(GOLD), 'headline': f'YOUR {word} CLASS',
-            'sentence': f'YOUR {word} CLASS WITH {name}!', 'lines64': lines[:LINES_64], 'pages32': pages,
-            'footer': footer, 'figure': None, 'reason': None, 'highlight': [word]}
+    pages = [lines32[i : i + LINES_32] for i in range(0, min(len(lines32), LINES_32 * PAGES_32), LINES_32)]
+    return {
+        'code': 'instructor_milestone',
+        'colour': list(GOLD),
+        'headline': f'YOUR {word} CLASS',
+        'sentence': f'YOUR {word} CLASS WITH {name}!',
+        'lines64': lines[:LINES_64],
+        'pages32': pages,
+        'footer': footer,
+        'figure': None,
+        'reason': None,
+        'highlight': [word],
+    }
 
 
 def board_view(code, facts):
@@ -341,13 +405,22 @@ def board_view(code, facts):
     else:
         if isinstance(sentence, tuple):  # parts that each start a new line
             lines = [line for part in sentence for line in wrap(part)]
-            sentence = f"{sentence[0]}: {'. '.join(part.rstrip('.') for part in sentence[1:])}."  # for logs
+            sentence = f'{sentence[0]}: {". ".join(part.rstrip(".") for part in sentence[1:])}.'  # for logs
         else:
             lines = wrap(sentence)
         lines64 = lines[:LINES_64]
-        pages32 = [lines[i:i + LINES_32] for i in range(0, min(len(lines), LINES_32 * PAGES_32), LINES_32)]
-    view = {'code': code, 'colour': list(COLOURS[code]), 'headline': headline, 'sentence': sentence,
-            'lines64': lines64, 'pages32': pages32, 'footer': footer, 'figure': figure, 'reason': reason}
+        pages32 = [lines[i : i + LINES_32] for i in range(0, min(len(lines), LINES_32 * PAGES_32), LINES_32)]
+    view = {
+        'code': code,
+        'colour': list(COLOURS[code]),
+        'headline': headline,
+        'sentence': sentence,
+        'lines64': lines64,
+        'pages32': pages32,
+        'footer': footer,
+        'figure': figure,
+        'reason': reason,
+    }
     if reason_parts:
         view['reason_parts'] = reason_parts
     return view

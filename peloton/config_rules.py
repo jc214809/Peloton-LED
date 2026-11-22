@@ -1,19 +1,19 @@
 """The pieces peloton/config.py's validation tables are built from: a Rule row, a runner, and the
 small checks ("is a whole number from 1 to 3", "is HH:MM") that the rows share. Standard library only."""
+
 import math
 import re
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import NamedTuple
-from collections.abc import Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
 
 # What a good value looks like. Each takes the value as the config holds it (anything JSON can
 # carry) and says whether it passes; bools are never numbers here.
 
+
 def int_in(value, low, high=None):
-    return (not isinstance(value, bool) and isinstance(value, int) and value >= low
-            and (high is None or value <= high))
+    return not isinstance(value, bool) and isinstance(value, int) and value >= low and (high is None or value <= high)
 
 
 def whole_number(low, high=None):
@@ -76,11 +76,11 @@ def is_iso_date(value):
     return True
 
 
-
 class Rule(NamedTuple):
     """One check: the value at `key` in a section must pass `ok`, else raise `message`. The message
     is the error text after "<path>: "; {value} is the offending value and {prefix} the section's
     place in the config ("display.", "users[0]."), for rules shared by sections."""
+
     key: str
     ok: Callable
     message: str

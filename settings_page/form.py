@@ -5,6 +5,7 @@ Only the keys the page shows change; anything else in config.json (riders' names
 cache paths, login variable names, the journey, keys a newer version adds) is kept as it is.
 Every check is the app's own (peloton.config.validate_config), so a saved config starts the app.
 """
+
 import copy
 import re
 
@@ -17,31 +18,40 @@ FORM_FIELD = 'settings_form'
 
 # Every rotation screen, in the app's default order: (name, label, hint).
 SCREENS = (
-    ('latest_workouts', 'Latest workouts',
-     'Each workout from your latest day, then a PR celebration when there is one.'),
+    ('latest_workouts', 'Latest workouts', 'Each workout from your latest day, then a PR celebration when there is one.'),
     ('username', 'Name and highlights', 'Your name, then all-time totals, this week and top instructors.'),
     ('streaks', 'Streaks', 'Weekly and daily streaks, one per pass.'),
     ('versus', 'Head to head', 'This week, rider against rider. Needs two or more riders.'),
     ('total_workouts', 'Total workouts', 'Every workout, all time. Shown as long as each Lifetime page.'),
-    ('next_milestone', 'Next milestone',
-     'A countdown when all workouts or a discipline is a few workouts from its next milestone '
-     '(a discipline\'s: 25, 50, 100, then every 100), closest first. How close and how many pages are '
-     'under Milestones. Most days there are none.'),
+    (
+        'next_milestone',
+        'Next milestone',
+        'A countdown when all workouts or a discipline is a few workouts from its next milestone '
+        "(a discipline's: 25, 50, 100, then every 100), closest first. How close and how many pages are "
+        'under Milestones. Most days there are none.',
+    ),
     ('lifetime', 'Lifetime by discipline', 'All-time totals per discipline.'),
     ('journey', 'Journey', 'Miles along the journey route.'),
     ('heatmap', 'Activity heatmap', 'Minutes a day over the last 12 weeks.'),
-    ('milestones', 'Milestone celebrations',
-     'A trophy for a milestone just reached, all workouts or one discipline\'s, for the rest of that '
-     'day. Always first, after the logo.'),
+    (
+        'milestones',
+        'Milestone celebrations',
+        "A trophy for a milestone just reached, all workouts or one discipline's, for the rest of that day. Always first, after the logo.",
+    ),
     ('goals', 'Weekly goals', "Progress toward this week's goals."),
-    ('challenges', 'Challenges',
-     'Each Peloton challenge you joined: how far to its next tier. Only running challenges with some '
-     'progress and a tier still to reach.'),
-    ('next_class', 'Next booked class',
-     'The next live or encore class you booked in the Peloton app: when, the class and the instructor. '
-     'Only when one is booked. It takes over the whole panel just before the class starts (see Timing).'),
-    ('club', 'Club Peloton',
-     'Your Club Peloton level and points, and how many points to the next level.'),
+    (
+        'challenges',
+        'Challenges',
+        'Each Peloton challenge you joined: how far to its next tier. Only running challenges with some '
+        'progress and a tier still to reach.',
+    ),
+    (
+        'next_class',
+        'Next booked class',
+        'The next live or encore class you booked in the Peloton app: when, the class and the instructor. '
+        'Only when one is booked. It takes over the whole panel just before the class starts (see Timing).',
+    ),
+    ('club', 'Club Peloton', 'Your Club Peloton level and points, and how many points to the next level.'),
 )
 # The Milestones card's countdown settings; blank is the app's default.
 MILESTONE_KEYS = ('milestone_within', 'milestone_pages')
@@ -57,8 +67,7 @@ TIMING = (
     ('overview_duration', 'Each page', 'For any screen without its own time in Rotation.'),
     ('last_workout_detail_interval', 'Each workout stat', 'How long each stat shows on a workout page.'),
     ('logo_duration', 'Logo', 'At start-up and between riders (once per cycle with one rider).'),
-    ('refresh_interval', 'Check Peloton every',
-     'How often to look for new workouts. 300 (5 minutes) is plenty; much less only adds load.'),
+    ('refresh_interval', 'Check Peloton every', 'How often to look for new workouts. 300 (5 minutes) is plenty; much less only adds load.'),
 )
 
 # The Timing card's least values: a time is never 0 (a screen is switched off instead, and the logo has
@@ -74,9 +83,12 @@ PANEL_SIZES = ('64x64', '64x32')
 # columns are the Panel size dropdown's.
 PANEL_FIELDS = (
     ('brightness', 'Brightness', '1 to 100. A day and night schedule, when on, takes over from it.'),
-    ('gpio_mapping', 'GPIO mapping',
-     'How the panel is wired to the Pi. adafruit-hat-pwm needs the Pi\'s onboard audio off: after '
-     'choosing it, run the installer again, which offers to turn it off.'),
+    (
+        'gpio_mapping',
+        'GPIO mapping',
+        "How the panel is wired to the Pi. adafruit-hat-pwm needs the Pi's onboard audio off: after "
+        'choosing it, run the installer again, which offers to turn it off.',
+    ),
     ('pixel_mapper', 'Rotation', 'Which way up the panel is mounted.'),
     ('slowdown_gpio', 'GPIO slowdown', '0 to 4: higher for a faster Pi whose panel flickers.'),
     ('pwm_lsb_nanoseconds', 'PWM timing', 'Lower is a faster refresh; raise it if colours look wrong.'),
@@ -84,9 +96,13 @@ PANEL_FIELDS = (
 SIZE_KEYS = ('rows', 'cols')
 SWITCH_KEYS = ('show_refresh', 'no_hardware_pulse')
 # Rotation's choices: --led-pixel-mapper values. A saved one not here is offered as it is.
-ROTATIONS = (('Rotate:180', 'Upside down (Rotate:180)'), ('Rotate:90', 'A quarter turn (Rotate:90)'),
-             ('Rotate:270', 'Three quarters (Rotate:270)'), ('Mirror:H', 'Mirrored left to right (Mirror:H)'),
-             ('Mirror:V', 'Mirrored top to bottom (Mirror:V)'))
+ROTATIONS = (
+    ('Rotate:180', 'Upside down (Rotate:180)'),
+    ('Rotate:90', 'A quarter turn (Rotate:90)'),
+    ('Rotate:270', 'Three quarters (Rotate:270)'),
+    ('Mirror:H', 'Mirrored left to right (Mirror:H)'),
+    ('Mirror:V', 'Mirrored top to bottom (Mirror:V)'),
+)
 
 
 def advanced_keys():
@@ -104,8 +120,9 @@ def section(config, key):
 def riders(config):
     """config.json's riders that have a name: [(index, rider)]."""
     users = config.get('users')
-    return [(i, u) for i, u in enumerate(users if isinstance(users, list) else [])
-            if isinstance(u, dict) and isinstance(u.get('name'), str)]
+    return [
+        (i, u) for i, u in enumerate(users if isinstance(users, list) else []) if isinstance(u, dict) and isinstance(u.get('name'), str)
+    ]
 
 
 def rotation_rows(display):
@@ -130,7 +147,7 @@ def board_rows(matrix):
 
 def panel_size(matrix):
     """config.json's matrix size as "64x32"; the app's 64x64 where unset."""
-    return f"{matrix.get('cols') or MATRIX_DEFAULTS['cols']}x{matrix.get('rows') or MATRIX_DEFAULTS['rows']}"
+    return f'{matrix.get("cols") or MATRIX_DEFAULTS["cols"]}x{matrix.get("rows") or MATRIX_DEFAULTS["rows"]}'
 
 
 def number_text(value):
@@ -226,16 +243,21 @@ def _apply_schedules(form, new, display, problems):
     _set_or_drop(form, display, 'timezone', 'timezone', str)
     if _checked(form, 'brightness_schedule'):
         display['brightness_schedule'] = {
-            'day': _number(_one(form, 'bright_day')), 'night': _number(_one(form, 'bright_night')),
-            'day_start': _one(form, 'day_start'), 'night_start': _one(form, 'night_start')}
+            'day': _number(_one(form, 'bright_day')),
+            'night': _number(_one(form, 'bright_night')),
+            'day_start': _one(form, 'day_start'),
+            'night_start': _one(form, 'night_start'),
+        }
     else:
         display['brightness_schedule'] = None
     if _checked(form, 'refresh_schedule'):
         old = display.get('refresh_schedule') if isinstance(display.get('refresh_schedule'), dict) else {}
         display['refresh_schedule'] = {
             **{k: v for k, v in old.items() if k == 'timezone'},  # its own zone, set by hand, stays
-            'quiet_start': _one(form, 'quiet_start'), 'quiet_end': _one(form, 'quiet_end'),
-            'quiet_interval': _number(_one(form, 'quiet_interval'))}
+            'quiet_start': _one(form, 'quiet_start'),
+            'quiet_end': _one(form, 'quiet_end'),
+            'quiet_interval': _number(_one(form, 'quiet_interval')),
+        }
     else:
         display['refresh_schedule'] = None
 
@@ -295,14 +317,13 @@ def _apply_panel(form, new, display, problems):
         if found:
             matrix['cols'], matrix['rows'] = int(found.group(1)), int(found.group(2))
         else:
-            problems.append(f"Panel size should be like 64x32, not {_one(form, 'panel_size')!r}.")
+            problems.append(f'Panel size should be like 64x32, not {_one(form, "panel_size")!r}.')
     for key in [k for k, _, _ in PANEL_FIELDS] + advanced_keys():
         _apply_matrix_field(form, matrix, key)
 
 
 # The form's sections in the order they apply (each reads the config the ones before it left).
-FORM_SECTIONS = (_apply_display_basics, _apply_rotation, _apply_schedules, _apply_goals_and_milestones,
-                 _apply_riders, _apply_panel)
+FORM_SECTIONS = (_apply_display_basics, _apply_rotation, _apply_schedules, _apply_goals_and_milestones, _apply_riders, _apply_panel)
 
 
 def _is_number(value):
@@ -328,8 +349,9 @@ def _timing_problems(display):
     for key, label, _ in TIMING:
         value, least = display.get(key), TIMING_LEAST.get(key)
         if least and _is_number(value) and value < least:
-            problems.append(f'{label} needs at least {_seconds(least)}'
-                            + ('. To hide the logo, switch it off.' if key == 'logo_duration' else '.'))
+            problems.append(
+                f'{label} needs at least {_seconds(least)}' + ('. To hide the logo, switch it off.' if key == 'logo_duration' else '.')
+            )
     return problems
 
 

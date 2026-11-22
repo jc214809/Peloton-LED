@@ -1,4 +1,5 @@
 """Total Workouts: a big gold count under the title, on both panel sizes."""
+
 import unittest  # noqa: F401  (selects emulator graphics)
 
 import pytest
@@ -14,8 +15,7 @@ GOLD, WHITE = (255, 215, 0), (255, 255, 255)
 
 def _page(total, height):
     snapshot = {'summaries': [], 'totals': {'Total Workouts': total}, 'me': {}, 'streaks': {}}
-    pages = build_rotation_pages(snapshot, None, {**DEFAULTS, 'rotation': ['total_workouts'],
-                                                  'color': 'white'}, 'Rider', height)
+    pages = build_rotation_pages(snapshot, None, {**DEFAULTS, 'rotation': ['total_workouts'], 'color': 'white'}, 'Rider', height)
     return next(state for name, state, _ in pages if name == 'discipline')
 
 
@@ -47,8 +47,7 @@ def test_count_is_taller_than_the_old_number_font(height, minimum):
     initialize_fonts(height)
     matrix = ImageMatrix(height=height)
     DisciplinePageScreen().render(matrix, _page(2123, height))
-    gold_rows = [y for y in range(height)
-                 if any(matrix.image.getpixel((x, y)) == GOLD for x in range(64))]
+    gold_rows = [y for y in range(height) if any(matrix.image.getpixel((x, y)) == GOLD for x in range(64))]
     assert max(gold_rows) - min(gold_rows) + 1 >= minimum
 
 

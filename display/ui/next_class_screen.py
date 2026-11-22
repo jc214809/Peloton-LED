@@ -7,12 +7,13 @@ In the last hour the time is `45 MIN` (and the day `AT 2:15 PM`); from the start
 State: {'booking': one record from peloton.feeds.booked_classes (validated again here: the cache can hold anything),
 'now': the timestamp to count from, 'timezone': the board's zone name or None}.
 """
+
 import math
 
-from driver import graphics
-
 from display.display import get_text_width, loaded_fonts, plain_letters
+from driver import graphics
 from peloton.feeds.booked_classes import ENCORE, LIVE, class_lines, instructor_lines, valid_booking, when
+
 from .discipline_icons import DISCIPLINE_ICON_ROWS
 from .lifetime_overview import discipline_color, draw_icon
 from .screen import Screen
@@ -135,15 +136,21 @@ class NextClassScreen(Screen):
         if moment['mode'] == 'now':
             time_line, day_line = 'NOW', 'STARTING'
         elif moment['mode'] == 'minutes':
-            time_line, day_line = f"{moment['minutes']} MIN", f"AT {moment['time']} {moment['meridiem']}"
+            time_line, day_line = f'{moment["minutes"]} MIN', f'AT {moment["time"]} {moment["meridiem"]}'
         else:
-            time_line, day_line = f"{moment['time']} {moment['meridiem']}", moment['day']
+            time_line, day_line = f'{moment["time"]} {moment["meridiem"]}', moment['day']
         _centre_in(matrix, fonts['bold'], 0, width, TIME_BASELINE, WHITE, time_line)
-        _centre_in(matrix, fonts['titles'], 0, width, DAY_BASELINE, GOLD,
-                   fitted(fonts['titles'], [day_line], width))
+        _centre_in(matrix, fonts['titles'], 0, width, DAY_BASELINE, GOLD, fitted(fonts['titles'], [day_line], width))
         small = fonts['stats']
-        _centre_in(matrix, small, 0, width, CLASS_BASELINE, discipline_color(booking['discipline']),
-                   fitted(small, class_lines(booking), LINE_WIDTH))
+        _centre_in(
+            matrix,
+            small,
+            0,
+            width,
+            CLASS_BASELINE,
+            discipline_color(booking['discipline']),
+            fitted(small, class_lines(booking), LINE_WIDTH),
+        )
         names = instructor_lines(plain_letters(booking['instructor']))
         if names:
             _centre_in(matrix, small, 0, width, INSTRUCTOR_BASELINE, GREY, fitted(small, names, LINE_WIDTH))
@@ -158,12 +165,10 @@ class NextClassScreen(Screen):
             self._pair(matrix, left, width, (big, 'NOW', SHORT_BIG_BASELINE))
             day_line = 'STARTING'
         elif moment['mode'] == 'minutes':
-            self._pair(matrix, left, width, (big, str(moment['minutes']), SHORT_BIG_BASELINE),
-                       (small, 'MIN', SHORT_BIG_BASELINE))
-            day_line = f"{moment['time']} {moment['meridiem']}"
+            self._pair(matrix, left, width, (big, str(moment['minutes']), SHORT_BIG_BASELINE), (small, 'MIN', SHORT_BIG_BASELINE))
+            day_line = f'{moment["time"]} {moment["meridiem"]}'
         else:
-            self._pair(matrix, left, width, (medium, moment['time'], SHORT_TIME_BASELINE),
-                       (small, moment['meridiem'], SHORT_TIME_BASELINE))
+            self._pair(matrix, left, width, (medium, moment['time'], SHORT_TIME_BASELINE), (small, moment['meridiem'], SHORT_TIME_BASELINE))
             day_line = moment['day']
         _centre_in(matrix, small, left, width, SHORT_DAY_BASELINE, GOLD, fitted(small, [day_line], width))
         names = instructor_lines(plain_letters(booking['instructor']))

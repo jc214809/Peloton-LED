@@ -6,6 +6,7 @@ uses so the two agree), and nothing over the network. Credentials: the Peloton e
 passwords and the Pushover keys in auth.env, which the page can set but never shows: only
 whether each one is set ever leaves this module.
 """
+
 import json
 import logging
 import math
@@ -16,8 +17,15 @@ from datetime import datetime
 from pathlib import Path
 
 from peloton.config import renewal_failed_path, user_token_path
-from scripts.refresh_cookies import (ALERT_STATE_NAME, browser_attempt_path, describe_chain, load_refresh_chain,
-                                     profile_env_names, refresh_token_path, token_status)
+from scripts.refresh_cookies import (
+    ALERT_STATE_NAME,
+    browser_attempt_path,
+    describe_chain,
+    load_refresh_chain,
+    profile_env_names,
+    refresh_token_path,
+    token_status,
+)
 
 logger = logging.getLogger('peloton-led.settings')
 
@@ -61,8 +69,7 @@ def rider_paths(config, config_dir, default_token=DEFAULT_TOKEN):
     """[(key, name, token path, email variable, password variable)], as the display and token
     renewal find them: users[] with config_dir for relative paths, else the single rider."""
     users = config.get('users')
-    users = [u for u in users if isinstance(u, dict) and isinstance(u.get('name'), str)] \
-        if isinstance(users, list) else []
+    users = [u for u in users if isinstance(u, dict) and isinstance(u.get('name'), str)] if isinstance(users, list) else []
     if not users:
         display = config.get('display') if isinstance(config.get('display'), dict) else {}
         name = display.get('username') if isinstance(display.get('username'), str) else 'This board'
@@ -106,11 +113,21 @@ def rider_logins(config, config_dir, auth, default_token=DEFAULT_TOKEN):
     logins = []
     for key, name, token_path, email_env, password_env in rider_paths(config, config_dir, default_token):
         refresh = refresh_token_path(token_path)
-        logins.append(RiderLogin(
-            key, name, token_path, email_env, password_env, token_status(token_path),
-            describe_chain(load_refresh_chain(refresh)) if refresh.exists() else None,
-            _padlock(token_path), _number_file(browser_attempt_path(token_path)),
-            bool(auth.get(email_env)), bool(auth.get(password_env))))
+        logins.append(
+            RiderLogin(
+                key,
+                name,
+                token_path,
+                email_env,
+                password_env,
+                token_status(token_path),
+                describe_chain(load_refresh_chain(refresh)) if refresh.exists() else None,
+                _padlock(token_path),
+                _number_file(browser_attempt_path(token_path)),
+                bool(auth.get(email_env)),
+                bool(auth.get(password_env)),
+            )
+        )
     return logins
 
 
@@ -133,6 +150,7 @@ def token_mode(path=TOKEN_MODE_FILE):
 
 
 # --- auth.env
+
 
 def _unquote(value):
     """A value as systemd's EnvironmentFile= reads it, for the quoting setup_config.py writes."""
@@ -236,8 +254,10 @@ def _pushover_changes(form, changes, problems, changed):
         changes.update({name: None for name in PUSHOVER_KEYS})
         changed.append('Pushover keys removed')
         return
-    for name, field, label in ((PUSHOVER_KEYS[0], 'pushover_app_token', 'Pushover app token'),
-                               (PUSHOVER_KEYS[1], 'pushover_user_key', 'Pushover user key')):
+    for name, field, label in (
+        (PUSHOVER_KEYS[0], 'pushover_app_token', 'Pushover app token'),
+        (PUSHOVER_KEYS[1], 'pushover_user_key', 'Pushover user key'),
+    ):
         value = _form_value(form, field).strip()
         if not value:
             continue

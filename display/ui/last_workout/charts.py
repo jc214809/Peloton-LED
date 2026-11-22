@@ -1,9 +1,10 @@
 """The chart slides: workout graph, heart-rate zone bar, muscle groups and the top lift."""
 
-from driver import graphics
 from display.display import get_text_width
+from driver import graphics
+
 from .colors import _INSIGHT_GOLD, _LABEL_GREY, _PEAK_WHITE, _WHITE, HR_ZONE_COLORS, _disc_color
-from .stats import top_lift_text, strength_tracker
+from .stats import strength_tracker, top_lift_text
 from .text import _centred, _draw_text, _text_width, _truncate, _wrap_two_lines
 
 
@@ -18,7 +19,7 @@ def _draw_graph(matrix, summary: dict, font, label_y: int, top: int, bottom: int
     values = graph['values']
     zones = graph.get('zones') or [None] * len(values)
     label = 'OUTPUT' if graph.get('metric') == 'output' else 'HEART RATE'
-    peak = f"{graph.get('peak', max(values))}{'W' if graph.get('metric') == 'output' else ''}"
+    peak = f'{graph.get("peak", max(values))}{"W" if graph.get("metric") == "output" else ""}'
     _draw_text(matrix, font, 2, label_y, graphics.Color(*_LABEL_GREY), label)
     _draw_text(matrix, font, w - 2 - _text_width(font, peak), label_y, _WHITE, peak)
 
@@ -36,8 +37,7 @@ def _draw_graph(matrix, summary: dict, font, label_y: int, top: int, bottom: int
         bar = 0 if ceiling <= floor else round((value - floor) / (ceiling - floor) * (height - 1))
         bar = max(1, bar) if value > floor else 0
         zone = zones[i] if i < len(zones) else None
-        r, g, b = (HR_ZONE_COLORS[zone - 1] if zone else
-                   (fallback.red, fallback.green, fallback.blue))
+        r, g, b = HR_ZONE_COLORS[zone - 1] if zone else (fallback.red, fallback.green, fallback.blue)
         x = 2 + col
         for y in range(bottom - bar + 1, bottom + 1):
             matrix.SetPixel(x, y, r, g, b)
@@ -46,19 +46,26 @@ def _draw_graph(matrix, summary: dict, font, label_y: int, top: int, bottom: int
             matrix.SetPixel(x, bottom - bar, 255, 215, 0)
 
 
-def _draw_zones(matrix, seconds: list[float], font, big_font, label_y: int,  # noqa: PLR0913
-                bar_top: int, bar_bottom: int, text_y: int) -> None:
+def _draw_zones(  # noqa: PLR0913
+    matrix,
+    seconds: list[float],
+    font,
+    big_font,
+    label_y: int,
+    bar_top: int,
+    bar_bottom: int,
+    text_y: int,
+) -> None:
     """Stacked zone bar across the panel, then the zone you spent longest in."""
     w = matrix.width
     label = 'HR ZONES'
-    _draw_text(matrix, font, max((w - _text_width(font, label)) // 2, 2), label_y,
-               graphics.Color(*_LABEL_GREY), label)
+    _draw_text(matrix, font, max((w - _text_width(font, label)) // 2, 2), label_y, graphics.Color(*_LABEL_GREY), label)
     total = sum(seconds)
     span = w - 4
     # Largest-remainder rounding so the segments fill the bar exactly.
     exact = [s / total * span for s in seconds]
     widths = [int(e) for e in exact]
-    for i in sorted(range(5), key=lambda i: exact[i] - widths[i], reverse=True)[:span - sum(widths)]:
+    for i in sorted(range(5), key=lambda i: exact[i] - widths[i], reverse=True)[: span - sum(widths)]:
         widths[i] += 1
     x = 2
     for zone, width in enumerate(widths):
@@ -83,7 +90,7 @@ MUSCLE_BUCKET_COLORS = {1: (200, 150, 0), 2: (255, 110, 0), 3: (255, 30, 0)}
 def _muscle_row_text(matrix, font, baseline: int, group: dict) -> None:
     """Muscle name on the left, its percent on the right, in white."""
     w = matrix.width
-    pct = f"{group['percent']}%"
+    pct = f'{group["percent"]}%'
     pct_w = _text_width(font, pct)
     name = _truncate(font, group['name'].upper(), w - 4 - pct_w - 3)
     _draw_text(matrix, font, 2, baseline, _WHITE, name)
@@ -95,8 +102,7 @@ def _draw_muscles(matrix, muscles: list[dict], font, label_y: int) -> None:
     in its bucket colour, scaled to the top muscle."""
     w = matrix.width
     label = 'MUSCLES WORKED'
-    _draw_text(matrix, font, max((w - _text_width(font, label)) // 2, 2), label_y,
-               graphics.Color(*_LABEL_GREY), label)
+    _draw_text(matrix, font, max((w - _text_width(font, label)) // 2, 2), label_y, graphics.Color(*_LABEL_GREY), label)
     peak = muscles[0]['percent']
     for i, group in enumerate(muscles):
         baseline = label_y + 10 + i * 9
@@ -151,5 +157,4 @@ def _draw_top_lift(matrix, summary: dict, label_font, name_font, small_name_font
         value_y = label_y + (31 if len(lines) > 1 else 22)
     else:
         value_y = matrix.height - 2 if len(lines) > 1 else label_y + 17
-    graphics.DrawText(matrix, font, max((w - get_text_width(font, value)) // 2, 2), value_y,
-                      graphics.Color(*_INSIGHT_GOLD), value)
+    graphics.DrawText(matrix, font, max((w - get_text_width(font, value)) // 2, 2), value_y, graphics.Color(*_INSIGHT_GOLD), value)

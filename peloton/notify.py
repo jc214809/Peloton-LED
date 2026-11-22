@@ -3,6 +3,7 @@
 Configured by PUSHOVER_APP_TOKEN and PUSHOVER_USER_KEY (on the Pi, in
 /etc/peloton-led/auth.env). Without both, alerts are logged and skipped.
 """
+
 import json
 import logging
 import os
@@ -33,8 +34,11 @@ def send_pushover(title: str, message: str) -> bool:
         logger.info('Pushover not configured; alert not sent: %s', title)
         return False
     try:
-        response = requests.post(PUSHOVER_URL, timeout=PUSHOVER_TIMEOUT_SECONDS, data={
-            'token': token, 'user': user, 'title': title[:250], 'message': message[:1024]})
+        response = requests.post(
+            PUSHOVER_URL,
+            timeout=PUSHOVER_TIMEOUT_SECONDS,
+            data={'token': token, 'user': user, 'title': title[:250], 'message': message[:1024]},
+        )
         body = response.json()
     except (requests.RequestException, ValueError) as exc:
         logger.warning('Pushover alert failed: %s', exc)
@@ -63,8 +67,7 @@ def plan_alert(state: dict, failure: str | None, now: float) -> tuple[tuple[str,
         return ('Peloton token renewal recovered', 'Token renewal is working again.'), {}
     failures = state.get('failures')
     failures = failures + 1 if isinstance(failures, int) and not isinstance(failures, bool) else 1
-    new_state = {'failures': failures, 'last_message': failure,
-                 'last_alert_at': last_alert if alerted else None}
+    new_state = {'failures': failures, 'last_message': failure, 'last_alert_at': last_alert if alerted else None}
     if alerted:
         due = now - last_alert >= REPEAT_ALERT_SECONDS
     else:
@@ -93,8 +96,7 @@ def save_state(path: Path, state: dict) -> None:
         return
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
-                                         prefix='.peloton-alert-', delete=False) as handle:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, prefix='.peloton-alert-', delete=False) as handle:
             temporary = Path(handle.name)
             json.dump(state, handle)
         os.replace(temporary, path)

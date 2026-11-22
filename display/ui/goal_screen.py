@@ -1,7 +1,8 @@
 """Compact weekly-goal screen (milestones have their own: celebration_screen)."""
-from driver import graphics
 
 from display.display import draw_centered_text, get_text_width, loaded_fonts
+from driver import graphics
+
 from .screen import Screen
 
 _WHITE = graphics.Color(255, 255, 255)

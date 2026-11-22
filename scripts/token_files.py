@@ -1,5 +1,6 @@
 """Token-file helpers for refresh_cookies.py: the refresh-token file (and its chain history) and
 reading a token's expiry. File reads and writes only, no network; refresh_cookies re-exports every name."""
+
 import base64
 import binascii
 import json
@@ -8,13 +9,13 @@ import os
 import re
 import tempfile
 import time
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 from peloton.config import default_token_path
 
 # Peloton's web app (Auth0 SPA) client; the token endpoint renews its sessions.
-AUTH0_CLIENT_ID = "WVoJxVDdPoFx4RNewvvg6ch2mZ7bwnsM"
+AUTH0_CLIENT_ID = 'WVoJxVDdPoFx4RNewvvg6ch2mZ7bwnsM'
 
 
 def refresh_token_path(token_path: Path) -> Path:
@@ -22,8 +23,7 @@ def refresh_token_path(token_path: Path) -> Path:
     return token_path.with_name(f'{token_path.stem}.refresh.json')
 
 
-def save_refresh_token(path: Path, refresh_token: str, client_id: str,
-                       chain: dict | None = None) -> None:
+def save_refresh_token(path: Path, refresh_token: str, client_id: str, chain: dict | None = None) -> None:
     """Atomically replace the refresh file, fsynced, owner-only. Auth0 rotates
     refresh tokens on every use, so a lost write would strand the board.
 
@@ -31,12 +31,10 @@ def save_refresh_token(path: Path, refresh_token: str, client_id: str,
     load_refresh_chain); without it, this token starts a new chain."""
     now = datetime.now(UTC).isoformat()
     chain = chain or {'chain_started_at': now, 'chain_start_exact': True, 'renewals': 0}
-    payload = json.dumps({'client_id': client_id, 'refresh_token': refresh_token,
-                          'saved_at': now, **chain})
+    payload = json.dumps({'client_id': client_id, 'refresh_token': refresh_token, 'saved_at': now, **chain})
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
-                dir=path.parent, prefix=".peloton-refresh-", delete=False) as handle:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, prefix='.peloton-refresh-', delete=False) as handle:
             temporary = Path(handle.name)
             os.chmod(temporary, 0o600)
             handle.write(payload)
@@ -59,10 +57,10 @@ def load_refresh_token(path: Path) -> tuple[str, str]:
     try:
         data = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:
-        raise RuntimeError(f"Cannot read refresh token file {path}: {exc}") from exc
+        raise RuntimeError(f'Cannot read refresh token file {path}: {exc}') from exc
     refresh_token = data.get('refresh_token') if isinstance(data, dict) else None
     if not isinstance(refresh_token, str) or not refresh_token:
-        raise RuntimeError(f"Refresh token file {path} has no refresh_token.")
+        raise RuntimeError(f'Refresh token file {path} has no refresh_token.')
     client_id = data.get('client_id')
     return refresh_token, client_id if isinstance(client_id, str) and client_id else AUTH0_CLIENT_ID
 
@@ -82,11 +80,13 @@ def load_refresh_chain(path: Path) -> dict:
     renewals = data.get('renewals')
     renewals = renewals if isinstance(renewals, int) and not isinstance(renewals, bool) and renewals >= 0 else None
     if isinstance(started, str) and _parse_time(started) is not None:
-        return {'chain_started_at': started, 'chain_start_exact': data.get('chain_start_exact') is True,
-                'renewals': renewals}
+        return {'chain_started_at': started, 'chain_start_exact': data.get('chain_start_exact') is True, 'renewals': renewals}
     saved = data.get('saved_at')
-    return {'chain_started_at': saved if isinstance(saved, str) and _parse_time(saved) is not None else None,
-            'chain_start_exact': False, 'renewals': renewals}
+    return {
+        'chain_started_at': saved if isinstance(saved, str) and _parse_time(saved) is not None else None,
+        'chain_start_exact': False,
+        'renewals': renewals,
+    }
 
 
 def _parse_time(value: str) -> datetime | None:
@@ -104,12 +104,12 @@ def describe_chain(chain: dict, now: datetime | None = None) -> str:
         age = 'refresh chain age unknown'
     else:
         days = max(0.0, ((now or datetime.now(UTC)) - started).total_seconds() / 86400)
-        age = f"refresh chain {'' if chain.get('chain_start_exact') else 'at least '}{days:.1f} days old"
+        age = f'refresh chain {"" if chain.get("chain_start_exact") else "at least "}{days:.1f} days old'
     renewals = chain.get('renewals')
     if renewals is None:
         return age
     more = '' if chain.get('chain_start_exact') else '+'
-    return f"{age}, {renewals}{more} renewal{'' if renewals == 1 and not more else 's'}"
+    return f'{age}, {renewals}{more} renewal{"" if renewals == 1 and not more else "s"}'
 
 
 def token_expiration(token_path: Path) -> float | None:
@@ -140,8 +140,7 @@ def token_status(token_path: Path) -> dict:
         return {'path': str(token_path), 'ok': False, 'reason': 'file is empty'}
     parts = text.split('.')
     if len(parts) != 3:
-        return {'path': str(token_path), 'ok': False,
-                'reason': f'not a 3-part JWT ({len(parts)} dot-separated part(s))'}
+        return {'path': str(token_path), 'ok': False, 'reason': f'not a 3-part JWT ({len(parts)} dot-separated part(s))'}
     try:
         payload = json.loads(base64.urlsafe_b64decode(parts[1] + '=' * (-len(parts[1]) % 4)))
     except (UnicodeError, ValueError, TypeError, binascii.Error) as exc:
@@ -150,8 +149,7 @@ def token_status(token_path: Path) -> dict:
     if isinstance(expiry, bool) or not isinstance(expiry, (int, float)) or not math.isfinite(expiry):
         return {'path': str(token_path), 'ok': False, 'reason': 'JWT payload has no usable exp claim'}
     expiry = float(expiry)
-    return {'path': str(token_path), 'ok': True, 'expires_at': expiry,
-            'expired': expiry <= time.time()}
+    return {'path': str(token_path), 'ok': True, 'expires_at': expiry, 'expired': expiry <= time.time()}
 
 
 def resolve_token_paths(config_path: Path, fallback_token: Path) -> list[tuple[str, Path]]:
@@ -179,5 +177,4 @@ def browser_attempt_path(token_path: Path) -> Path:
 
 def profile_env_names(user: dict) -> tuple[str, str]:
     suffix = re.sub(r'[^A-Z0-9]+', '_', user['name'].upper()).strip('_') or 'USER'
-    return (user.get('email_env') or f'PELOTON_EMAIL_{suffix}',
-            user.get('password_env') or f'PELOTON_PASSWORD_{suffix}')
+    return (user.get('email_env') or f'PELOTON_EMAIL_{suffix}', user.get('password_env') or f'PELOTON_PASSWORD_{suffix}')

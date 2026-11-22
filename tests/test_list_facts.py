@@ -1,5 +1,6 @@
 """scripts/list_facts.py: every name-page fact for a workout log, offline."""
-from datetime import datetime, UTC
+
+from datetime import UTC, datetime
 
 import pytest
 
@@ -39,8 +40,9 @@ def test_snapshot_takes_the_totals_from_a_cache_when_given(tmp_path):
     snapshot = snapshot_for(demo_log(NOW), None, NOW, cache, assume_complete=True)
     assert snapshot['totals'] == {'Total Workouts': 2123, 'Cycling': 641}
     assert snapshot['streaks'] == {}
-    save_snapshot(cache, {'me': {}, 'totals': {'Total Workouts': 2123}, 'summaries': [], 'last_updated': 1773496800,
-                          'streaks': {'best_weekly': 74}})
+    save_snapshot(
+        cache, {'me': {}, 'totals': {'Total Workouts': 2123}, 'summaries': [], 'last_updated': 1773496800, 'streaks': {'best_weekly': 74}}
+    )
     assert snapshot_for(demo_log(NOW), None, NOW, cache, assume_complete=True)['streaks'] == {'best_weekly': 74}
 
 
@@ -90,14 +92,18 @@ def test_compare_totals_lines_overview_up_against_the_log_and_flags_differences(
     snapshot = snapshot_for(demo_log(NOW), 'America/New_York', NOW, assume_complete=True)
     in_log = snapshot['time_frames']['all']['disciplines']
     # The overview agrees on cycling, is one short on strength, and has a discipline the log lacks.
-    snapshot['totals'] = {'Total Workouts': snapshot['time_frames']['all']['workouts'],
-                          'Cycling': in_log['cycling'], 'Strength': in_log['strength'] - 1, 'Yoga Flow': 4}
+    snapshot['totals'] = {
+        'Total Workouts': snapshot['time_frames']['all']['workouts'],
+        'Cycling': in_log['cycling'],
+        'Strength': in_log['strength'] - 1,
+        'Yoga Flow': 4,
+    }
     rows = {label: (overview, logged) for label, overview, logged in list_facts.compare_totals(snapshot)}
     assert rows['Total Workouts'][0] == rows['Total Workouts'][1]
     assert rows['Cycling'][0] == rows['Cycling'][1]
     assert rows['Strength'] == (in_log['strength'] - 1, in_log['strength'])
     assert rows['Yoga Flow'] == (4, 0)
-    assert rows['walking'] == (None, in_log['walking'])       # in the log, not in the overview
+    assert rows['walking'] == (None, in_log['walking'])  # in the log, not in the overview
     list_facts.show(snapshot, 1)
     out = capsys.readouterr().out
     assert 'overview vs log' in out and out.count('<-- differs') >= 3
@@ -109,6 +115,7 @@ def test_compare_totals_lines_overview_up_against_the_log_and_flags_differences(
 def test_show_output_is_pinned(capsys):
     """A fixed log and clock give the same listing, byte for byte (guards the 2f-G refactor of show)."""
     import hashlib
+
     list_facts.show(snapshot_for(demo_log(NOW), 'America/New_York', NOW, None, True), 3)
     out = capsys.readouterr().out
     assert len(out) == 15206
@@ -119,4 +126,5 @@ def test_show_with_nothing_to_show_prints_the_empty_notice(capsys):
     list_facts.show({}, 1)
     assert capsys.readouterr().out == (
         'No time-frame figures: the log is empty or its backfill is not complete (try --assume-complete).\n'
-        '\n\nscores (base + bonuses, before any cool-down):\n\npass 0: \n')
+        '\n\nscores (base + bonuses, before any cool-down):\n\npass 0: \n'
+    )

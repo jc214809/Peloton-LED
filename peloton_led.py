@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Peloton LED dashboard: network-free screen rotation over background snapshots."""
+
 import logging
 import time
 from datetime import datetime
@@ -7,17 +8,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from peloton.feeds.booked_classes import SHOWN_AFTER_START, takeover_booking
-from peloton.config import DEFAULTS, load_config, load_dotenv, user_cache_path, user_token_path
-from peloton.dashboard import Dashboard
-from peloton.stats.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # noqa: F401  re-export kept for callers
-from utils import heartbeat
-from utils.utils import args, ensure_privileges_dropped, led_matrix_options
-from utils.username import resolve_display_username
-from utils.wifi_setup import hotspot_name
 from display.rotation_pages import DEFAULT_ROTATION, build_rotation_pages
 from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
 from display.ui.overlays.settings_pin import shown_pin
+from peloton.config import DEFAULTS, load_config, load_dotenv, user_cache_path, user_token_path
+from peloton.dashboard import Dashboard
+from peloton.feeds.booked_classes import SHOWN_AFTER_START, takeover_booking
+from peloton.stats.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count  # noqa: F401  re-export kept for callers
+from utils import heartbeat
+from utils.username import resolve_display_username
+from utils.utils import args, ensure_privileges_dropped, led_matrix_options
+from utils.wifi_setup import hotspot_name
 
 logger = logging.getLogger('peloton-led')
 ROOT = Path(__file__).resolve().parent
@@ -204,10 +205,8 @@ def _rotation_pages(manager, dashboard, display, username_override, rivals, pass
     if not isinstance(matrix_height, (int, float)):
         matrix_height = 64
     profile = snapshot.get('me') or {}
-    apply_scheduled_brightness(manager.matrix, display,
-                               timezone_name=profile.get('timezone'))
-    return build_rotation_pages(snapshot, dashboard, display, username, matrix_height,
-                                rivals=rivals, pass_index=pass_index)
+    apply_scheduled_brightness(manager.matrix, display, timezone_name=profile.get('timezone'))
+    return build_rotation_pages(snapshot, dashboard, display, username, matrix_height, rivals=rivals, pass_index=pass_index)
 
 
 def _acknowledge_page(dashboard, name, state):
@@ -240,8 +239,16 @@ def _play_page(manager, dashboard, takeover, page):
     return True
 
 
-def run_display_loop(manager, dashboard, display, username_override=None, cycles=0, rivals=None,  # noqa: PLR0913
-                     first_pass=0, takeover=None):
+def run_display_loop(  # noqa: PLR0913
+    manager,
+    dashboard,
+    display,
+    username_override=None,
+    cycles=0,
+    rivals=None,
+    first_pass=0,
+    takeover=None,
+):
     """Play `cycles` rotations (0 forever). `takeover`, a NextClassTakeover, is checked before every page and
     every TAKEOVER_CHECK_SECONDS during one (not a celebration or PR page, which finish first). A page it cut
     short plays again from its start once the takeover ends, except the next-class page, which the takeover
@@ -289,10 +296,16 @@ def run_multi_user_loop(manager, profiles, display, active, cycles=0):
                 show_and_wait(manager, 'logo', None, logo_duration, profile['dashboard'])
             # The head-to-head page covers everyone, so show it once per cycle. Each rider's
             # rotation uses their own display settings (weekly goals, milestones, journey).
-            run_display_loop(manager, profile['dashboard'], profile.get('display', display),
-                             profile.get('username'), cycles=1,
-                             rivals=rivals if index == 0 else None, first_pass=completed,
-                             takeover=takeover)
+            run_display_loop(
+                manager,
+                profile['dashboard'],
+                profile.get('display', display),
+                profile.get('username'),
+                cycles=1,
+                rivals=rivals if index == 0 else None,
+                first_pass=completed,
+                takeover=takeover,
+            )
         completed += 1
 
 
@@ -301,9 +314,14 @@ def weekly_rivals(profiles):
     rivals = []
     for profile in profiles:
         progress = profile['dashboard'].snapshot().get('weekly_progress') or {}
-        rivals.append({'name': profile.get('name') or profile.get('username') or 'Rider',
-                       'workouts': progress.get('workouts', 0), 'minutes': progress.get('minutes', 0),
-                       'output_kj': progress.get('output_kj', 0)})
+        rivals.append(
+            {
+                'name': profile.get('name') or profile.get('username') or 'Rider',
+                'workouts': progress.get('workouts', 0),
+                'minutes': progress.get('minutes', 0),
+                'output_kj': progress.get('output_kj', 0),
+            }
+        )
     return rivals
 
 
@@ -312,9 +330,14 @@ def configured_profiles(config, options):
     display = config['display']
     users = config.get('users')
     if not users:
-        return [{'name': 'default', 'username': options.username, 'display': display,
-                 'dashboard': Dashboard(options.cookies, display, demo=options.demo,
-                     demo_login_needed=options.demo_login_needed)}]
+        return [
+            {
+                'name': 'default',
+                'username': options.username,
+                'display': display,
+                'dashboard': Dashboard(options.cookies, display, demo=options.demo, demo_login_needed=options.demo_login_needed),
+            }
+        ]
     config_dir = Path(options.config).with_suffix('.json').expanduser().resolve().parent
     profiles = []
     for user in users:
@@ -332,9 +355,14 @@ def configured_profiles(config, options):
             if not log_path.is_absolute():
                 log_path = config_dir / log_path
             user_display['log_path'] = str(log_path)
-        profiles.append({'name': user['name'], 'username': user.get('username'), 'display': user_display,
-                         'dashboard': Dashboard(token_path, user_display,
-                             demo=options.demo, demo_login_needed=options.demo_login_needed)})
+        profiles.append(
+            {
+                'name': user['name'],
+                'username': user.get('username'),
+                'display': user_display,
+                'dashboard': Dashboard(token_path, user_display, demo=options.demo, demo_login_needed=options.demo_login_needed),
+            }
+        )
     return profiles
 
 
@@ -356,29 +384,30 @@ def _load_checked_config(options):
 
 def _import_display():
     """The driver and screen classes, imported only once the configuration has been checked."""
-    from driver import RGBMatrix
     from display.display import initialize_fonts
-    from display.ui.manager import ScreenManager
-    from display.ui.username import UsernameScreen
-    from display.ui.discipline_page import DisciplinePageScreen
-    from display.ui.lifetime_overview import LifetimeOverviewScreen
-    from display.ui.logo_screen import LogoScreen
-    from display.ui.logo_mask_screen import LogoMaskScreen
-    from display.ui.last_workout.screen import LastWorkoutScreen
-    from display.ui.pr_celebration import PrCelebrationScreen
     from display.ui.celebration_screen import CelebrationScreen
-    from display.ui.status_screen import StatusScreen
-    from display.ui.goal_screen import GoalScreen
-    from display.ui.streak_screen import StreakScreen
-    from display.ui.versus_screen import VersusScreen
-    from display.ui.countdown_screen import CountdownScreen
-    from display.ui.journey_screen import JourneyScreen
-    from display.ui.heatmap_screen import HeatmapScreen
-    from display.ui.streak_risk_screen import StreakRiskScreen
-    from display.ui.overlays.wifi_setup_screen import WifiSetupScreen
     from display.ui.challenge_screen import ChallengeScreen
-    from display.ui.next_class_screen import NextClassScreen
     from display.ui.club_screen import ClubScreen
+    from display.ui.countdown_screen import CountdownScreen
+    from display.ui.discipline_page import DisciplinePageScreen
+    from display.ui.goal_screen import GoalScreen
+    from display.ui.heatmap_screen import HeatmapScreen
+    from display.ui.journey_screen import JourneyScreen
+    from display.ui.last_workout.screen import LastWorkoutScreen
+    from display.ui.lifetime_overview import LifetimeOverviewScreen
+    from display.ui.logo_mask_screen import LogoMaskScreen
+    from display.ui.logo_screen import LogoScreen
+    from display.ui.manager import ScreenManager
+    from display.ui.next_class_screen import NextClassScreen
+    from display.ui.overlays.wifi_setup_screen import WifiSetupScreen
+    from display.ui.pr_celebration import PrCelebrationScreen
+    from display.ui.status_screen import StatusScreen
+    from display.ui.streak_risk_screen import StreakRiskScreen
+    from display.ui.streak_screen import StreakScreen
+    from display.ui.username import UsernameScreen
+    from display.ui.versus_screen import VersusScreen
+    from driver import RGBMatrix
+
     return SimpleNamespace(
         RGBMatrix=RGBMatrix,
         initialize_fonts=initialize_fonts,
@@ -402,7 +431,8 @@ def _import_display():
         WifiSetupScreen=WifiSetupScreen,
         ChallengeScreen=ChallengeScreen,
         NextClassScreen=NextClassScreen,
-        ClubScreen=ClubScreen)
+        ClubScreen=ClubScreen,
+    )
 
 
 def _build_matrix(options, config, ui):
@@ -418,16 +448,21 @@ def _build_matrix(options, config, ui):
 
 def _build_manager(matrix, display, active, ui):
     """The ScreenManager with every rotation screen registered (the logo is registered in main)."""
-    manager = ui.ScreenManager(matrix,
+    manager = ui.ScreenManager(
+        matrix,
         login_required=lambda: active['dashboard'].login_indicator_required,
-        stale_data=lambda: active['dashboard'].stale_indicator_required)
+        stale_data=lambda: active['dashboard'].stale_indicator_required,
+    )
     manager.register('username', ui.UsernameScreen(font_key=display['font'], color_key=display['color']))
     manager.register('discipline', ui.DisciplinePageScreen())
     manager.register('lifetime', ui.LifetimeOverviewScreen())
-    manager.register('last_workout', ui.LastWorkoutScreen(
-        detail_interval=display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)))
-    manager.register('pr', ui.PrCelebrationScreen(
-        detail_interval=display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)))
+    manager.register(
+        'last_workout',
+        ui.LastWorkoutScreen(detail_interval=display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS)),
+    )
+    manager.register(
+        'pr', ui.PrCelebrationScreen(detail_interval=display.get('last_workout_detail_interval', LAST_WORKOUT_DETAIL_INTERVAL_SECONDS))
+    )
     manager.register('celebration', ui.CelebrationScreen())
     manager.register('status', ui.StatusScreen())
     manager.register('goal', ui.GoalScreen())
@@ -449,8 +484,7 @@ def _wait_for_first_refresh(manager, profiles, active):
     deadline = time.monotonic() + 60
     for profile in profiles:
         active['dashboard'] = profile['dashboard']
-        while (profile['dashboard'].snapshot()['status'] == 'loading'
-               and time.monotonic() < deadline):
+        while profile['dashboard'].snapshot()['status'] == 'loading' and time.monotonic() < deadline:
             show_and_wait(manager, 'status', 'loading', 0.2, profile['dashboard'])
 
 
@@ -486,8 +520,7 @@ def main():
     finally:
         for profile in profiles:
             if not profile['dashboard'].stop():
-                logger.warning('Refresh worker for %s did not stop before its request timeout',
-                               profile['name'])
+                logger.warning('Refresh worker for %s did not stop before its request timeout', profile['name'])
         matrix.Clear()
 
 

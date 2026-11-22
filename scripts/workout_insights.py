@@ -16,6 +16,7 @@ insight the LED board would show for it (peloton/workouts/insight_lines.py: head
 --dry-run makes no API calls and writes nothing. A 401 stops the run (exit 2) and keeps every row
 already saved. Uses the Mac's own token from the config, never a board's.
 """
+
 import argparse
 import logging
 import sys
@@ -26,13 +27,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from peloton.api import PelotonClient, make_session  # noqa: E402
-from peloton.workouts.insight_lines import board_insights  # noqa: E402
 from peloton.config import load_config, user_slug, user_token_path  # noqa: E402
+from peloton.workouts.insight_lines import board_insights  # noqa: E402
 from peloton.workouts.workout_compare import DISCIPLINES  # noqa: E402
 from peloton.workouts.workout_insights import insights  # noqa: E402
 from peloton.workouts.workout_log import WorkoutLog, default_log_path  # noqa: E402
-from peloton.workouts.workout_rows import (MAX_PER_RUN, LoginRequired, RawFiles, RowStore,  # noqa: E402
-                                  candidate_ids, default_rows_path, import_raw, sync)
+from peloton.workouts.workout_rows import MAX_PER_RUN, LoginRequired, RawFiles, RowStore, candidate_ids, default_rows_path, import_raw, sync  # noqa: E402
 
 log = logging.getLogger('workout-insights')
 EXIT_LOGIN = 2
@@ -42,8 +42,7 @@ def args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--rider', required=True, help="the rider's name in the config's users")
     parser.add_argument('--config', default='config.json')
-    parser.add_argument('--raw-dir', default=str(ROOT / 'training-data'),
-                        help='saved API responses (training-data layout)')
+    parser.add_argument('--raw-dir', default=str(ROOT / 'training-data'), help='saved API responses (training-data layout)')
     parser.add_argument('--dry-run', action='store_true', help='no API calls, no writes')
     parser.add_argument('--limit', type=int, default=MAX_PER_RUN, help='most workouts fetched per run')
     parser.add_argument('--workout', help='print this workout (ID or ID prefix) instead')
@@ -73,11 +72,11 @@ def rider_paths(config, config_path, rider):
 
 
 def describe(row, rows):
-    lines = [f"{row['date']} {row.get('title') or row['disc']} ({row['id'][:8]})"]
+    lines = [f'{row["date"]} {row.get("title") or row["disc"]} ({row["id"][:8]})']
     messages = insights(row, rows)
     lines += [f'  [{code}] {text}' for code, text, _ in messages]
     views = board_insights(messages)
-    lines += [f"  board: {view['headline']} | {view['sentence']}" for view in views] or ['  board: (no slide)']
+    lines += [f'  board: {view["headline"]} | {view["sentence"]}' for view in views] or ['  board: (no slide)']
     return '\n'.join(lines)
 
 
@@ -93,8 +92,7 @@ def fetch_new(client, store, raw, log_path, limit):
     if not user_id:
         user_id = client.get_me()['id']
     page = client.get_workouts_page(user_id, limit=20, page=0)
-    ids = candidate_ids(log_workouts=workout_log.workouts if workout_log else None,
-                        listed=client.page_rows(page), now=time.time())
+    ids = candidate_ids(log_workouts=workout_log.workouts if workout_log else None, listed=client.page_rows(page), now=time.time())
     return sync(client, store, raw, ids, limit=limit)
 
 
@@ -125,7 +123,7 @@ def choose_rows(options, store, rows, added):
         return chosen
     if options.last:
         usable = [r for r in rows if r['disc'] in DISCIPLINES]
-        return sorted(usable, key=lambda r: r['start'])[-options.last:]
+        return sorted(usable, key=lambda r: r['start'])[-options.last :]
     if added:
         return sorted((store.rows[i] for i in added), key=lambda r: r['start'])
     return [r for r in [latest(rows)] if r]
@@ -133,8 +131,9 @@ def choose_rows(options, store, rows, added):
 
 def main(argv=None):
     options = args(argv)
-    logging.basicConfig(level=logging.DEBUG if options.verbose else logging.INFO,
-                        format='%(levelname)s %(name)s: %(message)s', stream=sys.stderr)
+    logging.basicConfig(
+        level=logging.DEBUG if options.verbose else logging.INFO, format='%(levelname)s %(name)s: %(message)s', stream=sys.stderr
+    )
     try:
         config = load_config(options.config)
     except ValueError as exc:

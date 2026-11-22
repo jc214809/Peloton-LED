@@ -1,11 +1,12 @@
 """Streaks: a pixel flame over the weekly streak and the best one, or the
 daily streak and the day it started (one per rotation pass)."""
+
 import math
 from datetime import date
 
+from display.display import get_text_width, loaded_fonts
 from driver import graphics
 
-from display.display import get_text_width, loaded_fonts
 from .screen import Screen
 
 # The flame is drawn, not stored: three teardrop tongues (FLAME_LOBES) whose
@@ -17,12 +18,16 @@ FLAME_FRAME_SECONDS = 0.05  # 20 fps, like the celebration
 # (centre offset, bulb centre row, bulb half-width, bulb half-height,
 #  highest tip row, how far the tip falls, noise seed): the middle tongue,
 # then the left and right ones.
-FLAME_LOBES = ((0.0, 10.4, 4.2, 6.0, -1.6, 2.4, 0.0),
-               (-3.0, 11.2, 2.5, 4.2, 1.6, 3.4, 5.1),
-               (3.0, 11.2, 2.5, 4.2, 1.0, 3.6, 9.7))
+FLAME_LOBES = ((0.0, 10.4, 4.2, 6.0, -1.6, 2.4, 0.0), (-3.0, 11.2, 2.5, 4.2, 1.6, 3.4, 5.1), (3.0, 11.2, 2.5, 4.2, 1.0, 3.6, 9.7))
 # Heat (0 to 1) to colour: deep red, red, orange, amber, yellow, pale yellow.
-FLAME_RAMP = ((0.00, (90, 8, 0)), (0.22, (200, 30, 5)), (0.45, (245, 90, 0)),
-              (0.70, (255, 170, 10)), (0.88, (255, 230, 70)), (1.00, (255, 250, 190)))
+FLAME_RAMP = (
+    (0.00, (90, 8, 0)),
+    (0.22, (200, 30, 5)),
+    (0.45, (245, 90, 0)),
+    (0.70, (255, 170, 10)),
+    (0.88, (255, 230, 70)),
+    (1.00, (255, 250, 190)),
+)
 # A spark drifts up beside the tongues in some of these spans.
 SPARK_SECONDS = 1.6
 SPARK_RISE_SECONDS = 0.8
@@ -183,8 +188,7 @@ def daily_streak_lines(streaks):
         return None
     footer = ''
     try:
-        footer = since_text(date.fromisoformat(streaks['daily_start']),
-                            date.fromisoformat(streaks['today']))
+        footer = since_text(date.fromisoformat(streaks['daily_start']), date.fromisoformat(streaks['today']))
     except (KeyError, TypeError, ValueError):
         pass
     return current, 'DAY STREAK', footer, False

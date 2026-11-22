@@ -1,7 +1,7 @@
 """The settings form's hardware cards: Panel (size, brightness, wiring) and Advanced (every other matrix setting)."""
+
 from peloton.config import GPIO_MAPPINGS, MATRIX_DEFAULTS
-from settings_page.form import (PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SWITCH_KEYS, advanced_keys, number_text,
-                                panel_size)
+from settings_page.form import PANEL_FIELDS, PANEL_SIZES, ROTATIONS, SWITCH_KEYS, advanced_keys, number_text, panel_size
 from settings_page.page.icons import icon
 from settings_page.page.widgets import _attr, _field, _input, _notice, _options, _section, _switch, _unit
 
@@ -13,8 +13,7 @@ def _matrix_field(key, label, hint, value):
     """A config.json "matrix" setting's row; blank, it's the app's default (MATRIX_DEFAULTS)."""
     name = f'matrix_{key}'
     default = MATRIX_DEFAULTS[key]
-    blank = f'Default: {"On" if default is True else "Off" if default is False else default}' \
-        if default not in (None, '') else 'Default'
+    blank = f'Default: {"On" if default is True else "Off" if default is False else default}' if default not in (None, '') else 'Default'
     if key == 'pixel_mapper':
         choices = list(ROTATIONS) + ([(value, value)] if value and value not in dict(ROTATIONS) else [])
         control = _options(name, [('', 'Right way up')] + choices, value or '')
@@ -28,19 +27,29 @@ def _matrix_field(key, label, hint, value):
     elif isinstance(default, str):
         control = _input(name, value or '', extra=f' class="mono" placeholder="{_attr(blank)}"')
     else:
-        control = _unit(_input(name, number_text(value), 'number',
-                               f' inputmode="numeric" step="1" placeholder="{_attr(blank)}"'), MATRIX_UNITS.get(key))
+        control = _unit(
+            _input(name, number_text(value), 'number', f' inputmode="numeric" step="1" placeholder="{_attr(blank)}"'), MATRIX_UNITS.get(key)
+        )
     return _field(name, label, control, hint)
 
 
 def panel_card(matrix):
     sizes = list(PANEL_SIZES) + ([panel_size(matrix)] if panel_size(matrix) not in PANEL_SIZES else [])
-    return _section('panel', 'Panel', "The LED panel's size, brightness and wiring.", (
-        _field('panel_size', 'Panel size', _options('panel_size', [(s, s) for s in sizes], panel_size(matrix)),
-               'Columns x rows, as on the panel\'s label.')
-
-        + ''.join(_matrix_field(key, label, hint, matrix.get(key)) for key, label, hint in PANEL_FIELDS)
-    ), 'board')
+    return _section(
+        'panel',
+        'Panel',
+        "The LED panel's size, brightness and wiring.",
+        (
+            _field(
+                'panel_size',
+                'Panel size',
+                _options('panel_size', [(s, s) for s in sizes], panel_size(matrix)),
+                "Columns x rows, as on the panel's label.",
+            )
+            + ''.join(_matrix_field(key, label, hint, matrix.get(key)) for key, label, hint in PANEL_FIELDS)
+        ),
+        'board',
+    )
 
 
 def advanced_card(config, display, matrix):
@@ -50,11 +59,13 @@ def advanced_card(config, display, matrix):
         '<p>Logging, a fallback name and panel hardware. Most boards never need these.</p></div>'
         f'<span class="chev">{icon("chevron")}</span></summary><div class="card-body">'
         + _switch('debug', 'Debug logging', config.get('debug', False), "More detail in the display's log.")
-        + _field('username', 'Fallback name', _input('username', display.get('username') or '',
-                                                     extra=' placeholder="Your Peloton username"'),
-                 'Only shown if Peloton gives no username. Riders have their own in Goals.')
-        + _notice('warn', 'The wrong panel settings can leave the board dark or flickering. Blank leaves each '
-                          'one to the default.')
-        + ''.join(_matrix_field(key, key.replace('_', ' ').capitalize(), '', matrix.get(key))
-                  for key in advanced_keys())
-        + '</div></details>')
+        + _field(
+            'username',
+            'Fallback name',
+            _input('username', display.get('username') or '', extra=' placeholder="Your Peloton username"'),
+            'Only shown if Peloton gives no username. Riders have their own in Goals.',
+        )
+        + _notice('warn', 'The wrong panel settings can leave the board dark or flickering. Blank leaves each one to the default.')
+        + ''.join(_matrix_field(key, key.replace('_', ' ').capitalize(), '', matrix.get(key)) for key in advanced_keys())
+        + '</div></details>'
+    )

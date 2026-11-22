@@ -1,14 +1,23 @@
 """The celebration splash: ordinals, nouns, trophy and confetti, the text, and its place in the rotation."""
+
 import json
 from unittest.mock import Mock
 
 import pytest
 
-from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.celebration_screen import (INTRO_SECONDS, MIN_CARD_SECONDS, RISE_SECONDS, TEXT_LEFT_32,
-                                           CelebrationScreen, milestone_noun, number_text, ordinal)
-from peloton.cache import CACHE_VERSION, load_snapshot
 import peloton_led
+from display.display import get_text_width, initialize_fonts, loaded_fonts
+from display.ui.celebration_screen import (
+    INTRO_SECONDS,
+    MIN_CARD_SECONDS,
+    RISE_SECONDS,
+    TEXT_LEFT_32,
+    CelebrationScreen,
+    milestone_noun,
+    number_text,
+    ordinal,
+)
+from peloton.cache import CACHE_VERSION, load_snapshot
 from peloton_led import build_rotation_pages, run_display_loop
 from scripts.render_demo import ImageMatrix
 from scripts.render_rotation import frame_times
@@ -20,10 +29,28 @@ STATE = {'number': 600, 'noun': 'WORKOUT', 'subtitle': 'Joel'}
 pytestmark = pytest.mark.usefixtures('instant_clock')
 
 
-@pytest.mark.parametrize('number, expected', [
-    (1, '1ST'), (2, '2ND'), (3, '3RD'), (4, '4TH'), (11, '11TH'), (12, '12TH'), (13, '13TH'),
-    (21, '21ST'), (22, '22ND'), (23, '23RD'), (100, '100TH'), (101, '101ST'), (111, '111TH'),
-    (112, '112TH'), (600, '600TH'), (1002, '1002ND'), (0, '0TH')])
+@pytest.mark.parametrize(
+    'number, expected',
+    [
+        (1, '1ST'),
+        (2, '2ND'),
+        (3, '3RD'),
+        (4, '4TH'),
+        (11, '11TH'),
+        (12, '12TH'),
+        (13, '13TH'),
+        (21, '21ST'),
+        (22, '22ND'),
+        (23, '23RD'),
+        (100, '100TH'),
+        (101, '101ST'),
+        (111, '111TH'),
+        (112, '112TH'),
+        (600, '600TH'),
+        (1002, '1002ND'),
+        (0, '0TH'),
+    ],
+)
 def test_ordinals(number, expected):
     assert ordinal(number) == expected
 
@@ -34,10 +61,23 @@ def test_number_text_skips_what_is_not_a_count():
         assert number_text(bad) == ''
 
 
-@pytest.mark.parametrize('discipline, noun', [
-    (None, 'WORKOUT'), ('', 'WORKOUT'), ('cycling', 'RIDE'), ('Cycling', 'RIDE'), ('bike_bootcamp', 'RIDE'),
-    ('running', 'RUN'), ('walking', 'WALK'), ('rowing', 'ROW'), ('caesar', 'ROW'),
-    ('caesar_bootcamp', 'ROW'), ('strength', 'CLASS'), ('yoga', 'CLASS')])
+@pytest.mark.parametrize(
+    'discipline, noun',
+    [
+        (None, 'WORKOUT'),
+        ('', 'WORKOUT'),
+        ('cycling', 'RIDE'),
+        ('Cycling', 'RIDE'),
+        ('bike_bootcamp', 'RIDE'),
+        ('running', 'RUN'),
+        ('walking', 'WALK'),
+        ('rowing', 'ROW'),
+        ('caesar', 'ROW'),
+        ('caesar_bootcamp', 'ROW'),
+        ('strength', 'CLASS'),
+        ('yoga', 'CLASS'),
+    ],
+)
 def test_milestone_noun_by_discipline(discipline, noun):
     assert milestone_noun(discipline) == noun
 
@@ -53,8 +93,12 @@ def _render(height, elapsed, state):
 
 
 def _lit(image, color=None):
-    return {(x, y) for y in range(image.height) for x in range(image.width)
-            if image.getpixel((x, y)) != (0, 0, 0) and (color is None or image.getpixel((x, y)) == color)}
+    return {
+        (x, y)
+        for y in range(image.height)
+        for x in range(image.width)
+        if image.getpixel((x, y)) != (0, 0, 0) and (color is None or image.getpixel((x, y)) == color)
+    }
 
 
 TROPHY_GOLD = (230, 170, 0)
@@ -62,7 +106,7 @@ TROPHY_GOLD = (230, 170, 0)
 
 def _lit_colors(image):
     raw = image.tobytes()
-    return {tuple(raw[i:i + 3]) for i in range(0, len(raw), 3)}
+    return {tuple(raw[i : i + 3]) for i in range(0, len(raw), 3)}
 
 
 def _text_box(image, color):
@@ -156,9 +200,16 @@ def test_without_a_number_the_headline_takes_the_big_line():
 
 
 def _display(**changes):
-    return {'rotation': ['username', 'milestones', 'goals'], 'duration': 4, 'last_workout_duration': 15,
-            'overview_duration': 5, 'milestones': [100, 500], 'milestone_step': 0, 'color': 'white',
-            **changes}
+    return {
+        'rotation': ['username', 'milestones', 'goals'],
+        'duration': 4,
+        'last_workout_duration': 15,
+        'overview_duration': 5,
+        'milestones': [100, 500],
+        'milestone_step': 0,
+        'color': 'white',
+        **changes,
+    }
 
 
 def _snapshot():
@@ -175,11 +226,9 @@ def test_rotation_leads_with_the_newest_milestone_only():
     assert state == {'number': 500, 'noun': 'WORKOUT', 'subtitle': 'Joel', 'milestone': 500}
     # Long enough for the trophy and a readable card.
     assert duration == INTRO_SECONDS + MIN_CARD_SECONDS
-    long = build_rotation_pages(_snapshot(), dashboard,
-                                _display(screen_durations={'milestones': 20}), 'Joel', 64)
+    long = build_rotation_pages(_snapshot(), dashboard, _display(screen_durations={'milestones': 20}), 'Joel', 64)
     assert long[0][2] == 20
-    short = build_rotation_pages(_snapshot(), dashboard,
-                                 _display(screen_durations={'milestones': 2}), 'Joel', 64)
+    short = build_rotation_pages(_snapshot(), dashboard, _display(screen_durations={'milestones': 2}), 'Joel', 64)
     assert short[0][2] == INTRO_SECONDS + MIN_CARD_SECONDS  # never cut short
 
 
@@ -210,8 +259,7 @@ def test_display_loop_records_the_name_page_facts_after_showing_them():
     dashboard = Mock(login_required=False)
     dashboard.pending_discipline_milestones.return_value = []
     dashboard.pending_milestones.return_value = []
-    dashboard.snapshot.return_value = {'me': {'username': 'Rider'}, **_snapshot(),
-                                       'totals': {'Total Workouts': 90, 'Cycling': 60}}
+    dashboard.snapshot.return_value = {'me': {'username': 'Rider'}, **_snapshot(), 'totals': {'Total Workouts': 90, 'Cycling': 60}}
     run_display_loop(Mock(), dashboard, _display(rotation=['username']), cycles=1)
     dashboard.acknowledge_name_facts.assert_called_once_with(['all:top_discipline', 'kind:top_discipline'])
 
@@ -262,6 +310,7 @@ def test_show_and_wait_ticks_faster_for_the_confetti(monkeypatch):
 @pytest.mark.parametrize('number', [600, 21, 102, 10000])
 def test_ordinal_ending_is_small_and_raised_to_the_top_of_the_digits(height, number):
     from display.ui.celebration_screen import _CAP_HEIGHTS, ordinal_line
+
     initialize_fonts(height)
     digits_font = loaded_fonts['big']
     suffix_font = loaded_fonts['titles' if height >= 64 else 'info']
@@ -270,7 +319,7 @@ def test_ordinal_ending_is_small_and_raised_to_the_top_of_the_digits(height, num
     left = TEXT_LEFT_32 if height < 64 else 0
     parts = ordinal_line(number, [digits_font], suffix_font, 30, (255, 255, 255), left, 64)
     (_, dx, dy, _, digits), (_, sx, sy, _, suffix) = parts
-    assert (digits, suffix) == (str(number), ordinal(number)[len(str(number)):])
+    assert (digits, suffix) == (str(number), ordinal(number)[len(str(number)) :])
     assert sx > dx + get_text_width(digits_font, digits) and sy < dy  # after the digits, raised
     # Drawn: the ending's top row is the digits' top row, and it ends well above their baseline.
     image = _render(height, INTRO_SECONDS + 0.1, {**STATE, 'number': number})
@@ -280,12 +329,12 @@ def test_ordinal_ending_is_small_and_raised_to_the_top_of_the_digits(height, num
     assert min(suffix_rows) == min(digit_rows) and max(suffix_rows) < max(digit_rows) - 2
 
 
-@pytest.mark.parametrize('height, number, left', [(64, 600, 0), (64, 2000, 0), (32, 600, TEXT_LEFT_32),
-                                                  (32, 21, TEXT_LEFT_32)])
+@pytest.mark.parametrize('height, number, left', [(64, 600, 0), (64, 2000, 0), (32, 600, TEXT_LEFT_32), (32, 21, TEXT_LEFT_32)])
 def test_the_number_is_centred_on_its_digits_plus_half_the_ending(height, number, left):
     # Joel, 2026-11-14: centring 600TH as one piece set the digits off to the left, and centring the
     # digits alone crowded the TH against the right edge.
     from display.ui.celebration_screen import ordinal_line
+
     initialize_fonts(height)
     fonts = [loaded_fonts['big'], loaded_fonts['countdown']]
     parts = ordinal_line(number, fonts, loaded_fonts['info'], 30, (1, 1, 1), left, 64)
@@ -296,10 +345,12 @@ def test_the_number_is_centred_on_its_digits_plus_half_the_ending(height, number
     assert abs((digits_left + centred_right) - (left + 64)) <= 1
 
 
-@pytest.mark.parametrize('height, number, left', [(64, 2000, 0), (64, 10000, 0), (32, 2000, TEXT_LEFT_32),
-                                                  (32, 10000, TEXT_LEFT_32), (32, 123456, TEXT_LEFT_32)])
+@pytest.mark.parametrize(
+    'height, number, left', [(64, 2000, 0), (64, 10000, 0), (32, 2000, TEXT_LEFT_32), (32, 10000, TEXT_LEFT_32), (32, 123456, TEXT_LEFT_32)]
+)
 def test_a_wide_number_moves_left_only_enough_to_keep_its_ending_on(height, number, left):
     from display.ui.celebration_screen import ordinal_line
+
     initialize_fonts(height)
     fonts = [loaded_fonts['big'], loaded_fonts['countdown']]
     parts = ordinal_line(number, fonts, loaded_fonts['info'], 30, (1, 1, 1), left, 64)
@@ -313,17 +364,20 @@ def test_a_wide_number_moves_left_only_enough_to_keep_its_ending_on(height, numb
 
 def test_ordinal_that_fits_no_font_is_left_off():
     from display.ui.celebration_screen import ordinal_line
+
     initialize_fonts(64)
-    assert ordinal_line(10 ** 12, [loaded_fonts['big']], loaded_fonts['titles'], 41, (1, 1, 1), 0, 64) is None
+    assert ordinal_line(10**12, [loaded_fonts['big']], loaded_fonts['titles'], 41, (1, 1, 1), 0, 64) is None
     no_suffix_font = ordinal_line(600, [loaded_fonts['big']], None, 41, (1, 1, 1), 0, 64)
     assert [part[4] for part in no_suffix_font] == ['600']
 
 
-@pytest.mark.parametrize('height, number, digits', [
-    (64, 600, '600'), (64, 2000, '2,000'), (64, 2500, '2,500'), (64, 10000, '10000'),
-    (32, 2000, '2,000'), (32, 10000, '10000')])
+@pytest.mark.parametrize(
+    'height, number, digits',
+    [(64, 600, '600'), (64, 2000, '2,000'), (64, 2500, '2,500'), (64, 10000, '10000'), (32, 2000, '2,000'), (32, 10000, '10000')],
+)
 def test_comma_unless_dropping_it_keeps_the_big_font(height, number, digits):
     from display.ui.celebration_screen import ordinal_line
+
     initialize_fonts(height)
     left = TEXT_LEFT_32 if height < 64 else 0
     fonts = [loaded_fonts['big'], loaded_fonts['countdown']]
@@ -335,6 +389,7 @@ def test_comma_unless_dropping_it_keeps_the_big_font(height, number, digits):
 @pytest.mark.parametrize('height', [32, 64])
 def test_comma_is_spaced_like_the_digits(height):
     from display.ui.celebration_screen import _COMMA_INK, _number_runs
+
     initialize_fonts(height)
     font = loaded_fonts['big']
     assert (font.height, font.baseline, font.CharacterWidth(ord('0'))) in _COMMA_INK
@@ -352,6 +407,7 @@ def test_comma_is_spaced_like_the_digits(height):
 
 def test_number_runs_leave_fonts_without_measurements_alone():
     from display.ui.celebration_screen import _number_runs
+
     font = Mock(height=99, baseline=1, CharacterWidth=lambda code: 5)
     assert _number_runs(font, '2,000') == ([(0, '2,000')], 25)
     initialize_fonts(64)
@@ -363,6 +419,7 @@ def test_render_celebration_draws_both_panel_sizes(tmp_path, capsys):
     from PIL import Image
 
     from scripts import render_celebration, render_logo
+
     out = tmp_path / 'milestones.png'
     render_celebration.main(['--out', str(out)])
     sheet = Image.open(out).convert('RGB')
@@ -385,6 +442,7 @@ def test_render_celebration_runs_from_the_command_line(tmp_path, monkeypatch, ca
     import runpy
     import sys
     from pathlib import Path
+
     root = str(Path(__file__).resolve().parents[1])
     out = tmp_path / 'sheet.png'
     monkeypatch.setattr(sys, 'path', [p for p in sys.path if p not in (root, '')])

@@ -7,6 +7,7 @@ each with a derived email_env/password_env and token/cache paths under
 /var/lib/peloton-led/. Credentials are written straight to auth.env and
 never stored in config.json.
 """
+
 import argparse
 import getpass
 import json
@@ -27,14 +28,12 @@ def prompt_riders(input_fn=input, password_fn=getpass.getpass):
     riders = []
     print("Let's set up who's using this board.")
     while True:
-        prompt = 'Rider name (leave blank to finish' + (
-            ', at least one required' if not riders else '') + '): '
+        prompt = 'Rider name (leave blank to finish' + (', at least one required' if not riders else '') + '): '
         name = input_fn(prompt).strip()
         if not name:
             if riders:
                 break
-            print('At least one rider is required for single-user mode too — '
-                  "just give the account a name (e.g. your own).")
+            print('At least one rider is required for single-user mode too — just give the account a name (e.g. your own).')
             continue
         if any(rider['name'].casefold() == name.casefold() for rider in riders):
             print(f'"{name}" was already added; use a different name.')
@@ -59,13 +58,15 @@ def build_config(riders, template):
         email_env = f'PELOTON_EMAIL_{suffix}'
         password_env = f'PELOTON_PASSWORD_{suffix}'
         token_name = Path(default_token_path(rider['name'])).name
-        users.append({
-            'name': rider['name'],
-            'email_env': email_env,
-            'password_env': password_env,
-            'token_path': f'{STATE_DIR}/{token_name}',
-            'cache_path': f'{STATE_DIR}/dashboard-cache-{user_slug(rider["name"])}.json',
-        })
+        users.append(
+            {
+                'name': rider['name'],
+                'email_env': email_env,
+                'password_env': password_env,
+                'token_path': f'{STATE_DIR}/{token_name}',
+                'cache_path': f'{STATE_DIR}/dashboard-cache-{user_slug(rider["name"])}.json',
+            }
+        )
         auth_env[email_env] = rider['email']
         auth_env[password_env] = rider['password']
     base['users'] = users

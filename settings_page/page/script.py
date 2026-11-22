@@ -166,4 +166,3 @@ const spy = new IntersectionObserver(entries => entries.forEach(e => {
 }), {rootMargin: '-80px 0px -65% 0px'});
 document.querySelectorAll('main .card[id]').forEach(s => spy.observe(s));
 """
-

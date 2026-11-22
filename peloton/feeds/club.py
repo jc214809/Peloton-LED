@@ -5,12 +5,24 @@ undocumented host the Peloton web app calls, and, until that first answers, `bad
 Only what the page draws is kept, so the cache stays small and an odd response can't reach the screen.
 Standard library only, so the cache can validate with it.
 """
+
 import math
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 # `badge_level` in /api/me, 0 to 10, and the names the score calls them (upper case).
-LEVELS = ('BRONZE I', 'BRONZE II', 'BRONZE III', 'SILVER I', 'SILVER II', 'SILVER III',
-          'GOLD I', 'GOLD II', 'GOLD III', 'CHAMPION', 'LEGEND')
+LEVELS = (
+    'BRONZE I',
+    'BRONZE II',
+    'BRONZE III',
+    'SILVER I',
+    'SILVER II',
+    'SILVER III',
+    'GOLD I',
+    'GOLD II',
+    'GOLD III',
+    'CHAMPION',
+    'LEGEND',
+)
 # The gem's kind is the level's first word; anything else is drawn as gold.
 KINDS = ('BRONZE', 'SILVER', 'GOLD', 'CHAMPION', 'LEGEND')
 # Peloton answers 404 for a rider with no score (free trial, cancelled): the record says so, and no page shows.
@@ -96,11 +108,23 @@ def parse_score(payload, now):
     marks = []
     if bar.get('ignore_segments_on_profile') is not True:
         # Where one level of the tier ends and the next begins: Gold I | Gold II | Gold III.
-        marks = sorted({m for m in (_points(s.get('min_points')) for s in segments if isinstance(s, dict))
-                        if m is not None and low < m < (high if high is not None else -1)})
-    return {'level': level, 'points': points, 'tier_min': low, 'tier_max': high, 'marks': marks[:8],
-            'next': following or None, 'to_next': target - points if following and target else None,
-            'boost_until': _boost_until(payload.get('boost'), now)}
+        marks = sorted(
+            {
+                m
+                for m in (_points(s.get('min_points')) for s in segments if isinstance(s, dict))
+                if m is not None and low < m < (high if high is not None else -1)
+            }
+        )
+    return {
+        'level': level,
+        'points': points,
+        'tier_min': low,
+        'tier_max': high,
+        'marks': marks[:8],
+        'next': following or None,
+        'to_next': target - points if following and target else None,
+        'boost_until': _boost_until(payload.get('boost'), now),
+    }
 
 
 def level_from_me(me):

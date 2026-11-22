@@ -8,11 +8,12 @@ Spec: WORKOUT-COMPARE-SPEC.md (kept outside this repo), section 3. `build_row` i
 Standard library only and import-free of the display code. Bumping ROW_VERSION makes every stored
 row stale (peloton/workouts/workout_rows.py rebuilds them from the saved raw files).
 """
+
 import collections
 import logging
 import math
 import statistics
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 log = logging.getLogger(__name__)
@@ -25,8 +26,7 @@ FOOT = {'running', 'walking', 'tread_bootcamp'}  # speed, not treadmill watts, i
 BIKE = {'cycling', 'bike_bootcamp'}
 SERIES = ('output', 'speed', 'cadence', 'resistance', 'stroke_rate', 'incline', 'heart_rate')
 # A target metric name -> the rider series it is compared with.
-TARGET_SERIES = {'resistance': 'resistance', 'cadence': 'cadence', 'stroke_rate': 'stroke_rate',
-                 'incline': 'incline', 'speed': 'speed'}
+TARGET_SERIES = {'resistance': 'resistance', 'cadence': 'cadence', 'stroke_rate': 'stroke_rate', 'incline': 'incline', 'speed': 'speed'}
 MIN_EFF_SAMPLES = 24  # two minutes of 5-second samples
 
 # Watts a bike makes at a cadence and resistance: log W = A + B log cadence + C log resistance.
@@ -38,13 +38,27 @@ EFFORT_RATIO = 1.15  # a stretch is an effort at this many times the class's med
 MIN_EFFORT_SECS = 10
 MIN_PLAN_SAMPLES = 24
 # The nine plan descriptors the fill-in distance uses (spec section 4.1).
-PLAN_KEYS = ('ride_min', 'arms_min', 'planned_watts', 'planned_watts_high', 'effort_share',
-             'efforts_per_10min', 'effort_length_s', 'cadence_mean', 'resistance_mean')
+PLAN_KEYS = (
+    'ride_min',
+    'arms_min',
+    'planned_watts',
+    'planned_watts_high',
+    'effort_share',
+    'efforts_per_10min',
+    'effort_length_s',
+    'cadence_mean',
+    'resistance_mean',
+)
 
 WEIGHT_LEVELS = ('body_weight', 'light', 'medium', 'heavy')
 # Ride-details subsegment types -> the block kind `asks` reports in minutes.
-GROUP_KINDS = {'emom_group': 'emom', 'amrap_group': 'amrap', 'compound_group': 'compound',
-               'complex_group': 'compound', 'generic_group': 'circuit'}
+GROUP_KINDS = {
+    'emom_group': 'emom',
+    'amrap_group': 'amrap',
+    'compound_group': 'compound',
+    'complex_group': 'compound',
+    'generic_group': 'circuit',
+}
 TIMED_TRACKING = ('time_based', 'time_tracked_rep', None)
 TOP_MUSCLES = 5
 
@@ -92,8 +106,7 @@ def _in_windows(t, windows):
 
 
 def _window_mean(times, values, windows):
-    return _mean([values[i] for i in range(min(len(times), len(values)))
-                  if values[i] is not None and _in_windows(times[i], windows)])
+    return _mean([values[i] for i in range(min(len(times), len(values))) if values[i] is not None and _in_windows(times[i], windows)])
 
 
 def _strength(detail):
@@ -103,18 +116,28 @@ def _strength(detail):
     sets = []
     for entry in summary.get('repetition_summary_data') or []:
         weight = (entry.get('weight') or [{}])[0] or {}
-        sets.append({
-            'name': entry.get('movement_name'), 'movement_id': entry.get('movement_id'),
-            'type': entry.get('tracking_type'), 'offset': entry.get('offset'), 'len': entry.get('length'),
-            'done': entry.get('completed_number'), 'target': entry.get('target_number'),
-            'hit': entry.get('is_target_reached'), 'hold': bool(entry.get('is_hold')),
-            'lb': (weight.get('weight_data') or {}).get('weight_value'),
-            'cat': weight.get('weight_category'), 'volume': entry.get('total_volume'),
-        })
+        sets.append(
+            {
+                'name': entry.get('movement_name'),
+                'movement_id': entry.get('movement_id'),
+                'type': entry.get('tracking_type'),
+                'offset': entry.get('offset'),
+                'len': entry.get('length'),
+                'done': entry.get('completed_number'),
+                'target': entry.get('target_number'),
+                'hit': entry.get('is_target_reached'),
+                'hold': bool(entry.get('is_hold')),
+                'lb': (weight.get('weight_data') or {}).get('weight_value'),
+                'cat': weight.get('weight_category'),
+                'volume': entry.get('total_volume'),
+            }
+        )
     weights = summary.get('weight_info_summary_data') or {}
     tracker = {
-        'volume': summary.get('total_volume'), 'reps': summary.get('total_repetitions'),
-        'movements': summary.get('num_movements'), 'targets_hit': summary.get('num_targets_reached'),
+        'volume': summary.get('total_volume'),
+        'reps': summary.get('total_repetitions'),
+        'movements': summary.get('num_movements'),
+        'targets_hit': summary.get('num_targets_reached'),
         'weights': {k.split('_')[0]: sorted(x['weight_value'] for x in v) for k, v in weights.items() if v},
     }
     return tracker, sets
@@ -143,8 +166,12 @@ def _plan_samples(lines, kind_at, segments):
     """The (cadence, resistance, planned watts) lists over the riding samples of the callout lines."""
     cadence, resistance = lines['cadence'], lines['resistance']
     cad, res, watts = [], [], []
-    count = min(len(cadence.get('upper') or []), len(cadence.get('lower') or []),
-                len(resistance.get('upper') or []), len(resistance.get('lower') or []))
+    count = min(
+        len(cadence.get('upper') or []),
+        len(cadence.get('lower') or []),
+        len(resistance.get('upper') or []),
+        len(resistance.get('lower') or []),
+    )
     for i in range(count):
         if kind_at.get(i, 'ride' if not segments else None) != 'ride':
             continue
@@ -179,8 +206,9 @@ def bike_plan(graph, ride_meta=None):
     Built from the 5-second cadence and resistance callout lines over riding segments only.
     """
     ride_meta = ride_meta or {}
-    lines = {m.get('type'): m.get('graph_data') or {} for m in
-             (graph.get('target_performance_metrics') or {}).get('target_graph_metrics') or []}
+    lines = {
+        m.get('type'): m.get('graph_data') or {} for m in (graph.get('target_performance_metrics') or {}).get('target_graph_metrics') or []
+    }
     if 'cadence' not in lines or 'resistance' not in lines:
         return None
     segments = graph.get('segment_list') or []
@@ -217,15 +245,17 @@ def _strength_blocks(ride):
                 continue
             levels = [m.get('weight_level') for m in moves if m.get('weight_level') in WEIGHT_LEVELS]
             group = GROUP_KINDS.get(sub.get('type'))
-            blocks.append({
-                'secs': sub['length'], 'group': group,
-                'names': [m.get('name') or '' for m in moves],
-                'target': moves[0].get('target_number'),
-                'timed': not group and all(m.get('tracking_type') in TIMED_TRACKING for m in moves),
-                'muscles': [(g.get('muscle_group'), g.get('ranking') or 1)
-                            for m in moves for g in m.get('muscle_groups') or []],
-                'level': max(levels, key=WEIGHT_LEVELS.index) if levels else None,
-            })
+            blocks.append(
+                {
+                    'secs': sub['length'],
+                    'group': group,
+                    'names': [m.get('name') or '' for m in moves],
+                    'target': moves[0].get('target_number'),
+                    'timed': not group and all(m.get('tracking_type') in TIMED_TRACKING for m in moves),
+                    'muscles': [(g.get('muscle_group'), g.get('ranking') or 1) for m in moves for g in m.get('muscle_groups') or []],
+                    'level': max(levels, key=WEIGHT_LEVELS.index) if levels else None,
+                }
+            )
     return blocks
 
 
@@ -278,8 +308,10 @@ def _local_date(detail):
 def _segment_layout(graph):
     """(segments, mix, windows, mode): the class's segments, seconds per kind, the (a, b) windows per kind
     (the whole class counts as work when it has no work, floor or arms segment) and plain | arms | floor."""
-    segments = [{'kind': segment_kind(s), 'a': s['start_time_offset'],
-                 'b': s['start_time_offset'] + s['length']} for s in graph.get('segment_list') or []]
+    segments = [
+        {'kind': segment_kind(s), 'a': s['start_time_offset'], 'b': s['start_time_offset'] + s['length']}
+        for s in graph.get('segment_list') or []
+    ]
     mix = {}
     windows = {}
     for seg in segments:
@@ -293,7 +325,7 @@ def _segment_layout(graph):
         mode = 'plain'
     if not segments or not ({'work', 'floor', 'arms'} & set(windows)):
         # Freestyle, or a class that is one warm-up / cool-down block: the whole thing is the work.
-        windows['work'] = [(0, 10 ** 9)]
+        windows['work'] = [(0, 10**9)]
     return segments, mix, windows, mode
 
 
@@ -310,8 +342,7 @@ def _work_fields(row, detail, graph, times, series, windows, duration):
     """What the rider produced, in the work segments only (warm-up, cool-down, arms, floor excluded)."""
     work_windows = windows.get('work') or []
     heart = series.get('heart_rate') or []
-    work = {name: _round(_window_mean(times, series[name], work_windows))
-            for name in SERIES if name in series and work_windows}
+    work = {name: _round(_window_mean(times, series[name], work_windows)) for name in SERIES if name in series and work_windows}
     row['work'] = {k: v for k, v in work.items() if v is not None}
     row['work_secs'] = sum(max(0, min(hi, duration or hi) - lo) for lo, hi in work_windows)
     if 'floor' in windows and heart:
@@ -331,8 +362,11 @@ def _efficiency_fields(row, times, series, work_windows):
     main = next((name for name in order if name in series), None)
     row['main'] = main
     if main and heart:
-        pairs = [(series[main][i], heart[i]) for i in range(min(len(times), len(series[main]), len(heart)))
-                 if series[main][i] and heart[i] and _in_windows(times[i], work_windows)]
+        pairs = [
+            (series[main][i], heart[i])
+            for i in range(min(len(times), len(series[main]), len(heart)))
+            if series[main][i] and heart[i] and _in_windows(times[i], work_windows)
+        ]
         if len(pairs) >= MIN_EFF_SAMPLES:
             row['eff'] = _round(_mean([a for a, _ in pairs]) / _mean([b for _, b in pairs]), 3)
 
@@ -366,17 +400,24 @@ def build_row(detail, graph=None, ride=None):
 
     disc = discipline(detail.get('fitness_discipline'))
     row = {
-        'v': ROW_VERSION, 'id': detail['id'], 'disc': disc,
-        'start': detail['start_time'], 'date': _local_date(detail),
-        'ride_id': ride_meta.get('id'), 'title': ride_meta.get('title'),
-        'dur': duration, 'elapsed': elapsed,
+        'v': ROW_VERSION,
+        'id': detail['id'],
+        'disc': disc,
+        'start': detail['start_time'],
+        'date': _local_date(detail),
+        'ride_id': ride_meta.get('id'),
+        'title': ride_meta.get('title'),
+        'dur': duration,
+        'elapsed': elapsed,
         'complete': bool(detail.get('status') == 'COMPLETE' and duration and elapsed >= 0.8 * duration),
-        'wtype': detail.get('workout_type'), 'outdoor': bool(detail.get('is_outdoor')),
+        'wtype': detail.get('workout_type'),
+        'outdoor': bool(detail.get('is_outdoor')),
         'device': detail.get('device_type_display_name'),
         'instructor': (ride_meta.get('instructor') or {}).get('name'),
         'ctype': '/'.join(c.get('name') or '' for c in ride.get('class_types') or []) or None,
         'difficulty': _round(ride_meta.get('difficulty_estimate')),
-        'mode': mode, 'mix': mix,
+        'mode': mode,
+        'mix': mix,
         'arms_sections': sum(1 for seg in segments if seg['kind'] == 'arms'),
         'has_graph': bool(graph),
     }
@@ -452,8 +493,7 @@ def _tally_callout(acc, row, callout, times, series, work_windows):
         source = TARGET_SERIES.get(name)
         if source in series and hi > lo:
             floor = floor_watts if name in MISSED_METRICS else None
-            for position, inside, under, missed in _callout_readings(
-                    (lo, hi, a, b), series, source, times, work_windows, floor):
+            for position, inside, under, missed in _callout_readings((lo, hi, a, b), series, source, times, work_windows, floor):
                 acc['position'].setdefault(name, []).append(position)
                 acc['inside'].setdefault(name, []).append(inside)
                 acc['under'].setdefault(name, []).append(under)
@@ -485,8 +525,7 @@ def _write_target_fields(row, acc):
     """The callout fields of the row: level, position, share in and under, missed share, pace plan."""
     level, missed = acc['level'], acc['missed']
     if level:
-        row['target'] = {n: _round(sum(v * w for v, w in pairs) / sum(w for _, w in pairs))
-                         for n, pairs in level.items()}
+        row['target'] = {n: _round(sum(v * w for v, w in pairs) / sum(w for _, w in pairs)) for n, pairs in level.items()}
         row['target_pos'] = {n: _round(_mean(v)) for n, v in acc['position'].items()}
         row['target_in'] = {n: round(100 * sum(v) / len(v)) for n, v in acc['inside'].items()}
         row['target_under'] = {n: round(100 * sum(v) / len(v)) for n, v in acc['under'].items()}

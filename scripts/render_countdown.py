@@ -6,6 +6,7 @@
 writes docs/screenshots/rotation/next-milestone.png: the countdown page for each case in PAGES, on a
 64x64 panel (top row) and a 64x32 panel (bottom row), labelled like the README's other screenshots.
 """
+
 import argparse
 import os
 import sys

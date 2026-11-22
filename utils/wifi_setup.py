@@ -5,6 +5,7 @@ writes "<STATE> <hotspot name>" to STATE_FILE on each change of state: HOTSPOT (
 in range, so the setup hotspot is up), CONNECTING or CONNECTED. /run is cleared at boot, so the
 file never outlives comitup's run. No comitup, no file: never in setup.
 """
+
 import logging
 
 logger = logging.getLogger('peloton-led.wifi')

@@ -8,17 +8,17 @@ update's "sha", "ref", "channel"), "reason" (why the last one rolled back) and "
 KEEP_GOOD commits that passed their health check, newest first).
 A phase in UNFINISHED means an update stopped midway: a power cut, or a crash.
 """
+
 import fcntl
 import json
 import os
 from contextlib import contextmanager
 
-STATE_DIR = "/var/lib/peloton-update"
+STATE_DIR = '/var/lib/peloton-update'
 KEEP_GOOD = 3
 
-IDLE, READY, SWITCHED, INSTALLED, CHECKING, ROLLING_BACK = \
-    "idle", "ready", "switched", "installed", "checking", "rolling_back"
-UPDATED, ROLLED_BACK, ROLLBACK_FAILED = "updated", "rolled_back", "rollback_failed"
+IDLE, READY, SWITCHED, INSTALLED, CHECKING, ROLLING_BACK = 'idle', 'ready', 'switched', 'installed', 'checking', 'rolling_back'
+UPDATED, ROLLED_BACK, ROLLBACK_FAILED = 'updated', 'rolled_back', 'rollback_failed'
 UNFINISHED = (READY, SWITCHED, INSTALLED, CHECKING, ROLLING_BACK)
 
 
@@ -29,24 +29,24 @@ class Busy(Exception):
 class State:
     def __init__(self, folder=STATE_DIR):
         self.folder = folder
-        self.path = os.path.join(folder, "state.json")
-        self.freeze_path = os.path.join(folder, "pip-freeze.txt")
-        self.config_path = os.path.join(folder, "config.json.before-update")
-        self.outcome_path = os.path.join(folder, "outcome.json")
+        self.path = os.path.join(folder, 'state.json')
+        self.freeze_path = os.path.join(folder, 'pip-freeze.txt')
+        self.config_path = os.path.join(folder, 'config.json.before-update')
+        self.outcome_path = os.path.join(folder, 'outcome.json')
 
     def load(self):
         """state.json, or a fresh state when there isn't one (or it's unreadable: logged by the caller's
         outcome, since an unknown phase can't be rolled back anyway)."""
         try:
-            with open(self.path, encoding="utf-8") as f:
+            with open(self.path, encoding='utf-8') as f:
                 found = json.load(f)
         except (OSError, ValueError):
             found = None
         if not isinstance(found, dict):
             found = {}
-        found.setdefault("phase", IDLE)
-        if not isinstance(found.get("good"), list):
-            found["good"] = []
+        found.setdefault('phase', IDLE)
+        if not isinstance(found.get('good'), list):
+            found['good'] = []
         return found
 
     def unreadable(self):
@@ -54,7 +54,7 @@ class State:
         anyone else load() would say idle whatever happened."""
         if os.path.isdir(self.folder):
             return not os.access(self.folder, os.R_OK | os.X_OK)
-        return not os.access(os.path.dirname(self.folder) or ".", os.X_OK)
+        return not os.access(os.path.dirname(self.folder) or '.', os.X_OK)
 
     def save(self, state):
         """Write state.json whole or not at all, flushed to disk: it's what a power cut leaves."""
@@ -69,7 +69,7 @@ class State:
     def load_outcome(self):
         """outcome.json, or None when there isn't one (or it's unreadable)."""
         try:
-            with open(self.outcome_path, encoding="utf-8") as f:
+            with open(self.outcome_path, encoding='utf-8') as f:
                 found = json.load(f)
         except (OSError, ValueError):
             return None
@@ -77,10 +77,10 @@ class State:
 
     def _write(self, path, data):
         os.makedirs(self.folder, mode=0o700, exist_ok=True)
-        temp = path + ".new"
-        with open(temp, "w", encoding="utf-8") as f:
+        temp = path + '.new'
+        with open(temp, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
-            f.write("\n")
+            f.write('\n')
             f.flush()
             os.fsync(f.fileno())
         os.replace(temp, path)
@@ -94,11 +94,11 @@ class State:
     def lock(self):
         """Hold the update lock, or raise Busy. The kernel drops it if the process dies."""
         os.makedirs(self.folder, mode=0o700, exist_ok=True)
-        with open(os.path.join(self.folder, "lock"), "w") as f:
+        with open(os.path.join(self.folder, 'lock'), 'w') as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                raise Busy("an update or rollback is already running") from None
+                raise Busy('an update or rollback is already running') from None
             try:
                 yield
             finally:
@@ -107,4 +107,4 @@ class State:
 
 def remember_good(state, sha):
     """Put sha first in the good commits, keeping KEEP_GOOD."""
-    state["good"] = ([sha] + [s for s in state.get("good", []) if s != sha])[:KEEP_GOOD]
+    state['good'] = ([sha] + [s for s in state.get('good', []) if s != sha])[:KEEP_GOOD]

@@ -1,4 +1,5 @@
 """The settings page's form and config.json: what the page posts becomes the config to save."""
+
 import copy
 import json
 import re
@@ -9,9 +10,18 @@ import pytest
 
 from peloton.config import DEFAULTS, MATRIX_DEFAULTS, ROTATION_SECTIONS, load_config
 from settings_page import page
+from settings_page.form import (
+    FORM_FIELD,
+    RETIRED_DISPLAY_KEYS,
+    SCREEN_NAMES,
+    advanced_keys,
+    apply_form,
+    duration_fallback,
+    number_text,
+    panel_size,
+    rotation_rows,
+)
 from settings_page.page.script import SCRIPT
-from settings_page.form import (FORM_FIELD, RETIRED_DISPLAY_KEYS, SCREEN_NAMES, advanced_keys, apply_form, duration_fallback,
-                                number_text, panel_size, rotation_rows)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,13 +29,23 @@ TWO_RIDERS = {
     'debug': False,
     'matrix': {'rows': 32, 'cols': 64, 'gpio_mapping': 'adafruit-hat-pwm', 'brightness': 70},
     'users': [
-        {'name': 'Joel', 'email_env': 'PELOTON_EMAIL_RIDER_ONE', 'password_env': 'PELOTON_PASSWORD_RIDER_ONE',
-         'weekly_goals': {'workouts': 5, 'minutes': 0}, 'milestones': [100, 250]},
+        {
+            'name': 'Joel',
+            'email_env': 'PELOTON_EMAIL_RIDER_ONE',
+            'password_env': 'PELOTON_PASSWORD_RIDER_ONE',
+            'weekly_goals': {'workouts': 5, 'minutes': 0},
+            'milestones': [100, 250],
+        },
         {'name': 'Jen', 'token_path': 'cookies-jen.txt'},
     ],
-    'display': {'timezone': 'America/New_York', 'rotation': ['username', 'latest_workouts', 'goals'],
-                'screen_durations': {'latest_workouts': 15, 'username': 9}, 'weekly_goals': {'workouts': 3},
-                'journey': {'from': 'A', 'to': 'B', 'miles': 10}, 'cache_path': 'keep.json'},
+    'display': {
+        'timezone': 'America/New_York',
+        'rotation': ['username', 'latest_workouts', 'goals'],
+        'screen_durations': {'latest_workouts': 15, 'username': 9},
+        'weekly_goals': {'workouts': 3},
+        'journey': {'from': 'A', 'to': 'B', 'miles': 10},
+        'cache_path': 'keep.json',
+    },
     'future_key': {'kept': True},
 }
 
@@ -88,13 +108,16 @@ def test_every_rotation_screen_is_on_the_page():
     assert tuple(SCREEN_NAMES) == tuple(DEFAULTS['rotation'])
 
 
-@pytest.mark.parametrize('config', [
-    TWO_RIDERS,
-    json.loads((ROOT / 'config.json-example').read_text()),
-    json.loads((ROOT / 'packaging' / 'config.pi.json').read_text()),
-    json.loads((ROOT / 'config.dual-users-example.json').read_text()),
-    {},
-])
+@pytest.mark.parametrize(
+    'config',
+    [
+        TWO_RIDERS,
+        json.loads((ROOT / 'config.json-example').read_text()),
+        json.loads((ROOT / 'packaging' / 'config.pi.json').read_text()),
+        json.loads((ROOT / 'config.dual-users-example.json').read_text()),
+        {},
+    ],
+)
 def test_saving_the_page_unchanged_keeps_a_config_that_loads_the_same(tmp_path, config):
     new, problems = apply_form(config, posted(config))
     assert problems == []
@@ -113,6 +136,7 @@ def test_saving_the_page_unchanged_keeps_a_config_that_loads_the_same(tmp_path, 
             if 'weekly_goals' in owner:
                 owner['weekly_goals'] = {k: v for k, v in owner['weekly_goals'].items() if v}
         return loaded
+
     assert same(load_config(after)) == same(load_config(before))
 
 
@@ -130,12 +154,14 @@ def test_the_workout_insights_switch_is_on_the_page_and_saves_both_ways():
     assert 'href="#insights"' in page.settings_page(TWO_RIDERS)
 
 
-HISTORY = [{'name': 'Rider One', 'state': 'ready', 'workouts': 1503, 'updated': 1773496800},
-           {'name': 'Rider Two', 'state': 'missing', 'workouts': 0, 'updated': None}]
+HISTORY = [
+    {'name': 'Rider One', 'state': 'ready', 'workouts': 1503, 'updated': 1773496800},
+    {'name': 'Rider Two', 'state': 'missing', 'workouts': 0, 'updated': None},
+]
 
 
 def _insights_section(html):
-    return html[html.index('id="insights"'):html.index('id="timing"')]
+    return html[html.index('id="insights"') : html.index('id="timing"')]
 
 
 def test_the_insights_card_lists_each_riders_history():
@@ -144,24 +170,34 @@ def test_the_insights_card_lists_each_riders_history():
     assert 'Rider One' in card and '1,503 workouts' in card and 'to compare with' in card
     assert 'Rider Two' in card and 'Not copied yet' in card
     assert 'push_workout_rows.sh' in card
-    assert 'no insights until' not in card                     # switched off: no warning
+    assert 'no insights until' not in card  # switched off: no warning
     on = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'workout_insights': True}}
     card = _insights_section(page.settings_page(on, history=HISTORY))
     assert '<strong>Rider Two</strong>: no insights until its history is copied' in card
     both = [{**rider, 'state': state} for rider, state in zip(HISTORY, ('old', 'unreadable'))]
     card = _insights_section(page.settings_page(on, history=both))
     assert 'Rider One, Rider Two</strong>: no insights until their history' in card
-    assert 'Out of date' in card and "Can&#x27;t be read" in card
+    assert 'Out of date' in card and 'Can&#x27;t be read' in card
     one = [{**HISTORY[0], 'workouts': 1, 'updated': None}]
     card = _insights_section(page.settings_page(on, history=one))
     assert '1 workout<' in card and 'updated' not in card and 'no insights until' not in card
 
 
 def test_the_insights_card_lists_recent_workouts_missing_data():
-    rider = {**HISTORY[0], 'incomplete': [
-        {'id': 'a', 'start': 1, 'date': '2026-09-02', 'disc': 'strength', 'title': '30 min Full Body <Strength>',
-         'missing': ['performance graph', 'movement list']},
-        {'id': 'b', 'start': 0, 'date': None, 'disc': 'cycling', 'title': None, 'missing': ['class details']}]}
+    rider = {
+        **HISTORY[0],
+        'incomplete': [
+            {
+                'id': 'a',
+                'start': 1,
+                'date': '2026-09-02',
+                'disc': 'strength',
+                'title': '30 min Full Body <Strength>',
+                'missing': ['performance graph', 'movement list'],
+            },
+            {'id': 'b', 'start': 0, 'date': None, 'disc': 'cycling', 'title': None, 'missing': ['class details']},
+        ],
+    }
     card = _insights_section(page.settings_page(TWO_RIDERS, history=[rider]))
     assert '<details class="incomplete whole">' in card and '2 missing data' in card and 'in the last 30 days' in card
     assert 'Sep 2 &middot; 30 min Full Body &lt;Strength&gt;' in card
@@ -190,9 +226,9 @@ def test_keys_the_page_does_not_show_are_kept():
 
 
 def test_rotation_follows_page_order_and_switches():
-    order = ['goals', 'username', 'streaks', 'latest_workouts'] + [n for n in SCREEN_NAMES
-                                                                    if n not in ('goals', 'username', 'streaks',
-                                                                                 'latest_workouts')]
+    order = ['goals', 'username', 'streaks', 'latest_workouts'] + [
+        n for n in SCREEN_NAMES if n not in ('goals', 'username', 'streaks', 'latest_workouts')
+    ]
     form = posted(TWO_RIDERS, rotation_order=order, rotation_on_streaks='on', rotation_on_latest_workouts=None)
     new, problems = apply_form(TWO_RIDERS, form)
     assert problems == []
@@ -224,24 +260,27 @@ def test_duration_fallbacks_name_the_setting_the_app_uses():
     assert duration_fallback(display, 'goals') == 4
 
 
-@pytest.mark.parametrize('field,value,message', [
-    ('duration_goals', '-1', 'Weekly goals needs at least 1 second. To hide it, switch it off.'),
-    ('duration_goals', '0', 'Weekly goals needs at least 1 second. To hide it, switch it off.'),
-    ('duration_goals', 'soon', 'screen_durations values must be numbers above 0'),
-    ('refresh_interval', '0', 'display.refresh_interval must be a positive integer'),
-    ('refresh_interval', '60.5', 'display.refresh_interval must be a positive integer'),
-    ('timezone', 'Mars/Olympus', 'invalid display.timezone'),
-    ('goal_workouts', '-2', 'weekly_goals values must be non-negative'),
-    ('milestones', '100, ten', 'milestones must contain positive integers'),
-    ('rider_0_milestones', '0', 'milestones must contain positive integers'),
-    ('matrix_brightness', '101', 'matrix.brightness must be a whole number from 1 to 100'),
-    ('matrix_slowdown_gpio', '9', 'matrix.slowdown_gpio must be a whole number from 0 to 4'),
-    ('matrix_rgb_sequence', 'RGX', 'matrix.rgb_sequence must be an ordering'),
-    ('panel_size', '64x48', 'matrix.rows must be 32 or 64'),
-    ('panel_size', 'big', 'Panel size should be like 64x32'),
-    ('font', 'comic-sans', 'unsupported display.font'),
-    ('streak_reminder_day', '9', 'streak_reminder_day must be 0 (Monday) to 6'),
-])
+@pytest.mark.parametrize(
+    'field,value,message',
+    [
+        ('duration_goals', '-1', 'Weekly goals needs at least 1 second. To hide it, switch it off.'),
+        ('duration_goals', '0', 'Weekly goals needs at least 1 second. To hide it, switch it off.'),
+        ('duration_goals', 'soon', 'screen_durations values must be numbers above 0'),
+        ('refresh_interval', '0', 'display.refresh_interval must be a positive integer'),
+        ('refresh_interval', '60.5', 'display.refresh_interval must be a positive integer'),
+        ('timezone', 'Mars/Olympus', 'invalid display.timezone'),
+        ('goal_workouts', '-2', 'weekly_goals values must be non-negative'),
+        ('milestones', '100, ten', 'milestones must contain positive integers'),
+        ('rider_0_milestones', '0', 'milestones must contain positive integers'),
+        ('matrix_brightness', '101', 'matrix.brightness must be a whole number from 1 to 100'),
+        ('matrix_slowdown_gpio', '9', 'matrix.slowdown_gpio must be a whole number from 0 to 4'),
+        ('matrix_rgb_sequence', 'RGX', 'matrix.rgb_sequence must be an ordering'),
+        ('panel_size', '64x48', 'matrix.rows must be 32 or 64'),
+        ('panel_size', 'big', 'Panel size should be like 64x32'),
+        ('font', 'comic-sans', 'unsupported display.font'),
+        ('streak_reminder_day', '9', 'streak_reminder_day must be 0 (Monday) to 6'),
+    ],
+)
 def test_bad_values_are_named_and_nothing_is_saved(field, value, message):
     _, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, **{field: value}))
     assert len(problems) == 1 and message in problems[0]
@@ -249,12 +288,10 @@ def test_bad_values_are_named_and_nothing_is_saved(field, value, message):
 
 
 def test_brightness_schedule_on_off_and_bad_times():
-    on = posted(TWO_RIDERS, brightness_schedule='on', bright_day='90', bright_night='10',
-                day_start='06:30', night_start='21:00')
+    on = posted(TWO_RIDERS, brightness_schedule='on', bright_day='90', bright_night='10', day_start='06:30', night_start='21:00')
     new, problems = apply_form(TWO_RIDERS, on)
     assert problems == []
-    assert new['display']['brightness_schedule'] == {'day': 90, 'night': 10, 'day_start': '06:30',
-                                                      'night_start': '21:00'}
+    assert new['display']['brightness_schedule'] == {'day': 90, 'night': 10, 'day_start': '06:30', 'night_start': '21:00'}
     new, _ = apply_form(new, posted(new, brightness_schedule=None))
     assert new['display']['brightness_schedule'] is None
     _, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, brightness_schedule='on', day_start=''))
@@ -263,12 +300,20 @@ def test_brightness_schedule_on_off_and_bad_times():
 
 def test_quiet_hours_keep_their_own_time_zone():
     config = copy.deepcopy(TWO_RIDERS)
-    config['display']['refresh_schedule'] = {'quiet_start': '23:00', 'quiet_end': '05:00',
-                                             'quiet_interval': 1800, 'timezone': 'Europe/London'}
+    config['display']['refresh_schedule'] = {
+        'quiet_start': '23:00',
+        'quiet_end': '05:00',
+        'quiet_interval': 1800,
+        'timezone': 'Europe/London',
+    }
     new, problems = apply_form(config, posted(config, quiet_interval='3600'))
     assert problems == []
-    assert new['display']['refresh_schedule'] == {'timezone': 'Europe/London', 'quiet_start': '23:00',
-                                                  'quiet_end': '05:00', 'quiet_interval': 3600}
+    assert new['display']['refresh_schedule'] == {
+        'timezone': 'Europe/London',
+        'quiet_start': '23:00',
+        'quiet_end': '05:00',
+        'quiet_interval': 3600,
+    }
     new, _ = apply_form(new, posted(new, refresh_schedule=None))
     assert new['display']['refresh_schedule'] is None
     _, problems = apply_form(config, posted(config, quiet_interval='0'))
@@ -276,8 +321,9 @@ def test_quiet_hours_keep_their_own_time_zone():
 
 
 def test_shared_goals_blank_is_no_goal_and_milestones_are_sorted_once_each():
-    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, goal_workouts='', goal_minutes='150',
-                                                  milestones='500, 100 250,100', milestone_step=''))
+    new, problems = apply_form(
+        TWO_RIDERS, posted(TWO_RIDERS, goal_workouts='', goal_minutes='150', milestones='500, 100 250,100', milestone_step='')
+    )
     assert problems == []
     assert new['display']['weekly_goals'] == {'workouts': 0, 'minutes': 150, 'active_days': 0}
     assert new['display']['milestones'] == [100, 250, 500]
@@ -324,8 +370,15 @@ def test_class_takeover_minutes_round_trip_through_the_timing_card():
 
 
 def test_each_rider_has_own_goals_or_everyones():
-    form = posted(TWO_RIDERS, rider_0_workouts='', rider_0_minutes='', rider_0_milestones='',
-                  rider_1_workouts='4', rider_1_milestones='50 100', rider_1_username='JenRides')
+    form = posted(
+        TWO_RIDERS,
+        rider_0_workouts='',
+        rider_0_minutes='',
+        rider_0_milestones='',
+        rider_1_workouts='4',
+        rider_1_milestones='50 100',
+        rider_1_username='JenRides',
+    )
     new, problems = apply_form(TWO_RIDERS, form)
     assert problems == []
     joel, jen = new['users']
@@ -346,8 +399,15 @@ def test_a_rider_list_changed_since_the_page_loaded_saves_nothing():
 
 
 def test_panel_size_and_matrix_blanks():
-    form = posted(TWO_RIDERS, panel_size='64x64', matrix_brightness='', matrix_pixel_mapper='Rotate:180',
-                  matrix_show_refresh='true', matrix_pwm_bits='9', matrix_rgb_sequence='rbg')
+    form = posted(
+        TWO_RIDERS,
+        panel_size='64x64',
+        matrix_brightness='',
+        matrix_pixel_mapper='Rotate:180',
+        matrix_show_refresh='true',
+        matrix_pwm_bits='9',
+        matrix_rgb_sequence='rbg',
+    )
     new, problems = apply_form(TWO_RIDERS, form)
     assert problems == []
     matrix = new['matrix']
@@ -368,8 +428,7 @@ def test_a_board_with_a_gpio_mapping_is_not_offered_none():
 
 
 def test_display_options_and_switches():
-    form = posted(TWO_RIDERS, debug='on', streak_reminder_day='off',
-                  username='Rider', font='info', color='gold')
+    form = posted(TWO_RIDERS, debug='on', streak_reminder_day='off', username='Rider', font='info', color='gold')
     new, problems = apply_form(TWO_RIDERS, form)
     assert problems == []
     assert new['debug'] is True
@@ -391,7 +450,7 @@ def test_a_broken_config_still_gives_a_page_and_saves_whole():
     broken = {'display': 'nope', 'matrix': [], 'users': 'x'}
     form = posted(broken)
     new, problems = apply_form(broken, form)
-    assert problems == ["users must be a non-empty list"]
+    assert problems == ['users must be a non-empty list']
     del broken['users']
     new, problems = apply_form(broken, posted(broken))
     assert problems == [] and isinstance(new['display'], dict) and isinstance(new['matrix'], dict)
@@ -400,8 +459,15 @@ def test_a_broken_config_still_gives_a_page_and_saves_whole():
 def test_helpers():
     assert panel_size({}) == '64x64' and panel_size({'rows': 32}) == '64x32'
     assert number_text(4.0) == '4' and number_text(None) == '' and number_text(True) == '' and number_text(2.5) == '2.5'
-    assert set(advanced_keys()) | {'rows', 'cols', 'brightness', 'gpio_mapping', 'pixel_mapper', 'slowdown_gpio',
-                                   'pwm_lsb_nanoseconds'} == set(MATRIX_DEFAULTS)
+    assert set(advanced_keys()) | {
+        'rows',
+        'cols',
+        'brightness',
+        'gpio_mapping',
+        'pixel_mapper',
+        'slowdown_gpio',
+        'pwm_lsb_nanoseconds',
+    } == set(MATRIX_DEFAULTS)
 
 
 def test_rotation_rows_have_a_grip_and_arrow_for_the_script():
@@ -412,7 +478,7 @@ def test_rotation_rows_have_a_grip_and_arrow_for_the_script():
         # Hidden until the script runs: without it, rows keep their order and the switches still work.
         assert 'class="grip js-only" hidden aria-label="Drag to reorder' in row
         assert 'class="move js-only" hidden' in row
-    assert "screens.append(row)" in SCRIPT  # switched off: to the bottom
+    assert 'screens.append(row)' in SCRIPT  # switched off: to the bottom
     assert "addEventListener('pointerdown'" in SCRIPT  # mouse and touch dragging
 
 
@@ -426,17 +492,39 @@ def test_total_workouts_time_says_it_matches_lifetime():
 
 def test_number_fields_show_their_units():
     import re
+
     config = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'brightness_schedule': None}}
     html = page.settings_page(config)
-    units = dict(re.findall(r'<span class="unit"[^>]*><input [^>]*id="([^"]+)"[^>]*>'
-                            r'<span class="unit-text" aria-hidden="true">([^<]+)</span>', html))
-    expected = {'duration_goals': 's', 'overview_duration': 's', 'refresh_interval': 's', 'logo_duration': 's',
-                'last_workout_detail_interval': 's', 'quiet_interval': 's', 'goal_minutes': 'min',
-                'goal_workouts': 'workouts', 'milestone_step': 'workouts', 'milestone_within': 'to go',
-                'milestone_pages': 'pages', 'next_class_takeover_minutes': 'min', 'rider_0_minutes': 'min', 'goal_active_days': 'days',
-                'rider_1_active_days': 'days',
-                'rider_1_workouts': 'workouts', 'bright_day': '%', 'bright_night': '%', 'matrix_brightness': '%',
-                'matrix_pwm_lsb_nanoseconds': 'ns', 'matrix_limit_refresh': 'Hz'}
+    units = dict(
+        re.findall(
+            r'<span class="unit"[^>]*><input [^>]*id="([^"]+)"[^>]*>'
+            r'<span class="unit-text" aria-hidden="true">([^<]+)</span>',
+            html,
+        )
+    )
+    expected = {
+        'duration_goals': 's',
+        'overview_duration': 's',
+        'refresh_interval': 's',
+        'logo_duration': 's',
+        'last_workout_detail_interval': 's',
+        'quiet_interval': 's',
+        'goal_minutes': 'min',
+        'goal_workouts': 'workouts',
+        'milestone_step': 'workouts',
+        'milestone_within': 'to go',
+        'milestone_pages': 'pages',
+        'next_class_takeover_minutes': 'min',
+        'rider_0_minutes': 'min',
+        'goal_active_days': 'days',
+        'rider_1_active_days': 'days',
+        'rider_1_workouts': 'workouts',
+        'bright_day': '%',
+        'bright_night': '%',
+        'matrix_brightness': '%',
+        'matrix_pwm_lsb_nanoseconds': 'ns',
+        'matrix_limit_refresh': 'Hz',
+    }
     assert {name: units.get(name) for name in expected} == expected
     assert 'duration_total_workouts' not in units  # timed by Lifetime, no field
     assert 'matrix_chain' not in units and 'matrix_slowdown_gpio' not in units  # counts, not units
@@ -465,8 +553,7 @@ def test_name_and_text_is_gone_and_its_settings_live_where_they_belong():
 def test_milestone_settings_have_their_own_card_after_goals():
     html = page.settings_page(TWO_RIDERS)
     card, goals = _card(html, 'milestone-settings'), _card(html, 'goals')
-    for name in ('milestones', 'milestone_step', 'milestone_within', 'milestone_pages',
-                 'rider_0_milestones', 'rider_1_milestones'):
+    for name in ('milestones', 'milestone_step', 'milestone_within', 'milestone_pages', 'rider_0_milestones', 'rider_1_milestones'):
         assert f'name="{name}"' in card and f'name="{name}"' not in goals, name
     for name in ('goal_workouts', 'streak_reminder_day', 'rider_0_name', 'rider_0_username', 'rider_1_minutes'):
         assert f'name="{name}"' in goals, name
@@ -489,8 +576,7 @@ def test_the_text_colours_are_four_plus_an_old_configs_own():
 
 
 def test_compact_workout_pages_are_gone_and_a_save_tidies_their_settings_away():
-    old = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'compact_workout_pages': True,
-                                     'last_workout_duration': 20}}
+    old = {**TWO_RIDERS, 'display': {**TWO_RIDERS['display'], 'compact_workout_pages': True, 'last_workout_duration': 20}}
     assert 'compact' not in page.settings_page(old).lower()
     new, problems = apply_form(old, posted(old))
     assert problems == []
@@ -512,16 +598,16 @@ def test_rotation_has_column_headings_with_tooltips():
     for tid, label in (('tip-rotation-order', 'Order'), ('tip-rotation-seconds', 'Seconds'), ('tip-rotation-show', 'Show')):
         assert f'aria-label="About {label}" aria-describedby="{tid}"' in head
         assert f'role="tooltip" id="{tid}">' in head
-    assert 'To hide a screen, switch it off' in head and 'Seconds per page' not in rotation, \
-        'the old note is in the tooltips now'
+    assert 'To hide a screen, switch it off' in head and 'Seconds per page' not in rotation, 'the old note is in the tooltips now'
     assert '0 skips' not in html and '0 hides' not in html, 'a time is never 0: screens are switched off'
     assert rotation.index('id="screens-head"') < rotation.index('id="screens"')
     assert "getElementById('screens-head').classList.add('js')" in html, 'lines up with the grip column'
 
 
 def test_active_days_goal_saves_for_everyone_and_each_rider_up_to_seven():
-    new, problems = apply_form(TWO_RIDERS, posted(TWO_RIDERS, goal_active_days='5', rider_0_workouts='',
-                                                  rider_0_minutes='', rider_0_active_days='4'))
+    new, problems = apply_form(
+        TWO_RIDERS, posted(TWO_RIDERS, goal_active_days='5', rider_0_workouts='', rider_0_minutes='', rider_0_active_days='4')
+    )
     assert problems == []
     assert new['display']['weekly_goals']['active_days'] == 5
     assert new['users'][0]['weekly_goals'] == {'workouts': 0, 'minutes': 0, 'active_days': 4}

@@ -1,17 +1,17 @@
 import os
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import pytest
 
-from peloton.timestamps import parse_timestamp, workout_date
-from peloton.selection import latest_workout, last_active_day, select_latest, normalize_discipline
-from peloton.stats.summaries import summarize_workout
-from peloton.stats.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count
-from peloton.config import load_config, load_dotenv
-from peloton.stats.records import is_pr_workout
 from display.ui.last_workout.stats import _fmt_pace, _fmt_split, _stat_details
 from models import get_model_for_discipline
 from models.core import GeneralWorkout
+from peloton.config import load_config, load_dotenv
+from peloton.selection import last_active_day, latest_workout, normalize_discipline, select_latest
+from peloton.stats.records import is_pr_workout
+from peloton.stats.summaries import summarize_workout
+from peloton.stats.totals import extract_discipline_totals, lifetime_overview_pages, total_workout_count
+from peloton.timestamps import parse_timestamp, workout_date
 
 
 @pytest.mark.parametrize('value', [1773496800, 1773496800000, '1773496800', '2026-03-14T14:00:00Z', '2026-03-14T10:00:00-04:00'])
@@ -25,9 +25,11 @@ def test_invalid_or_date_only_is_not_an_instant(value):
 
 
 def test_local_day_and_dst():
-    rows = [{'id': 1, 'start_time': '2026-03-09T03:30:00Z'},
-            {'id': 2, 'start_time': '2026-03-09T04:30:00Z'},
-            {'id': 3, 'start_time': '2026-03-09T06:00:00Z', 'status': 'IN_PROGRESS'}]
+    rows = [
+        {'id': 1, 'start_time': '2026-03-09T03:30:00Z'},
+        {'id': 2, 'start_time': '2026-03-09T04:30:00Z'},
+        {'id': 3, 'start_time': '2026-03-09T06:00:00Z', 'status': 'IN_PROGRESS'},
+    ]
     assert [w['id'] for w in last_active_day(rows, 'America/New_York')] == [2]
     assert str(workout_date(rows[0], 'America/New_York')) == '2026-03-08'
     assert parse_timestamp('2026-03-08T03:30:00', 'America/New_York').hour == 7
@@ -41,9 +43,11 @@ def test_date_only_groups_without_inventing_order():
 
 
 def test_latest_completed_deduplicated_and_discipline_alias():
-    rows = [{'id': 1, 'start_time': 1773496800, 'fitness_discipline': 'cycling'},
-            {'id': 2, 'start_time': 1773496801000, 'fitness_discipline': 'running'},
-            {'id': 3, 'start_time': 1773496810, 'status': 'IN_PROGRESS'}]
+    rows = [
+        {'id': 1, 'start_time': 1773496800, 'fitness_discipline': 'cycling'},
+        {'id': 2, 'start_time': 1773496801000, 'fitness_discipline': 'running'},
+        {'id': 3, 'start_time': 1773496810, 'status': 'IN_PROGRESS'},
+    ]
     assert latest_workout(rows)['id'] == 2
     assert len(last_active_day(rows + rows)) == 2
     assert select_latest(rows, 'bike')['id'] == 1
@@ -53,9 +57,11 @@ def test_latest_completed_deduplicated_and_discipline_alias():
 def test_last_active_day_is_chronological_not_latest_first():
     # Taken in this order: tread bootcamp, core, strength. The dashboard
     # should show them in the order they were actually taken.
-    rows = [{'id': 1, 'start_time': 1773496800, 'fitness_discipline': 'tread_bootcamp'},
-            {'id': 2, 'start_time': 1773497800, 'fitness_discipline': 'stretching'},
-            {'id': 3, 'start_time': 1773498800, 'fitness_discipline': 'strength'}]
+    rows = [
+        {'id': 1, 'start_time': 1773496800, 'fitness_discipline': 'tread_bootcamp'},
+        {'id': 2, 'start_time': 1773497800, 'fitness_discipline': 'stretching'},
+        {'id': 3, 'start_time': 1773498800, 'fitness_discipline': 'strength'},
+    ]
     assert [w['id'] for w in last_active_day(rows)] == [1, 2, 3]
 
 
@@ -70,8 +76,7 @@ def test_metric_pace_and_duration_fallback():
     assert summary['avg_speed_unit'] == 'km/h'
     assert summary['avg_pace'] == 6
     assert summary['avg_pace_unit'] == 'min/km'
-    assert {'label': 'avg pace', 'value': '6:00/km'}.items() <= next(
-        d for d in _stat_details(summary) if d['label'] == 'avg pace').items()
+    assert {'label': 'avg pace', 'value': '6:00/km'}.items() <= next(d for d in _stat_details(summary) if d['label'] == 'avg pace').items()
 
 
 def test_imperial_pace_and_rounding():
@@ -84,8 +89,10 @@ def test_imperial_pace_and_rounding():
 
 def test_row_split_independent_of_existing_speed_and_pace():
     perf = metric_perf(4000, 'm', 1200)
-    perf['average_summaries'] = [{'slug': 'avg_speed', 'value': 12, 'display_unit': 'km/h'},
-                                 {'slug': 'avg_pace', 'value': 5, 'display_unit': 'min/km'}]
+    perf['average_summaries'] = [
+        {'slug': 'avg_speed', 'value': 12, 'display_unit': 'km/h'},
+        {'slug': 'avg_pace', 'value': 5, 'display_unit': 'min/km'},
+    ]
     perf['metrics'] = [{'slug': 'output', 'average_value': 100, 'display_unit': 'w'}]
     summary = summarize_workout({'fitness_discipline': 'rowing'}, perf)
     assert summary['row_split_sec_per_500m'] == 150
@@ -112,12 +119,15 @@ def test_explicit_metrics_take_precedence():
     assert summarize_workout({'fitness_discipline': 'running'}, perf)['avg_speed'] == 9
 
 
-@pytest.mark.parametrize('fields, output, splits', [
-    ({'is_total_work_personal_record': True}, True, False),
-    ({'is_splits_personal_record': True}, False, True),
-    ({'achievement_templates': [{'slug': 'output_pr'}]}, True, False),
-    ({'achievement_templates': [None], 'is_total_work_personal_record': 'false'}, False, False),
-])
+@pytest.mark.parametrize(
+    'fields, output, splits',
+    [
+        ({'is_total_work_personal_record': True}, True, False),
+        ({'is_splits_personal_record': True}, False, True),
+        ({'achievement_templates': [{'slug': 'output_pr'}]}, True, False),
+        ({'achievement_templates': [None], 'is_total_work_personal_record': 'false'}, False, False),
+    ],
+)
 def test_consistent_pr_classification(fields, output, splits):
     summary = summarize_workout(fields)
     assert summary['is_output_pr'] == output
@@ -126,27 +136,51 @@ def test_consistent_pr_classification(fields, output, splits):
 
 
 def test_totals_preserve_zero_and_deduplicate():
-    overview = {'workout_counts': [{'name': 'Cycling', 'count': 0}, {'name': 'cycling', 'count': 100}],
-                'discipline_counts': {'bike': 10, 'Running': '20', 'Bad': -1, 'Fraction': 2.5}}
+    overview = {
+        'workout_counts': [{'name': 'Cycling', 'count': 0}, {'name': 'cycling', 'count': 100}],
+        'discipline_counts': {'bike': 10, 'Running': '20', 'Bad': -1, 'Fraction': 2.5},
+    }
     assert extract_discipline_totals(overview) == {'Cycling': 0, 'Running': 20}
 
 
 def test_lifetime_totals_preserve_each_discipline_and_exact_count():
-    totals = {'Cycling': 100, 'Bike Bootcamp': 5, 'Running': 20, 'Walking': 10,
-              'Outdoor Run': 3, 'Strength': 7, 'Pilates': 2, 'Yoga': 4,
-              'Stretching': 6, 'Boxing': 1, 'Total Workouts': 158}
+    totals = {
+        'Cycling': 100,
+        'Bike Bootcamp': 5,
+        'Running': 20,
+        'Walking': 10,
+        'Outdoor Run': 3,
+        'Strength': 7,
+        'Pilates': 2,
+        'Yoga': 4,
+        'Stretching': 6,
+        'Boxing': 1,
+        'Total Workouts': 158,
+    }
     items = [item for page in lifetime_overview_pages(totals) for item in page]
     counts = {item['label']: item['count'] for item in items}
     assert counts == {key: value for key, value in totals.items() if key != 'Total Workouts'}
     assert total_workout_count(totals) == 158
 
 
-@pytest.mark.parametrize('display', [{'duration': -1}, {'color': 'unknown'}, {'font': 'missing'},
-    {'timezone': 'Invalid/Zone'}, {'refresh_interval': 0}, {'performance_cache_size': 0},
-    {'duration': True}, {'history_batch_size': 0}, {'recent_fetch_size': True},
-    {'last_workout_detail_interval': -1}])
+@pytest.mark.parametrize(
+    'display',
+    [
+        {'duration': -1},
+        {'color': 'unknown'},
+        {'font': 'missing'},
+        {'timezone': 'Invalid/Zone'},
+        {'refresh_interval': 0},
+        {'performance_cache_size': 0},
+        {'duration': True},
+        {'history_batch_size': 0},
+        {'recent_fetch_size': True},
+        {'last_workout_detail_interval': -1},
+    ],
+)
 def test_config_validation(tmp_path, display):
     import json
+
     path = tmp_path / 'config.json'
     path.write_text(json.dumps({'display': display}))
     with pytest.raises(ValueError):
@@ -155,17 +189,25 @@ def test_config_validation(tmp_path, display):
 
 def test_dual_user_config_requires_unique_names_and_tokens(tmp_path):
     import json
+
     path = tmp_path / 'config.json'
-    path.write_text(json.dumps({'users': [
-        {'name': 'Rider', 'token_path': 'one.token'},
-        {'name': 'rider', 'token_path': 'two.token'},
-    ]}))
+    path.write_text(
+        json.dumps(
+            {
+                'users': [
+                    {'name': 'Rider', 'token_path': 'one.token'},
+                    {'name': 'rider', 'token_path': 'two.token'},
+                ]
+            }
+        )
+    )
     with pytest.raises(ValueError, match='unique'):
         load_config(path)
 
 
 def test_dual_user_example_is_valid():
     from pathlib import Path
+
     example = Path(__file__).resolve().parents[1] / 'config.dual-users-example.json'
     config = load_config(example)
     assert [user['name'] for user in config['users']] == ['Joel', 'Jen']
@@ -173,6 +215,7 @@ def test_dual_user_example_is_valid():
 
 def test_user_token_path_defaults_to_slug_of_name(tmp_path):
     import json
+
     path = tmp_path / 'config.json'
     path.write_text(json.dumps({'users': [{'name': 'Joel'}, {'name': 'Jen'}]}))
     config = load_config(path)
@@ -181,21 +224,36 @@ def test_user_token_path_defaults_to_slug_of_name(tmp_path):
 
 def test_user_default_token_paths_must_be_unique(tmp_path):
     import json
+
     path = tmp_path / 'config.json'
-    path.write_text(json.dumps({'users': [
-        {'name': 'Rider'}, {'name': 'Rider!'},
-    ]}))
+    path.write_text(
+        json.dumps(
+            {
+                'users': [
+                    {'name': 'Rider'},
+                    {'name': 'Rider!'},
+                ]
+            }
+        )
+    )
     with pytest.raises(ValueError, match='unique'):
         load_config(path)
 
 
 def test_user_weekly_goals_and_milestones_are_optional_overrides(tmp_path):
     import json
+
     path = tmp_path / 'config.json'
-    path.write_text(json.dumps({'users': [
-        {'name': 'Joel', 'weekly_goals': {'workouts': 5}, 'milestones': [500, 100]},
-        {'name': 'Jen'},
-    ]}))
+    path.write_text(
+        json.dumps(
+            {
+                'users': [
+                    {'name': 'Joel', 'weekly_goals': {'workouts': 5}, 'milestones': [500, 100]},
+                    {'name': 'Jen'},
+                ]
+            }
+        )
+    )
     config = load_config(path)
     assert config['users'][0]['weekly_goals'] == {'workouts': 5}
     assert config['users'][0]['milestones'] == [100, 500]
@@ -207,12 +265,7 @@ def test_load_dotenv_sets_unset_vars_and_strips_quotes(tmp_path, monkeypatch):
     monkeypatch.delenv('DOTENV_TEST_EMAIL', raising=False)
     monkeypatch.delenv('DOTENV_TEST_PASSWORD', raising=False)
     env_file = tmp_path / '.env'
-    env_file.write_text(
-        '# comment\n'
-        '\n'
-        'DOTENV_TEST_EMAIL=rider@example.com\n'
-        'DOTENV_TEST_PASSWORD="quoted secret"\n'
-    )
+    env_file.write_text('# comment\n\nDOTENV_TEST_EMAIL=rider@example.com\nDOTENV_TEST_PASSWORD="quoted secret"\n')
     load_dotenv(env_file)
     assert os.environ['DOTENV_TEST_EMAIL'] == 'rider@example.com'
     assert os.environ['DOTENV_TEST_PASSWORD'] == 'quoted secret'
@@ -259,6 +312,7 @@ def test_load_dotenv_skips_an_unreadable_dotenv(tmp_path, caplog):
 
 def test_load_dotenv_survives_is_file_raising(tmp_path, caplog):
     from unittest.mock import patch
+
     with patch('peloton.config.Path.is_file', side_effect=PermissionError(13, 'Permission denied')):
         load_dotenv(tmp_path / '.env')
     assert 'Ignoring' in caplog.text
@@ -266,68 +320,101 @@ def test_load_dotenv_survives_is_file_raising(tmp_path, caplog):
 
 def test_user_weekly_goals_rejects_unsupported_keys(tmp_path):
     import json
+
     path = tmp_path / 'config.json'
-    path.write_text(json.dumps({'users': [
-        {'name': 'Joel', 'weekly_goals': {'rides': 5}},
-    ]}))
+    path.write_text(
+        json.dumps(
+            {
+                'users': [
+                    {'name': 'Joel', 'weekly_goals': {'rides': 5}},
+                ]
+            }
+        )
+    )
     with pytest.raises(ValueError, match='weekly_goals'):
         load_config(path)
 
 
 def test_user_milestones_rejects_non_positive_values(tmp_path):
     import json
+
     path = tmp_path / 'config.json'
-    path.write_text(json.dumps({'users': [
-        {'name': 'Joel', 'milestones': [0, 100]},
-    ]}))
+    path.write_text(
+        json.dumps(
+            {
+                'users': [
+                    {'name': 'Joel', 'milestones': [0, 100]},
+                ]
+            }
+        )
+    )
     with pytest.raises(ValueError, match='milestones'):
         load_config(path)
 
 
-@pytest.mark.parametrize('source, value, units, expected', [
-    ('average_summaries', 2.1, 'min/500m', 126),
-    ('average_summaries', 125, 'sec/500m', 125),
-    ('metrics', 2.2, 'min/500m', 132),
-])
+@pytest.mark.parametrize(
+    'source, value, units, expected',
+    [
+        ('average_summaries', 2.1, 'min/500m', 126),
+        ('average_summaries', 125, 'sec/500m', 125),
+        ('metrics', 2.2, 'min/500m', 132),
+    ],
+)
 def test_explicit_rowing_split_takes_precedence(source, value, units, expected):
     perf = metric_perf(4000, 'm', 1200)  # Derived split would be 150 seconds.
-    perf[source] = [{'slug': 'split_pace' if source == 'metrics' else 'avg_split_pace',
-                     'average_value' if source == 'metrics' else 'value': value,
-                     'display_unit': units}]
+    perf[source] = [
+        {
+            'slug': 'split_pace' if source == 'metrics' else 'avg_split_pace',
+            'average_value' if source == 'metrics' else 'value': value,
+            'display_unit': units,
+        }
+    ]
     assert summarize_workout({'fitness_discipline': 'rowing'}, perf)['row_split_sec_per_500m'] == pytest.approx(expected)
 
 
 def test_date_only_discipline_match_does_not_hide_latest_timed_workout():
-    rows = [{'id': 'cycling', 'start_date': '2026-03-14', 'fitness_discipline': 'cycling'},
-            {'id': 'running', 'start_time': 1773496800, 'fitness_discipline': 'running'}]
+    rows = [
+        {'id': 'cycling', 'start_date': '2026-03-14', 'fitness_discipline': 'cycling'},
+        {'id': 'running', 'start_time': 1773496800, 'fitness_discipline': 'running'},
+    ]
     assert select_latest(rows, 'cycling')['id'] == 'running'
 
 
 def test_numeric_overflow_metric_is_missing():
-    summary = summarize_workout({'total_work': 10 ** 1000})
+    summary = summarize_workout({'total_work': 10**1000})
     assert summary['total_output_kj'] is None
 
 
 def test_weekly_progress_uses_local_monday_and_completed_duration():
     from datetime import datetime
+
     from peloton.feeds.goals import weekly_progress
+
     now = datetime(2026, 9, 16, 12, tzinfo=UTC)  # Wednesday
     workouts = [
-        {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 14, 13, tzinfo=UTC).timestamp(),
-         'ride': {'duration': 1800}, 'total_work': 250400},
-        {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 13, 13, tzinfo=UTC).timestamp(),
-         'ride': {'duration': 3600}},
-        {'status': 'IN_PROGRESS', 'start_time': datetime(2026, 9, 15, 13, tzinfo=UTC).timestamp(),
-         'ride': {'duration': 1200}, 'total_work': 99000},
+        {
+            'status': 'COMPLETE',
+            'start_time': datetime(2026, 9, 14, 13, tzinfo=UTC).timestamp(),
+            'ride': {'duration': 1800},
+            'total_work': 250400,
+        },
+        {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 13, 13, tzinfo=UTC).timestamp(), 'ride': {'duration': 3600}},
+        {
+            'status': 'IN_PROGRESS',
+            'start_time': datetime(2026, 9, 15, 13, tzinfo=UTC).timestamp(),
+            'ride': {'duration': 1200},
+            'total_work': 99000,
+        },
     ]
     # Output only counts completed workouts from this week.
-    assert weekly_progress(workouts, 'UTC', now) == {'workouts': 1, 'minutes': 30, 'output_kj': 250,
-                                                     'active_days': 1}
+    assert weekly_progress(workouts, 'UTC', now) == {'workouts': 1, 'minutes': 30, 'output_kj': 250, 'active_days': 1}
 
 
 def test_active_days_count_each_local_day_once():
     from datetime import datetime
+
     from peloton.feeds.goals import weekly_progress
+
     now = datetime(2026, 9, 18, 12, tzinfo=UTC)  # Friday
     at = lambda *args: datetime(*args, tzinfo=UTC).timestamp()  # noqa: E731  one-line test helper
     workouts = [
@@ -360,16 +447,31 @@ def test_circuit_normalizes_to_tread_bootcamp():
     assert normalize_discipline('circuit') == 'tread_bootcamp'
 
 
-@pytest.mark.parametrize('discipline,family', [
-    ('Cycling', 'cycling'), ('Bike Bootcamp', 'cycling'),
-    ('Running', 'running'), ('Walking', 'running'), ('Outdoor Run', 'running'),
-    ('Outdoor Walk', 'running'), ('Tread Bootcamp', 'running'), ('Hiking', 'running'),
-    ('Rowing', 'rowing'), ('Row Bootcamp', 'rowing'),
-    ('Strength', 'general'), ('Cardio', 'general'), ('Yoga', 'general'),
-    ('Meditation', 'general'), ('Stretching', 'general'), ('Pilates', 'general'),
-    ('Barre', 'general'), ('Boxing', 'general'), ('Dance Cardio', 'general'),
-    ('Mobility', 'general'),
-])
+@pytest.mark.parametrize(
+    'discipline,family',
+    [
+        ('Cycling', 'cycling'),
+        ('Bike Bootcamp', 'cycling'),
+        ('Running', 'running'),
+        ('Walking', 'running'),
+        ('Outdoor Run', 'running'),
+        ('Outdoor Walk', 'running'),
+        ('Tread Bootcamp', 'running'),
+        ('Hiking', 'running'),
+        ('Rowing', 'rowing'),
+        ('Row Bootcamp', 'rowing'),
+        ('Strength', 'general'),
+        ('Cardio', 'general'),
+        ('Yoga', 'general'),
+        ('Meditation', 'general'),
+        ('Stretching', 'general'),
+        ('Pilates', 'general'),
+        ('Barre', 'general'),
+        ('Boxing', 'general'),
+        ('Dance Cardio', 'general'),
+        ('Mobility', 'general'),
+    ],
+)
 def test_known_disciplines_have_registered_summary_models(discipline, family):
     model = get_model_for_discipline(discipline)
     assert model is not GeneralWorkout
@@ -383,38 +485,74 @@ def test_known_disciplines_have_registered_summary_models(discipline, family):
         assert {'avg_stroke_rate', 'avg_split_pace'} <= slugs
 
 
-@pytest.mark.parametrize('discipline', [
-    'Bike Bootcamp', 'Tread Bootcamp', 'Row Bootcamp', 'Strength', 'Yoga', 'Meditation', 'Unknown Future Workout',
-])
+@pytest.mark.parametrize(
+    'discipline',
+    [
+        'Bike Bootcamp',
+        'Tread Bootcamp',
+        'Row Bootcamp',
+        'Strength',
+        'Yoga',
+        'Meditation',
+        'Unknown Future Workout',
+    ],
+)
 def test_discipline_stat_layouts_have_safe_fallbacks(discipline):
-    summary = {'discipline': discipline, 'total_output_kj': 200, 'strive_score': 25,
-               'avg_speed': 10, 'avg_speed_unit': 'mph', 'avg_cadence': 80,
-               'avg_resistance': 40, 'distance': 3.1, 'distance_unit': 'mi',
-               'avg_pace': 10, 'avg_pace_unit': 'min/mi', 'elevation': 100,
-               'elevation_unit': 'ft', 'avg_incline': 2, 'avg_stroke_rate': 24,
-               'row_split_sec_per_500m': 130, 'avg_output_w': 110, 'hr_max': 165}
+    summary = {
+        'discipline': discipline,
+        'total_output_kj': 200,
+        'strive_score': 25,
+        'avg_speed': 10,
+        'avg_speed_unit': 'mph',
+        'avg_cadence': 80,
+        'avg_resistance': 40,
+        'distance': 3.1,
+        'distance_unit': 'mi',
+        'avg_pace': 10,
+        'avg_pace_unit': 'min/mi',
+        'elevation': 100,
+        'elevation_unit': 'ft',
+        'avg_incline': 2,
+        'avg_stroke_rate': 24,
+        'row_split_sec_per_500m': 130,
+        'avg_output_w': 110,
+        'hr_max': 165,
+    }
     details = _stat_details(summary)
     assert details and all(d['label'] and d['value'] for d in details)
 
 
-@pytest.mark.parametrize('start,end,seconds,brief', [
-    (1000, 1041, 41, True), (1000, 1059, 59, True), (1000, 1060, 60, False), (1000, 4611, 3611, False),
-    (1000, None, None, False), (None, 1041, None, False), (1000, 0, None, False), (True, 1041, None, False),
-])
+@pytest.mark.parametrize(
+    'start,end,seconds,brief',
+    [
+        (1000, 1041, 41, True),
+        (1000, 1059, 59, True),
+        (1000, 1060, 60, False),
+        (1000, 4611, 3611, False),
+        (1000, None, None, False),
+        (None, 1041, None, False),
+        (1000, 0, None, False),
+        (True, 1041, None, False),
+    ],
+)
 def test_brief_workouts_are_under_a_minute_by_their_start_and_end(start, end, seconds, brief):
     from peloton.selection import is_brief, workout_seconds
+
     workout = {'start_time': start, 'end_time': end}
     assert workout_seconds(workout) == seconds and is_brief(workout) is brief
 
 
-@pytest.mark.parametrize('instructor,shown', [
-    ({'id': 'abc', 'name': 'Cody Rigsby'}, 'Cody Rigsby'),
-    ({'id': 'abc', 'display_name': 'Cody'}, 'Cody'),
-    # Class-free workouts carry a placeholder named after the workout, with no ID.
-    ({'name': 'Just Walk'}, ''),
-    ({'id': '', 'name': 'Just Ride'}, ''),
-    (None, ''),
-])
+@pytest.mark.parametrize(
+    'instructor,shown',
+    [
+        ({'id': 'abc', 'name': 'Cody Rigsby'}, 'Cody Rigsby'),
+        ({'id': 'abc', 'display_name': 'Cody'}, 'Cody'),
+        # Class-free workouts carry a placeholder named after the workout, with no ID.
+        ({'name': 'Just Walk'}, ''),
+        ({'id': '', 'name': 'Just Ride'}, ''),
+        (None, ''),
+    ],
+)
 def test_a_placeholder_instructor_is_not_shown(instructor, shown):
     summary = summarize_workout({'fitness_discipline': 'walking', 'ride': {'instructor': instructor}})
     assert summary['instructor'] == shown
@@ -424,55 +562,129 @@ def _stat_values(summary):
     return {d['label']: d['value'] for d in _stat_details(summary) if d['label'] != 'instructor'}
 
 
-@pytest.mark.parametrize('summary,expected', [
-    # Jen's real 30 min ride: the board used to show Strive 27 (int() cut the .7) and 6.3 mi.
-    ({'discipline': 'Cycling', 'total_output_kj': 140.0, 'strive_score': 27.7, 'avg_speed': 12.7,
-      'avg_speed_unit': 'mph', 'avg_cadence': 65.0, 'avg_resistance': 37.0,
-      'distance': 6.3333, 'distance_unit': 'mi'},
-     {'total output': '140 kj', 'strive score': '27.7', 'avg speed': '12.7 mph',
-      'avg cadence': '65 rpm', 'avg resistance': '37%', 'distance': '6.33 mi'}),
-    # Joel's real outdoor walk.
-    ({'discipline': 'Walking', 'distance': 15.7592, 'distance_unit': 'mi', 'avg_pace': 10.33,
-      'avg_pace_unit': 'min/mi', 'elevation': 772.0, 'elevation_unit': 'ft'},
-     {'distance': '15.76 mi', 'avg pace': '10:20/mi', 'elevation gain': '772 ft'}),
-    # A whole Strive Score still shows its decimal, like the app.
-    ({'discipline': 'Strength', 'strive_score': 11.0, 'hr_max': 142.0},
-     {'strive score': '11.0', 'max heart rate': '142'}),
-    # Real tread walk: Peloton sends incline to one decimal, 0.0 included.
-    ({'discipline': 'Walking', 'distance': 1.0439, 'distance_unit': 'mi', 'elevation': 0.0,
-      'elevation_unit': 'ft', 'avg_incline': 0.0},
-     {'distance': '1.04 mi', 'elevation gain': '0 ft', 'avg incline': '0.0%'}),
-    # Real row: Peloton sends metres with centimetres (1906.47); the board shows whole metres with a comma.
-    ({'discipline': 'Rowing', 'distance': 1906.47, 'distance_unit': 'm', 'avg_stroke_rate': 26.0,
-      'row_split_sec_per_500m': 157.2, 'avg_output_w': 111.0},
-     {'distance': '1,906m', 'stroke rate': '26 spm', 'split per 500m': '2:37'}),
-    # A long row (3,929 m is the longest saved) and a long walk get a thousands comma.
-    ({'discipline': 'Rowing', 'distance': 3929.83, 'distance_unit': 'm'}, {'distance': '3,930m'}),
-    ({'discipline': 'Rowing', 'distance': 999.4, 'distance_unit': 'm'}, {'distance': '999m'}),
-    ({'discipline': 'Walking', 'distance': 1234.567, 'distance_unit': 'km'}, {'distance': '1,234.57 km'}),
-    # Total Output from total_work (no graph summary) rounds half up rather than truncating.
-    ({'discipline': 'Cycling', 'total_output_kj': 139.7, 'strive_score': 0.1},
-     {'total output': '140 kj', 'strive score': '0.1'}),
-])
+@pytest.mark.parametrize(
+    'summary,expected',
+    [
+        # Jen's real 30 min ride: the board used to show Strive 27 (int() cut the .7) and 6.3 mi.
+        (
+            {
+                'discipline': 'Cycling',
+                'total_output_kj': 140.0,
+                'strive_score': 27.7,
+                'avg_speed': 12.7,
+                'avg_speed_unit': 'mph',
+                'avg_cadence': 65.0,
+                'avg_resistance': 37.0,
+                'distance': 6.3333,
+                'distance_unit': 'mi',
+            },
+            {
+                'total output': '140 kj',
+                'strive score': '27.7',
+                'avg speed': '12.7 mph',
+                'avg cadence': '65 rpm',
+                'avg resistance': '37%',
+                'distance': '6.33 mi',
+            },
+        ),
+        # Joel's real outdoor walk.
+        (
+            {
+                'discipline': 'Walking',
+                'distance': 15.7592,
+                'distance_unit': 'mi',
+                'avg_pace': 10.33,
+                'avg_pace_unit': 'min/mi',
+                'elevation': 772.0,
+                'elevation_unit': 'ft',
+            },
+            {'distance': '15.76 mi', 'avg pace': '10:20/mi', 'elevation gain': '772 ft'},
+        ),
+        # A whole Strive Score still shows its decimal, like the app.
+        ({'discipline': 'Strength', 'strive_score': 11.0, 'hr_max': 142.0}, {'strive score': '11.0', 'max heart rate': '142'}),
+        # Real tread walk: Peloton sends incline to one decimal, 0.0 included.
+        (
+            {
+                'discipline': 'Walking',
+                'distance': 1.0439,
+                'distance_unit': 'mi',
+                'elevation': 0.0,
+                'elevation_unit': 'ft',
+                'avg_incline': 0.0,
+            },
+            {'distance': '1.04 mi', 'elevation gain': '0 ft', 'avg incline': '0.0%'},
+        ),
+        # Real row: Peloton sends metres with centimetres (1906.47); the board shows whole metres with a comma.
+        (
+            {
+                'discipline': 'Rowing',
+                'distance': 1906.47,
+                'distance_unit': 'm',
+                'avg_stroke_rate': 26.0,
+                'row_split_sec_per_500m': 157.2,
+                'avg_output_w': 111.0,
+            },
+            {'distance': '1,906m', 'stroke rate': '26 spm', 'split per 500m': '2:37'},
+        ),
+        # A long row (3,929 m is the longest saved) and a long walk get a thousands comma.
+        ({'discipline': 'Rowing', 'distance': 3929.83, 'distance_unit': 'm'}, {'distance': '3,930m'}),
+        ({'discipline': 'Rowing', 'distance': 999.4, 'distance_unit': 'm'}, {'distance': '999m'}),
+        ({'discipline': 'Walking', 'distance': 1234.567, 'distance_unit': 'km'}, {'distance': '1,234.57 km'}),
+        # Total Output from total_work (no graph summary) rounds half up rather than truncating.
+        ({'discipline': 'Cycling', 'total_output_kj': 139.7, 'strive_score': 0.1}, {'total output': '140 kj', 'strive score': '0.1'}),
+    ],
+)
 def test_stats_match_the_peloton_apps_formats(summary, expected):
     assert _stat_values(summary) == expected
 
 
-@pytest.mark.parametrize('summary,expected', [
-    # Treadmill: Strive and Total Output join distance and pace, as in the app.
-    ({'discipline': 'Running', 'distance': 3.1, 'distance_unit': 'mi', 'avg_pace': 9.5,
-      'avg_pace_unit': 'min/mi', 'strive_score': 31.2, 'total_output_kj': 312.0,
-      'elevation': 60.0, 'elevation_unit': 'ft', 'avg_incline': 1.5},
-     ['distance', 'avg pace', 'strive score', 'total output', 'elevation gain', 'avg incline']),
-    # Outdoor: total_work is 0, so there's no output to show; Strive still is.
-    ({'discipline': 'Outdoor Walk', 'distance': 2.0, 'distance_unit': 'mi', 'avg_pace': 18.0,
-      'avg_pace_unit': 'min/mi', 'strive_score': 9.4, 'total_output_kj': 0.0},
-     ['distance', 'avg pace', 'strive score']),
-    # Rows lead with Total Output and Strive like rides; average watts gives way to them.
-    ({'discipline': 'Rowing', 'distance': 1906.47, 'distance_unit': 'm', 'avg_stroke_rate': 26.0,
-      'row_split_sec_per_500m': 157.2, 'avg_output_w': 111.0, 'total_output_kj': 63.0,
-      'strive_score': 13.3},
-     ['total output', 'strive score', 'distance', 'stroke rate', 'split per 500m']),
-])
+@pytest.mark.parametrize(
+    'summary,expected',
+    [
+        # Treadmill: Strive and Total Output join distance and pace, as in the app.
+        (
+            {
+                'discipline': 'Running',
+                'distance': 3.1,
+                'distance_unit': 'mi',
+                'avg_pace': 9.5,
+                'avg_pace_unit': 'min/mi',
+                'strive_score': 31.2,
+                'total_output_kj': 312.0,
+                'elevation': 60.0,
+                'elevation_unit': 'ft',
+                'avg_incline': 1.5,
+            },
+            ['distance', 'avg pace', 'strive score', 'total output', 'elevation gain', 'avg incline'],
+        ),
+        # Outdoor: total_work is 0, so there's no output to show; Strive still is.
+        (
+            {
+                'discipline': 'Outdoor Walk',
+                'distance': 2.0,
+                'distance_unit': 'mi',
+                'avg_pace': 18.0,
+                'avg_pace_unit': 'min/mi',
+                'strive_score': 9.4,
+                'total_output_kj': 0.0,
+            },
+            ['distance', 'avg pace', 'strive score'],
+        ),
+        # Rows lead with Total Output and Strive like rides; average watts gives way to them.
+        (
+            {
+                'discipline': 'Rowing',
+                'distance': 1906.47,
+                'distance_unit': 'm',
+                'avg_stroke_rate': 26.0,
+                'row_split_sec_per_500m': 157.2,
+                'avg_output_w': 111.0,
+                'total_output_kj': 63.0,
+                'strive_score': 13.3,
+            },
+            ['total output', 'strive score', 'distance', 'stroke rate', 'split per 500m'],
+        ),
+    ],
+)
 def test_tread_and_row_pages_show_strive_and_output(summary, expected):
     assert list(_stat_values(summary)) == expected

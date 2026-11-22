@@ -1,10 +1,17 @@
 """Extract unique non-negative discipline counts from overview variants."""
+
 from math import isfinite
+
 from ..selection import normalize_discipline
 
-RANGE_KEYS = ('discipline_totals', 'workouts', 'workouts_per_discipline', 'workout_counts',
-              'workout_counts_by_discipline', 'discipline_counts')
-
+RANGE_KEYS = (
+    'discipline_totals',
+    'workouts',
+    'workouts_per_discipline',
+    'workout_counts',
+    'workout_counts_by_discipline',
+    'discipline_counts',
+)
 
 
 LABEL_KEYS = ('discipline_display_name', 'discipline_name', 'name', 'title', 'discipline')
@@ -38,8 +45,7 @@ def _add(totals, seen, label, value):
 
 
 def _count_of(entry):
-    return next((entry[k] for k in COUNT_KEYS
-                 if entry.get(k) is not None and not isinstance(entry[k], (dict, list))), None)
+    return next((entry[k] for k in COUNT_KEYS if entry.get(k) is not None and not isinstance(entry[k], (dict, list))), None)
 
 
 def _visit_list(totals, seen, entries):
@@ -77,11 +83,12 @@ def extract_discipline_totals(overview):
 
 def lifetime_overview_pages(totals, page_size=4):
     """Paginate independent discipline counts without combining activities."""
-    items = [{'label': label, 'count': count, 'icon': normalize_discipline(label)}
-             for label, count in (totals or {}).items()
-             if normalize_discipline(label) != 'total_workouts'
-             and isinstance(count, int) and not isinstance(count, bool) and count >= 0]
-    return [items[index:index + page_size] for index in range(0, len(items), page_size)]
+    items = [
+        {'label': label, 'count': count, 'icon': normalize_discipline(label)}
+        for label, count in (totals or {}).items()
+        if normalize_discipline(label) != 'total_workouts' and isinstance(count, int) and not isinstance(count, bool) and count >= 0
+    ]
+    return [items[index : index + page_size] for index in range(0, len(items), page_size)]
 
 
 # start_date_of_current_daily is a Unix timestamp: the daily streak's first day.
@@ -107,6 +114,11 @@ def parse_streaks(overview):
 
 def total_workout_count(totals):
     """Return Peloton's overall workout count when present."""
-    return next((count for label, count in (totals or {}).items()
-                 if normalize_discipline(label) == 'total_workouts'
-                 and isinstance(count, int) and not isinstance(count, bool) and count >= 0), None)
+    return next(
+        (
+            count
+            for label, count in (totals or {}).items()
+            if normalize_discipline(label) == 'total_workouts' and isinstance(count, int) and not isinstance(count, bool) and count >= 0
+        ),
+        None,
+    )

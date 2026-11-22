@@ -1,26 +1,35 @@
 """Workout compare rows: build_row, bike plan and strength asks from hand-made raw responses."""
-from datetime import datetime, UTC
+
+from datetime import UTC, datetime
 
 import pytest
 
-from peloton.workouts.workout_features import (BIKE_CURVE, bike_plan, build_row, discipline, planned_watts,
-                                      strength_asks)
+from peloton.workouts.workout_features import BIKE_CURVE, bike_plan, build_row, discipline, planned_watts, strength_asks
 
 START = 1_700_000_000
 
 
 def detail(**over):
-    base = {'id': 'w1', 'start_time': START, 'end_time': START + 1200, 'status': 'COMPLETE',
-            'fitness_discipline': 'cycling', 'timezone': 'UTC',
-            'ride': {'id': 'r1', 'title': 'Ride', 'duration': 1200, 'instructor': {'name': 'Ann'}}}
+    base = {
+        'id': 'w1',
+        'start_time': START,
+        'end_time': START + 1200,
+        'status': 'COMPLETE',
+        'fitness_discipline': 'cycling',
+        'timezone': 'UTC',
+        'ride': {'id': 'r1', 'title': 'Ride', 'duration': 1200, 'instructor': {'name': 'Ann'}},
+    }
     base.update(over)
     return base
 
 
 def graph(metrics=None, n=0, **extra):
     """n samples, 5 seconds apart; metrics is {slug: values}."""
-    g = {'seconds_since_pedaling_start': [5 * i for i in range(n)], 'duration': 5 * n,
-         'metrics': [{'slug': k, 'values': v} for k, v in (metrics or {}).items()]}
+    g = {
+        'seconds_since_pedaling_start': [5 * i for i in range(n)],
+        'duration': 5 * n,
+        'metrics': [{'slug': k, 'values': v} for k, v in (metrics or {}).items()],
+    }
     g.update(extra)
     return g
 
@@ -53,8 +62,9 @@ def test_freestyle_counts_whole_as_work():
     assert row['mix'] == {} and row['mode'] == 'plain'
 
 
-@pytest.mark.parametrize('raw, expected', [('caesar', 'rowing'), ('caesar_bootcamp', 'row_bootcamp'),
-                                           ('circuit', 'tread_bootcamp'), ('cycling', 'cycling')])
+@pytest.mark.parametrize(
+    'raw, expected', [('caesar', 'rowing'), ('caesar_bootcamp', 'row_bootcamp'), ('circuit', 'tread_bootcamp'), ('cycling', 'cycling')]
+)
 def test_discipline_alias(raw, expected):
     assert discipline(raw) == expected
     assert build_row(detail(fitness_discipline=raw))['disc'] == expected
@@ -64,10 +74,15 @@ def test_callouts_count_only_inside_work_segments():
     cadence = [70, 70, 70, 90, 90, 90] + [0] * 6
     cadence = [50] * 12 + cadence  # 18 samples: warm-up 0-60 then work from 60
     g = graph({'cadence': cadence}, 18, segment_list=[seg('warmup', 0, 60), seg('cycling', 60, 30)])
-    g['target_metrics_performance_data'] = {'target_metrics': [
-        {'offsets': {'start': 10, 'end': 29}, 'metrics': [{'name': 'cadence', 'lower': 60, 'upper': 80}]},
-        {'offsets': {'start': 60, 'end': 89}, 'metrics': [
-            {'name': 'cadence', 'lower': 80, 'upper': 100}, {'name': 'resistance', 'lower': 5, 'upper': 5}]}]}
+    g['target_metrics_performance_data'] = {
+        'target_metrics': [
+            {'offsets': {'start': 10, 'end': 29}, 'metrics': [{'name': 'cadence', 'lower': 60, 'upper': 80}]},
+            {
+                'offsets': {'start': 60, 'end': 89},
+                'metrics': [{'name': 'cadence', 'lower': 80, 'upper': 100}, {'name': 'resistance', 'lower': 5, 'upper': 5}],
+            },
+        ]
+    }
     row = build_row(detail(), g)
     assert row['target'] == {'cadence': 90.0, 'resistance': 5.0}  # the warm-up callout (mid 70) is ignored
     assert row['target_pos'] == {'cadence': 0.0}  # 70 -> -0.5, 90 -> +0.5 against 80..100
@@ -78,13 +93,17 @@ def test_callouts_count_only_inside_work_segments():
 
 def test_a_callout_running_into_an_arms_section_counts_only_the_riding_seconds():
     # Riding 0-30 then arms 30-60 (pedalling optional); one cadence/resistance callout spans both.
-    cadence = [90] * 6 + [0] * 6        # on target while riding, stopped for the arms
-    resistance = [40] * 6 + [10] * 6    # turned down for the arms
-    g = graph({'cadence': cadence, 'resistance': resistance}, 12,
-              segment_list=[seg('cycling', 0, 30), seg('upper_body', 30, 30)])
-    g['target_metrics_performance_data'] = {'target_metrics': [
-        {'offsets': {'start': 0, 'end': 59}, 'metrics': [
-            {'name': 'cadence', 'lower': 80, 'upper': 100}, {'name': 'resistance', 'lower': 35, 'upper': 45}]}]}
+    cadence = [90] * 6 + [0] * 6  # on target while riding, stopped for the arms
+    resistance = [40] * 6 + [10] * 6  # turned down for the arms
+    g = graph({'cadence': cadence, 'resistance': resistance}, 12, segment_list=[seg('cycling', 0, 30), seg('upper_body', 30, 30)])
+    g['target_metrics_performance_data'] = {
+        'target_metrics': [
+            {
+                'offsets': {'start': 0, 'end': 59},
+                'metrics': [{'name': 'cadence', 'lower': 80, 'upper': 100}, {'name': 'resistance', 'lower': 35, 'upper': 45}],
+            }
+        ]
+    }
     row = build_row(detail(), g)
     assert row['mode'] == 'arms'
     assert row['target_under'] == {'cadence': 0, 'resistance': 0}
@@ -98,9 +117,14 @@ def _missed_graph():
     cadence = [90, 70, 70, 110, 85, 60]
     resistance = [40, 50, 35, 30, 25, None]
     g = graph({'cadence': cadence, 'resistance': resistance}, 6, segment_list=[seg('cycling', 0, 30)])
-    g['target_metrics_performance_data'] = {'target_metrics': [
-        {'offsets': {'start': 0, 'end': 29}, 'metrics': [
-            {'name': 'cadence', 'lower': 80, 'upper': 100}, {'name': 'resistance', 'lower': 35, 'upper': 45}]}]}
+    g['target_metrics_performance_data'] = {
+        'target_metrics': [
+            {
+                'offsets': {'start': 0, 'end': 29},
+                'metrics': [{'name': 'cadence', 'lower': 80, 'upper': 100}, {'name': 'resistance', 'lower': 35, 'upper': 45}],
+            }
+        ]
+    }
     return g
 
 
@@ -131,17 +155,21 @@ def test_a_callout_without_a_resistance_range_counts_toward_no_miss():
 def test_a_callout_level_is_weighted_by_its_seconds_in_work_segments():
     # 10 s of the first callout is riding, 50 s runs into the cool-down; the second is 30 s of riding.
     g = graph({'cadence': [90] * 20}, 20, segment_list=[seg('cycling', 0, 40), seg('cooldown', 40, 60)])
-    g['target_metrics_performance_data'] = {'target_metrics': [
-        {'offsets': {'start': 30, 'end': 89}, 'metrics': [{'name': 'cadence', 'lower': 60, 'upper': 60}]},
-        {'offsets': {'start': 0, 'end': 29}, 'metrics': [{'name': 'cadence', 'lower': 100, 'upper': 100}]}]}
+    g['target_metrics_performance_data'] = {
+        'target_metrics': [
+            {'offsets': {'start': 30, 'end': 89}, 'metrics': [{'name': 'cadence', 'lower': 60, 'upper': 60}]},
+            {'offsets': {'start': 0, 'end': 29}, 'metrics': [{'name': 'cadence', 'lower': 100, 'upper': 100}]},
+        ]
+    }
     row = build_row(detail(), g)
     assert row['target'] == {'cadence': 90.0}  # (60 x 10 + 100 x 30) / 40, not the whole 60 s of the first
 
 
 def test_a_callout_starting_in_the_warm_up_counts_its_work_part():
     g = graph({'cadence': [50] * 6 + [70] * 6}, 12, segment_list=[seg('warmup', 0, 30), seg('cycling', 30, 30)])
-    g['target_metrics_performance_data'] = {'target_metrics': [
-        {'offsets': {'start': 20, 'end': 59}, 'metrics': [{'name': 'cadence', 'lower': 80, 'upper': 100}]}]}
+    g['target_metrics_performance_data'] = {
+        'target_metrics': [{'offsets': {'start': 20, 'end': 59}, 'metrics': [{'name': 'cadence', 'lower': 80, 'upper': 100}]}]
+    }
     row = build_row(detail(), g)
     assert row['target'] == {'cadence': 90.0}
     assert row['target_under'] == {'cadence': 100}  # the 6 riding samples at 70, not the warm-up's 50s
@@ -149,9 +177,12 @@ def test_a_callout_starting_in_the_warm_up_counts_its_work_part():
 
 def test_pace_callouts_are_weighted_by_their_work_seconds():
     g = graph({'pace': [10] * 24}, 24, segment_list=[seg('run', 0, 60), seg('cooldown', 60, 60)])
-    g['target_metrics_performance_data'] = {'target_metrics': [
-        {'offsets': {'start': 0, 'end': 29}, 'metrics': [{'name': 'pace_intensity', 'lower': 2, 'upper': 2}]},
-        {'offsets': {'start': 30, 'end': 119}, 'metrics': [{'name': 'pace_intensity', 'lower': 3, 'upper': 3}]}]}
+    g['target_metrics_performance_data'] = {
+        'target_metrics': [
+            {'offsets': {'start': 0, 'end': 29}, 'metrics': [{'name': 'pace_intensity', 'lower': 2, 'upper': 2}]},
+            {'offsets': {'start': 30, 'end': 119}, 'metrics': [{'name': 'pace_intensity', 'lower': 3, 'upper': 3}]},
+        ]
+    }
     row = build_row(detail(fitness_discipline='running'), g)
     assert row['pace_plan'] == {'2': 50, '3': 50}  # 30 s each in the run; the cool-down's 60 s left out
 
@@ -172,8 +203,7 @@ def test_ctype_from_ride_details():
 
 
 def test_strength_tracker_without_repetition_data():
-    d = detail(fitness_discipline='strength',
-               movement_tracker_data={'completed_movements_summary_data': {'total_volume': 100}})
+    d = detail(fitness_discipline='strength', movement_tracker_data={'completed_movements_summary_data': {'total_volume': 100}})
     row = build_row(d)
     assert row['tracker']['volume'] == 100
     assert row['sets'] == []
@@ -182,17 +212,33 @@ def test_strength_tracker_without_repetition_data():
 
 def test_strength_tracker_sets_and_weights():
     summary = {
-        'total_volume': 900, 'total_repetitions': 30, 'num_movements': 2, 'num_targets_reached': 1,
+        'total_volume': 900,
+        'total_repetitions': 30,
+        'num_movements': 2,
+        'num_targets_reached': 1,
         'repetition_summary_data': [
-            {'movement_name': 'Squat', 'movement_id': 'm1', 'tracking_type': 'repetition', 'offset': 10,
-             'length': 40, 'completed_number': 10, 'target_number': 10, 'is_target_reached': True,
-             'is_hold': 1, 'total_volume': 200,
-             'weight': [{'weight_data': {'weight_value': 20}, 'weight_category': 'heavy_weight'}]},
-            {'movement_name': 'Plank', 'is_target_reached': False}],
-        'weight_info_summary_data': {'heavy_weight': [{'weight_value': 20}, {'weight_value': 15}],
-                                     'light_weight': [], 'medium_weight': [{'weight_value': 10}]}}
-    row = build_row(detail(fitness_discipline='strength',
-                           movement_tracker_data={'completed_movements_summary_data': summary}))
+            {
+                'movement_name': 'Squat',
+                'movement_id': 'm1',
+                'tracking_type': 'repetition',
+                'offset': 10,
+                'length': 40,
+                'completed_number': 10,
+                'target_number': 10,
+                'is_target_reached': True,
+                'is_hold': 1,
+                'total_volume': 200,
+                'weight': [{'weight_data': {'weight_value': 20}, 'weight_category': 'heavy_weight'}],
+            },
+            {'movement_name': 'Plank', 'is_target_reached': False},
+        ],
+        'weight_info_summary_data': {
+            'heavy_weight': [{'weight_value': 20}, {'weight_value': 15}],
+            'light_weight': [],
+            'medium_weight': [{'weight_value': 10}],
+        },
+    }
+    row = build_row(detail(fitness_discipline='strength', movement_tracker_data={'completed_movements_summary_data': summary}))
     first, second = row['sets']
     assert (first['lb'], first['cat'], first['hit'], first['hold']) == (20, 'heavy_weight', True, True)
     assert first['name'] == 'Squat' and first['done'] == 10 and first['len'] == 40
@@ -208,8 +254,9 @@ def test_timezone_falls_back_to_utc_and_real_zone_gives_local_date():
     assert build_row(detail(start_time=ts, end_time=ts + 10, timezone='America/New_York'))['date'] == '2026-11-10'
 
 
-@pytest.mark.parametrize('status, elapsed, expected', [
-    ('COMPLETE', 799, False), ('COMPLETE', 800, True), ('COMPLETE', 1000, True), ('CANCELLED', 1000, False)])
+@pytest.mark.parametrize(
+    'status, elapsed, expected', [('COMPLETE', 799, False), ('COMPLETE', 800, True), ('COMPLETE', 1000, True), ('CANCELLED', 1000, False)]
+)
 def test_complete_needs_status_and_eighty_percent(status, elapsed, expected):
     d = detail(status=status, end_time=START + elapsed)
     d['ride']['duration'] = 1000
@@ -232,9 +279,14 @@ def test_mode_floor_arms_plain_and_floor_heart_rate():
 
 
 def _eff_graph(n, speed=10, output=100):
-    return {'seconds_since_pedaling_start': [5 * i for i in range(n)], 'duration': 5 * n, 'metrics': [
-        {'slug': 'output', 'values': [output] * n, 'alternatives': [{'slug': 'speed', 'values': [speed] * n}]},
-        {'slug': 'heart_rate', 'values': [100] * n}]}
+    return {
+        'seconds_since_pedaling_start': [5 * i for i in range(n)],
+        'duration': 5 * n,
+        'metrics': [
+            {'slug': 'output', 'values': [output] * n, 'alternatives': [{'slug': 'speed', 'values': [speed] * n}]},
+            {'slug': 'heart_rate', 'values': [100] * n},
+        ],
+    }
 
 
 def test_foot_disciplines_use_speed_and_eff_needs_24_samples():
@@ -248,13 +300,16 @@ def test_foot_disciplines_use_speed_and_eff_needs_24_samples():
 
 def test_pace_plan_level_fit_and_form_score():
     g = graph(n=24, segment_list=[seg('rowing', 0, 120)])
-    g['target_metrics_performance_data'] = {'target_metrics': [
-        {'offsets': {'start': 0, 'end': 59}, 'metrics': [{'name': 'pace_intensity', 'lower': 2, 'upper': 3}]},
-        {'offsets': {'start': 60, 'end': 119}, 'metrics': [{'name': 'pace_intensity', 'lower': 4, 'upper': 5}]}]}
+    g['target_metrics_performance_data'] = {
+        'target_metrics': [
+            {'offsets': {'start': 0, 'end': 59}, 'metrics': [{'name': 'pace_intensity', 'lower': 2, 'upper': 3}]},
+            {'offsets': {'start': 60, 'end': 119}, 'metrics': [{'name': 'pace_intensity', 'lower': 4, 'upper': 5}]},
+        ]
+    }
     g['target_metrics_compliance'] = {
         'workout_pace_level': 3,
-        'pace_intensities_target_compliance_percentage': {
-            'overall': {'below_target': 10, 'in_target': 80, 'above_target': 10}}}
+        'pace_intensities_target_compliance_percentage': {'overall': {'below_target': 10, 'in_target': 80, 'above_target': 10}},
+    }
     g['caesar_metrics'] = {'detail': {'score': 85}}
     row = build_row(detail(fitness_discipline='caesar'), g)
     assert row['pace_plan'] == {'2': 50, '4': 50}
@@ -275,10 +330,12 @@ def test_leaderboard_percentile():
 
 
 def test_summaries_zones_and_effort_fields():
-    g = graph({'output': [1, 2]}, 2, summaries=[{'slug': 'total_output', 'value': 200},
-                                                {'slug': 'distance', 'value': 5.5},
-                                                {'slug': 'elevation', 'value': 30}],
-              effort_zones={'heart_rate_zone_durations': {'heart_rate_z1_duration': 10, 'heart_rate_z3_duration': 5}})
+    g = graph(
+        {'output': [1, 2]},
+        2,
+        summaries=[{'slug': 'total_output', 'value': 200}, {'slug': 'distance', 'value': 5.5}, {'slug': 'elevation', 'value': 30}],
+        effort_zones={'heart_rate_zone_durations': {'heart_rate_z1_duration': 10, 'heart_rate_z3_duration': 5}},
+    )
     d = detail(hr_total_points=12.34, is_outdoor=True, workout_type='class')
     d['ride']['difficulty_estimate'] = 7.456
     row = build_row(d, g)
@@ -292,8 +349,7 @@ def test_summaries_zones_and_effort_fields():
 def test_planned_watts_clamps_low_cadence_and_resistance():
     assert planned_watts(10, 3) == planned_watts(20, 5)
     assert planned_watts(30, 5) > planned_watts(20, 5)
-    assert planned_watts(60, 30) == pytest.approx(
-        pow(2.718281828459045, BIKE_CURVE[0]) * 60 ** BIKE_CURVE[1] * 30 ** BIKE_CURVE[2])
+    assert planned_watts(60, 30) == pytest.approx(pow(2.718281828459045, BIKE_CURVE[0]) * 60 ** BIKE_CURVE[1] * 30 ** BIKE_CURVE[2])
 
 
 def bike_graph(burst=True, n=84):
@@ -306,11 +362,16 @@ def bike_graph(burst=True, n=84):
     if burst:
         for i in (32, 33, 52):  # a 10 s stretch and a lone 5 s sample
             res_hi[i], res_lo[i] = 70, 60
-    return {'duration': 420,
-            'segment_list': [seg('warmup', 0, 60), seg('cycling', 60, 300), seg('upper_body', 360, 60)],
-            'target_performance_metrics': {'target_graph_metrics': [
+    return {
+        'duration': 420,
+        'segment_list': [seg('warmup', 0, 60), seg('cycling', 60, 300), seg('upper_body', 360, 60)],
+        'target_performance_metrics': {
+            'target_graph_metrics': [
                 {'type': 'cadence', 'graph_data': {'upper': cad_hi, 'lower': cad_lo}},
-                {'type': 'resistance', 'graph_data': {'upper': res_hi, 'lower': res_lo}}]}}
+                {'type': 'resistance', 'graph_data': {'upper': res_hi, 'lower': res_lo}},
+            ]
+        },
+    }
 
 
 def test_bike_plan_constant_ride():
@@ -320,8 +381,17 @@ def test_bike_plan_constant_ride():
     assert plan['planned_watts_high'] == plan['planned_watts']
     assert plan['effort_share'] == 0 and plan['efforts_per_10min'] == 0 and plan['effort_length_s'] == 0
     assert plan['cadence_mean'] == 85 and plan['resistance_mean'] == 45
-    assert set(plan) == {'ride_min', 'arms_min', 'planned_watts', 'planned_watts_high', 'effort_share',
-                         'efforts_per_10min', 'effort_length_s', 'cadence_mean', 'resistance_mean'}
+    assert set(plan) == {
+        'ride_min',
+        'arms_min',
+        'planned_watts',
+        'planned_watts_high',
+        'effort_share',
+        'efforts_per_10min',
+        'effort_length_s',
+        'cadence_mean',
+        'resistance_mean',
+    }
 
 
 def test_bike_plan_counts_ten_second_effort_not_a_single_sample():
@@ -341,9 +411,14 @@ def test_bike_plan_none_cases():
     assert bike_plan({**g, 'target_performance_metrics': {'target_graph_metrics': lines[:1]}}) is None
     assert bike_plan({**g, 'segment_list': g['segment_list'] + [seg('floor', 420, 60, metrics_type='floor')]}) is None
     # 24 samples, one dropped (None) -> 23 riding samples
-    short = {'target_performance_metrics': {'target_graph_metrics': [
-        {'type': 'cadence', 'graph_data': {'upper': [90] * 24, 'lower': [80] * 24}},
-        {'type': 'resistance', 'graph_data': {'upper': [50] * 23 + [None], 'lower': [40] * 24}}]}}
+    short = {
+        'target_performance_metrics': {
+            'target_graph_metrics': [
+                {'type': 'cadence', 'graph_data': {'upper': [90] * 24, 'lower': [80] * 24}},
+                {'type': 'resistance', 'graph_data': {'upper': [50] * 23 + [None], 'lower': [40] * 24}},
+            ]
+        }
+    }
     assert bike_plan(short) is None
     short['target_performance_metrics']['target_graph_metrics'][1]['graph_data']['upper'][-1] = 50
     assert bike_plan(short)['ride_min'] == 2.0  # no segments: every sample rides
@@ -367,22 +442,40 @@ def sub(kind, offset, length, *movements):
 def strength_ride():
     subs = [
         sub('normal', 0, 120, mv('Warm Up Flow')),
-        sub('normal', 120, 60, mv('Squat', target_number=10, tracking_type='repetition', weight_level='heavy',
-                                  muscle_groups=[{'muscle_group': 'Quads', 'ranking': 2}])),
-        sub('normal', 180, 60, mv('Plank', tracking_type='time_based', weight_level='light',
-                                  muscle_groups=[{'muscle_group': 'Core'}])),
+        sub(
+            'normal',
+            120,
+            60,
+            mv(
+                'Squat',
+                target_number=10,
+                tracking_type='repetition',
+                weight_level='heavy',
+                muscle_groups=[{'muscle_group': 'Quads', 'ranking': 2}],
+            ),
+        ),
+        sub('normal', 180, 60, mv('Plank', tracking_type='time_based', weight_level='light', muscle_groups=[{'muscle_group': 'Core'}])),
         sub('rest', 240, 30, mv('Rest')),
         sub('normal', 270, 30, mv('Pause', is_rest=True)),
         sub('emom_group', 300, 120, mv('Burpee', target_number=5, tracking_type='repetition')),
         sub('complex_group', 420, 60, mv('Clean', target_number=5, tracking_type='repetition')),
-        {'type': 'normal', 'scheduled_offset': 480, 'length': 30,
-         'movements': [mv('Curl', target_number=8, tracking_type='repetition', weight_level='medium',
-                          muscle_groups=[{'muscle_group': None}])]},
+        {
+            'type': 'normal',
+            'scheduled_offset': 480,
+            'length': 30,
+            'movements': [
+                mv('Curl', target_number=8, tracking_type='repetition', weight_level='medium', muscle_groups=[{'muscle_group': None}])
+            ],
+        },
         sub('normal', 510, 30, mv('Stretch', tracking_type='repetition')),
         {'type': 'normal', 'length': 30, 'movements': [mv('No offset', target_number=3)]},
     ]
-    return {'segments': {'segment_list': [{'subsegments_v2': subs[:5]}, {'subsegments_v2': subs[5:]}],
-                         'movement_patterns': [{'slug': 'push', 'percentage': 40}]}}
+    return {
+        'segments': {
+            'segment_list': [{'subsegments_v2': subs[:5]}, {'subsegments_v2': subs[5:]}],
+            'movement_patterns': [{'slug': 'push', 'percentage': 40}],
+        }
+    }
 
 
 def test_strength_asks_summary():
@@ -398,8 +491,12 @@ def test_strength_asks_summary():
 def test_strength_asks_none_without_movements():
     assert strength_asks(None) is None
     assert strength_asks({}) is None
-    assert strength_asks({'segments': {'segment_list': [{'subsegments_v2': [
-        sub('normal', 0, 60, mv('Warm-up')), sub('rest', 60, 30, mv('Rest'))]}]}}) is None
+    assert (
+        strength_asks(
+            {'segments': {'segment_list': [{'subsegments_v2': [sub('normal', 0, 60, mv('Warm-up')), sub('rest', 60, 30, mv('Rest'))]}]}}
+        )
+        is None
+    )
 
 
 def test_build_row_asks_only_on_strength_rows():

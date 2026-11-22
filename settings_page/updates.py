@@ -12,6 +12,7 @@ app_dir is the checkout peloton-install.sh installed from (the service runs from
 which has no git): the installer's drop-in passes it as PELOTON_CHECKOUT, with its .git writable
 for the check's fetch. Ported from LightningLane-Live-LED's.
 """
+
 import logging
 import subprocess
 import sys
@@ -24,21 +25,25 @@ from self_update.update import BLOCKED, CHANNELS, REQUIREMENTS, WAITING, WOULD_U
 
 logger = logging.getLogger('peloton-led.settings')
 
-UPDATE_UNIT = "peloton-update"
+UPDATE_UNIT = 'peloton-update'
 START_TIMEOUT_S = 30
 # A check older than this is dropped: what's newest may have moved on.
 CHECK_FRESH_S = 10 * 60
 # What a running update is doing, by state.json's phase (before its rollback point, it's checking).
-PHASE_TEXT = {states.READY: "Saving a rollback point", states.SWITCHED: "Installing the new version",
-              states.INSTALLED: "Restarting the board", states.CHECKING: "Checking the new version works",
-              states.ROLLING_BACK: "Rolling back"}
-CHECKING_TEXT = "Checking it can update"
-ROLLING_BACK_TEXT = "Rolling back"
+PHASE_TEXT = {
+    states.READY: 'Saving a rollback point',
+    states.SWITCHED: 'Installing the new version',
+    states.INSTALLED: 'Restarting the board',
+    states.CHECKING: 'Checking the new version works',
+    states.ROLLING_BACK: 'Rolling back',
+}
+CHECKING_TEXT = 'Checking it can update'
+ROLLING_BACK_TEXT = 'Rolling back'
 # An update's steps, as the card lists them while one runs, and the step each phase is on.
-STEPS = (CHECKING_TEXT, "Saving a rollback point", "Installing the new version", "Restarting and checking it works")
+STEPS = (CHECKING_TEXT, 'Saving a rollback point', 'Installing the new version', 'Restarting and checking it works')
 PHASE_STEP = {states.READY: 1, states.SWITCHED: 2, states.INSTALLED: 3, states.CHECKING: 3}
 # start()'s outcomes, which the page says after the redirect.
-STARTED, BUSY, START_FAILED = "started", "busy", "failed"
+STARTED, BUSY, START_FAILED = 'started', 'busy', 'failed'
 STARTS = (STARTED, BUSY, START_FAILED)
 
 
@@ -61,7 +66,7 @@ class Updates:
     def running(self):
         """Whether an update or rollback is running now (its unit is active)."""
         try:
-            return self.updater.board.active(f"{UPDATE_UNIT}.service")
+            return self.updater.board.active(f'{UPDATE_UNIT}.service')
         except CommandFailed:  # no systemctl: nothing can be running
             return False
 
@@ -69,13 +74,13 @@ class Updates:
         """For the page's script while one runs: {"running", "phase" (what it's doing, in words),
         "step" (its index in STEPS, or None for a rollback, which has no steps)}."""
         running = self.running()
-        phase = self.updater.state.load()["phase"]
+        phase = self.updater.state.load()['phase']
         text, step = self._progress(phase) if running else (None, None)
-        return {"running": running, "phase": text, "step": step}
+        return {'running': running, 'phase': text, 'step': step}
 
     def _progress(self, phase):
         """(what a running update or rollback is doing, its step) from state.json's phase."""
-        if phase == states.ROLLING_BACK or (phase not in states.UNFINISHED and self.started == "rollback"):
+        if phase == states.ROLLING_BACK or (phase not in states.UNFINISHED and self.started == 'rollback'):
             return ROLLING_BACK_TEXT, None
         return PHASE_TEXT.get(phase, CHECKING_TEXT), PHASE_STEP.get(phase, 0)
 
@@ -93,24 +98,33 @@ class Updates:
             sha, branch = None, None
         record = updater.state.load()
         check = self.last_check
-        if check and self.clock() - check["at"] > CHECK_FRESH_S:
+        if check and self.clock() - check['at'] > CHECK_FRESH_S:
             check = self.last_check = None
         running = self.running()
         # What's being installed: state.json's once the update has its rollback point (it survives
         # this page's restart), else what was started.
-        to = record.get("to") if record["phase"] in states.UNFINISHED and isinstance(record.get("to"), dict) \
-            else self.starting
-        if running and to and self.starting and self.starting.get("sha") == to.get("sha"):
+        to = record.get('to') if record['phase'] in states.UNFINISHED and isinstance(record.get('to'), dict) else self.starting
+        if running and to and self.starting and self.starting.get('sha') == to.get('sha'):
             to = {**self.starting, **to}
         installed = self.installed_channel(sha, branch, record)
-        status, step = self._progress(record["phase"]) if running else (None, None)
-        return {"version": updater.installed_version, "sha": sha, "branch": branch, "running": running,
-                "to": to if running else None, "phase": record["phase"], "status": status, "step": step,
-                "from": record.get("from") if isinstance(record.get("from"), dict) else None,
-                "outcome": updater.state.load_outcome(), "check": check, "installed_channel": installed,
-                "channel": (check or {}).get("channel") or installed,
-                # No check yet: the page's script asks for one (auto_check) once it's loaded.
-                "auto_check": not check and not running}
+        status, step = self._progress(record['phase']) if running else (None, None)
+        return {
+            'version': updater.installed_version,
+            'sha': sha,
+            'branch': branch,
+            'running': running,
+            'to': to if running else None,
+            'phase': record['phase'],
+            'status': status,
+            'step': step,
+            'from': record.get('from') if isinstance(record.get('from'), dict) else None,
+            'outcome': updater.state.load_outcome(),
+            'check': check,
+            'installed_channel': installed,
+            'channel': (check or {}).get('channel') or installed,
+            # No check yet: the page's script asks for one (auto_check) once it's loaded.
+            'auto_check': not check and not running,
+        }
 
     def auto_check(self, channel):
         """The page's own check when it loads: check(channel), unless one from the last CHECK_FRESH_S
@@ -123,35 +137,36 @@ class Updates:
         if channel not in CHANNELS:
             return
         if self.running():
-            result, message, ok, found = BLOCKED, "an update or rollback is running", False, {}
+            result, message, ok, found = BLOCKED, 'an update or rollback is running', False, {}
         else:
             with self._check_lock:  # two at once would fetch at once
                 last = self.last_check
-                if reuse and last and last["channel"] == channel and self.clock() - last["at"] <= CHECK_FRESH_S:
+                if reuse and last and last['channel'] == channel and self.clock() - last['at'] <= CHECK_FRESH_S:
                     return
                 try:
                     outcome = self.updater.update(channel, dry_run=True)
                     result, message, ok = outcome.result, outcome.message, outcome.ok
                     found = self.details(outcome.target) if result == WOULD_UPDATE and outcome.target else {}
                     if result == WAITING and outcome.runs is not None:
-                        found = {"runs": [list(run) for run in outcome.runs]}
+                        found = {'runs': [list(run) for run in outcome.runs]}
                 except (CommandFailed, OSError) as e:
                     result, message, ok, found = BLOCKED, str(e), False, {}
-        logger.info("Settings page: checked for updates on %s: %s: %s", channel, result, message)
-        self.last_check = {"channel": channel, "result": result, "message": message, "ok": ok, "at": self.clock(),
-                           **found}
+        logger.info('Settings page: checked for updates on %s: %s: %s', channel, result, message)
+        self.last_check = {'channel': channel, 'result': result, 'message': message, 'ok': ok, 'at': self.clock(), **found}
 
     def details(self, target):
         """What an update to target brings: {"ref", "sha", "version" (from its tags, as version.py gives it, or None),
         "changes" ([PR number or None, title, release notes], newest first: Board.what_changed), "packages" (whether a
         requirements file changes: pip runs, which takes ages on a Pi Zero)}. Only ref and sha if git can't say."""
-        found = {"ref": target.ref, "sha": target.sha}
+        found = {'ref': target.ref, 'sha': target.sha}
         board = self.updater.board
         try:
             head = board.head()
-            found.update(version=board.describe(target.sha),
-                         changes=[list(change) for change in board.what_changed(head, target.sha)],
-                         packages=any(board.changed(head, target.sha, path) for path in REQUIREMENTS))
+            found.update(
+                version=board.describe(target.sha),
+                changes=[list(change) for change in board.what_changed(head, target.sha)],
+                packages=any(board.changed(head, target.sha, path) for path in REQUIREMENTS),
+            )
         except CommandFailed as e:
             logger.warning("Settings page: can't list what's in %s: %s", target.ref, e)
         return found
@@ -159,12 +174,21 @@ class Updates:
     def start(self, command, channel=None):
         """Start python3 -m self_update update --channel channel, or rollback, as its own unit.
         STARTED, BUSY (one is running already) or START_FAILED (logged)."""
-        args = ["systemd-run", f"--unit={UPDATE_UNIT}", "--collect", f"--working-directory={self.app_dir}",
-                "--description=Peloton LED update", self.python, "-m", "self_update", command]
-        if command == "update":
+        args = [
+            'systemd-run',
+            f'--unit={UPDATE_UNIT}',
+            '--collect',
+            f'--working-directory={self.app_dir}',
+            '--description=Peloton LED update',
+            self.python,
+            '-m',
+            'self_update',
+            command,
+        ]
+        if command == 'update':
             if channel not in CHANNELS:
                 return START_FAILED
-            args += ["--channel", channel]
+            args += ['--channel', channel]
         if self.running():
             return BUSY
         try:
@@ -173,15 +197,23 @@ class Updates:
             logger.error("Settings page: can't start the %s: %s", command, e)
             return START_FAILED
         if done.returncode:
-            problem = (done.stderr or "").strip() or f"systemd-run exited {done.returncode}"
-            if "already" in problem:  # "Unit peloton-update.service was already loaded" / "already exists"
+            problem = (done.stderr or '').strip() or f'systemd-run exited {done.returncode}'
+            if 'already' in problem:  # "Unit peloton-update.service was already loaded" / "already exists"
                 return BUSY
             logger.error("Settings page: can't start the %s: %s", command, problem)
             return START_FAILED
         self.started = command
-        self.starting = self.last_check if command == "update" and self.last_check \
-            and self.last_check.get("channel") == channel and self.last_check.get("sha") else None
-        logger.info("Settings page: started the %s%s (%s.service; journalctl -u %s has how it goes).",
-                    command, f" on {channel}" if channel else "", UPDATE_UNIT, UPDATE_UNIT)
+        self.starting = (
+            self.last_check
+            if command == 'update' and self.last_check and self.last_check.get('channel') == channel and self.last_check.get('sha')
+            else None
+        )
+        logger.info(
+            'Settings page: started the %s%s (%s.service; journalctl -u %s has how it goes).',
+            command,
+            f' on {channel}' if channel else '',
+            UPDATE_UNIT,
+            UPDATE_UNIT,
+        )
         self.last_check = None
         return STARTED

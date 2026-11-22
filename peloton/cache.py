@@ -1,4 +1,5 @@
 """Private, atomic persistence for the last successful dashboard snapshot."""
+
 import json
 import os
 from pathlib import Path
@@ -8,14 +9,28 @@ from .feeds.challenges import valid_challenge
 from .feeds.club import valid_club
 from .feeds.goals import parse_milestone_key
 
-
 CACHE_VERSION = 1
 PERSISTED_KEYS = (
-    'me', 'totals', 'summaries', 'last_updated', 'generation',
-    'active_day_count', 'celebrated_pr_ids', 'pr_shown_at',
-    'weekly_progress', 'celebrated_milestones', 'personal_records', 'streaks',
-    'milestone_shown_at', 'celebrated_discipline_milestones', 'discipline_milestone_shown_at',
-    'name_facts_passes', 'name_facts_shown', 'challenges', 'booked_classes', 'club',
+    'me',
+    'totals',
+    'summaries',
+    'last_updated',
+    'generation',
+    'active_day_count',
+    'celebrated_pr_ids',
+    'pr_shown_at',
+    'weekly_progress',
+    'celebrated_milestones',
+    'personal_records',
+    'streaks',
+    'milestone_shown_at',
+    'celebrated_discipline_milestones',
+    'discipline_milestone_shown_at',
+    'name_facts_passes',
+    'name_facts_shown',
+    'challenges',
+    'booked_classes',
+    'club',
 )
 
 
@@ -51,8 +66,7 @@ def _unless_none(valid):
 
 
 def _valid_records(records):
-    return isinstance(records, dict) and all(
-        isinstance(r, dict) and isinstance(r.get('workout_id'), str) for r in records.values())
+    return isinstance(records, dict) and all(isinstance(r, dict) and isinstance(r.get('workout_id'), str) for r in records.values())
 
 
 def _valid_streaks(streaks):
@@ -60,13 +74,11 @@ def _valid_streaks(streaks):
 
 
 def _valid_milestone_clock(shown):
-    return isinstance(shown, dict) and all(
-        key.isdigit() and _is_number(at) for key, at in shown.items())
+    return isinstance(shown, dict) and all(key.isdigit() and _is_number(at) for key, at in shown.items())
 
 
 def _valid_pr_clock(shown):
-    return isinstance(shown, dict) and all(
-        isinstance(key, str) and _is_number(at) for key, at in shown.items())
+    return isinstance(shown, dict) and all(isinstance(key, str) and _is_number(at) for key, at in shown.items())
 
 
 def _valid_discipline_milestones(celebrated):
@@ -74,8 +86,7 @@ def _valid_discipline_milestones(celebrated):
 
 
 def _valid_discipline_clock(shown):
-    return isinstance(shown, dict) and all(
-        parse_milestone_key(key) and _is_number(at) for key, at in shown.items())
+    return isinstance(shown, dict) and all(parse_milestone_key(key) and _is_number(at) for key, at in shown.items())
 
 
 def _valid_challenges(challenges):
@@ -105,8 +116,7 @@ _REPAIRS = (
 
 
 def _valid_name_facts(passes, facts):
-    return (_is_int(passes) and passes >= 0 and isinstance(facts, dict)
-            and all(_is_int(at) for at in facts.values()))
+    return _is_int(passes) and passes >= 0 and isinstance(facts, dict) and all(_is_int(at) for at in facts.values())
 
 
 def load_snapshot(path):
@@ -138,8 +148,7 @@ def save_snapshot(path, snapshot):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f'.{path.name}.tmp')
-    payload = {'version': CACHE_VERSION,
-               'snapshot': {key: snapshot[key] for key in PERSISTED_KEYS if key in snapshot}}
+    payload = {'version': CACHE_VERSION, 'snapshot': {key: snapshot[key] for key in PERSISTED_KEYS if key in snapshot}}
     try:
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:

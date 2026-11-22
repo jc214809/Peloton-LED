@@ -1,13 +1,14 @@
 """The settings server over real HTTP on a free port, with config.json, the PIN file and comitup's
 state in a temp folder; systemctl and Pushover are faked."""
+
 import json
 import os
-from html import unescape
 import subprocess
 import threading
 import time
 import urllib.error
 import urllib.request
+from html import unescape
 from http.cookiejar import CookieJar
 from types import SimpleNamespace
 from urllib.parse import urlencode
@@ -36,10 +37,15 @@ class Board:
         self.restarts, self.sent = [], []
         self.running = True
         self.auth_env = tmp_path / 'auth.env'
-        self.settings = Settings(str(self.config), self.gate, state_file=str(self.state),
-                                 send_pushover=lambda title, message: self.sent.append((title, message)) or True,
-                                 auth_env=str(self.auth_env), default_token=str(tmp_path / 'cookies.txt'),
-                                 token_mode_file=str(tmp_path / 'token-mode'))
+        self.settings = Settings(
+            str(self.config),
+            self.gate,
+            state_file=str(self.state),
+            send_pushover=lambda title, message: self.sent.append((title, message)) or True,
+            auth_env=str(self.auth_env),
+            default_token=str(tmp_path / 'cookies.txt'),
+            token_mode_file=str(tmp_path / 'token-mode'),
+        )
         self.units = {}  # systemctl show answers, by unit
         monkeypatch.setattr(self.settings, '_unit_properties', lambda unit, *names: self.units.get(unit, {}))
         monkeypatch.setattr(self.settings, 'restart_app', lambda: self.restarts.append(1) or 'restarted')
@@ -199,6 +205,7 @@ def test_the_pin_goes_to_a_phone_with_pushover_keys(board):
         assert secret not in page_html
     # Credential fields are write-only: every one is empty, whatever is saved.
     import re
+
     fields = re.findall(r'<input type="(?:password|email)"[^>]*>', page_html)
     assert fields and all('value=""' in f for f in fields)
 
@@ -240,12 +247,14 @@ def test_a_save_that_cannot_be_written_says_so(board):
 
     def fail(config):
         raise OSError('read-only file system')
+
     board.settings.save = fail
     status, _, body = board.request('/save', posted(TWO_RIDERS))
     assert status == 500 and "Couldn't save: read-only file system" in body
 
 
 # --- Settings without HTTP
+
 
 def _settings(tmp_path, monkeypatch, results, which='/bin/systemctl'):
     calls = []
@@ -256,19 +265,23 @@ def _settings(tmp_path, monkeypatch, results, which='/bin/systemctl'):
         if isinstance(result, Exception):
             raise result
         return SimpleNamespace(returncode=result[0], stderr=result[1])
+
     monkeypatch.setattr(server.shutil, 'which', lambda name: which)
     monkeypatch.setattr(server.subprocess, 'run', run)
     return Settings(str(tmp_path / 'config.json'), PinGate(str(tmp_path / 'pin'))), calls
 
 
-@pytest.mark.parametrize('results,outcome', [
-    ([(0, ''), (0, '')], 'restarted'),
-    ([(3, '')], 'not_running'),
-    ([(0, ''), (1, 'Unit failed')], 'failed'),
-    ([(0, ''), (1, '')], 'failed'),
-    ([(0, ''), subprocess.TimeoutExpired('systemctl', 30)], 'failed'),
-    ([OSError('no dbus')], 'saved'),
-])
+@pytest.mark.parametrize(
+    'results,outcome',
+    [
+        ([(0, ''), (0, '')], 'restarted'),
+        ([(3, '')], 'not_running'),
+        ([(0, ''), (1, 'Unit failed')], 'failed'),
+        ([(0, ''), (1, '')], 'failed'),
+        ([(0, ''), subprocess.TimeoutExpired('systemctl', 30)], 'failed'),
+        ([OSError('no dbus')], 'saved'),
+    ],
+)
 def test_restart_outcomes(tmp_path, monkeypatch, results, outcome):
     settings, calls = _settings(tmp_path, monkeypatch, results)
     assert settings.restart_app() == outcome
@@ -300,6 +313,7 @@ def test_save_config_as_a_non_root_owner(tmp_path, monkeypatch):
 
     def denied(*args):
         raise PermissionError
+
     monkeypatch.setattr(server.os, 'chown', denied)
     save_config({'b': 1}, str(path))
     assert json.loads(path.read_text()) == {'b': 1}
@@ -307,8 +321,7 @@ def test_save_config_as_a_non_root_owner(tmp_path, monkeypatch):
 
 def test_only_the_pushover_keys_are_read_from_auth_env(tmp_path, caplog):
     env = tmp_path / 'auth.env'
-    env.write_text('PELOTON_PASSWORD_RIDER_ONE=hunter2\n# comment\nPUSHOVER_APP_TOKEN="tok"\n'
-                   "PUSHOVER_USER_KEY='usr'\nnot a line\n")
+    env.write_text('PELOTON_PASSWORD_RIDER_ONE=hunter2\n# comment\nPUSHOVER_APP_TOKEN="tok"\nPUSHOVER_USER_KEY=\'usr\'\nnot a line\n')
     assert read_pushover_keys(str(env)) == {'PUSHOVER_APP_TOKEN': 'tok', 'PUSHOVER_USER_KEY': 'usr'}
     assert read_pushover_keys(str(tmp_path / 'missing.env')) == {}
     assert read_pushover_keys(str(tmp_path)) == {}  # a folder: can't be read, logged
@@ -328,10 +341,9 @@ def test_main_reads_the_keys_and_serves(tmp_path, monkeypatch):
     class FakeServer:
         def serve_forever(self):
             served.append(True)
-    monkeypatch.setattr(server, 'make_server', lambda settings, host, port: served.append((settings, host, port))
-                        or FakeServer())
-    server.main(['--config', str(tmp_path / 'config.json'), '--auth-env', str(env), '--port', '9999',
-                 '--pin-file', str(tmp_path / 'pin')])
+
+    monkeypatch.setattr(server, 'make_server', lambda settings, host, port: served.append((settings, host, port)) or FakeServer())
+    server.main(['--config', str(tmp_path / 'config.json'), '--auth-env', str(env), '--port', '9999', '--pin-file', str(tmp_path / 'pin')])
     settings, host, port = served[0]
     assert port == 9999 and settings.gate.pin_file == str(tmp_path / 'pin') and served[1] is True
     assert environ == {'PUSHOVER_APP_TOKEN': 'tok', 'PUSHOVER_USER_KEY': 'usr'}
@@ -342,20 +354,35 @@ def test_main_reads_the_keys_and_serves(tmp_path, monkeypatch):
 
 class FakeUpdates:
     """updates.Updates, recording what the buttons asked for."""
+
     def __init__(self):
         self.asked, self.is_running = [], False
 
     def view(self):
-        return {'version': '0.1.0', 'sha': 'a' * 40, 'branch': 'main', 'running': self.is_running, 'phase': 'idle',
-                'status': None, 'step': None, 'from': None, 'outcome': None, 'check': None, 'channel': 'releases',
-                'auto_check': False}
+        return {
+            'version': '0.1.0',
+            'sha': 'a' * 40,
+            'branch': 'main',
+            'running': self.is_running,
+            'phase': 'idle',
+            'status': None,
+            'step': None,
+            'from': None,
+            'outcome': None,
+            'check': None,
+            'channel': 'releases',
+            'auto_check': False,
+        }
 
     def running(self):
         return self.is_running
 
     def status(self):
-        return {'running': self.is_running, 'phase': 'Installing the new version' if self.is_running else None,
-                'step': 2 if self.is_running else None}
+        return {
+            'running': self.is_running,
+            'phase': 'Installing the new version' if self.is_running else None,
+            'step': 2 if self.is_running else None,
+        }
 
     def check(self, channel):
         self.asked.append(('check', channel))
@@ -442,12 +469,13 @@ def test_the_checkout_is_the_installers_or_this_codes_own(tmp_path):
 
 def test_the_page_shows_each_riders_workout_history(board, tmp_path):
     from peloton.workouts.workout_features import ROW_VERSION
+
     start = board.settings.clock() - 86400
     rows = {f'w{i}': {'id': f'w{i}', 'v': ROW_VERSION, 'disc': 'cycling', 'start': start} for i in range(3)}
     (tmp_path / 'cookies-joel-dashboard-cache.workout-rows.json').write_text(json.dumps({'version': 1, 'rows': rows}))
     board.sign_in()
     _, _, body = board.request('/')
-    card = body[body.index('id="insights"'):body.index('id="timing"')]
+    card = body[body.index('id="insights"') : body.index('id="timing"')]
     assert 'Joel' in card and '3 workouts' in card
     assert 'Jen' in card and 'Not copied yet' in card
 
@@ -485,6 +513,7 @@ def systemctl(board, monkeypatch):
                 break
             time.sleep(0.01)
         return fake.calls
+
     fake.wait_for = wait_for
 
     def run(cmd, **kwargs):
@@ -492,6 +521,7 @@ def systemctl(board, monkeypatch):
         if fake.error:
             raise fake.error
         return SimpleNamespace(returncode=fake.result[0], stderr=fake.result[1])
+
     monkeypatch.setattr(server.shutil, 'which', lambda name: '/bin/systemctl')
     monkeypatch.setattr(server.subprocess, 'run', run)
     return fake
@@ -499,7 +529,7 @@ def systemctl(board, monkeypatch):
 
 def _menu(body):
     start = body.index('<details class="power">')
-    return body[start:body.index('</details>', start)]
+    return body[start : body.index('</details>', start)]
 
 
 def test_the_power_menu_is_in_the_top_bar_before_sign_out(board):
@@ -532,9 +562,9 @@ def test_the_power_menu_is_off_the_setup_hotspot_page(board):
     assert 'class="power"' not in board.request('/')[2]
 
 
-@pytest.mark.parametrize('action,note', [
-    ('restart-display', 'Display restarted.'), ('stop-display', 'Display stopped.'),
-    ('start-display', 'Display started.')])
+@pytest.mark.parametrize(
+    'action,note', [('restart-display', 'Display restarted.'), ('stop-display', 'Display stopped.'), ('start-display', 'Display started.')]
+)
 def test_display_power_actions_run_systemctl_and_say_so(board, systemctl, action, note):
     board.sign_in()
     status, headers, _ = board.request('/power', {'action': action})
@@ -543,9 +573,9 @@ def test_display_power_actions_run_systemctl_and_say_so(board, systemctl, action
     assert note in board.request(headers['Location'])[2]
 
 
-@pytest.mark.parametrize('action,title,text', [
-    ('reboot', 'Rebooting', 'back in about a minute'),
-    ('poweroff', 'Shutting down', 'unplug it and plug it back in')])
+@pytest.mark.parametrize(
+    'action,title,text', [('reboot', 'Rebooting', 'back in about a minute'), ('poweroff', 'Shutting down', 'unplug it and plug it back in')]
+)
 def test_reboot_and_shutdown_answer_with_a_message_page(board, systemctl, action, title, text):
     board.sign_in()
     status, _, body = board.request('/power', {'action': action})
@@ -560,9 +590,9 @@ def test_the_message_page_is_sent_before_the_machine_is_told_to_go_down(board, s
     def send(self, *args, **kwargs):
         order.append('sent')
         return real_send(self, *args, **kwargs)
+
     monkeypatch.setattr(server.Handler, '_send', send)
-    monkeypatch.setattr(server.subprocess, 'run', lambda cmd, **k: order.append('run') or SimpleNamespace(
-        returncode=0, stderr=''))
+    monkeypatch.setattr(server.subprocess, 'run', lambda cmd, **k: order.append('run') or SimpleNamespace(returncode=0, stderr=''))
     board.sign_in()
     board.request('/power', {'action': 'reboot'})
     for _ in range(200):  # the command runs a moment after the reply

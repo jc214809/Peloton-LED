@@ -1,11 +1,24 @@
 """Workout compare grouping: is_peer, peers, baseline, stat, fill-in, comparison_group (hand-made rows)."""
+
 import copy
 import itertools
 
 import pytest
 
-from peloton.workouts.workout_compare import (DAY, MAX_PEERS, PLAN_KEYS, baseline, comparison_group, distance,
-                                     fill_in, is_peer, is_warm_up_or_cool_down, peers, standardise, stat)
+from peloton.workouts.workout_compare import (
+    DAY,
+    MAX_PEERS,
+    PLAN_KEYS,
+    baseline,
+    comparison_group,
+    distance,
+    fill_in,
+    is_peer,
+    is_warm_up_or_cool_down,
+    peers,
+    standardise,
+    stat,
+)
 
 T = 1_800_000_000
 _ids = itertools.count(1)
@@ -13,9 +26,20 @@ _ids = itertools.count(1)
 
 def row(days=0, **over):
     """A complete 30-minute Music cycling class `days` before T."""
-    base = {'id': f'w{next(_ids)}', 'disc': 'cycling', 'start': T - days * DAY, 'dur': 1800,
-            'complete': True, 'wtype': 'class', 'ctype': 'Music (Cycling)', 'mode': 'plain',
-            'outdoor': False, 'arms_sections': 0, 'plan': None, 'work': {}}
+    base = {
+        'id': f'w{next(_ids)}',
+        'disc': 'cycling',
+        'start': T - days * DAY,
+        'dur': 1800,
+        'complete': True,
+        'wtype': 'class',
+        'ctype': 'Music (Cycling)',
+        'mode': 'plain',
+        'outdoor': False,
+        'arms_sections': 0,
+        'plan': None,
+        'work': {},
+    }
     base.update(over)
     return base
 
@@ -32,21 +56,26 @@ def target(**over):
 
 # --- is_peer ---------------------------------------------------------------------------------
 
+
 def test_same_kind_is_peer():
     assert is_peer(target(), row(5))
 
 
-@pytest.mark.parametrize('ctype, title, expected', [
-    ('Warm Up Ride', '5 min Warm Up Ride', True),
-    ('Cool Down Ride', '10 min Cool Down Ride', True),
-    ('Theme', '10 min All for One Warm Up Ride', True),
-    ('Power Zone', '10 min FTP Warm Up Ride', True),
-    (None, '5 min Chris Stapleton Cool Down', True),
-    ('Barre', '5 min Barre warm-up', True),
-    ('Music (Running)', "10 min Red (Taylor's Version) Cooldown", True),
-    ('Music (Cycling)', '20 min Recovery Ride', False),
-    ('Intervals', 'Extra 10: Tabata Ride', False),
-    (None, None, False)])
+@pytest.mark.parametrize(
+    'ctype, title, expected',
+    [
+        ('Warm Up Ride', '5 min Warm Up Ride', True),
+        ('Cool Down Ride', '10 min Cool Down Ride', True),
+        ('Theme', '10 min All for One Warm Up Ride', True),
+        ('Power Zone', '10 min FTP Warm Up Ride', True),
+        (None, '5 min Chris Stapleton Cool Down', True),
+        ('Barre', '5 min Barre warm-up', True),
+        ('Music (Running)', "10 min Red (Taylor's Version) Cooldown", True),
+        ('Music (Cycling)', '20 min Recovery Ride', False),
+        ('Intervals', 'Extra 10: Tabata Ride', False),
+        (None, None, False),
+    ],
+)
 def test_warm_ups_and_cool_downs_by_class_type_or_title(ctype, title, expected):
     assert is_warm_up_or_cool_down({'ctype': ctype, 'title': title}) is expected
 
@@ -125,6 +154,7 @@ def test_zero_duration_has_no_peers(which):
 
 # --- rule 4b ---------------------------------------------------------------------------------
 
+
 def arms(n, days=0, **over):
     return row(days, ctype='Intervals', mode='arms', arms_sections=n, **over)
 
@@ -167,6 +197,7 @@ def test_rule_4b_applies_to_bike_bootcamp_arms():
 
 # --- peers -----------------------------------------------------------------------------------
 
+
 def test_peers_exclude_later_target_incomplete_and_other_kinds():
     t = target()
     keep = row(3)
@@ -197,6 +228,7 @@ def test_peers_respect_window():
 
 # --- baseline --------------------------------------------------------------------------------
 
+
 def test_baseline_five_in_year_stays():
     t = target()
     rows = [row(d) for d in (10, 20, 30, 40, 50)] + [row(d) for d in (400, 500, 600)]
@@ -224,6 +256,7 @@ def test_baseline_wider_window_with_nothing_extra_stays():
 
 # --- stat ------------------------------------------------------------------------------------
 
+
 def test_stat_values():
     s = stat(120, [100, 100, 110, 130])
     assert s == {'value': 120, 'median': 105.0, 'n': 4, 'pct': 14.3, 'below': 3}
@@ -240,6 +273,7 @@ def test_stat_none_when_missing_or_zero_median(value, values):
 
 
 # --- standardise / distance ------------------------------------------------------------------
+
 
 def test_standardise_is_z_score_with_equal_weights():
     z = standardise([{'a': 0}, {'a': 2}], keys=('a', 'b'))
@@ -263,6 +297,7 @@ def test_distance_identical_plans_zero_and_rms():
 
 
 # --- fill_in ---------------------------------------------------------------------------------
+
 
 def real_peers(n, days=10):
     return [row(days + i, plan=plan()) for i in range(n)]
@@ -329,16 +364,16 @@ def test_fill_in_candidate_filters():
     real = real_peers(3)
     good = candidate(20, 0.5)
     bad = [
-        candidate(-3, 0),                          # later than the target
-        candidate(731, 0),                         # outside 730 days
+        candidate(-3, 0),  # later than the target
+        candidate(731, 0),  # outside 730 days
         candidate(20, 0, complete=False),
-        row(20, plan=None, ctype='Intervals'),     # no plan
+        row(20, plan=None, ctype='Intervals'),  # no plan
         candidate(20, 0, disc='rowing'),
         candidate(20, 0, wtype='freestyle'),
         candidate(20, 0, mode='arms'),
-        candidate(20, 0, dur=1200),                # 0.67 of the target
-        dict(candidate(20, 0), id=t['id']),        # the target itself
-        dict(real[0], ctype='Intervals'),          # already a real peer (same id)
+        candidate(20, 0, dur=1200),  # 0.67 of the target
+        dict(candidate(20, 0), id=t['id']),  # the target itself
+        dict(real[0], ctype='Intervals'),  # already a real peer (same id)
     ]
     filled = fill_in(t, [t] + real + [good] + bad, real)
     assert [f['id'] for f in filled] == [good['id']]
@@ -376,6 +411,7 @@ def test_fill_in_distance_tie_prefers_newer():
 
 
 # --- comparison_group ------------------------------------------------------------------------
+
 
 def test_comparison_group_peers_plus_fill_in():
     t = target(plan=plan())

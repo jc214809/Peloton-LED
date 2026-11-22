@@ -10,14 +10,15 @@ the title, unit and bottom line are there from the first frame; the ring (64 row
 from empty to the real figure with an ease-out while the number counts up with it, and on 64 rows the ring's
 leading end then flashes once. After that the page holds still, and that settled frame is the page.
 """
+
 import math
 from bisect import bisect_right
 from functools import lru_cache
 
-from driver import graphics
-
 from display.display import get_text_width, loaded_fonts
+from driver import graphics
 from peloton.feeds.challenges import MONTH_ABBREVIATIONS, UNEARNED, tier_progress, valid_challenge
+
 from .journey_screen import ease_out
 from .screen import Screen
 
@@ -35,13 +36,13 @@ RING_RADIUS = 21.5
 RING_WIDTH = 3
 SUBSAMPLES = 5  # per side: each pixel's coverage is measured at 5 x 5 points
 # The intro, in seconds from the page appearing: the sweep (bar and number), then the flash on the ring's end.
-FRAME_SECONDS = 0.05      # 20 fps
+FRAME_SECONDS = 0.05  # 20 fps
 SWEEP_SECONDS = 0.8
-INTRO_SECONDS = 1.0       # the flash is over, the page holds still (a test checks)
+INTRO_SECONDS = 1.0  # the flash is over, the page holds still (a test checks)
 SWEEP_FRAMES = round(SWEEP_SECONDS / FRAME_SECONDS)
 FLASH_FRAMES = round((INTRO_SECONDS - SWEEP_SECONDS) / FRAME_SECONDS)
-FLASH_PEAK = 0.7          # at most this much of the way to white
-FLASH_RADIUS = 4.5        # pixels from the ring's end that brighten
+FLASH_PEAK = 0.7  # at most this much of the way to white
+FLASH_RADIUS = 4.5  # pixels from the ring's end that brighten
 # The number inside the ring: the widest advance that clears the ring's inside at its rows.
 RING_NUMBER_WIDTH = 33
 # The unit under it, in the 4 px `stats` font: the ring's inside is 31 px wide at its row.
@@ -112,13 +113,11 @@ def ring_pixels(fraction, color):
         if fraction <= 0:
             lit = 0
         elif math.hypot(mx - ex, my - ey) <= half + 0.75:  # the end cap reaches into this pixel: sample it
-            lit = sum(1 for px, py, angle, under_start in samples
-                      if under_start or angle <= end or math.hypot(px - ex, py - ey) <= half)
+            lit = sum(1 for px, py, angle, under_start in samples if under_start or angle <= end or math.hypot(px - ex, py - ey) <= half)
         else:
             lit = covered + bisect_right(angles, end)
         track = band - lit
-        pixels.append((x, y) + tuple(min(255, round(color[k] * lit / total + RING_TRACK[k] * track / total))
-                                     for k in range(3)))
+        pixels.append((x, y) + tuple(min(255, round(color[k] * lit / total + RING_TRACK[k] * track / total)) for k in range(3)))
     return tuple(pixels)
 
 
@@ -222,7 +221,7 @@ def ring_number(shown):
 def remaining_line(challenge, font, width):
     """`497 TO 6K`; `497 TO GO` when the tier's name makes it too wide; else just the number."""
     to_next = challenge['to_next']
-    for line in (f"{to_next} TO {challenge['next']['title']}", f'{to_next} TO GO'):
+    for line in (f'{to_next} TO {challenge["next"]["title"]}', f'{to_next} TO GO'):
         if get_text_width(font, line) <= width:
             return line
     return to_next

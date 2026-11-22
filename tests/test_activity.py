@@ -1,5 +1,6 @@
 """PR B: the streak reminder and the activity heatmap, built from the workout log."""
-from datetime import date, datetime, timedelta, UTC
+
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import Mock
 
 import pytest
@@ -7,8 +8,8 @@ import pytest
 from display.display import initialize_fonts
 from display.ui.heatmap_screen import EMPTY, LEVELS, HeatmapScreen, heatmap_cells, level_color
 from display.ui.streak_risk_screen import StreakRiskScreen, days_left_text
-from peloton.workouts.activity import counts_for_streaks, daily_minutes, streak_week_workouts
 from peloton.config import load_config
+from peloton.workouts.activity import counts_for_streaks, daily_minutes, streak_week_workouts
 from peloton.workouts.workout_log import WorkoutLog
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
@@ -19,39 +20,49 @@ SATURDAY = datetime(2026, 10, 31, 16, 0, tzinfo=UTC)
 
 
 def _w(identity, when, status='COMPLETE', minutes=20, synced=False):
-    return {'id': identity, 'status': status, 'start_time': int(when.timestamp()), 'fitness_discipline': 'cycling',
-            'ride': {'duration': minutes * 60}, 'is_3p_fit_feed_workout_excluded_from_streaks': synced}
+    return {
+        'id': identity,
+        'status': status,
+        'start_time': int(when.timestamp()),
+        'fitness_discipline': 'cycling',
+        'ride': {'duration': minutes * 60},
+        'is_3p_fit_feed_workout_excluded_from_streaks': synced,
+    }
 
 
 # calculations
 
+
 def test_streak_week_counts_only_streak_eligible_completed_workouts_since_monday():
-    workouts = [_w('ride', SATURDAY - timedelta(hours=2)),
-                _w('watch-walk', SATURDAY - timedelta(hours=1), synced=True),
-                _w('running', SATURDAY - timedelta(minutes=5), status='IN_PROGRESS'),
-                _w('last-sunday', SATURDAY - timedelta(days=6))]
+    workouts = [
+        _w('ride', SATURDAY - timedelta(hours=2)),
+        _w('watch-walk', SATURDAY - timedelta(hours=1), synced=True),
+        _w('running', SATURDAY - timedelta(minutes=5), status='IN_PROGRESS'),
+        _w('last-sunday', SATURDAY - timedelta(days=6)),
+    ]
     assert streak_week_workouts(workouts, ZONE, now=SATURDAY) == 1
     assert streak_week_workouts(workouts[1:], ZONE, now=SATURDAY) == 0
     assert counts_for_streaks({}) and not counts_for_streaks({'is_3p_fit_feed_workout_excluded_from_streaks': True})
 
 
 def test_daily_minutes_covers_twelve_monday_aligned_weeks_through_today():
-    workouts = [_w('a', SATURDAY - timedelta(hours=3), minutes=30), _w('b', SATURDAY - timedelta(hours=2), minutes=15),
-                _w('c', SATURDAY - timedelta(days=1), minutes=45),
-                _w('first-day', datetime(2026, 8, 10, 16, tzinfo=UTC)),      # Monday, 12 weeks back
-                _w('too-old', datetime(2026, 8, 9, 16, tzinfo=UTC)),
-                _w('unfinished', SATURDAY, status='IN_PROGRESS'),
-                {'id': 'undated', 'status': 'COMPLETE', 'ride': {'duration': 600}}]
-    assert daily_minutes(workouts, ZONE, now=SATURDAY) == {
-        '2026-08-10': 20, '2026-10-30': 45, '2026-10-31': 45}
+    workouts = [
+        _w('a', SATURDAY - timedelta(hours=3), minutes=30),
+        _w('b', SATURDAY - timedelta(hours=2), minutes=15),
+        _w('c', SATURDAY - timedelta(days=1), minutes=45),
+        _w('first-day', datetime(2026, 8, 10, 16, tzinfo=UTC)),  # Monday, 12 weeks back
+        _w('too-old', datetime(2026, 8, 9, 16, tzinfo=UTC)),
+        _w('unfinished', SATURDAY, status='IN_PROGRESS'),
+        {'id': 'undated', 'status': 'COMPLETE', 'ride': {'duration': 600}},
+    ]
+    assert daily_minutes(workouts, ZONE, now=SATURDAY) == {'2026-08-10': 20, '2026-10-30': 45, '2026-10-31': 45}
 
 
 def test_log_derives_both_and_keeps_the_heatmap_for_a_complete_log():
     # A fixed clock: "30 minutes ago" from the real one is last week for the
     # first half hour of every Monday.
     log = WorkoutLog('unused')
-    log.merge([_w('today', SATURDAY - timedelta(minutes=30)),
-               _w('synced', SATURDAY - timedelta(minutes=20), synced=True)])
+    log.merge([_w('today', SATURDAY - timedelta(minutes=30)), _w('synced', SATURDAY - timedelta(minutes=20), synced=True)])
     partial = log.derived(tzname=ZONE, now=SATURDAY)
     assert partial['streak_week_workouts'] == 1 and partial['activity_days'] == {}
     log.backfill['complete'] = True
@@ -63,26 +74,43 @@ def test_log_derives_both_and_keeps_the_heatmap_for_a_complete_log():
 
 # rotation pages
 
+
 def _snapshot(week_workouts, current=74, days=None):
-    return {'me': {'timezone': ZONE}, 'summaries': [], 'status': 'ready', 'totals': {},
-            'streaks': {'current_weekly': current, 'best_weekly': 80},
-            'streak_week_workouts': week_workouts, 'activity_days': days if days is not None else {}}
+    return {
+        'me': {'timezone': ZONE},
+        'summaries': [],
+        'status': 'ready',
+        'totals': {},
+        'streaks': {'current_weekly': current, 'best_weekly': 80},
+        'streak_week_workouts': week_workouts,
+        'activity_days': days if days is not None else {},
+    }
 
 
 def _display(**extra):
-    return {'rotation': ['streaks', 'heatmap'], 'duration': 1, 'overview_duration': 5,
-            'last_workout_duration': 1, 'color': 'white', 'timezone': ZONE, **extra}
+    return {
+        'rotation': ['streaks', 'heatmap'],
+        'duration': 1,
+        'overview_duration': 5,
+        'last_workout_duration': 1,
+        'color': 'white',
+        'timezone': ZONE,
+        **extra,
+    }
 
 
-@pytest.mark.parametrize('weekday, workouts, reminder_day, expected', [
-    (5, 0, 5, 'streak_risk'),       # Saturday, nothing yet
-    (6, 0, 5, 'streak_risk'),       # Sunday
-    (4, 0, 5, 'streak'),            # Friday: too early
-    (5, 1, 5, 'streak'),            # already kept
-    (5, None, 5, 'streak'),         # unknown (log not loaded): no false alarm
-    (3, 0, 3, 'streak_risk'),       # configurable day
-    (6, 0, None, 'streak'),         # disabled
-])
+@pytest.mark.parametrize(
+    'weekday, workouts, reminder_day, expected',
+    [
+        (5, 0, 5, 'streak_risk'),  # Saturday, nothing yet
+        (6, 0, 5, 'streak_risk'),  # Sunday
+        (4, 0, 5, 'streak'),  # Friday: too early
+        (5, 1, 5, 'streak'),  # already kept
+        (5, None, 5, 'streak'),  # unknown (log not loaded): no false alarm
+        (3, 0, 3, 'streak_risk'),  # configurable day
+        (6, 0, None, 'streak'),  # disabled
+    ],
+)
 def test_streak_page_becomes_the_reminder_late_in_an_empty_week(monkeypatch, weekday, workouts, reminder_day, expected):
     monkeypatch.setattr('display.rotation_pages.week_day', lambda zone: weekday)
     pages = build_rotation_pages(_snapshot(workouts), Mock(), _display(streak_reminder_day=reminder_day), 'R', 64)
@@ -104,6 +132,7 @@ def test_heatmap_page_needs_activity(monkeypatch):
 
 # screens
 
+
 def test_heatmap_cells_and_levels():
     cells = heatmap_cells({'2026-10-31': 100, '2026-08-10': 5}, date(2026, 10, 31), 12)
     assert len(cells) == 11 * 7 + 6
@@ -112,7 +141,17 @@ def test_heatmap_cells_and_levels():
     colors = [color for _, color in LEVELS]
     assert len(colors) == 5
     assert [level_color(m) for m in (1, 5, 6, 20, 21, 38, 39, 59, 60, 224)] == [
-        colors[0], colors[0], colors[1], colors[1], colors[2], colors[2], colors[3], colors[3], colors[4], colors[4]]
+        colors[0],
+        colors[0],
+        colors[1],
+        colors[1],
+        colors[2],
+        colors[2],
+        colors[3],
+        colors[3],
+        colors[4],
+        colors[4],
+    ]
 
 
 def test_heatmap_levels_step_down_in_brightness_and_stand_out_from_empty():
@@ -167,8 +206,10 @@ def test_streak_reminder_rejects_bad_state_and_words_the_deadline():
 
 # config
 
+
 def test_config_accepts_the_heatmap_and_validates_the_reminder_day(tmp_path):
     import json
+
     path = tmp_path / 'config.json'
     path.write_text(json.dumps({'display': {'rotation': ['heatmap'], 'streak_reminder_day': None}}))
     assert load_config(path)['display']['streak_reminder_day'] is None

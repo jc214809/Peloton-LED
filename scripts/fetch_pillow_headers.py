@@ -9,6 +9,7 @@ different version whose struct layout may not match (Pillow 12 changed it).
 Usage: python fetch_pillow_headers.py DEST_DIR
 Prints DEST_DIR on success; exits non-zero with a message otherwise.
 """
+
 import io
 import json
 import sys
@@ -39,8 +40,7 @@ def extract_headers(archive_bytes, dest):
     with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode='r:gz') as archive:
         for member in archive.getmembers():
             path = PurePosixPath(member.name)
-            if (member.isfile() and path.suffix == '.h' and len(path.parts) == 4
-                    and '/'.join(path.parts[1:3]) == HEADER_DIR):
+            if member.isfile() and path.suffix == '.h' and len(path.parts) == 4 and '/'.join(path.parts[1:3]) == HEADER_DIR:
                 (dest / path.name).write_bytes(archive.extractfile(member).read())
                 count += 1
     if not (dest / 'Imaging.h').is_file():
@@ -60,6 +60,7 @@ def main(argv=None, fetch=_fetch, version=None):
         sys.exit(__doc__)
     if version is None:
         import PIL
+
         version = PIL.__version__
     try:
         count = extract_headers(fetch(sdist_url(version, fetch)), argv[0])

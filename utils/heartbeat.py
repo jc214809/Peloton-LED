@@ -9,6 +9,7 @@ display's run. Without the folder (a dev machine, the emulator) nothing is writt
 atomically (a temp file renamed over it) and never raises: a board that can't write it only fails
 its health check.
 """
+
 import json
 import logging
 import os

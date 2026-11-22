@@ -1,4 +1,5 @@
 """Distance journey: tally, route progress, config, dashboard backfill, screen."""
+
 import json
 from unittest.mock import Mock
 
@@ -6,13 +7,31 @@ import pytest
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
 from display.ui import journey_screen
-from display.ui.journey_screen import (DONE_COLOR, GROUP_COLORS, TIP_COLOR, JourneyScreen, counted_miles,
-                                       group_cents, group_figure, journey_steps, journey_text,
-                                       percent, tip_brightness, trip_text)
+from display.ui.journey_screen import (
+    DONE_COLOR,
+    GROUP_COLORS,
+    TIP_COLOR,
+    JourneyScreen,
+    counted_miles,
+    group_cents,
+    group_figure,
+    journey_steps,
+    journey_text,
+    percent,
+    tip_brightness,
+    trip_text,
+)
 from peloton.config import load_config
-from peloton.stats.journey import (DEFAULT_JOURNEY, DISTANCE_DISCIPLINES, journey_progress,
-                             merge_distance_totals, mile_group, uses_metric, workout_miles)
 from peloton.selection import normalize_discipline
+from peloton.stats.journey import (
+    DEFAULT_JOURNEY,
+    DISTANCE_DISCIPLINES,
+    journey_progress,
+    merge_distance_totals,
+    mile_group,
+    uses_metric,
+    workout_miles,
+)
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 
@@ -32,16 +51,19 @@ def test_workout_miles_handles_units_and_bad_values():
 
 
 def test_merge_distance_totals_skips_incomplete_and_distance_less_workouts():
-    totals = merge_distance_totals({'cycling': 10}, [
-        row('cycling', 5), row('running', 1.25), row('circuit', 0.75),
-        row('running', 3, status='IN_PROGRESS'), row('strength', None)])
+    totals = merge_distance_totals(
+        {'cycling': 10},
+        [row('cycling', 5), row('running', 1.25), row('circuit', 0.75), row('running', 3, status='IN_PROGRESS'), row('strength', None)],
+    )
     assert totals == {'cycling': 15, 'running': 1.25, 'tread_bootcamp': 0.75}
 
 
 def test_merge_distance_totals_counts_only_from_the_start_date():
-    rows = [{**row('cycling', 5, 'new'), 'created_at': 1767268800},    # 2026-01-01 07:00 New York
-            {**row('cycling', 7, 'eve'), 'created_at': 1767241800},    # 2025-12-31 23:30 New York
-            {**row('running', 2, 'undated')}]
+    rows = [
+        {**row('cycling', 5, 'new'), 'created_at': 1767268800},  # 2026-01-01 07:00 New York
+        {**row('cycling', 7, 'eve'), 'created_at': 1767241800},  # 2025-12-31 23:30 New York
+        {**row('running', 2, 'undated')},
+    ]
     assert merge_distance_totals({}, rows, since='2026-01-01', tzname='America/New_York') == {'cycling': 5}
     assert merge_distance_totals({}, rows) == {'cycling': 12, 'running': 2}
 
@@ -64,88 +86,112 @@ def test_progress_counts_only_chosen_disciplines_and_goes_there_and_back():
 
 
 def test_default_journey_counts_every_discipline_with_distance():
-    totals = {'cycling': 100, 'bike_bootcamp': 10, 'tread_bootcamp': 5, 'running_outdoor': 3,
-              'rowing': 2, 'walking': 1}
+    totals = {'cycling': 100, 'bike_bootcamp': 10, 'tread_bootcamp': 5, 'running_outdoor': 3, 'rowing': 2, 'walking': 1}
     assert journey_progress(totals, DEFAULT_JOURNEY)['miles'] == 121
     # Listing disciplines still narrows it.
     assert journey_progress(totals, {**DEFAULT_JOURNEY, 'disciplines': ['Cycling', 'Outdoor Run']})['miles'] == 103
 
 
 def test_every_distance_discipline_name_matches_a_tally_key():
-    keys = {'cycling', 'bike_bootcamp', 'running', 'running_outdoor', 'tread_bootcamp',
-            'walking', 'walking_outdoor', 'rowing', 'row_bootcamp'}
+    keys = {
+        'cycling',
+        'bike_bootcamp',
+        'running',
+        'running_outdoor',
+        'tread_bootcamp',
+        'walking',
+        'walking_outdoor',
+        'rowing',
+        'row_bootcamp',
+    }
     assert {normalize_discipline(name) for name in DISTANCE_DISCIPLINES} == keys
-    assert merge_distance_totals({}, [row('circuit', 1), row('caesar_bootcamp', 1609.344),
-                                      row('outdoor_running', 2)]) == pytest.approx(
-        {'tread_bootcamp': 1, 'row_bootcamp': 1, 'running_outdoor': 2})
+    assert merge_distance_totals({}, [row('circuit', 1), row('caesar_bootcamp', 1609.344), row('outdoor_running', 2)]) == pytest.approx(
+        {'tread_bootcamp': 1, 'row_bootcamp': 1, 'running_outdoor': 2}
+    )
 
 
 def test_config_warns_when_a_listed_discipline_has_no_distance(tmp_path, caplog):
-    load_config(write_config(tmp_path, {'display': {'journey': {
-        **DEFAULT_JOURNEY, 'disciplines': ['Cycling', 'Strength']}}}))
+    load_config(write_config(tmp_path, {'display': {'journey': {**DEFAULT_JOURNEY, 'disciplines': ['Cycling', 'Strength']}}}))
     assert "'Strength' has no distance" in caplog.text and 'Cycling' not in caplog.text.split('distance comes')[0]
 
 
 def test_config_journey_without_disciplines_counts_everything(tmp_path):
-    journey = load_config(write_config(tmp_path, {'display': {'journey': {
-        'from': 'A', 'to': 'B', 'miles': 10}}}))['display']['journey']
+    journey = load_config(write_config(tmp_path, {'display': {'journey': {'from': 'A', 'to': 'B', 'miles': 10}}}))['display']['journey']
     assert journey['disciplines'] is None
 
 
-@pytest.mark.parametrize('journey', [None, {}, {**DEFAULT_JOURNEY, 'miles': 0},
-                                     {**DEFAULT_JOURNEY, 'miles': True}])
+@pytest.mark.parametrize('journey', [None, {}, {**DEFAULT_JOURNEY, 'miles': 0}, {**DEFAULT_JOURNEY, 'miles': True}])
 def test_progress_is_none_for_unusable_routes(journey):
     assert journey_progress({'cycling': 10}, journey) is None
 
 
 def test_progress_splits_the_miles_into_bike_walk_run_and_row():
-    totals = {'cycling': 100, 'bike_bootcamp': 10, 'tread_bootcamp': 5, 'running_outdoor': 3,
-              'walking': 1, 'hiking': 2, 'rowing': 20, 'row_bootcamp': 4}
+    totals = {
+        'cycling': 100,
+        'bike_bootcamp': 10,
+        'tread_bootcamp': 5,
+        'running_outdoor': 3,
+        'walking': 1,
+        'hiking': 2,
+        'rowing': 20,
+        'row_bootcamp': 4,
+    }
     progress = journey_progress(totals, DEFAULT_JOURNEY)
-    assert progress['groups'] == [{'key': 'bike', 'label': 'BIKE', 'miles': 110},
-                                  {'key': 'row', 'label': 'ROW', 'miles': 24},
-                                  {'key': 'walk_run', 'label': 'WALK/RUN', 'miles': 11}]
+    assert progress['groups'] == [
+        {'key': 'bike', 'label': 'BIKE', 'miles': 110},
+        {'key': 'row', 'label': 'ROW', 'miles': 24},
+        {'key': 'walk_run', 'label': 'WALK/RUN', 'miles': 11},
+    ]
     assert sum(g['miles'] for g in progress['groups']) == progress['miles'], 'every mile is in a row'
 
 
 def test_progress_groups_follow_the_chosen_disciplines_and_skip_empty_ones():
     totals = {'cycling': 100, 'running': 30, 'rowing': 0, 'walking': True}
     assert journey_progress(totals, DEFAULT_JOURNEY)['groups'] == [
-        {'key': 'bike', 'label': 'BIKE', 'miles': 100}, {'key': 'walk_run', 'label': 'WALK/RUN', 'miles': 30}]
+        {'key': 'bike', 'label': 'BIKE', 'miles': 100},
+        {'key': 'walk_run', 'label': 'WALK/RUN', 'miles': 30},
+    ]
     only_running = journey_progress(totals, {**DEFAULT_JOURNEY, 'disciplines': ['Running']})
     assert [g['key'] for g in only_running['groups']] == ['walk_run']
     assert journey_progress({}, DEFAULT_JOURNEY)['groups'] == []
 
 
-@pytest.mark.parametrize('key, group', [
-    ('cycling', 'bike'), ('bike_bootcamp', 'bike'), ('rowing', 'row'), ('row_bootcamp', 'row'),
-    ('running', 'walk_run'), ('walking_outdoor', 'walk_run'), ('tread_bootcamp', 'walk_run'),
-    ('hiking', 'walk_run'), ('something_new', 'walk_run')])
+@pytest.mark.parametrize(
+    'key, group',
+    [
+        ('cycling', 'bike'),
+        ('bike_bootcamp', 'bike'),
+        ('rowing', 'row'),
+        ('row_bootcamp', 'row'),
+        ('running', 'walk_run'),
+        ('walking_outdoor', 'walk_run'),
+        ('tread_bootcamp', 'walk_run'),
+        ('hiking', 'walk_run'),
+        ('something_new', 'walk_run'),
+    ],
+)
 def test_every_discipline_lands_in_a_group(key, group):
     assert mile_group(key)[0] == group
 
 
 def test_32_rows_share_the_journey_time_between_its_two_steps():
-    display = {'rotation': ['journey'], 'last_workout_duration': 15, 'overview_duration': 5,
-               'journey': DEFAULT_JOURNEY}
-    snapshot = {'summaries': [], 'totals': {}, 'status': 'ready',
-                'distance_totals': {'cycling': 400, 'running': 40}}
-    (_, state, duration), = build_rotation_pages(snapshot, Mock(), display, 'R', 32)
+    display = {'rotation': ['journey'], 'last_workout_duration': 15, 'overview_duration': 5, 'journey': DEFAULT_JOURNEY}
+    snapshot = {'summaries': [], 'totals': {}, 'status': 'ready', 'distance_totals': {'cycling': 400, 'running': 40}}
+    ((_, state, duration),) = build_rotation_pages(snapshot, Mock(), display, 'R', 32)
     assert duration == 8 and state['step_seconds'] == 4, 'raised to 4 s a step'
     display['screen_durations'] = {'journey': 12}
-    (_, state, duration), = build_rotation_pages(snapshot, Mock(), display, 'R', 32)
+    ((_, state, duration),) = build_rotation_pages(snapshot, Mock(), display, 'R', 32)
     assert duration == 12 and state['step_seconds'] == 6
-    (_, state, duration), = build_rotation_pages(snapshot, Mock(), display, 'R', 64)
+    ((_, state, duration),) = build_rotation_pages(snapshot, Mock(), display, 'R', 64)
     assert duration == 12 and 'step_seconds' not in state, '64 rows: one page'
     snapshot['distance_totals'] = {'cycling': 400}
     display['screen_durations'] = {}
-    (_, state, duration), = build_rotation_pages(snapshot, Mock(), display, 'R', 32)
+    ((_, state, duration),) = build_rotation_pages(snapshot, Mock(), display, 'R', 32)
     assert duration == 5 and 'step_seconds' not in state, 'one kind of miles: no split to show'
 
 
 def test_rotation_shows_journey_only_once_there_are_miles():
-    display = {'rotation': ['journey'], 'last_workout_duration': 15, 'overview_duration': 5,
-               'journey': DEFAULT_JOURNEY}
+    display = {'rotation': ['journey'], 'last_workout_duration': 15, 'overview_duration': 5, 'journey': DEFAULT_JOURNEY}
     snapshot = {'summaries': [], 'totals': {}, 'status': 'ready', 'distance_totals': {'cycling': 440}}
     pages = build_rotation_pages(snapshot, Mock(), display, 'R', 64)
     assert pages[0][0] == 'journey' and pages[0][1]['fraction'] == 0.5
@@ -169,31 +215,43 @@ def test_config_defaults_to_columbus_to_disney_world(tmp_path):
 
 def test_config_accepts_a_custom_route_and_per_rider_override(tmp_path):
     custom = {'from': 'Chicago', 'to': 'Nashville', 'miles': 473, 'disciplines': ['Rowing']}
-    config = load_config(write_config(tmp_path, {
-        'display': {'journey': custom},
-        'users': [{'name': 'Jen', 'journey': {**custom, 'disciplines': ['Running', 'Walking']}}]}))
+    config = load_config(
+        write_config(
+            tmp_path,
+            {'display': {'journey': custom}, 'users': [{'name': 'Jen', 'journey': {**custom, 'disciplines': ['Running', 'Walking']}}]},
+        )
+    )
     assert config['display']['journey'] == {**custom, 'start_date': None}
     assert config['users'][0]['journey']['disciplines'] == ['Running', 'Walking']
 
 
 def test_config_accepts_a_journey_start_date_for_display_and_riders(tmp_path):
-    config = load_config(write_config(tmp_path, {
-        'display': {'journey': {**DEFAULT_JOURNEY, 'start_date': ' 2026-01-01 '}},
-        'users': [{'name': 'Jen', 'journey': {**DEFAULT_JOURNEY, 'start_date': '2026-06-15'}}]}))
+    config = load_config(
+        write_config(
+            tmp_path,
+            {
+                'display': {'journey': {**DEFAULT_JOURNEY, 'start_date': ' 2026-01-01 '}},
+                'users': [{'name': 'Jen', 'journey': {**DEFAULT_JOURNEY, 'start_date': '2026-06-15'}}],
+            },
+        )
+    )
     assert config['display']['journey']['start_date'] == '2026-01-01'
     assert config['users'][0]['journey']['start_date'] == '2026-06-15'
 
 
-@pytest.mark.parametrize('journey, message', [
-    ({'from': 'A', 'to': 'B', 'disciplines': ['Cycling']}, 'needs from, to and miles'),
-    ({'from': ' ', 'to': 'B', 'miles': 10, 'disciplines': ['Cycling']}, 'journey.from'),
-    ({'from': 'A', 'to': 'B', 'miles': -1, 'disciplines': ['Cycling']}, 'journey.miles'),
-    ({'from': 'A', 'to': 'B', 'miles': 10, 'disciplines': []}, 'journey.disciplines'),
-    ({'from': 'A', 'to': 'B', 'miles': 10, 'disciplines': [5]}, 'journey.disciplines'),
-    ({**DEFAULT_JOURNEY, 'start_date': '2026-13-01'}, 'journey.start_date'),
-    ({**DEFAULT_JOURNEY, 'start_date': 'last spring'}, 'journey.start_date'),
-    ({**DEFAULT_JOURNEY, 'start_date': 20260101}, 'journey.start_date'),
-])
+@pytest.mark.parametrize(
+    'journey, message',
+    [
+        ({'from': 'A', 'to': 'B', 'disciplines': ['Cycling']}, 'needs from, to and miles'),
+        ({'from': ' ', 'to': 'B', 'miles': 10, 'disciplines': ['Cycling']}, 'journey.from'),
+        ({'from': 'A', 'to': 'B', 'miles': -1, 'disciplines': ['Cycling']}, 'journey.miles'),
+        ({'from': 'A', 'to': 'B', 'miles': 10, 'disciplines': []}, 'journey.disciplines'),
+        ({'from': 'A', 'to': 'B', 'miles': 10, 'disciplines': [5]}, 'journey.disciplines'),
+        ({**DEFAULT_JOURNEY, 'start_date': '2026-13-01'}, 'journey.start_date'),
+        ({**DEFAULT_JOURNEY, 'start_date': 'last spring'}, 'journey.start_date'),
+        ({**DEFAULT_JOURNEY, 'start_date': 20260101}, 'journey.start_date'),
+    ],
+)
 def test_config_rejects_bad_routes(tmp_path, journey, message):
     with pytest.raises(ValueError, match=message):
         load_config(write_config(tmp_path, {'display': {'journey': journey}}))
@@ -224,10 +282,19 @@ def render(height, progress, at=SETTLED):
 
 @pytest.mark.parametrize('height', [32, 64])
 @pytest.mark.parametrize('split', [None, EVERY_GROUP])
-@pytest.mark.parametrize('miles, journey', [
-    (252, DEFAULT_JOURNEY), (3470, DEFAULT_JOURNEY), (1300, DEFAULT_JOURNEY), (12345.6, DEFAULT_JOURNEY),
-    (500, {**DEFAULT_JOURNEY, 'from': 'San Francisco', 'to': 'Walt Disney World Resort'}),
-    (8.8, {**DEFAULT_JOURNEY, 'miles': 26.2}), (999.9, DEFAULT_JOURNEY), (1879.9, DEFAULT_JOURNEY)])
+@pytest.mark.parametrize(
+    'miles, journey',
+    [
+        (252, DEFAULT_JOURNEY),
+        (3470, DEFAULT_JOURNEY),
+        (1300, DEFAULT_JOURNEY),
+        (12345.6, DEFAULT_JOURNEY),
+        (500, {**DEFAULT_JOURNEY, 'from': 'San Francisco', 'to': 'Walt Disney World Resort'}),
+        (8.8, {**DEFAULT_JOURNEY, 'miles': 26.2}),
+        (999.9, DEFAULT_JOURNEY),
+        (1879.9, DEFAULT_JOURNEY),
+    ],
+)
 def test_journey_screen_fits_both_boards(height, split, miles, journey):
     progress = progress_for(miles, journey, split)
     if journey_steps(progress, height) == 2:
@@ -257,7 +324,10 @@ def test_64_rows_list_each_group_in_its_colour_most_miles_first():
     image = render(64, progress)
     # One colour square a row, under the bar, in group order.
     assert [image.getpixel((3, 47 + row * 7 - 3)) for row in range(3)] == [
-        GROUP_COLORS['bike'], GROUP_COLORS['walk_run'], GROUP_COLORS['row']]
+        GROUP_COLORS['bike'],
+        GROUP_COLORS['walk_run'],
+        GROUP_COLORS['row'],
+    ]
 
 
 def test_32_rows_show_the_trip_then_the_miles_by_type():
@@ -287,13 +357,14 @@ def test_switching_steps_clears_a_board_without_frame_canvases():
     screen.render(matrix, progress)
     screen.update(5)
     screen.render(matrix, progress)
-    assert matrix.image == render(32, progress, 5), "no pixels left over from the trip step"
+    assert matrix.image == render(32, progress, 5), 'no pixels left over from the trip step'
 
 
 def test_the_opening_animation_is_done_by_intro_seconds():
     js = journey_screen
-    assert js.INTRO_SECONDS >= max(js.FILL_SECONDS, js.SPLIT_GROW_SECONDS,
-                                   js.ROW_START_SECONDS + 2 * js.ROW_GAP_SECONDS + js.ROW_SLIDE_SECONDS)
+    assert js.INTRO_SECONDS >= max(
+        js.FILL_SECONDS, js.SPLIT_GROW_SECONDS, js.ROW_START_SECONDS + 2 * js.ROW_GAP_SECONDS + js.ROW_SLIDE_SECONDS
+    )
     assert js.INTRO_SECONDS <= 1.0, 'a 32-row step has 4 s: at least 3 of them still'
     progress = {**progress_for(1190, split=EVERY_GROUP), 'step_seconds': STEP}
     for height, start in ((64, 0), (32, 0), (32, STEP)):
@@ -305,8 +376,7 @@ def test_the_opening_animation_is_done_by_intro_seconds():
 def test_the_bar_fills_from_empty(height):
     progress = progress_for(440)
     bar_y = 37 if height == 64 else 28
-    orange = [sum(render(height, progress, at).getpixel((x, bar_y)) == DONE_COLOR for x in range(64))
-              for at in (0, 0.2, 0.5, SETTLED)]
+    orange = [sum(render(height, progress, at).getpixel((x, bar_y)) == DONE_COLOR for x in range(64)) for at in (0, 0.2, 0.5, SETTLED)]
     assert orange[0] == 0 and orange == sorted(orange) and orange[-1] == 29
     assert render(height, progress, 0).getpixel((2, bar_y)) == TIP_COLOR, 'the tip starts at the left end'
 
@@ -355,10 +425,14 @@ def test_64_rows_slide_the_groups_in_one_after_another():
 
 def test_32_rows_grow_the_split_a_colour_at_a_time():
     progress = {**progress_for(500, split=EVERY_GROUP), 'step_seconds': STEP}
+
     def at(seconds):
         image = render(32, progress, STEP + seconds)
-        return ([image.getpixel((x, 8)) for x in (2, 61)],
-                [image.getpixel((x, y)) != (0, 0, 0) for y in (14, 21, 28) for x in range(2, 30)])
+        return (
+            [image.getpixel((x, 8)) for x in (2, 61)],
+            [image.getpixel((x, y)) != (0, 0, 0) for y in (14, 21, 28) for x in range(2, 30)],
+        )
+
     bar, _ = at(0)
     assert bar == [(0, 0, 0)] * 2, 'the split starts empty'
     bar, _ = at(0.15)
@@ -369,10 +443,11 @@ def test_32_rows_grow_the_split_a_colour_at_a_time():
 
 def test_a_row_waits_for_its_colour_to_land():
     progress = {**progress_for(500, split=EVERY_GROUP), 'step_seconds': STEP}
+
     def rows_lit(seconds):
         image = render(32, progress, STEP + seconds)
-        return [any(image.getpixel((x, y)) != (0, 0, 0) for x in range(2, 40) for y in range(top, top + 6))
-                for top in (12, 19, 26)]
+        return [any(image.getpixel((x, y)) != (0, 0, 0) for x in range(2, 40) for y in range(top, top + 6)) for top in (12, 19, 26)]
+
     assert rows_lit(0) == [False] * 3
     assert rows_lit(journey_screen.SPLIT_GROW_SECONDS) == [True] * 3
     partial = rows_lit(0.3)  # BIKE's colour has landed, ROW's hasn't
@@ -423,11 +498,16 @@ def test_group_figures_add_up_to_the_total():
 
 
 @pytest.mark.parametrize('height', [32, 64])
-@pytest.mark.parametrize('totals', [
-    {'cycling': 12.346}, {'cycling': 123.456, 'running': 99.99, 'rowing': 9.994},
-    {'cycling': 1234.5678, 'running': 987.654, 'rowing': 111.111},
-    {'cycling': 4444.4444, 'running': 4444.4444, 'rowing': 4444.4444},
-    {'cycling': 9999.995, 'running': 1.005, 'rowing': 12345.678}])
+@pytest.mark.parametrize(
+    'totals',
+    [
+        {'cycling': 12.346},
+        {'cycling': 123.456, 'running': 99.99, 'rowing': 9.994},
+        {'cycling': 1234.5678, 'running': 987.654, 'rowing': 111.111},
+        {'cycling': 4444.4444, 'running': 4444.4444, 'rowing': 4444.4444},
+        {'cycling': 9999.995, 'running': 1.005, 'rowing': 12345.678},
+    ],
+)
 def test_decimals_fit_inside_a_one_pixel_margin_and_never_touch_their_labels(height, totals):
     progress = journey_progress(totals, {**DEFAULT_JOURNEY, 'miles': 20000})
     progress['step_seconds'] = STEP
@@ -447,11 +527,13 @@ def test_decimals_fit_inside_a_one_pixel_margin_and_never_touch_their_labels(hei
 
 
 def test_the_big_figure_shows_one_decimal_where_it_fits():
-    for height, totals, text in ((64, {'cycling': 26.175, 'running': 0.0004}, '26.2'),
-                                 (64, {'cycling': 999.994}, '1,000.0'),
-                                 (64, {'cycling': 1234.5678}, '1,234.6'),
-                                 (64, {'cycling': 12345.678}, '12,346'),
-                                 (32, {'cycling': 1234.5678}, '1,234.6')):
+    for height, totals, text in (
+        (64, {'cycling': 26.175, 'running': 0.0004}, '26.2'),
+        (64, {'cycling': 999.994}, '1,000.0'),
+        (64, {'cycling': 1234.5678}, '1,234.6'),
+        (64, {'cycling': 12345.678}, '12,346'),
+        (32, {'cycling': 1234.5678}, '1,234.6'),
+    ):
         initialize_fonts(height)
         small = loaded_fonts.get('stats')
         fonts = [loaded_fonts.get('big'), loaded_fonts.get('bold' if height == 64 else 'countdown')]
@@ -482,6 +564,7 @@ def test_group_colours_avoid_christmas_and_the_bar():
     """No red beside green (the orange bar makes it Christmas), all distinct from each other
     and from the bar, each bright enough to read as small text."""
     import colorsys
+
     colours = list(GROUP_COLORS.values())
     assert len(set(colours)) == len(colours) and DONE_COLOR not in colours
     hues = []
@@ -494,4 +577,4 @@ def test_group_colours_avoid_christmas_and_the_bar():
     assert not (red and green)
     bar_hue = colorsys.rgb_to_hsv(*(c / 255 for c in DONE_COLOR))[0] * 360
     assert all(abs(h - bar_hue) > 40 for h in hues)
-    assert all(abs(a - b) > 30 for i, a in enumerate(hues) for b in hues[i + 1:])
+    assert all(abs(a - b) > 30 for i, a in enumerate(hues) for b in hues[i + 1 :])

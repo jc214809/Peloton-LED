@@ -1,17 +1,18 @@
 """Pixel art the page draws: the PR trophy, the heart, the insight lightbulb and filled rectangles."""
-from driver import graphics
-from .colors import _INSIGHT_GOLD, _LABEL_GREY
 
+from driver import graphics
+
+from .colors import _INSIGHT_GOLD, _LABEL_GREY
 
 # 7-wide × 7-tall pixel trophy marking PRs: 'C' gold cup, 'B' darker stem/base.
 _TROPHY_ROWS = (
-    "CCCCCCC",
-    "C.CCC.C",
-    ".CCCCC.",
-    "..CCC..",
-    "...B...",
-    "...B...",
-    "..BBB..",
+    'CCCCCCC',
+    'C.CCC.C',
+    '.CCCCC.',
+    '..CCC..',
+    '...B...',
+    '...B...',
+    '..BBB..',
 )
 
 
@@ -34,12 +35,33 @@ def _draw_trophy(matrix, x: int, y: int) -> None:
 
 # 7-wide × 6-tall pixel heart (offsets from top-left)
 _HEART_PIXELS = [
-    (1,0),(2,0),(4,0),(5,0),
-    (0,1),(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),
-    (0,2),(1,2),(2,2),(3,2),(4,2),(5,2),(6,2),
-    (1,3),(2,3),(3,3),(4,3),(5,3),
-    (2,4),(3,4),(4,4),
-    (3,5),
+    (1, 0),
+    (2, 0),
+    (4, 0),
+    (5, 0),
+    (0, 1),
+    (1, 1),
+    (2, 1),
+    (3, 1),
+    (4, 1),
+    (5, 1),
+    (6, 1),
+    (0, 2),
+    (1, 2),
+    (2, 2),
+    (3, 2),
+    (4, 2),
+    (5, 2),
+    (6, 2),
+    (1, 3),
+    (2, 3),
+    (3, 3),
+    (4, 3),
+    (5, 3),
+    (2, 4),
+    (3, 4),
+    (4, 4),
+    (3, 5),
 ]
 
 

@@ -1,4 +1,5 @@
 """Offline logo tools: prepare_image, generate_logo_variants, postprocess_logos."""
+
 import argparse
 import runpy
 import sys
@@ -51,8 +52,7 @@ def test_prepare_image_usage(monkeypatch, capsys):
 
 def test_generate_logo_variants_writes_every_variant(tmp_path, monkeypatch):
     source, out_dir = _source(tmp_path / 'logo.png'), tmp_path / 'variants'
-    _run('generate_logo_variants.py', monkeypatch, source, '--out-dir', out_dir,
-         '--sizes', '64x32, 64x64,', '--colors', '8')
+    _run('generate_logo_variants.py', monkeypatch, source, '--out-dir', out_dir, '--sizes', '64x32, 64x64,', '--colors', '8')
     names = sorted(p.name for p in out_dir.iterdir())
     for w, h in ((64, 32), (64, 64)):
         for suffix in ('nearest', 'lanczos_sharp', 'lanczos_unsharp', 'quant8', 'posterize6', 'mono_dither'):
@@ -64,6 +64,7 @@ def test_generate_logo_variants_writes_every_variant(tmp_path, monkeypatch):
 
 def test_generate_logo_variants_rejects_a_bad_size():
     from scripts.generate_logo_variants import parse_size
+
     assert parse_size('64X32') == (64, 32)
     with pytest.raises(argparse.ArgumentTypeError, match='expected WIDTHxHEIGHT'):
         parse_size('sixty-four')
@@ -76,9 +77,14 @@ def test_postprocess_logos_writes_variants_for_both_sizes(tmp_path, monkeypatch,
     _source(tmp_path / 'prepared_logos' / 'peloton_64x32.png', (64, 32))
     _run('postprocess_logos.py', monkeypatch)
     names = {p.name for p in (tmp_path / 'prepared_logos').iterdir()}
-    assert {'peloton_64x64_nearest.png', 'peloton_64x64_sharp.png', 'peloton_64x64_quant12.png',
-            'peloton_64x32_nearest.png', 'peloton_64x32_sharp.png',
-            'peloton_64x32_posterize6.png'} <= names
+    assert {
+        'peloton_64x64_nearest.png',
+        'peloton_64x64_sharp.png',
+        'peloton_64x64_quant12.png',
+        'peloton_64x32_nearest.png',
+        'peloton_64x32_sharp.png',
+        'peloton_64x32_posterize6.png',
+    } <= names
     assert 'Postprocessing complete' in capsys.readouterr().out
 
 

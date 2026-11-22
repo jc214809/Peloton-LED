@@ -1,4 +1,5 @@
 """A broken screen or a damaged cache must never take the board down."""
+
 import json
 from unittest.mock import Mock
 
@@ -43,8 +44,7 @@ def test_unknown_screen_is_ignored():
 @pytest.mark.parametrize('where', ['enter', 'exit', 'render'])
 def test_screen_errors_do_not_stop_the_rotation(where):
     matrix = Mock(width=64, height=64, spec=['width', 'height', 'Clear', 'SetPixel'])
-    manager = ScreenManager(matrix, initial=Exploding(where), login_required=lambda: True,
-                            stale_data=lambda: True)
+    manager = ScreenManager(matrix, initial=Exploding(where), login_required=lambda: True, stale_data=lambda: True)
     manager.register('next', Exploding(where))
     manager.show('next', {'x': 1})
     manager.tick({'x': 1})
@@ -73,6 +73,7 @@ def test_default_on_exit_clears_and_logs_failures(caplog):
     class Plain(Screen):
         def render(self, matrix, state=None):
             return True
+
     matrix = Mock()
     Plain().on_exit(matrix)
     matrix.Clear.assert_called_once()
@@ -88,10 +89,17 @@ def _cache(tmp_path, **changes):
     return path
 
 
-@pytest.mark.parametrize('changes', [
-    {'me': 'not a dict'}, {'celebrated_pr_ids': [1]}, {'celebrated_milestones': ['x']},
-    {'weekly_progress': []}, {'last_updated': True}, {'last_updated': None},
-])
+@pytest.mark.parametrize(
+    'changes',
+    [
+        {'me': 'not a dict'},
+        {'celebrated_pr_ids': [1]},
+        {'celebrated_milestones': ['x']},
+        {'weekly_progress': []},
+        {'last_updated': True},
+        {'last_updated': None},
+    ],
+)
 def test_damaged_cache_fields_reject_the_cache(tmp_path, changes):
     assert load_snapshot(_cache(tmp_path, **changes)) is None
 
@@ -99,12 +107,18 @@ def test_damaged_cache_fields_reject_the_cache(tmp_path, changes):
 def test_tally_keys_from_before_the_workout_log_are_ignored(tmp_path):
     # Instructor and distance figures now come from the workout log; old caches
     # still load, without their (possibly wrong) tallies.
-    snapshot = load_snapshot(_cache(tmp_path, instructor_counts={'Ally': True}, instructor_tally_cursor=5,
-                                    distance_totals={'cycling': 'far'}, tally_version=3,
-                                    history_truncated=False))
+    snapshot = load_snapshot(
+        _cache(
+            tmp_path,
+            instructor_counts={'Ally': True},
+            instructor_tally_cursor=5,
+            distance_totals={'cycling': 'far'},
+            tally_version=3,
+            history_truncated=False,
+        )
+    )
     assert snapshot is not None
-    for key in ('instructor_counts', 'instructor_tally_cursor', 'distance_totals', 'tally_version',
-                'history_truncated'):
+    for key in ('instructor_counts', 'instructor_tally_cursor', 'distance_totals', 'tally_version', 'history_truncated'):
         assert key not in snapshot
 
 
@@ -122,8 +136,15 @@ def test_damaged_optional_tables_are_dropped_not_the_cache(tmp_path):
         assert key not in snapshot
 
 
-@pytest.mark.parametrize('payload', [[], {'version': 99}, {'version': CACHE_VERSION, 'snapshot': []},
-                                     {'version': CACHE_VERSION, 'snapshot': {'summaries': {}, 'totals': {}}}])
+@pytest.mark.parametrize(
+    'payload',
+    [
+        [],
+        {'version': 99},
+        {'version': CACHE_VERSION, 'snapshot': []},
+        {'version': CACHE_VERSION, 'snapshot': {'summaries': {}, 'totals': {}}},
+    ],
+)
 def test_wrong_shape_or_version_rejects_the_cache(tmp_path, payload):
     path = tmp_path / 'cache.json'
     path.write_text(json.dumps(payload))

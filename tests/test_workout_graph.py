@@ -1,10 +1,11 @@
 """Workout output graph, heart-rate zone and muscle-group slides (both board sizes)."""
+
 from unittest.mock import Mock
 
 import pytest
 
-from display.display import initialize_fonts
 import display.ui.last_workout.rotation as rotation_module
+from display.display import initialize_fonts
 from display.ui.last_workout.charts import MUSCLE_BUCKET_COLORS
 from display.ui.last_workout.colors import HR_ZONE_COLORS
 from display.ui.last_workout.rotation import GRAPH_FRAME_EXTRA_SECONDS, detail_at, detail_hold_seconds, rotating_details
@@ -14,8 +15,7 @@ from peloton.stats.summaries import heart_rate_zone_seconds, muscle_groups, perf
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 
-ZONES = [{'slug': f'zone{i + 1}', 'min_value': low, 'duration': 60}
-         for i, low in enumerate((0, 120, 138, 157, 175))]
+ZONES = [{'slug': f'zone{i + 1}', 'min_value': low, 'duration': 60} for i, low in enumerate((0, 120, 138, 157, 175))]
 
 
 def perf(output=None, heart=None, zones=ZONES, durations=None):
@@ -46,11 +46,16 @@ def test_graph_falls_back_to_heart_rate_without_output():
     assert graph['zones'] == [1, 3, 4]
 
 
-@pytest.mark.parametrize('bad', [
-    {}, {'metrics': None}, {'metrics': [{'slug': 'output', 'values': None}]},
-    {'metrics': [{'slug': 'output', 'values': ['x', None]}]},
-    {'metrics': [{'slug': 'heart_rate', 'values': [120]}]},  # a single sample isn't a graph
-])
+@pytest.mark.parametrize(
+    'bad',
+    [
+        {},
+        {'metrics': None},
+        {'metrics': [{'slug': 'output', 'values': None}]},
+        {'metrics': [{'slug': 'output', 'values': ['x', None]}]},
+        {'metrics': [{'slug': 'heart_rate', 'values': [120]}]},  # a single sample isn't a graph
+    ],
+)
 def test_graph_is_none_for_missing_or_malformed_series(bad):
     assert performance_graph(bad) is None
 
@@ -89,8 +94,7 @@ def test_rotation_page_duration_counts_the_new_slides():
     dashboard.should_celebrate_pr.return_value = False
     ride = demo_ride()
     snapshot = {'summaries': [ride], 'totals': {}, 'status': 'ready'}
-    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
-               'last_workout_detail_interval': 4, 'overview_duration': 4}
+    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15, 'last_workout_detail_interval': 4, 'overview_duration': 4}
     for height in (32, 64):
         # The graph and zone slides each hold one extra second.
         expected = 4 * (1 + len(rotating_details(ride, height))) + 2 * GRAPH_FRAME_EXTRA_SECONDS
@@ -106,7 +110,7 @@ def test_graph_and_zone_slides_hold_one_second_longer_than_stats():
     details = [stat, graph, zones]
     assert detail_at(details, 4, 3.9) == (0, 3.9)
     assert detail_at(details, 4, 4.0) == (1, 0.0)
-    assert detail_at(details, 4, 8.5) == (1, 4.5)   # A stat would have moved on at 8 s.
+    assert detail_at(details, 4, 8.5) == (1, 4.5)  # A stat would have moved on at 8 s.
     assert detail_at(details, 4, 9.0) == (2, 0.0)
     assert detail_at(details, 4, 13.5) == (2, 4.5)
     assert detail_at(details, 4, 14.0) == (0, 0.0)  # Wraps after one 14 s pass.
@@ -160,13 +164,11 @@ def test_zone_slide_fills_the_bar_and_names_the_top_zone(height):
     seconds = ride['hr_zone_seconds']
     top = max(range(5), key=lambda i: seconds[i])
     pixels = matrix.image.load()
-    bar_row = next(y for y in range(height) if pixels[2, y] in HR_ZONE_COLORS
-                   and pixels[61, y] in HR_ZONE_COLORS)
+    bar_row = next(y for y in range(height) if pixels[2, y] in HR_ZONE_COLORS and pixels[61, y] in HR_ZONE_COLORS)
     # The stacked bar spans the full 60 px with no gaps.
     assert all(pixels[x, bar_row] in HR_ZONE_COLORS for x in range(2, 62))
     # "ZONE n" is written in the top zone's color below the bar.
-    assert any(pixels[x, y] == HR_ZONE_COLORS[top]
-               for y in range(bar_row + 3, height) for x in range(64))
+    assert any(pixels[x, y] == HR_ZONE_COLORS[top] for y in range(bar_row + 3, height) for x in range(64))
 
 
 def muscle(name, pct, bucket):
@@ -174,17 +176,32 @@ def muscle(name, pct, bucket):
 
 
 def test_muscle_groups_are_the_top_three_most_worked_first():
-    perf = {'muscle_group_score': [muscle('Biceps', 4, 1), muscle('Glutes', 13, 3), muscle('Core', 9, 2),
-                                   muscle('Hamstrings', 13, 3), muscle('Quads', 20, 3)]}
-    assert muscle_groups(perf) == [{'name': 'Quads', 'percent': 20, 'bucket': 3},
-                                   {'name': 'Glutes', 'percent': 13, 'bucket': 3},  # ties keep Peloton's order
-                                   {'name': 'Hamstrings', 'percent': 13, 'bucket': 3}]
+    perf = {
+        'muscle_group_score': [
+            muscle('Biceps', 4, 1),
+            muscle('Glutes', 13, 3),
+            muscle('Core', 9, 2),
+            muscle('Hamstrings', 13, 3),
+            muscle('Quads', 20, 3),
+        ]
+    }
+    assert muscle_groups(perf) == [
+        {'name': 'Quads', 'percent': 20, 'bucket': 3},
+        {'name': 'Glutes', 'percent': 13, 'bucket': 3},  # ties keep Peloton's order
+        {'name': 'Hamstrings', 'percent': 13, 'bucket': 3},
+    ]
 
 
-@pytest.mark.parametrize('perf', [{}, {'muscle_group_score': None}, {'muscle_group_score': []},
-                                  {'muscle_group_score': 'x'},
-                                  {'muscle_group_score': [None, 'x', muscle('', 10, 1), muscle('Core', 0, 1),
-                                                          muscle('Core', None, 1), muscle('Core', 'x', 1)]}])
+@pytest.mark.parametrize(
+    'perf',
+    [
+        {},
+        {'muscle_group_score': None},
+        {'muscle_group_score': []},
+        {'muscle_group_score': 'x'},
+        {'muscle_group_score': [None, 'x', muscle('', 10, 1), muscle('Core', 0, 1), muscle('Core', None, 1), muscle('Core', 'x', 1)]},
+    ],
+)
 def test_muscle_groups_are_none_for_missing_or_malformed_data(perf):
     assert muscle_groups(perf) is None
 
@@ -197,8 +214,7 @@ def test_muscle_group_bucket_is_clamped_to_one_to_three():
 def demo_strength():
     data = demo_data()
     # The demo strength workout has no heart-rate data; give it the bottom row.
-    return {**summarize_workout(data['workouts'][-1], data['performance']['demo-strength']),
-            'hr_avg': 118, 'calories': 92}
+    return {**summarize_workout(data['workouts'][-1], data['performance']['demo-strength']), 'hr_avg': 118, 'calories': 92}
 
 
 def test_summary_carries_the_muscle_groups():
@@ -210,8 +226,7 @@ def test_summary_carries_the_muscle_groups():
 def test_muscle_slide_closes_out_strength_pages_only(height):
     strength = demo_strength()
     assert [d.get('kind') for d in rotating_details(strength, height)][-1] == 'muscles'
-    assert not any(d.get('kind') == 'muscles'
-                   for d in rotating_details({**strength, 'muscles': None}, height))
+    assert not any(d.get('kind') == 'muscles' for d in rotating_details({**strength, 'muscles': None}, height))
     # Peloton sends muscle groups for rides too, but those pages are full already.
     ride = {**demo_ride(), 'muscles': strength['muscles']}
     assert not any(d.get('kind') == 'muscles' for d in rotating_details(ride, height))
@@ -231,8 +246,7 @@ def test_muscle_slide_draws_bucket_colored_bars_scaled_to_the_top_muscle(height)
     assert len(starts) == 3
     assert [len([y for y in rows if s <= y < s + 6]) for s in starts] == [2 if height == 64 else 5] * 3
     # The text sits over (32) or above (64) the bars; a bar's width is its rightmost bar pixel.
-    widths = [1 + max(x for y in range(s, s + 5) for x in range(64) if pixels[x, y] in (red, orange)) - left
-              for s in starts]
+    widths = [1 + max(x for y in range(s, s + 5) for x in range(64) if pixels[x, y] in (red, orange)) - left for s in starts]
     span = 60 if height == 64 else 62
     assert widths[0] == span
     assert abs(widths[1] - round(span * 17 / 24)) <= 1 and abs(widths[2] - round(span * 14 / 24)) <= 1

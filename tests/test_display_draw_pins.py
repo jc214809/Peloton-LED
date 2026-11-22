@@ -3,6 +3,7 @@ frame and the PR star fill. Each case hashes the canvas, so a refactor of
 `draw_icon`, `PrCelebrationScreen.render` or `_scanline_fill_polygon` that moves
 one pixel fails here. Regenerate a hash only for an intended visual change.
 """
+
 import hashlib
 
 import pytest
@@ -14,18 +15,27 @@ from display.ui.pr_celebration import PrCelebrationScreen
 from display.ui.pr_star import PrStarScreen
 from scripts.render_demo import ImageMatrix
 
-EXTRA_ICON_KEYS = ['dance_cardio', 'running_outdoor', 'walking_outdoor', 'hiking', 'outdoor', 'boxing',
-                   'mobility', 'pilates', 'barre', 'nonsense', '']
+EXTRA_ICON_KEYS = [
+    'dance_cardio',
+    'running_outdoor',
+    'walking_outdoor',
+    'hiking',
+    'outdoor',
+    'boxing',
+    'mobility',
+    'pilates',
+    'barre',
+    'nonsense',
+    '',
+]
 
 SUMMARIES = {
-    'output_gain': {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'previous_best_kj': 398,
-                    'duration_min': 30},
+    'output_gain': {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'previous_best_kj': 398, 'duration_min': 30},
     'output_dur': {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412, 'duration_min': 30},
     'output_plain': {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 412},
     'splits': {'is_pr': True, 'is_splits_pr': True, 'row_split_sec_per_500m': 128, 'duration_min': 20},
     'new_pr': {'is_pr': True},
-    'wide': {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 1234567, 'previous_best_kj': 5,
-             'duration_min': 45},
+    'wide': {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 1234567, 'previous_best_kj': 5, 'duration_min': 45},
 }
 ELAPSED = [0.0, 0.3, 0.6, 1.19, 1.2, 1.25, 1.35, 1.5, 1.7, 2.0, 2.3, 3.0]
 STAR_SIZES = [(64, 64), (64, 32), (32, 32), (5, 5)]
@@ -268,9 +278,11 @@ def test_pr_star_pixels_unchanged(case):
 
 # The fallbacks below never run in the rotation, so they're checked directly.
 
+
 def test_pr_card_too_wide_value_drops_to_the_headline_font(monkeypatch):
     initialize_fonts(64)
     import display.ui.pr_celebration as pr
+
     drawn = []
     monkeypatch.setattr(pr, '_centered', lambda matrix, font, y, color, text: drawn.append((y, font)))
     monkeypatch.setattr(pr, 'get_text_width', lambda font, text: 999 if text.endswith('KJ') else 10)
@@ -308,6 +320,7 @@ SQUARE = [(1, 1), (5, 1), (5, 5), (1, 5)]  # two horizontal edges, which add no 
 
 def _fill(monkeypatch, poly, fake):
     import display.ui.pr_star as pr_star
+
     monkeypatch.setattr(pr_star, 'graphics', fake)
     PrStarScreen()._scanline_fill_polygon(_Canvas(), poly, 'gold')
     return fake

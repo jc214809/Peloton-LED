@@ -1,8 +1,11 @@
 """Normalize API metrics for screens and reports without inventing missing values."""
+
 from math import isfinite
+
 from models import get_model_for_discipline
-from ..timestamps import parse_timestamp, display_timezone, workout_timestamp
+
 from ..selection import discipline_of
+from ..timestamps import display_timezone, parse_timestamp, workout_timestamp
 from .records import pr_types
 
 
@@ -18,10 +21,23 @@ def number(value):
 
 def unit(value):
     key = str(value or '').strip().lower()
-    return {'miles': 'mi', 'mile': 'mi', 'kilometers': 'km', 'kilometres': 'km',
-            'meters': 'm', 'metres': 'm', 'meter': 'm', 'kph': 'km/h', 'km/hr': 'km/h',
-            'watts': 'w', 'watt': 'w', 'joules': 'j', 'kilojoules': 'kj',
-            'minutes/mile': 'min/mi', 'minutes/km': 'min/km'}.get(key, key) or None
+    return {
+        'miles': 'mi',
+        'mile': 'mi',
+        'kilometers': 'km',
+        'kilometres': 'km',
+        'meters': 'm',
+        'metres': 'm',
+        'meter': 'm',
+        'kph': 'km/h',
+        'km/hr': 'km/h',
+        'watts': 'w',
+        'watt': 'w',
+        'joules': 'j',
+        'kilojoules': 'kj',
+        'minutes/mile': 'min/mi',
+        'minutes/km': 'min/km',
+    }.get(key, key) or None
 
 
 def ts_to_local_str(ts, tzname=None, fmt='%b %d, %Y %I:%M %p %Z'):
@@ -42,15 +58,17 @@ def extract_summary_from_perf(perf, allowed_slugs):
         for entry in perf.get(field) or []:
             if isinstance(entry, dict):
                 put(entry.get('slug'), entry.get('value'), entry.get('display_unit'))
-    aliases = {'heart_rate': ('hr_avg', 'hr_max', 'bpm'),
-               'cadence': ('avg_cadence', None, 'rpm'),
-               'resistance': ('avg_resistance', None, '%'),
-               'incline': ('avg_incline', 'max_incline', '%'),
-               'speed': ('avg_speed', 'max_speed', None),
-               'pace': ('avg_pace', None, None),
-               'output': ('avg_output', None, 'w'),
-               'split_pace': ('avg_split_pace', None, None),
-               'stroke_rate': ('avg_stroke_rate', None, 'spm')}
+    aliases = {
+        'heart_rate': ('hr_avg', 'hr_max', 'bpm'),
+        'cadence': ('avg_cadence', None, 'rpm'),
+        'resistance': ('avg_resistance', None, '%'),
+        'incline': ('avg_incline', 'max_incline', '%'),
+        'speed': ('avg_speed', 'max_speed', None),
+        'pace': ('avg_pace', None, None),
+        'output': ('avg_output', None, 'w'),
+        'split_pace': ('avg_split_pace', None, None),
+        'stroke_rate': ('avg_stroke_rate', None, 'spm'),
+    }
     for metric in perf.get('metrics') or []:
         if not isinstance(metric, dict):
             continue
@@ -68,8 +86,7 @@ GRAPH_POINTS = 60  # one column each across a 64-px panel, leaving a 2-px margin
 
 
 def _metric(perf, slug):
-    return next((m for m in perf.get('metrics') or []
-                 if isinstance(m, dict) and m.get('slug') == slug), None)
+    return next((m for m in perf.get('metrics') or [] if isinstance(m, dict) and m.get('slug') == slug), None)
 
 
 def _series(metric):
@@ -131,12 +148,20 @@ def _top_movement(aggregates, unit_name):
         if entry is None:
             continue
         stats = {s.get('slug'): s.get('completed_number') for s in entry.get('stats') or [] if isinstance(s, dict)}
-        weights = [number(w.get('weight_value')) for group in (entry.get('weight_info_summary_data') or {}).values()
-                   if isinstance(group, list) for w in group
-                   if isinstance(w, dict) and (w.get('weight_unit') or unit_name) == unit_name]
+        weights = [
+            number(w.get('weight_value'))
+            for group in (entry.get('weight_info_summary_data') or {}).values()
+            if isinstance(group, list)
+            for w in group
+            if isinstance(w, dict) and (w.get('weight_unit') or unit_name) == unit_name
+        ]
         weights = [w for w in weights if w]
-        return {'name': str(entry['movement_name']).strip(), 'reps': _count(stats.get('total_reps')),
-                'volume': _count(stats.get('total_volume')), 'weight': max(weights) if weights else None}
+        return {
+            'name': str(entry['movement_name']).strip(),
+            'reps': _count(stats.get('total_reps')),
+            'volume': _count(stats.get('total_volume')),
+            'weight': max(weights) if weights else None,
+        }
     return None
 
 
@@ -190,8 +215,11 @@ def performance_graph(perf, points=GRAPH_POINTS):
     if not any(raw) or len(raw) < 2:
         return None
     zones_meta = (_metric(perf, 'heart_rate') or {}).get('zones')
-    bounds = ([number(z.get('min_value')) if isinstance(z, dict) else None for z in zones_meta]
-              if isinstance(zones_meta, list) and len(zones_meta) == 5 else None)
+    bounds = (
+        [number(z.get('min_value')) if isinstance(z, dict) else None for z in zones_meta]
+        if isinstance(zones_meta, list) and len(zones_meta) == 5
+        else None
+    )
     count = min(points, len(raw))
     values, zones = [], []
     for i in range(count):
@@ -200,20 +228,24 @@ def performance_graph(perf, points=GRAPH_POINTS):
         values.append(round(sum(bucket) / len(bucket)) if bucket else 0)
         beats = [v for v in heart[start:end] if v]
         zones.append(_zone_of(sum(beats) / len(beats), bounds) if beats and bounds else None)
-    return {'metric': metric, 'unit': unit, 'values': values, 'zones': zones,
-            'peak': round(max(v for v in raw if v is not None))}
+    return {'metric': metric, 'unit': unit, 'values': values, 'zones': zones, 'peak': round(max(v for v in raw if v is not None))}
 
 
 def _display_discipline(workout, ride=None):
     key = discipline_of(workout)
-    return {'running_outdoor': 'Outdoor Run', 'walking_outdoor': 'Outdoor Walk'}.get(
-        key, key.replace('_', ' ').title())
+    return {'running_outdoor': 'Outdoor Run', 'walking_outdoor': 'Outdoor Walk'}.get(key, key.replace('_', ' ').title())
 
 
 def _recorded_duration(workout, perf, ride):
     """The recorded workout duration, else the workout's, else the class's scheduled one."""
-    return next((v for v in (number(perf.get('duration')), number(workout.get('duration')),
-                             number(ride.get('duration'))) if v is not None and v > 0), None)
+    return next(
+        (
+            v
+            for v in (number(perf.get('duration')), number(workout.get('duration')), number(ride.get('duration')))
+            if v is not None and v > 0
+        ),
+        None,
+    )
 
 
 def _distance_metres(metrics):
@@ -306,26 +338,43 @@ def summarize_workout(workout, perf=None, detail=None):
     result = {
         'workout_id': workout.get('id'),
         'date_time': ts_to_local_str(stamp.timestamp(), workout.get('timezone')) if stamp else '',
-        'tz': workout.get('timezone') or '', 'discipline': discipline,
+        'tz': workout.get('timezone') or '',
+        'discipline': discipline,
         'workout_at': stamp.timestamp() if stamp else None,
         'title': ride.get('title') or workout.get('title') or workout.get('name') or 'Workout',
         'instructor': _instructor_name(ride),
         'duration_min': round(duration / 60) if duration else None,
-        'distance': metrics.get('distance'), 'distance_unit': metrics.get('distance__unit'),
-        'avg_speed': speed, 'avg_speed_unit': speed_unit,
-        'avg_pace': pace, 'avg_pace_unit': pace_unit,
+        'distance': metrics.get('distance'),
+        'distance_unit': metrics.get('distance__unit'),
+        'avg_speed': speed,
+        'avg_speed_unit': speed_unit,
+        'avg_pace': pace,
+        'avg_pace_unit': pace_unit,
         'row_split_sec_per_500m': _row_split(metrics, duration, metres),
-        'total_output_kj': total_output, 'total_work_kj': total_work_kj,
+        'total_output_kj': total_output,
+        'total_work_kj': total_work_kj,
         'avg_output_w': _average_output_watts(metrics),
-        'is_pr': bool(kinds), 'is_output_pr': 'output' in kinds, 'is_splits_pr': 'splits' in kinds,
+        'is_pr': bool(kinds),
+        'is_output_pr': 'output' in kinds,
+        'is_splits_pr': 'splits' in kinds,
         'strive_score': number((perf.get('effort_zones') or {}).get('total_effort_points')),
         'graph': performance_graph(perf),
         'hr_zone_seconds': heart_rate_zone_seconds(perf),
         'muscles': muscle_groups(perf),
         'strength': strength_tracker(detail),
     }
-    for key in ('calories', 'max_speed', 'avg_incline', 'max_incline', 'elevation',
-                'avg_cadence', 'avg_resistance', 'avg_stroke_rate', 'hr_avg', 'hr_max'):
+    for key in (
+        'calories',
+        'max_speed',
+        'avg_incline',
+        'max_incline',
+        'elevation',
+        'avg_cadence',
+        'avg_resistance',
+        'avg_stroke_rate',
+        'hr_avg',
+        'hr_max',
+    ):
         result[key] = metrics.get(key)
         result[key + '_unit'] = metrics.get(key + '__unit')
     return result

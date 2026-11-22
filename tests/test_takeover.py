@@ -1,6 +1,7 @@
 """The next-class takeover: from `display.next_class_takeover_minutes` before a booked class starts until
 TAKEOVER_END_AFTER_START after, the next-class page holds the panel, whoever's rotation is showing.
 Time is a fake clock (sleeping moves it on), the dashboards are fakes that read only their own snapshot."""
+
 import logging
 import time as real_time
 from unittest.mock import Mock, patch
@@ -8,11 +9,9 @@ from unittest.mock import Mock, patch
 import pytest
 
 import peloton_led
-from peloton.feeds.booked_classes import (SHOWN_AFTER_START, TAKEOVER_END_AFTER_START, TAKEOVER_MAX_MINUTES,
-                                    takeover_booking, when)
 from peloton.config import DEFAULTS, validate_config
-from peloton_led import (TAKEOVER_CHECK_SECONDS, NextClassTakeover, run_display_loop, run_multi_user_loop,
-                         show_and_wait)
+from peloton.feeds.booked_classes import SHOWN_AFTER_START, TAKEOVER_END_AFTER_START, TAKEOVER_MAX_MINUTES, takeover_booking, when
+from peloton_led import TAKEOVER_CHECK_SECONDS, NextClassTakeover, run_display_loop, run_multi_user_loop, show_and_wait
 
 NOW = 1794762000.0  # Sunday 2026-11-15, 12:00 PM in New York
 ZONE = 'America/New_York'
@@ -20,8 +19,7 @@ MINUTE = 60
 
 
 def booking(identity='a', start=NOW + 3600, **overrides):
-    return {'id': identity, 'start': start, 'tag': 'LIVE', 'discipline': 'cycling', 'minutes': 20,
-            'instructor': 'Ben Alldis', **overrides}
+    return {'id': identity, 'start': start, 'tag': 'LIVE', 'discipline': 'cycling', 'minutes': 20, 'instructor': 'Ben Alldis', **overrides}
 
 
 class Clock:
@@ -66,8 +64,13 @@ class FakeDashboard:
         return list(self.bookings)
 
     def snapshot(self):
-        return {'me': {'username': 'Rider', 'timezone': ZONE}, 'summaries': [], 'totals': {}, 'status': 'ready',
-                'booked_classes': list(self.bookings)}
+        return {
+            'me': {'username': 'Rider', 'timezone': ZONE},
+            'summaries': [],
+            'totals': {},
+            'status': 'ready',
+            'booked_classes': list(self.bookings),
+        }
 
     def should_celebrate_pr(self, summary):
         return False
@@ -86,6 +89,7 @@ class FakeManager:
 
     def show(self, name, state):
         from display.ui.next_class_screen import pulses
+
         self.shown.append((self.clock.now, name, state))
         self.current = Mock(animated=name == 'next_class' and pulses(state), frame_seconds=0.05)
 
@@ -97,8 +101,7 @@ class FakeManager:
 
 
 def rider(name, bookings=(), **display):
-    return {'name': name, 'dashboard': FakeDashboard(bookings),
-            'display': {'rotation': ['next_class'], **display}}
+    return {'name': name, 'dashboard': FakeDashboard(bookings), 'display': {'rotation': ['next_class'], **display}}
 
 
 # ---- which booking takes over -------------------------------------------------------------------------------------
@@ -172,19 +175,23 @@ def test_the_hold_counts_down_live_and_ends_at_the_end_constant(clock, caplog):
     with caplog.at_level(logging.INFO, logger='peloton-led'):
         assert NextClassTakeover([joel], {}).hold(manager) is True
     assert len(manager.shown) == 1 and manager.shown[0][1:] == (
-        'next_class', {'booking': joel['dashboard'].bookings[0], 'now': NOW, 'timezone': ZONE})
+        'next_class',
+        {'booking': joel['dashboard'].bookings[0], 'now': NOW, 'timezone': ZONE},
+    )
     ends = 3 * MINUTE + 30 + TAKEOVER_END_AFTER_START
     assert ends <= clock.now <= ends + TAKEOVER_CHECK_SECONDS + 0.1  # noticed at the next check
     words = []
     for _, state in manager.ticks:
         moment = when(state['booking'], state['now'], ZONE)
-        word = 'NOW' if moment['mode'] == 'now' else f"{moment['minutes']} MIN"
+        word = 'NOW' if moment['mode'] == 'now' else f'{moment["minutes"]} MIN'
         if not words or words[-1] != word:
             words.append(word)
     assert words == ['4 MIN', '3 MIN', '2 MIN', '1 MIN', 'NOW']  # the existing `when` wording, live
     assert max(t for t, _ in manager.ticks) <= clock.now
     assert [r.getMessage() for r in caplog.records] == [
-        f'Next-class takeover: Joel, class at {start}.', f'Next-class takeover ended for Joel (class at {start}).']
+        f'Next-class takeover: Joel, class at {start}.',
+        f'Next-class takeover ended for Joel (class at {start}).',
+    ]
 
 
 def test_a_hold_with_nothing_due_does_nothing(clock):
@@ -282,13 +289,16 @@ def test_the_zone_is_the_displays_else_the_riders_profile(clock):
 
 def test_nothing_in_the_takeover_touches_the_network(clock):
     joel = rider('Joel', [booking('j', NOW + 60)])
-    with patch('requests.Session.request', side_effect=AssertionError('network')), \
-         patch('requests.sessions.Session.send', side_effect=AssertionError('network')):
+    with (
+        patch('requests.Session.request', side_effect=AssertionError('network')),
+        patch('requests.sessions.Session.send', side_effect=AssertionError('network')),
+    ):
         NextClassTakeover([joel], {}).hold(FakeManager(clock))
 
 
 def test_the_dashboard_hands_out_a_copy_of_just_its_booked_classes(tmp_path):
     from peloton.dashboard import Dashboard
+
     dashboard = Dashboard(tmp_path / 'token', {'rotation': ['next_class']}, demo=True)
     first = dashboard.booked_classes()
     assert first and first == dashboard.snapshot()['booked_classes']
@@ -397,14 +407,19 @@ def test_a_rotations_next_class_page_counts_from_the_time_it_plays_and_skips_a_c
     assert state['now'] == NOW + 120 and state['booking'] == soon
     gone = booking('g', NOW + 30)
     clock.now = 0
-    manager = loop_over(clock, rider('Joel', [gone], next_class_takeover_minutes=0),
-                        pages=[('goal', {}, SHOWN_AFTER_START + 31), ('next_class', {**stale, 'booking': gone}, 5)])
+    manager = loop_over(
+        clock,
+        rider('Joel', [gone], next_class_takeover_minutes=0),
+        pages=[('goal', {}, SHOWN_AFTER_START + 31), ('next_class', {**stale, 'booking': gone}, 5)],
+    )
     assert [n for _, n, _ in manager.shown] == ['goal']
 
 
 def test_with_the_setting_off_or_no_page_nothing_interrupts_the_rotation(clock):
-    for joel in (rider('Joel', [booking('j', NOW + 100)], next_class_takeover_minutes=0),
-                 rider('Joel', [booking('j', NOW + 100)], rotation=['username'])):
+    for joel in (
+        rider('Joel', [booking('j', NOW + 100)], next_class_takeover_minutes=0),
+        rider('Joel', [booking('j', NOW + 100)], rotation=['username']),
+    ):
         clock.now = 0
         manager = loop_over(clock, joel, pages=[('goal', {}, 60), ('goal', {}, 60)])
         assert [n for _, n, _ in manager.shown] == ['goal', 'goal'] and clock.now == 120

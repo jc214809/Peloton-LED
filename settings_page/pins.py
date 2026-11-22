@@ -5,6 +5,7 @@ has run out, so guessing is slow and lights up the board. With Pushover keys (au
 can also be sent to a phone, at most once every SEND_EVERY_S, since anyone on the Wi-Fi can press
 the button. Nothing is saved: a restart of the server signs everyone out.
 """
+
 import logging
 import os
 import secrets

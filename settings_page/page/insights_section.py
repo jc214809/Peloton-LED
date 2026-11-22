@@ -1,4 +1,5 @@
 """The Workout insights card: the switch, and each rider's workout-compare history on this board."""
+
 from datetime import date as calendar_date
 from html import escape
 
@@ -29,12 +30,16 @@ def _incomplete(workouts):
         return f'<span class="hint whole">Every workout in the last {RECENT_DAYS} days has its full data.</span>'
     items = ''.join(
         f'<li>{escape(_workout_day(w.get("date")))} &middot; {escape(w.get("title") or "Untitled workout")}'
-        f' <span class="hint">&middot; no {escape(", no ".join(w["missing"]))}</span></li>' for w in workouts)
+        f' <span class="hint">&middot; no {escape(", no ".join(w["missing"]))}</span></li>'
+        for w in workouts
+    )
     count = len(workouts)
-    return (f'<details class="incomplete whole"><summary>{_pill("warn", f"{count} missing data")}'
-            f'<span class="hint">in the last {RECENT_DAYS} days</span></summary><ul>{items}</ul>'
-            '<p class="hint">Peloton didn\'t send this when the workout was saved; older workouts '
-            'aren\'t checked, since Peloton used to send less.</p></details>')
+    return (
+        f'<details class="incomplete whole"><summary>{_pill("warn", f"{count} missing data")}'
+        f'<span class="hint">in the last {RECENT_DAYS} days</span></summary><ul>{items}</ul>'
+        '<p class="hint">Peloton didn\'t send this when the workout was saved; older workouts '
+        "aren't checked, since Peloton used to send less.</p></details>"
+    )
 
 
 def _history_row(rider, zone):
@@ -52,19 +57,28 @@ def insights_card(display, history=None, zone=None):
     """The workout_insights switch, and each rider's history on this board (settings_page.history:
     None leaves it off). display: the config's display over DEFAULTS."""
     on = display.get('workout_insights') is True
-    body = _switch('workout_insights', 'Show workout insights', on,
-                   "After the latest workout's charts, comparisons with your similar earlier "
-                   'workouts, such as "Output down: 124 W vs your typical 188".')
+    body = _switch(
+        'workout_insights',
+        'Show workout insights',
+        on,
+        "After the latest workout's charts, comparisons with your similar earlier "
+        'workouts, such as "Output down: 124 W vs your typical 188".',
+    )
     if history is not None:
         waiting = [rider['name'] for rider in history if rider['state'] != 'ready']
         if on and waiting:
-            body += _notice('warn', f'<strong>{escape(", ".join(waiting))}</strong>: no insights until '
-                                    f'{"its" if len(waiting) == 1 else "their"} history is copied to this board.')
-        items = ''.join(f'<dt>{escape(name)}</dt><dd>{value}</dd>'
-                        for name, value in (_history_row(rider, zone) for rider in history))
-        body += (f'<h3>History on this board</h3><dl class="facts" id="insight-history">{items}</dl>'
-                 '<p class="hint">The workouts each rider is compared with: the last two years of rides, runs, '
-                 'walks, rows, strength and bootcamps. It is copied from the Mac once, with '
-                 '<code>scripts/push_workout_rows.sh</code>; after that the board adds each new workout itself.</p>')
-    return _section('insights', 'Workout insights',
-                    'Comparisons with your similar earlier workouts, after your latest workout.', body, 'bulb')
+            body += _notice(
+                'warn',
+                f'<strong>{escape(", ".join(waiting))}</strong>: no insights until '
+                f'{"its" if len(waiting) == 1 else "their"} history is copied to this board.',
+            )
+        items = ''.join(f'<dt>{escape(name)}</dt><dd>{value}</dd>' for name, value in (_history_row(rider, zone) for rider in history))
+        body += (
+            f'<h3>History on this board</h3><dl class="facts" id="insight-history">{items}</dl>'
+            '<p class="hint">The workouts each rider is compared with: the last two years of rides, runs, '
+            'walks, rows, strength and bootcamps. It is copied from the Mac once, with '
+            '<code>scripts/push_workout_rows.sh</code>; after that the board adds each new workout itself.</p>'
+        )
+    return _section(
+        'insights', 'Workout insights', 'Comparisons with your similar earlier workouts, after your latest workout.', body, 'bulb'
+    )

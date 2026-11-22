@@ -1,18 +1,20 @@
 # python file: display/ui/pr_star.py
 
-from .screen import Screen
-
-from driver import graphics
 from display.display import color_dict
+from driver import graphics
 from utils import debug
+
+from .screen import Screen
 
 
 class PrStarScreen(Screen):
-    def __init__(self, color_key: str = "gold", fill: bool = True):
+    def __init__(self, color_key: str = 'gold', fill: bool = True):
         self.color_key = color_key
         self.fill = fill
 
-    def _unit_star_points(self, outer_radius: float = 0.5, inner_radius: float = 0.2, cx: float = 0.5, cy: float = 0.5) -> list[tuple[float, float]]:
+    def _unit_star_points(
+        self, outer_radius: float = 0.5, inner_radius: float = 0.2, cx: float = 0.5, cy: float = 0.5
+    ) -> list[tuple[float, float]]:
         import math
 
         points: list[tuple[float, float]] = []
@@ -63,8 +65,7 @@ class PrStarScreen(Screen):
     @staticmethod
     def _crossings(edges, y: int) -> list[float]:
         """Sorted x positions where the edges cross scanline y."""
-        xs = [x_at_ymin + slope * (y - y_min)
-              for y_min, y_max, x_at_ymin, slope in edges if y_min <= y < y_max]
+        xs = [x_at_ymin + slope * (y - y_min) for y_min, y_max, x_at_ymin, slope in edges if y_min <= y < y_max]
         xs.sort()
         return xs
 
@@ -98,7 +99,7 @@ class PrStarScreen(Screen):
                 self._draw_span(matrix, y, x_start, x_end, color)
 
     def render(self, matrix, state=None):
-        color = color_dict.get(self.color_key) or color_dict.get("gold")
+        color = color_dict.get(self.color_key) or color_dict.get('gold')
 
         w, h = matrix.width, matrix.height
         min_dim = min(w, h)
@@ -133,5 +134,5 @@ class PrStarScreen(Screen):
                                 pass
             return True
         except Exception as exc:
-            debug.error("Failed to render PR star: %s", exc)
+            debug.error('Failed to render PR star: %s', exc)
             return False

@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'scripts' / 'push_workout_rows.sh'
 
-FAKE_SSH = '''#!/usr/bin/env bash
+FAKE_SSH = """#!/usr/bin/env bash
 echo "ssh $*" >> "$FAKE_LOG"
 for arg in "$@"; do last="$arg"; done
 case "$*" in
@@ -18,17 +18,17 @@ if [[ "$last" == "mktemp -d" ]]; then
 fi
 printf '%s\\n' "$last" > "$FAKE_REMOTE/command"
 exit "${FAKE_SSH_STATUS:-0}"
-'''
+"""
 
-FAKE_SCP = '''#!/usr/bin/env bash
+FAKE_SCP = """#!/usr/bin/env bash
 echo "scp $*" >> "$FAKE_LOG"
 args=(); for arg in "$@"; do args+=("$arg"); done
 target="${args[${#args[@]}-1]}"; target="${target#*:}"
 for arg in "${args[@]}"; do [[ -f "$arg" ]] && cp "$arg" "$target"; done
 exit 0
-'''
+"""
 
-FAKE_PYTHON = '''#!/usr/bin/env bash
+FAKE_PYTHON = """#!/usr/bin/env bash
 # Stand-in for scripts/build_board_rows.py: --list names two riders, --out writes a file.
 echo "python $*" >> "$FAKE_LOG"
 [[ -n "${FAKE_BUILD_FAIL:-}" ]] && { echo "Build failed" >&2; exit 1; }
@@ -44,7 +44,7 @@ if [[ -n "$list" ]]; then
 else
     echo '{"version": 1, "rows": {}}' > "$out"
 fi
-'''
+"""
 
 
 def _run(tmp_path, args=None, **env):
@@ -65,10 +65,18 @@ def _run(tmp_path, args=None, **env):
     default = ['admin@board.local', '--config', str(config), '--board-config', str(board_config)]
     result = subprocess.run(
         ['bash', str(SCRIPT), *(args if args is not None else default)],
-        capture_output=True, text=True,
-        env={**os.environ, 'PATH': f'{bin_dir}:{os.environ["PATH"]}', 'TMPDIR': str(local_tmp),
-             'PELOTON_PYTHON': str(bin_dir / 'fake-python'), 'FAKE_LOG': str(tmp_path / 'log'),
-             'FAKE_REMOTE': str(remote), **env})
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            'PATH': f'{bin_dir}:{os.environ["PATH"]}',
+            'TMPDIR': str(local_tmp),
+            'PELOTON_PYTHON': str(bin_dir / 'fake-python'),
+            'FAKE_LOG': str(tmp_path / 'log'),
+            'FAKE_REMOTE': str(remote),
+            **env,
+        },
+    )
     log = (tmp_path / 'log').read_text() if (tmp_path / 'log').exists() else ''
     return result, local_tmp, remote, log
 
@@ -76,7 +84,7 @@ def _run(tmp_path, args=None, **env):
 def test_push_builds_copies_installs_and_restarts(tmp_path):
     result, local_tmp, remote, log = _run(tmp_path)
     assert result.returncode == 0, result.stderr
-    assert f"--board-config {tmp_path / 'board-config.json'} --list" in log
+    assert f'--board-config {tmp_path / "board-config.json"} --list' in log
     names = ['dashboard-cache-jen.workout-rows.json', 'dashboard-cache-joel.workout-rows.json']
     assert sorted(p.name for p in (remote / 'push').iterdir()) == names
     assert '--rider joel' in log and '--rider jen' in log and '--out' in log
@@ -112,6 +120,5 @@ def test_push_usage_and_missing_config(tmp_path):
     result, *_ = _run(tmp_path, args=['admin@board.local', '--config', str(tmp_path / 'nope.json')])
     assert result.returncode == 1 and 'No config' in result.stderr
     config = tmp_path / 'config.json'
-    result, *_ = _run(tmp_path, args=['admin@board.local', '--config', str(config),
-                                      '--board-config', str(tmp_path / 'nope.json')])
+    result, *_ = _run(tmp_path, args=['admin@board.local', '--config', str(config), '--board-config', str(tmp_path / 'nope.json')])
     assert result.returncode == 1 and 'No board config' in result.stderr

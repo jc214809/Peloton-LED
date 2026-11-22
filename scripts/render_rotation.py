@@ -11,6 +11,7 @@ Pages come from the app's own build_rotation_pages, so the sheet shows what the
 panel would actually cycle through. Animated pages get one frame per phase
 (intro, each stat, each username detail, PR burst and card).
 """
+
 import argparse
 import sys
 from pathlib import Path
@@ -23,7 +24,22 @@ import unittest  # noqa: F401,E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 SCALE = 4
-ALL_SECTIONS = ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'next_milestone', 'lifetime', 'journey', 'heatmap', 'milestones', 'goals', 'challenges', 'next_class', 'club']
+ALL_SECTIONS = [
+    'latest_workouts',
+    'username',
+    'streaks',
+    'versus',
+    'total_workouts',
+    'next_milestone',
+    'lifetime',
+    'journey',
+    'heatmap',
+    'milestones',
+    'goals',
+    'challenges',
+    'next_class',
+    'club',
+]
 
 
 class PreviewDashboard:
@@ -39,16 +55,19 @@ class PreviewDashboard:
 
     def pending_milestones(self, snapshot):
         from peloton.feeds.goals import STEP_CELEBRATION_WINDOW
+
         total = snapshot.get('totals', {}).get('Total Workouts') or 0
         return [m for m in self.milestones if 0 <= total - m < STEP_CELEBRATION_WINDOW][-1:]
 
     def pending_discipline_milestones(self, snapshot):
         from peloton.feeds.goals import reached_discipline_milestones
+
         return reached_discipline_milestones(snapshot.get('totals'))[:1]
 
 
 def preview_journey(options):
     from peloton.config import DEFAULTS, load_config
+
     config = getattr(options, 'config', None)
     if not config:
         return DEFAULTS['journey']
@@ -66,6 +85,7 @@ def insights_enabled(options):
     if not config:
         return False
     from peloton.config import load_config
+
     try:
         return bool(load_config(config)['display'].get('workout_insights'))
     except ValueError as exc:
@@ -76,39 +96,59 @@ def add_log_figures(snapshot, options):
     """Instructor counts and journey miles live in the workout log, not the cache."""
     from peloton.stats.journey import uses_metric
     from peloton.workouts.workout_log import WorkoutLog, default_log_path
+
     path = Path(getattr(options, 'log', None) or default_log_path(options.cache))
     if not path.exists():
         return
     me = snapshot.get('me') or {}
     log = WorkoutLog.load(path)
-    derived = log.derived(journey=preview_journey(options), metric=uses_metric(me),
-                          tzname=me.get('timezone'), member_since=me.get('created_at'))
-    snapshot.update({key: derived[key] for key in ('instructor_counts', 'instructor_names', 'distance_totals',
-                                                   'activity_days', 'streak_week_workouts', 'time_frames', 'events')})
+    derived = log.derived(
+        journey=preview_journey(options), metric=uses_metric(me), tzname=me.get('timezone'), member_since=me.get('created_at')
+    )
+    snapshot.update(
+        {
+            key: derived[key]
+            for key in (
+                'instructor_counts',
+                'instructor_names',
+                'distance_totals',
+                'activity_days',
+                'streak_week_workouts',
+                'time_frames',
+                'events',
+            )
+        }
+    )
 
 
 def load_snapshot_for(options):
     if options.demo:
-        from peloton.feeds.challenges import parse_challenges
         import time
 
         from peloton.demo import demo_bookings, demo_club, demo_data
+        from peloton.feeds.challenges import parse_challenges
         from peloton.stats.summaries import summarize_workout
         from peloton.stats.totals import extract_discipline_totals, parse_streaks
+
         data = demo_data()
         from peloton.dashboard_state import with_demo_insight
+
         switch = {'workout_insights': insights_enabled(options)}
-        return {'me': data['me'], 'totals': extract_discipline_totals(data['overview']),
-                'summaries': [with_demo_insight(summarize_workout(w, data['performance'][w['id']]), data, switch)
-                              for w in data['workouts']],
-                'weekly_progress': {'workouts': 3, 'minutes': 95},
-                'instructor_counts': {}, 'status': 'ready',
-                'streaks': parse_streaks(data['overview']),
-                'distance_totals': data['distance_totals'],
-                'challenges': parse_challenges(data['challenges']),
-                'booked_classes': demo_bookings(time.time()),
-                'club': demo_club(time.time())}
+        return {
+            'me': data['me'],
+            'totals': extract_discipline_totals(data['overview']),
+            'summaries': [with_demo_insight(summarize_workout(w, data['performance'][w['id']]), data, switch) for w in data['workouts']],
+            'weekly_progress': {'workouts': 3, 'minutes': 95},
+            'instructor_counts': {},
+            'status': 'ready',
+            'streaks': parse_streaks(data['overview']),
+            'distance_totals': data['distance_totals'],
+            'challenges': parse_challenges(data['challenges']),
+            'booked_classes': demo_bookings(time.time()),
+            'club': demo_club(time.time()),
+        }
     from peloton.cache import load_snapshot
+
     snapshot = load_snapshot(options.cache)
     if snapshot is None:
         raise SystemExit(f'Could not read a dashboard cache from {options.cache}')
@@ -124,6 +164,7 @@ def load_snapshot_for(options):
 def _last_workout_times(state, duration, detail_interval, height):
     # One frame per intro/stat, at each one's own start: graph frames hold longer.
     from display.ui.last_workout.rotation import detail_hold_seconds, rotating_details
+
     starts, start = [0.0], detail_interval
     for detail in rotating_details(state, height):
         starts.append(start)
@@ -141,12 +182,14 @@ def _versus_times(state, duration, detail_interval, height):
 def _journey_times(state, duration, detail_interval, height):
     # Once each step's opening animation has settled; 32 rows: the trip, then the miles by type.
     from display.ui.journey_screen import INTRO_SECONDS
+
     share = state.get('step_seconds')
     return [INTRO_SECONDS, share + INTRO_SECONDS] if share else [INTRO_SECONDS]
 
 
 def _challenge_times(state, duration, detail_interval, height):
     from display.ui.challenge_screen import INTRO_SECONDS  # settled, as in the README
+
     return [INTRO_SECONDS]
 
 
@@ -157,16 +200,19 @@ def _username_times(state, duration, detail_interval, height):
 
 def _pr_times(state, duration, detail_interval, height):
     from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS
+
     return [0.5, BURST_SECONDS + SETTLE_SECONDS + 0.5]
 
 
 def _celebration_times(state, duration, detail_interval, height):
     from display.ui.celebration_screen import INTRO_SECONDS
+
     return [0.3, INTRO_SECONDS + 0.7]
 
 
 def _streak_times(state, duration, detail_interval, height):
     from scripts.render_streaks import FLAME_SECONDS
+
     return [FLAME_SECONDS]  # the README screenshots' flame
 
 
@@ -174,10 +220,18 @@ def _next_class_times(state, duration, detail_interval, height):
     return [0.0]  # the tag's full brightness, as in the README (it pulses in the last 10 minutes)
 
 
-FRAME_TIMES = {'last_workout': _last_workout_times, 'versus': _versus_times, 'journey': _journey_times,
-               'challenge': _challenge_times, 'username': _username_times, 'pr': _pr_times,
-               'celebration': _celebration_times, 'streak': _streak_times, 'streak_risk': _streak_times,
-               'next_class': _next_class_times}
+FRAME_TIMES = {
+    'last_workout': _last_workout_times,
+    'versus': _versus_times,
+    'journey': _journey_times,
+    'challenge': _challenge_times,
+    'username': _username_times,
+    'pr': _pr_times,
+    'celebration': _celebration_times,
+    'streak': _streak_times,
+    'streak_risk': _streak_times,
+    'next_class': _next_class_times,
+}
 
 
 def frame_times(name, state, duration, detail_interval, height=64):
@@ -187,57 +241,72 @@ def frame_times(name, state, duration, detail_interval, height=64):
 
 
 def _build_screens(display, detail_interval):
+    from display.ui.celebration_screen import CelebrationScreen
+    from display.ui.challenge_screen import ChallengeScreen
+    from display.ui.club_screen import ClubScreen
+    from display.ui.countdown_screen import CountdownScreen
     from display.ui.discipline_page import DisciplinePageScreen
     from display.ui.goal_screen import GoalScreen
+    from display.ui.heatmap_screen import HeatmapScreen
+    from display.ui.journey_screen import JourneyScreen
     from display.ui.last_workout.screen import LastWorkoutScreen
     from display.ui.lifetime_overview import LifetimeOverviewScreen
     from display.ui.logo_mask_screen import LogoMaskScreen
-    from display.ui.pr_celebration import PrCelebrationScreen
-    from display.ui.celebration_screen import CelebrationScreen
-    from display.ui.status_screen import StatusScreen
-    from display.ui.streak_screen import StreakScreen
-    from display.ui.versus_screen import VersusScreen
-    from display.ui.countdown_screen import CountdownScreen
-    from display.ui.journey_screen import JourneyScreen
-    from display.ui.heatmap_screen import HeatmapScreen
-    from display.ui.streak_risk_screen import StreakRiskScreen
-    from display.ui.username import UsernameScreen
-    from display.ui.challenge_screen import ChallengeScreen
     from display.ui.next_class_screen import NextClassScreen
-    from display.ui.club_screen import ClubScreen
-    return {'username': UsernameScreen(font_key=display['font'], color_key=display['color']),
-            'discipline': DisciplinePageScreen(), 'lifetime': LifetimeOverviewScreen(),
-            'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
-            'pr': PrCelebrationScreen(detail_interval=detail_interval), 'status': StatusScreen(), 'goal': GoalScreen(),
-            'logo': LogoMaskScreen(), 'streak': StreakScreen(), 'versus': VersusScreen(),
-            'countdown': CountdownScreen(),
-            'journey': JourneyScreen(),
-            'heatmap': HeatmapScreen(), 'streak_risk': StreakRiskScreen(),
-            'celebration': CelebrationScreen(), 'challenge': ChallengeScreen(),
-            'next_class': NextClassScreen(), 'club': ClubScreen()}
+    from display.ui.pr_celebration import PrCelebrationScreen
+    from display.ui.status_screen import StatusScreen
+    from display.ui.streak_risk_screen import StreakRiskScreen
+    from display.ui.streak_screen import StreakScreen
+    from display.ui.username import UsernameScreen
+    from display.ui.versus_screen import VersusScreen
+
+    return {
+        'username': UsernameScreen(font_key=display['font'], color_key=display['color']),
+        'discipline': DisciplinePageScreen(),
+        'lifetime': LifetimeOverviewScreen(),
+        'last_workout': LastWorkoutScreen(detail_interval=detail_interval),
+        'pr': PrCelebrationScreen(detail_interval=detail_interval),
+        'status': StatusScreen(),
+        'goal': GoalScreen(),
+        'logo': LogoMaskScreen(),
+        'streak': StreakScreen(),
+        'versus': VersusScreen(),
+        'countdown': CountdownScreen(),
+        'journey': JourneyScreen(),
+        'heatmap': HeatmapScreen(),
+        'streak_risk': StreakRiskScreen(),
+        'celebration': CelebrationScreen(),
+        'challenge': ChallengeScreen(),
+        'next_class': NextClassScreen(),
+        'club': ClubScreen(),
+    }
 
 
 def _rival_standings(options, username, snapshot):
     """The versus page's two riders: --rival's cache, else the demo pair, else none."""
     if options.rival:
         from peloton.cache import load_snapshot
+
         other = load_snapshot(options.rival) or {}
-        return [{'name': name, **{k: (snap.get('weekly_progress') or {}).get(k, 0)
-                                  for k in ('workouts', 'minutes', 'output_kj')}}
-                for name, snap in ((username, snapshot), (options.rival_name, other))]
+        return [
+            {'name': name, **{k: (snap.get('weekly_progress') or {}).get(k, 0) for k in ('workouts', 'minutes', 'output_kj')}}
+            for name, snap in ((username, snapshot), (options.rival_name, other))
+        ]
     if options.demo:
-        return [{'name': username, 'workouts': 3, 'minutes': 95, 'output_kj': 612},
-                {'name': 'Rival', 'workouts': 4, 'minutes': 80, 'output_kj': 540}]
+        return [
+            {'name': username, 'workouts': 3, 'minutes': 95, 'output_kj': 612},
+            {'name': 'Rival', 'workouts': 4, 'minutes': 80, 'output_kj': 540},
+        ]
     return None
 
 
 def _rotation_pages(snapshot, display, username, options, rivals):
     from peloton_led import build_rotation_pages
+
     dashboard = PreviewDashboard(display['milestones'])
     built = build_rotation_pages(snapshot, dashboard, display, username, options.height, rivals=rivals)
     # Total and discipline celebrations take turns pass by pass; show the next pass's too.
-    following = build_rotation_pages(snapshot, dashboard, display, username, options.height,
-                                     rivals=rivals, pass_index=1)
+    following = build_rotation_pages(snapshot, dashboard, display, username, options.height, rivals=rivals, pass_index=1)
     if following and following[0][0] == 'celebration' and following[0] != built[0]:
         built.insert(1, following[0])
     return [('logo', None, 1.0)] + built
@@ -246,6 +315,7 @@ def _rotation_pages(snapshot, display, username, options, rivals):
 def _expand_streak_views(pages):
     """The board alternates weekly and daily streaks across passes; show both."""
     from display.ui.streak_screen import streak_views
+
     expanded = []
     for name, state, duration in pages:
         if name == 'streak':
@@ -260,10 +330,10 @@ def _render_tiles(pages, screens, detail_interval, height):
     from display.ui.overlays.login_indicator import draw_login_indicator
     from display.ui.overlays.stale_indicator import draw_stale_indicator
     from scripts.render_demo import ImageMatrix
+
     tiles = []
     for name, state, duration in pages:
-        for t in frame_times(name, state or {}, duration, detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS,
-                             height):
+        for t in frame_times(name, state or {}, duration, detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, height):
             matrix = ImageMatrix(height=height)
             screen = screens[name]
             screen.on_enter(matrix, state)
@@ -275,7 +345,7 @@ def _render_tiles(pages, screens, detail_interval, height):
                 draw_stale_indicator(matrix)
             label = name
             if isinstance(state, dict):
-                label += f": {state.get('discipline') or state.get('username') or state.get('title') or ''}"
+                label += f': {state.get("discipline") or state.get("username") or state.get("title") or ""}'
             tiles.append((f'{label} @{t:.1f}s'[:40], matrix.image))
     return tiles
 
@@ -296,8 +366,14 @@ def render(options):
     from display.display import initialize_fonts
     from peloton.config import DEFAULTS
 
-    display = {**DEFAULTS, 'rotation': ALL_SECTIONS, 'color': 'white', 'journey': preview_journey(options),
-               'milestones': [100, 250, 500, 1000, 2000], 'weekly_goals': {'workouts': 5, 'minutes': 150}}
+    display = {
+        **DEFAULTS,
+        'rotation': ALL_SECTIONS,
+        'color': 'white',
+        'journey': preview_journey(options),
+        'milestones': [100, 250, 500, 1000, 2000],
+        'weekly_goals': {'workouts': 5, 'minutes': 150},
+    }
     detail_interval = display['last_workout_detail_interval']
     initialize_fonts(options.height)
     screens = _build_screens(display, detail_interval)
@@ -306,8 +382,7 @@ def render(options):
     rivals = _rival_standings(options, username, snapshot)
     pages = _expand_streak_views(_rotation_pages(snapshot, display, username, options, rivals))
     if options.overlays and snapshot['summaries']:
-        pages.append(('last_workout', {**snapshot['summaries'][0], 'login_required': True,
-                                       'data_stale': True}, detail_interval))
+        pages.append(('last_workout', {**snapshot['summaries'][0], 'login_required': True, 'data_stale': True}, detail_interval))
     tiles = _render_tiles(pages, screens, detail_interval, options.height)
     _contact_sheet(tiles, options.height, options.columns).save(options.out)
     print(f'{len(tiles)} frames from {len(pages)} pages -> {options.out}')
@@ -319,16 +394,18 @@ def main(argv=None):
     source.add_argument('--cache', help='Dashboard cache JSON, e.g. cookies-joel-dashboard-cache.json')
     source.add_argument('--demo', action='store_true', help='Use built-in demo data')
     parser.add_argument('--log', help='Workout log JSON (default: beside --cache)')
-    parser.add_argument('--config', help="config.json whose journey route to show (default: built-in route)")
-    parser.add_argument('--insights', action='store_true',
-                        help='Show the workout-compare insight frames (as display.workout_insights does)')
+    parser.add_argument('--config', help='config.json whose journey route to show (default: built-in route)')
+    parser.add_argument(
+        '--insights', action='store_true', help='Show the workout-compare insight frames (as display.workout_insights does)'
+    )
     parser.add_argument('--height', type=int, choices=(32, 64), default=32)
     parser.add_argument('--username', help='Name to show on the username page')
     parser.add_argument('--rival', help="Second rider's dashboard cache, for the versus page")
     parser.add_argument('--rival-name', default='Rival', help='Name for the --rival rider')
     parser.add_argument('--columns', type=int, default=5)
-    parser.add_argument('--no-overlays', dest='overlays', action='store_false',
-                        help='Skip the extra frame showing the login and stale-data icons')
+    parser.add_argument(
+        '--no-overlays', dest='overlays', action='store_false', help='Skip the extra frame showing the login and stale-data icons'
+    )
     parser.add_argument('--out', default='/tmp/peloton-rotation.png')
     render(parser.parse_args(argv))
 

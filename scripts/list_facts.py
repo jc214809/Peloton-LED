@@ -11,25 +11,51 @@ recorded as shown so the cool-down works as it does on the board.
 A log that isn't complete (its backfill unfinished) has no time-frame figures on the board; use
 --assume-complete to look at one anyway.
 """
+
 import argparse
 import random
 import sys
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from peloton.selection import normalize_discipline  # noqa: E402
-from peloton.stats.username_facts import (FRAME_ORDER, frame_facts, frame_rankings, frame_subjects,  # noqa: E402
-                                    record_name_facts, scored_facts, shown_keys, username_details)
+from peloton.stats.username_facts import (  # noqa: E402
+    FRAME_ORDER,
+    frame_facts,
+    frame_rankings,
+    frame_subjects,
+    record_name_facts,
+    scored_facts,
+    shown_keys,
+    username_details,
+)
 from peloton.workouts.workout_log import WorkoutLog  # noqa: E402
 
-DEMO_DISCIPLINES = (('cycling', 5), ('strength', 4), ('stretching', 2), ('walking', 2), ('running', 1),
-                    ('yoga', 1), ('meditation', 1), ('bike_bootcamp', 1))
-DEMO_INSTRUCTORS = {'jess': 'Jess Sims', 'andy': 'Andy Speer', 'adrian': 'Adrian Williams', 'cody': 'Cody Rigsby',
-                    'robin': 'Robin Arzon', 'tunde': 'Tunde Oyeneyin', 'emma': 'Emma Lovewell',
-                    'matt': 'Matt Wilpers', 'ally': 'Ally Love', 'hannah': 'Hannah Corbin'}
+DEMO_DISCIPLINES = (
+    ('cycling', 5),
+    ('strength', 4),
+    ('stretching', 2),
+    ('walking', 2),
+    ('running', 1),
+    ('yoga', 1),
+    ('meditation', 1),
+    ('bike_bootcamp', 1),
+)
+DEMO_INSTRUCTORS = {
+    'jess': 'Jess Sims',
+    'andy': 'Andy Speer',
+    'adrian': 'Adrian Williams',
+    'cody': 'Cody Rigsby',
+    'robin': 'Robin Arzon',
+    'tunde': 'Tunde Oyeneyin',
+    'emma': 'Emma Lovewell',
+    'matt': 'Matt Wilpers',
+    'ally': 'Ally Love',
+    'hannah': 'Hannah Corbin',
+}
 
 
 def demo_log(now, years=3, seed=7):
@@ -48,11 +74,19 @@ def demo_log(now, years=3, seed=7):
             discipline = rng.choices(disciplines, discipline_weights)[0]
             instructor = rng.choices(instructors, weights)[0]
             stamp = day.replace(hour=rng.choice((6, 7, 12, 17, 18)), minute=rng.randrange(60))
-            ride = {'fitness_discipline': discipline, 'duration': rng.choice((600, 1200, 1800, 2700)),
-                    'id': f'class-{discipline}-{rng.randrange(60)}',
-                    'instructor': {'id': instructor, 'name': DEMO_INSTRUCTORS[instructor]}}
-            workout = {'id': f'w{len(workouts)}', 'status': 'COMPLETE', 'start_time': int(stamp.timestamp()),
-                       'fitness_discipline': discipline, 'ride': ride}
+            ride = {
+                'fitness_discipline': discipline,
+                'duration': rng.choice((600, 1200, 1800, 2700)),
+                'id': f'class-{discipline}-{rng.randrange(60)}',
+                'instructor': {'id': instructor, 'name': DEMO_INSTRUCTORS[instructor]},
+            }
+            workout = {
+                'id': f'w{len(workouts)}',
+                'status': 'COMPLETE',
+                'start_time': int(stamp.timestamp()),
+                'fitness_discipline': discipline,
+                'ride': ride,
+            }
             if discipline == 'cycling':
                 workout['total_work'] = ride['duration'] * rng.randrange(120, 260)
             if rng.random() < 0.5:
@@ -71,6 +105,7 @@ def snapshot_for(log, tzname, now, cache_path=None, assume_complete=False):
     totals, cached = None, {}
     if cache_path:
         from peloton.cache import load_snapshot
+
         cached = load_snapshot(cache_path)
         if cached is None:
             raise SystemExit(f'Could not read a dashboard cache from {cache_path}')
@@ -114,9 +149,11 @@ def _print_frame_figures(frames):
     for key in FRAME_ORDER + ('week',):
         stats = frames.get(key)
         if stats:
-            print(f'{key:<10} workouts {stats["workouts"]:>5}  minutes {stats["minutes"]:>6}  classes {stats["classes"]:>4}'
-                  f'  instructors {stats["instructors"]:>3}  active days {stats["active_days"]:>3}'
-                  f'/{stats["days"] if stats["days"] is not None else "-"}')
+            print(
+                f'{key:<10} workouts {stats["workouts"]:>5}  minutes {stats["minutes"]:>6}  classes {stats["classes"]:>4}'
+                f'  instructors {stats["instructors"]:>3}  active days {stats["active_days"]:>3}'
+                f'/{stats["days"] if stats["days"] is not None else "-"}'
+            )
     print()
 
 
@@ -138,12 +175,14 @@ def _print_frame_highlights(snapshot):
         for fact in frame_facts(snapshot, key):
             print(f'   {fact["label"]:<16} {" / ".join(fact["lines"])}')
         if key == 'events':
-            continue    # its top three is the all-time one again
+            continue  # its top three is the all-time one again
         for ranking in frame_rankings(snapshot, key):
             print('   ' + '  |  '.join(f'{d["label"]}: {d["lines"][0]} ({d["lines"][1]})' for d in ranking))
         for headline, ranking in frame_subjects(snapshot, key):
-            print(f'   {headline["label"]:<16} {" / ".join(headline["lines"])}   then   '
-                  + '  |  '.join(f'{d["label"]}: {d["lines"][0]} ({d["lines"][1]})' for d in ranking))
+            print(
+                f'   {headline["label"]:<16} {" / ".join(headline["lines"])}   then   '
+                + '  |  '.join(f'{d["label"]}: {d["lines"][0]} ({d["lines"][1]})' for d in ranking)
+            )
     print()
 
 
@@ -160,7 +199,8 @@ def _print_passes(snapshot, passes):
         details = username_details(snapshot, index)
         print(f'pass {index}: ' + ' | '.join(d['label'] for d in details))
         snapshot['name_facts_passes'], snapshot['name_facts_shown'] = record_name_facts(
-            snapshot['name_facts_passes'], snapshot['name_facts_shown'], shown_keys(details))
+            snapshot['name_facts_passes'], snapshot['name_facts_shown'], shown_keys(details)
+        )
 
 
 def show(snapshot, passes):
@@ -174,9 +214,9 @@ def show(snapshot, passes):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument('--log', help='a rider\'s workout log (<cache>.workouts.json)')
+    source.add_argument('--log', help="a rider's workout log (<cache>.workouts.json)")
     source.add_argument('--demo', action='store_true', help='a synthetic three-year log')
-    parser.add_argument('--cache', help='that rider\'s dashboard cache, for the discipline totals')
+    parser.add_argument('--cache', help="that rider's dashboard cache, for the discipline totals")
     parser.add_argument('--tz', help='display timezone (default: UTC)')
     parser.add_argument('--passes', type=int, default=8, help='how many passes to show (default 8)')
     parser.add_argument('--assume-complete', action='store_true', help='treat an unfinished log as complete')

@@ -13,6 +13,7 @@ a tag someone else pushed first (two quick merges) is retried with the next numb
 
 Runs in CI without the app's requirements: the standard library and self_update.board only.
 """
+
 import argparse
 import logging
 import os
@@ -24,9 +25,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from self_update.board import Board
 
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BETA, RELEASE = "beta", "release"
-RELEASE_TAG = re.compile(r"v(\d+)\.(\d+)\.(\d+)")
-BETA_TAG = re.compile(r"v(\d+)\.(\d+)\.(\d+)-beta")
+BETA, RELEASE = 'beta', 'release'
+RELEASE_TAG = re.compile(r'v(\d+)\.(\d+)\.(\d+)')
+BETA_TAG = re.compile(r'v(\d+)\.(\d+)\.(\d+)-beta')
 PUSH_ATTEMPTS = 5
 GIT_TIMEOUT_S = 120
 
@@ -38,7 +39,7 @@ def _releases(tags):
 def newest_release(tags):
     """The newest vX.Y.Z tag, or None."""
     found = _releases(tags)
-    return "v{}.{}.{}".format(*found[-1]) if found else None
+    return 'v{}.{}.{}'.format(*found[-1]) if found else None
 
 
 def next_tag(kind, tags):
@@ -46,10 +47,13 @@ def next_tag(kind, tags):
     releases = _releases(tags)
     major, minor, _ = releases[-1] if releases else (0, 0, 0)
     if kind == RELEASE:
-        return f"v{major}.{minor + 1}.0"
-    betas = [int(found.group(3)) for tag in tags
-             if (found := BETA_TAG.fullmatch(tag)) and (int(found.group(1)), int(found.group(2))) == (major, minor)]
-    return f"v{major}.{minor}.{max(betas, default=0) + 1}-beta"
+        return f'v{major}.{minor + 1}.0'
+    betas = [
+        int(found.group(3))
+        for tag in tags
+        if (found := BETA_TAG.fullmatch(tag)) and (int(found.group(1)), int(found.group(2))) == (major, minor)
+    ]
+    return f'v{major}.{minor}.{max(betas, default=0) + 1}-beta'
 
 
 def tag_for(kind, tags, on_commit):
@@ -65,13 +69,13 @@ def release_notes(changes):
     lines, hidden = [], []
     for number, title, notes in changes:
         if notes == [] and number:
-            hidden.append(f"#{number}")
+            hidden.append(f'#{number}')
             continue
-        lines.append(f"- {title}" + (f" (#{number})" if number else ""))
-        lines += [f"  - {note}" for note in notes or ()]
+        lines.append(f'- {title}' + (f' (#{number})' if number else ''))
+        lines += [f'  - {note}' for note in notes or ()]
     if hidden:
-        lines += ["", f"Behind the scenes, nothing you'd notice: {', '.join(hidden)}"]
-    return "\n".join(lines) + "\n" if lines else "No changes.\n"
+        lines += ['', f"Behind the scenes, nothing you'd notice: {', '.join(hidden)}"]
+    return '\n'.join(lines) + '\n' if lines else 'No changes.\n'
 
 
 class Tagger:
@@ -79,57 +83,57 @@ class Tagger:
         self.app_dir, self._run = app_dir, run
 
     def git(self, *args, check=True):
-        done = self._run(["git", *args], cwd=self.app_dir, capture_output=True, text=True, timeout=GIT_TIMEOUT_S)
+        done = self._run(['git', *args], cwd=self.app_dir, capture_output=True, text=True, timeout=GIT_TIMEOUT_S)
         if check and done.returncode:
-            raise RuntimeError(f"git {' '.join(args)} exited {done.returncode}: {(done.stderr or '').strip()}")
+            raise RuntimeError(f'git {" ".join(args)} exited {done.returncode}: {(done.stderr or "").strip()}')
         return done
 
     def tags(self):
-        return self.git("tag", "--list", "v*").stdout.split()
+        return self.git('tag', '--list', 'v*').stdout.split()
 
     def tag(self, kind, sha):
         """Tag sha and push the tag, retrying with the next number when another run took this one."""
-        why = ""
+        why = ''
         for _ in range(PUSH_ATTEMPTS):
-            self.git("fetch", "--force", "--tags", "origin")
-            tag = tag_for(kind, self.tags(), self.git("tag", "--points-at", sha).stdout.split())
-            self.git("tag", "--force", tag, sha)
-            pushed = self.git("push", "origin", f"refs/tags/{tag}", check=False)
+            self.git('fetch', '--force', '--tags', 'origin')
+            tag = tag_for(kind, self.tags(), self.git('tag', '--points-at', sha).stdout.split())
+            self.git('tag', '--force', tag, sha)
+            pushed = self.git('push', 'origin', f'refs/tags/{tag}', check=False)
             if pushed.returncode == 0:
-                logging.info("Tagged %s %s", sha[:7], tag)
+                logging.info('Tagged %s %s', sha[:7], tag)
                 return tag
-            why = f"git exited {pushed.returncode}: {(pushed.stderr or '').strip()}"
+            why = f'git exited {pushed.returncode}: {(pushed.stderr or "").strip()}'
             logging.warning("Couldn't push %s (%s): trying again", tag, why)
-            self.git("tag", "--delete", tag)
+            self.git('tag', '--delete', tag)
         raise RuntimeError(f"couldn't push a {kind} tag for {sha[:7]} in {PUSH_ATTEMPTS} tries ({why})")
 
     def notes(self, tag, sha):
         """The release notes for tag on sha: what came in since the release before it, else since
         sha's first parent."""
         earlier = newest_release([t for t in self.tags() if t != tag])
-        since = earlier or self.git("rev-parse", f"{sha}^").stdout.strip()
+        since = earlier or self.git('rev-parse', f'{sha}^').stdout.strip()
         return release_notes(Board(self.app_dir, run=self._run).what_changed(since, sha))
 
 
 def main(argv=None, tagger=None):
-    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
-    parser = argparse.ArgumentParser(description="Tag a merge with the next version.")
-    parser.add_argument("kind", choices=(BETA, RELEASE))
-    parser.add_argument("sha")
-    parser.add_argument("--notes", help="release: write its release notes here")
+    logging.basicConfig(level=logging.INFO, format='%(message)s', stream=sys.stderr)
+    parser = argparse.ArgumentParser(description='Tag a merge with the next version.')
+    parser.add_argument('kind', choices=(BETA, RELEASE))
+    parser.add_argument('sha')
+    parser.add_argument('--notes', help='release: write its release notes here')
     args = parser.parse_args(argv)
     tagger = tagger or Tagger()
     try:
         tag = tagger.tag(args.kind, args.sha)
         if args.kind == RELEASE and args.notes:
-            with open(args.notes, "w", encoding="utf-8") as f:
+            with open(args.notes, 'w', encoding='utf-8') as f:
                 f.write(tagger.notes(tag, args.sha))
     except RuntimeError as e:
-        logging.error("%s", e)
+        logging.error('%s', e)
         return 1
     print(tag)
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

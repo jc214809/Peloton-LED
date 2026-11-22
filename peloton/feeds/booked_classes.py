@@ -6,16 +6,28 @@ IDs, and GET /api/peloton/{id}?joins=ride,ride.instructor gives each one's start
 Only what the page draws is kept, so the cache stays small and an odd response can't reach the screen.
 Standard library only, so the cache can validate with it.
 """
+
 import math
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 # Peloton's class disciplines under the board's names (peloton.workouts.workout_features.DISCIPLINE_ALIAS).
 ALIAS = {'caesar': 'rowing', 'caesar_bootcamp': 'row_bootcamp', 'circuit': 'tread_bootcamp'}
 # What the class line calls a class of each discipline: `20 MIN RIDE`.
-NOUNS = {'cycling': 'RIDE', 'running': 'RUN', 'walking': 'WALK', 'rowing': 'ROW', 'strength': 'STRENGTH',
-         'yoga': 'YOGA', 'meditation': 'MEDITATION', 'stretching': 'STRETCH', 'cardio': 'CARDIO',
-         'bike_bootcamp': 'BIKE BOOTCAMP', 'tread_bootcamp': 'TREAD BOOTCAMP', 'row_bootcamp': 'ROW BOOTCAMP'}
+NOUNS = {
+    'cycling': 'RIDE',
+    'running': 'RUN',
+    'walking': 'WALK',
+    'rowing': 'ROW',
+    'strength': 'STRENGTH',
+    'yoga': 'YOGA',
+    'meditation': 'MEDITATION',
+    'stretching': 'STRETCH',
+    'cardio': 'CARDIO',
+    'bike_bootcamp': 'BIKE BOOTCAMP',
+    'tread_bootcamp': 'TREAD BOOTCAMP',
+    'row_bootcamp': 'ROW BOOTCAMP',
+}
 # First names more than one Peloton instructor has (all 57 in GET /api/instructor, 2026-11-14): these
 # show the full name, so `JESS` can't be the wrong Jess.
 SHARED_FIRST_NAMES = frozenset({'ALEX', 'HANNAH', 'JESS', 'MARCEL'})
@@ -70,18 +82,30 @@ def slim_class(payload, identity=None):
         return None
     instructor = ride.get('instructor')
     tag = ENCORE if payload.get('is_encore') is True else LIVE if payload.get('is_live') is True else None
-    return {'id': _text(identity or payload.get('id'))[:64], 'start': start, 'tag': tag,
-            'discipline': ALIAS.get(discipline, discipline), 'minutes': max(1, round(seconds / 60)),
-            'instructor': _text(instructor.get('name')) if isinstance(instructor, dict) else ''}
+    return {
+        'id': _text(identity or payload.get('id'))[:64],
+        'start': start,
+        'tag': tag,
+        'discipline': ALIAS.get(discipline, discipline),
+        'minutes': max(1, round(seconds / 60)),
+        'instructor': _text(instructor.get('name')) if isinstance(instructor, dict) else '',
+    }
 
 
 def valid_booking(booking):
     """A kept booking the page can draw: the cache can hold anything."""
-    return (isinstance(booking, dict) and isinstance(booking.get('id'), str)
-            and _number(booking.get('start')) is not None and booking.get('tag') in (LIVE, ENCORE, None)
-            and isinstance(booking.get('discipline'), str) and booking['discipline']
-            and isinstance(booking.get('minutes'), int) and not isinstance(booking['minutes'], bool)
-            and 0 < booking['minutes'] < 1000 and isinstance(booking.get('instructor'), str))
+    return (
+        isinstance(booking, dict)
+        and isinstance(booking.get('id'), str)
+        and _number(booking.get('start')) is not None
+        and booking.get('tag') in (LIVE, ENCORE, None)
+        and isinstance(booking.get('discipline'), str)
+        and booking['discipline']
+        and isinstance(booking.get('minutes'), int)
+        and not isinstance(booking['minutes'], bool)
+        and 0 < booking['minutes'] < 1000
+        and isinstance(booking.get('instructor'), str)
+    )
 
 
 def valid_bookings(bookings):
@@ -110,7 +134,7 @@ def class_lines(booking):
     """The class line, longest first: `20 MIN RIDE`, then the noun alone. A discipline the board doesn't
     know is named by Peloton's key (`OUTDOOR`)."""
     noun = NOUNS.get(booking['discipline'], booking['discipline'].replace('_', ' ').upper())
-    return [f"{booking['minutes']} MIN {noun}", noun]
+    return [f'{booking["minutes"]} MIN {noun}', noun]
 
 
 def instructor_lines(name):
@@ -165,6 +189,10 @@ def when(booking, now, zone_name=None):
         mode = 'minutes'
     else:
         mode = 'clock'
-    return {'mode': mode, 'time': time_text, 'meridiem': meridiem, 'minutes': max(1, math.ceil(left / 60)),
-            'day': day_word(start, local_now)}
-
+    return {
+        'mode': mode,
+        'time': time_text,
+        'meridiem': meridiem,
+        'minutes': max(1, math.ceil(left / 60)),
+        'day': day_word(start, local_now),
+    }

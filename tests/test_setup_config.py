@@ -28,33 +28,39 @@ def test_prompt_riders_rejects_duplicate_names():
 
 
 def test_single_rider_uses_plain_email_password_vars_and_no_users_array():
-    config, auth_env = build_config(
-        [{'name': 'Joel', 'email': 'joel@example.com', 'password': 'secret'}], TEMPLATE)
+    config, auth_env = build_config([{'name': 'Joel', 'email': 'joel@example.com', 'password': 'secret'}], TEMPLATE)
     assert 'users' not in config
     assert auth_env == {'PELOTON_EMAIL': 'joel@example.com', 'PELOTON_PASSWORD': 'secret'}
     assert config['display']['cache_path'] == '/var/lib/peloton-led/dashboard-cache.json'
 
 
 def test_multiple_riders_get_isolated_state_paths_and_env_vars():
-    riders = [{'name': 'Joel', 'email': 'joel@example.com', 'password': 'pw1'},
-              {'name': 'Jen', 'email': 'jen@example.com', 'password': 'pw2'}]
+    riders = [
+        {'name': 'Joel', 'email': 'joel@example.com', 'password': 'pw1'},
+        {'name': 'Jen', 'email': 'jen@example.com', 'password': 'pw2'},
+    ]
     config, auth_env = build_config(riders, TEMPLATE)
     users = config['users']
     assert users[0]['token_path'] == '/var/lib/peloton-led/cookies-joel.txt'
     assert users[0]['cache_path'] == '/var/lib/peloton-led/dashboard-cache-joel.json'
     assert users[1]['token_path'] == '/var/lib/peloton-led/cookies-jen.txt'
     assert auth_env == {
-        'PELOTON_EMAIL_JOEL': 'joel@example.com', 'PELOTON_PASSWORD_JOEL': 'pw1',
-        'PELOTON_EMAIL_JEN': 'jen@example.com', 'PELOTON_PASSWORD_JEN': 'pw2',
+        'PELOTON_EMAIL_JOEL': 'joel@example.com',
+        'PELOTON_PASSWORD_JOEL': 'pw1',
+        'PELOTON_EMAIL_JEN': 'jen@example.com',
+        'PELOTON_PASSWORD_JEN': 'pw2',
     }
 
 
 def test_built_configs_pass_real_validation(tmp_path):
     single, _ = build_config([{'name': 'Joel', 'email': 'a@example.com', 'password': 'pw'}], TEMPLATE)
-    dual, _ = build_config([
-        {'name': 'Joel', 'email': 'a@example.com', 'password': 'pw'},
-        {'name': 'Jen', 'email': 'b@example.com', 'password': 'pw2'},
-    ], TEMPLATE)
+    dual, _ = build_config(
+        [
+            {'name': 'Joel', 'email': 'a@example.com', 'password': 'pw'},
+            {'name': 'Jen', 'email': 'b@example.com', 'password': 'pw2'},
+        ],
+        TEMPLATE,
+    )
     single_path = tmp_path / 'single.json'
     dual_path = tmp_path / 'dual.json'
     single_path.write_text(json.dumps(single))

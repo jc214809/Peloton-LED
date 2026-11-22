@@ -4,18 +4,19 @@ optional pages' data (challenges, booked classes, Club Peloton).
 `FetchMixin` is mixed into `Dashboard` (peloton/dashboard.py): these methods share its state (the caches
 and the "last asked" clocks) and publish through its `_publish`, so they stay methods rather than functions.
 """
+
 import logging
 import time
 
 import requests
 
+from .config import DEFAULTS
 from .feeds.booked_classes import reservation_ids, slim_class
 from .feeds.challenges import parse_challenges
 from .feeds.club import NOT_A_MEMBER, parse_score
-from .config import DEFAULTS
+from .feeds.goals import week_start
 from .selection import last_active_day
 from .timestamps import workout_date, workout_timestamp
-from .feeds.goals import week_start
 
 logger = logging.getLogger('peloton-led.dashboard')
 
@@ -57,12 +58,10 @@ class FetchMixin:
         Fetched once per class and kept while its signature holds; the workout insights reuse it rather
         than fetching it again. A failed or bad fetch retries after INSIGHT_RETRY_SECONDS. Only a 401 escapes."""
         identity = workout.get('id')
-        if (not identity or workout.get('status') != 'COMPLETE'
-                or str(workout.get('fitness_discipline') or '').lower() != 'strength'):
+        if not identity or workout.get('status') != 'COMPLETE' or str(workout.get('fitness_discipline') or '').lower() != 'strength':
             return None
         cached = self._details.get(identity)
-        if cached and cached[0] == signature and (
-                cached[1] is not None or time.monotonic() - cached[2] < INSIGHT_RETRY_SECONDS):
+        if cached and cached[0] == signature and (cached[1] is not None or time.monotonic() - cached[2] < INSIGHT_RETRY_SECONDS):
             self._details.move_to_end(identity)
             return cached[1]
         try:
@@ -174,8 +173,7 @@ class FetchMixin:
             return
         now = time.monotonic()
         new_workout = newest_workout is not None and newest_workout != self._club_workout
-        if (self._club_checked_at is not None and not new_workout
-                and now - self._club_checked_at < self._club_wait):
+        if self._club_checked_at is not None and not new_workout and now - self._club_checked_at < self._club_wait:
             return
         self._club_checked_at = now
         self._club_workout = newest_workout
@@ -184,8 +182,9 @@ class FetchMixin:
             club = NOT_A_MEMBER if payload is None else parse_score(payload, time.time())
         except (requests.RequestException, ValueError) as exc:
             status = getattr(getattr(exc, 'response', None), 'status_code', None)
-            logger.warning('Club Peloton score fetch failed (%s%s); keeping the last figures',
-                           type(exc).__name__, f' {status}' if status else '')
+            logger.warning(
+                'Club Peloton score fetch failed (%s%s); keeping the last figures', type(exc).__name__, f' {status}' if status else ''
+            )
             self._club_wait = CLUB_RETRY_SECONDS
             return
         self._club_wait = CLUB_REFRESH_SECONDS
@@ -219,8 +218,7 @@ class FetchMixin:
             return True
         with self._log_lock:
             complete = self._log.complete
-            gap = complete and bool(self._log.workouts) and not any(
-                self._log.knows(w.get('id')) for w in rows)
+            gap = complete and bool(self._log.workouts) and not any(self._log.knows(w.get('id')) for w in rows)
         if gap:
             return True
         stamp = workout_timestamp(oldest, tz)

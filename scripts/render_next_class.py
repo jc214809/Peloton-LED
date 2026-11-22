@@ -8,6 +8,7 @@ writes docs/screenshots/rotation/next_class.png: the next-class page for each ca
 `--gifs FOLDER` (or `write_gifs(folder)`)
 writes next-class-pulse-64.gif and -32.gif instead: one cycle of the tag's pulse for a LIVE class 5 minutes out.
 """
+
 import argparse
 import os
 import sys
@@ -29,8 +30,14 @@ ZONE = 'America/New_York'
 
 
 def _page(discipline, minutes, instructor, tag, starts_in):
-    return {'id': discipline, 'start': float(NOW + starts_in), 'tag': tag, 'discipline': discipline,
-            'minutes': minutes, 'instructor': instructor}
+    return {
+        'id': discipline,
+        'start': float(NOW + starts_in),
+        'tag': tag,
+        'discipline': discipline,
+        'minutes': minutes,
+        'instructor': instructor,
+    }
 
 
 # A live ride tomorrow, an encore bootcamp within the hour (a shared first name), and a class starting now.
@@ -72,8 +79,7 @@ def write_gifs(folder):
     for height in (64, 32):
         frames = pulse_frames(height)
         path = os.path.join(folder, f'next-class-pulse-{height}.gif')
-        frames[0].save(path, save_all=True, append_images=frames[1:], duration=round(PULSE_FRAME_SECONDS * 1000),
-                       loop=0)
+        frames[0].save(path, save_all=True, append_images=frames[1:], duration=round(PULSE_FRAME_SECONDS * 1000), loop=0)
         print(f'Wrote {path}')
 
 

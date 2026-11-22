@@ -7,6 +7,7 @@ writes docs/screenshots/rotation/streaks.png (the weekly and the daily streak) a
 reminder), each on a 64x64 panel (top row) and a 64x32 panel (bottom row), labelled like the README's other
 screenshots. The flame is drawn FLAME_SECONDS into the page.
 """
+
 import argparse
 import os
 import sys
@@ -26,10 +27,20 @@ from scripts.render_logo import GAP, LABEL_WIDTH, SHEET_BACKGROUND, SHEET_SCALE 
 # A moment with all three tongues up, so the screenshot shows the flame's shape.
 FLAME_SECONDS = 7.95
 SHEETS = {
-    'streaks.png': (StreakScreen, [
-        {'current_weekly': 103, 'best_weekly': 103, 'view': 'weekly'},
-        {'current_weekly': 103, 'best_weekly': 103, 'current_daily': 703, 'daily_start': '2024-12-08',
-         'today': '2026-11-02', 'view': 'daily'}]),
+    'streaks.png': (
+        StreakScreen,
+        [
+            {'current_weekly': 103, 'best_weekly': 103, 'view': 'weekly'},
+            {
+                'current_weekly': 103,
+                'best_weekly': 103,
+                'current_daily': 703,
+                'daily_start': '2024-12-08',
+                'today': '2026-11-02',
+                'view': 'daily',
+            },
+        ],
+    ),
     'streak-risk.png': (StreakRiskScreen, [{'current': 1, 'days_left': 1}]),
 }
 

@@ -1,41 +1,42 @@
 """The page's colours: discipline, heart-rate zone and insight palettes."""
-from driver import graphics
-from ..logo_art import ZONE_COLORS
 
+from driver import graphics
+
+from ..logo_art import ZONE_COLORS
 
 _WHITE = graphics.Color(255, 255, 255)
 
 
-_GOLD  = graphics.Color(255, 215,   0)
+_GOLD = graphics.Color(255, 215, 0)
 
 
-_RED   = graphics.Color(220,  20,  20)
+_RED = graphics.Color(220, 20, 20)
 
 
-_BLUE  = graphics.Color(  0, 120, 255)
+_BLUE = graphics.Color(0, 120, 255)
 
 
 _DISCIPLINE_COLORS = {
-    "cycling":       graphics.Color(220, 50,  20),
-    "bike bootcamp": graphics.Color(220, 50,  20),
-    "tread bootcamp": graphics.Color(20, 200, 80),
-    "row bootcamp":  graphics.Color(0, 140, 255),
-    "running":       graphics.Color(20,  200, 80),
-    "walking":       graphics.Color(20,  180, 60),
-    "outdoor run":   graphics.Color(20,  200, 80),
-    "outdoor walk":  graphics.Color(20,  180, 60),
-    "strength":      graphics.Color(255, 140,  0),
-    "bootcamp":      graphics.Color(255, 140,  0),
-    "rowing":        graphics.Color(0,   140, 255),
-    "yoga":          graphics.Color(160,   0, 220),
-    "meditation":    graphics.Color(120,   0, 180),
-    "stretching":    graphics.Color(0,   200, 180),
-    "cardio":        graphics.Color(255,  80,   0),
-    "pilates":       graphics.Color(200, 100, 200),
-    "barre":         graphics.Color(220,  80, 160),
-    "boxing":        graphics.Color(255,  80,  0),
-    "dance cardio":  graphics.Color(255,  80, 120),
-    "mobility":      graphics.Color(0,  200, 180),
+    'cycling': graphics.Color(220, 50, 20),
+    'bike bootcamp': graphics.Color(220, 50, 20),
+    'tread bootcamp': graphics.Color(20, 200, 80),
+    'row bootcamp': graphics.Color(0, 140, 255),
+    'running': graphics.Color(20, 200, 80),
+    'walking': graphics.Color(20, 180, 60),
+    'outdoor run': graphics.Color(20, 200, 80),
+    'outdoor walk': graphics.Color(20, 180, 60),
+    'strength': graphics.Color(255, 140, 0),
+    'bootcamp': graphics.Color(255, 140, 0),
+    'rowing': graphics.Color(0, 140, 255),
+    'yoga': graphics.Color(160, 0, 220),
+    'meditation': graphics.Color(120, 0, 180),
+    'stretching': graphics.Color(0, 200, 180),
+    'cardio': graphics.Color(255, 80, 0),
+    'pilates': graphics.Color(200, 100, 200),
+    'barre': graphics.Color(220, 80, 160),
+    'boxing': graphics.Color(255, 80, 0),
+    'dance cardio': graphics.Color(255, 80, 120),
+    'mobility': graphics.Color(0, 200, 180),
 }
 
 

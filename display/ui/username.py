@@ -1,9 +1,10 @@
 # python file: display/ui/username.py
 
-from .screen import Screen
-from display.display import loaded_fonts, color_dict, get_text_width, plain_letters
-from utils import debug
+from display.display import color_dict, get_text_width, loaded_fonts, plain_letters
 from driver import graphics
+from utils import debug
+
+from .screen import Screen
 
 DETAIL_INTERVAL_SECONDS = 5.0
 # A value line wider than the panel's room scrolls: hold, glide to the end, hold; and when the highlight
@@ -23,7 +24,7 @@ class UsernameScreen(Screen):
     animated = True
     atomic_frames = True
 
-    def __init__(self, font_key="discipline", color_key="white"):
+    def __init__(self, font_key='discipline', color_key='white'):
         self.font_key = font_key
         self.color_key = color_key
         self.elapsed = 0.0
@@ -45,8 +46,7 @@ class UsernameScreen(Screen):
         candidates = ('discipline', 'titles', 'info', 'stats')
         fonts = [loaded_fonts.get(key) for key in candidates]
         fonts = [font for font in fonts if font is not None]
-        return next((font for font in fonts if get_text_width(font, text) <= width),
-                    fonts[-1] if fonts else None)
+        return next((font for font in fonts if get_text_width(font, text) <= width), fonts[-1] if fonts else None)
 
     @staticmethod
     def _center(matrix, font, text, y, color, x_offset=0):
@@ -97,15 +97,15 @@ class UsernameScreen(Screen):
                 matrix.SetPixel(x, y, 0, 0, 0)
 
     def render(self, matrix, state=None):
-        username = (state or {}).get("username") if isinstance(state, dict) else state
-        text = (username or "").strip() or "Peloton Member"
+        username = (state or {}).get('username') if isinstance(state, dict) else state
+        text = (username or '').strip() or 'Peloton Member'
         title_font = self._username_font(text, matrix.width - 4)
         small_font = loaded_fonts.get('stats') or loaded_fonts.get('info')
         value_font = loaded_fonts.get('info') or small_font
         if not title_font or not small_font or not value_font:
-            debug.error("Font %s is not loaded", self.font_key)
+            debug.error('Font %s is not loaded', self.font_key)
             return False
-        color = color_dict.get(self.color_key, color_dict["white"])
+        color = color_dict.get(self.color_key, color_dict['white'])
         # Only pathological names wider than the smallest font are trimmed.
         text = self._fit(title_font, text, matrix.width - 4)
         details = (state or {}).get('details', []) if isinstance(state, dict) else []
@@ -181,8 +181,7 @@ class UsernameScreen(Screen):
             width = get_text_width(value_font, line)
             if compact and room < width <= matrix.width:
                 # Only a little too wide for the margins: edge to edge, no scrolling.
-                graphics.DrawText(matrix, value_font, (matrix.width - width) // 2, baseline + offset,
-                                  line_color, line)
+                graphics.DrawText(matrix, value_font, (matrix.width - width) // 2, baseline + offset, line_color, line)
             elif width > room:
                 self._scrolling(matrix, value_font, line, baseline + offset, line_color, phase_seconds, interval)
             else:

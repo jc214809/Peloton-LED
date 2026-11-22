@@ -3,18 +3,17 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from peloton.config import load_config
-from peloton_led import (build_rotation_pages, configured_profiles, main,
-                         run_display_loop, run_multi_user_loop, scheduled_brightness)
-from peloton.dashboard import Dashboard
-from display.ui.manager import ScreenManager
-from display.ui.last_workout.screen import LastWorkoutScreen
-from display.ui.username import UsernameScreen
+from display.display import initialize_fonts
 from display.ui.discipline_page import DisciplinePageScreen
+from display.ui.last_workout.screen import LastWorkoutScreen
 from display.ui.lifetime_overview import LifetimeOverviewScreen
+from display.ui.manager import ScreenManager
 from display.ui.pr_celebration import PrCelebrationScreen
 from display.ui.status_screen import StatusScreen
-from display.display import initialize_fonts
+from display.ui.username import UsernameScreen
+from peloton.config import load_config
+from peloton.dashboard import Dashboard
+from peloton_led import build_rotation_pages, configured_profiles, main, run_display_loop, run_multi_user_loop, scheduled_brightness
 from scripts.render_demo import ImageMatrix
 
 # Loops here play whole rotations: sleeping only moves peloton_led's clock on.
@@ -27,9 +26,14 @@ def test_demo_rotation_has_no_network_and_renders_all_screens(tmp_path):
     initialize_fonts(64)
     dashboard = Dashboard(tmp_path / 'missing', config, demo=True, demo_login_needed=True)
     manager = ScreenManager(matrix, login_required=lambda: dashboard.login_required)
-    for name, screen in [('last_workout', LastWorkoutScreen()), ('username', UsernameScreen('info')),
-                         ('discipline', DisciplinePageScreen()), ('lifetime', LifetimeOverviewScreen()),
-                         ('pr', PrCelebrationScreen()), ('status', StatusScreen())]:
+    for name, screen in [
+        ('last_workout', LastWorkoutScreen()),
+        ('username', UsernameScreen('info')),
+        ('discipline', DisciplinePageScreen()),
+        ('lifetime', LifetimeOverviewScreen()),
+        ('pr', PrCelebrationScreen()),
+        ('status', StatusScreen()),
+    ]:
         manager.register(name, screen)
     with patch('requests.Session.request', side_effect=AssertionError('Demo made a network request')):
         run_display_loop(manager, dashboard, config, cycles=1)
@@ -47,15 +51,18 @@ def test_invalid_config_fails_before_matrix_initialization(tmp_path):
 
 def test_cli_duration_respects_config_by_default():
     from utils.utils import args
+
     assert args([]).display_duration is None
     assert args(['--display-duration', '0']).display_duration == 0
 
 
 def test_matrix_settings_come_from_config_with_flags_winning(tmp_path):
     from utils.utils import args, led_matrix_options, matrix_settings
+
     path = tmp_path / 'config.json'
-    path.write_text(json.dumps({'matrix': {'rows': 32, 'gpio_mapping': 'adafruit-hat',
-                                           'slowdown_gpio': 2, 'brightness': 60, 'rgb_sequence': 'rbg'}}))
+    path.write_text(
+        json.dumps({'matrix': {'rows': 32, 'gpio_mapping': 'adafruit-hat', 'slowdown_gpio': 2, 'brightness': 60, 'rgb_sequence': 'rbg'}})
+    )
     configured = load_config(path)['matrix']
     resolved = matrix_settings(args([]), configured)
     assert (resolved.led_rows, resolved.led_cols, resolved.led_gpio_mapping) == (32, 64, 'adafruit-hat')
@@ -69,13 +76,21 @@ def test_matrix_settings_come_from_config_with_flags_winning(tmp_path):
     assert matrix_settings(args([])).led_rows == 64
 
 
-@pytest.mark.parametrize('matrix, message', [
-    ({'rows': 48}, 'matrix.rows'), ({'rows': True}, 'matrix.rows'), ({'cols': 0}, 'matrix.cols'),
-    ({'brightness': 101}, 'matrix.brightness'), ({'slowdown_gpio': 5}, 'matrix.slowdown_gpio'),
-    ({'gpio_mapping': 'hat'}, 'matrix.gpio_mapping'), ({'show_refresh': 1}, 'matrix.show_refresh'),
-    ({'rgb_sequence': 'RRB'}, 'matrix.rgb_sequence'), ({'led_rows': 32}, 'unsupported keys: led_rows'),
-    ([], 'matrix must be a JSON object'),
-])
+@pytest.mark.parametrize(
+    'matrix, message',
+    [
+        ({'rows': 48}, 'matrix.rows'),
+        ({'rows': True}, 'matrix.rows'),
+        ({'cols': 0}, 'matrix.cols'),
+        ({'brightness': 101}, 'matrix.brightness'),
+        ({'slowdown_gpio': 5}, 'matrix.slowdown_gpio'),
+        ({'gpio_mapping': 'hat'}, 'matrix.gpio_mapping'),
+        ({'show_refresh': 1}, 'matrix.show_refresh'),
+        ({'rgb_sequence': 'RRB'}, 'matrix.rgb_sequence'),
+        ({'led_rows': 32}, 'unsupported keys: led_rows'),
+        ([], 'matrix must be a JSON object'),
+    ],
+)
 def test_config_rejects_bad_matrix_settings(tmp_path, matrix, message):
     path = tmp_path / 'config.json'
     path.write_text(json.dumps({'matrix': matrix}))
@@ -93,22 +108,56 @@ def test_empty_token_shows_login_without_request(tmp_path):
 
 
 @pytest.mark.parametrize('height', [32, 64])
-@pytest.mark.parametrize('discipline', [
-    'Cycling', 'Bike Bootcamp', 'Running', 'Walking', 'Outdoor Run', 'Outdoor Walk',
-    'Tread Bootcamp', 'Hiking', 'Rowing', 'Row Bootcamp', 'Strength', 'Cardio',
-    'Yoga', 'Meditation', 'Stretching', 'Pilates', 'Barre', 'Boxing',
-    'Dance Cardio', 'Mobility', 'Unknown Future Workout',
-])
+@pytest.mark.parametrize(
+    'discipline',
+    [
+        'Cycling',
+        'Bike Bootcamp',
+        'Running',
+        'Walking',
+        'Outdoor Run',
+        'Outdoor Walk',
+        'Tread Bootcamp',
+        'Hiking',
+        'Rowing',
+        'Row Bootcamp',
+        'Strength',
+        'Cardio',
+        'Yoga',
+        'Meditation',
+        'Stretching',
+        'Pilates',
+        'Barre',
+        'Boxing',
+        'Dance Cardio',
+        'Mobility',
+        'Unknown Future Workout',
+    ],
+)
 def test_every_discipline_renders_on_supported_panels(height, discipline):
     matrix = ImageMatrix(height=height)
     initialize_fonts(height)
-    summary = {'discipline': discipline, 'title': '20 min Representative Workout',
-               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'hr_max': 165,
-               'strive_score': 22, 'distance': 3.1, 'distance_unit': 'mi',
-               'avg_pace': 10, 'avg_pace_unit': 'min/mi', 'avg_output_w': 100,
-               'avg_stroke_rate': 24, 'row_split_sec_per_500m': 130,
-               'total_output_kj': 200, 'avg_speed': 12, 'avg_speed_unit': 'mph',
-               'avg_cadence': 80, 'avg_resistance': 40}
+    summary = {
+        'discipline': discipline,
+        'title': '20 min Representative Workout',
+        'duration_min': 20,
+        'calories': 200,
+        'hr_avg': 130,
+        'hr_max': 165,
+        'strive_score': 22,
+        'distance': 3.1,
+        'distance_unit': 'mi',
+        'avg_pace': 10,
+        'avg_pace_unit': 'min/mi',
+        'avg_output_w': 100,
+        'avg_stroke_rate': 24,
+        'row_split_sec_per_500m': 130,
+        'total_output_kj': 200,
+        'avg_speed': 12,
+        'avg_speed_unit': 'mph',
+        'avg_cadence': 80,
+        'avg_resistance': 40,
+    }
     assert LastWorkoutScreen().render(matrix, summary)
     assert matrix.image.getbbox() is not None
 
@@ -117,14 +166,11 @@ def test_every_discipline_renders_on_supported_panels(height, discipline):
 def test_workout_duration_is_blue_above_white_title_with_gap(height):
     matrix = ImageMatrix(height=height)
     initialize_fonts(height)
-    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
-               'duration_min': 20, 'calories': None, 'hr_avg': None}
+    summary = {'discipline': 'Strength', 'title': 'Full Body Strength', 'duration_min': 20, 'calories': None, 'hr_avg': None}
     assert LastWorkoutScreen().render(matrix, summary)
     pixels = matrix.image.load()
-    blue_rows = {y for y in range(height) for x in range(64)
-                 if pixels[x, y] == (0, 120, 255)}
-    white_rows = {y for y in range(height) for x in range(64)
-                  if pixels[x, y] == (255, 255, 255)}
+    blue_rows = {y for y in range(height) for x in range(64) if pixels[x, y] == (0, 120, 255)}
+    white_rows = {y for y in range(height) for x in range(64) if pixels[x, y] == (255, 255, 255)}
     assert blue_rows and white_rows
     assert max(blue_rows) + 1 < min(white_rows)
 
@@ -132,8 +178,7 @@ def test_workout_duration_is_blue_above_white_title_with_gap(height):
 def test_bike_bootcamp_uses_larger_two_line_header_without_overlap():
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
-    summary = {'discipline': 'Bike Bootcamp', 'title': '30 min Bootcamp 50/50',
-               'duration_min': 30, 'calories': 218, 'hr_avg': 126}
+    summary = {'discipline': 'Bike Bootcamp', 'title': '30 min Bootcamp 50/50', 'duration_min': 30, 'calories': 218, 'hr_avg': 126}
     assert LastWorkoutScreen().render(matrix, summary)
     pixels = matrix.image.load()
     disc_color = (220, 50, 20)
@@ -150,15 +195,24 @@ def test_long_discipline_name_with_max_stat_rows_does_not_collide():
     # must retain clear separation throughout the screen.
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
-    summary = {'discipline': 'Bike Bootcamp', 'title': '30 min Bootcamp 50/50',
-               'duration_min': 30, 'calories': 218, 'hr_avg': 126,
-               'total_output_kj': 78, 'strive_score': 19, 'avg_cadence': 76,
-               'avg_resistance': 38, 'avg_speed': 15.2, 'avg_speed_unit': 'mph',
-               'distance': 3.5, 'distance_unit': 'mi'}
+    summary = {
+        'discipline': 'Bike Bootcamp',
+        'title': '30 min Bootcamp 50/50',
+        'duration_min': 30,
+        'calories': 218,
+        'hr_avg': 126,
+        'total_output_kj': 78,
+        'strive_score': 19,
+        'avg_cadence': 76,
+        'avg_resistance': 38,
+        'avg_speed': 15.2,
+        'avg_speed_unit': 'mph',
+        'distance': 3.5,
+        'distance_unit': 'mi',
+    }
     assert LastWorkoutScreen().render(matrix, summary)
     pixels = matrix.image.load()
-    white_rows_with_content = sorted({y for y in range(64) for x in range(64)
-                                      if pixels[x, y] == (255, 255, 255)})
+    white_rows_with_content = sorted({y for y in range(64) for x in range(64) if pixels[x, y] == (255, 255, 255)})
     # Consecutive rows of white text should never be adjacent to the point of
     # merging into unreadable noise: there must be at least one gap row
     # between the title line and the first stat row.
@@ -171,8 +225,14 @@ def test_last_workout_screen_keeps_discipline_title_through_stats_phase():
 
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
-    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
-               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
+    summary = {
+        'discipline': 'Strength',
+        'title': 'Full Body Strength',
+        'duration_min': 20,
+        'calories': 200,
+        'hr_avg': 130,
+        'strive_score': 22,
+    }
     screen = LastWorkoutScreen()
     screen.on_enter(matrix, summary)
 
@@ -194,8 +254,14 @@ def test_last_workout_screen_keeps_discipline_title_through_stats_phase():
 def test_two_line_title_leaves_extra_gap_above_instructor(discipline):
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
-    summary = {'discipline': discipline, 'title': 'Power Zone Endurance Ride With Robin',
-               'duration_min': 45, 'calories': 400, 'hr_avg': 140, 'instructor': 'Robin Arzon'}
+    summary = {
+        'discipline': discipline,
+        'title': 'Power Zone Endurance Ride With Robin',
+        'duration_min': 45,
+        'calories': 400,
+        'hr_avg': 140,
+        'instructor': 'Robin Arzon',
+    }
     screen = LastWorkoutScreen()
     screen.on_enter(matrix, summary)
     screen.update(2.0)  # in the intro, past the instructor's rise-in
@@ -208,14 +274,12 @@ def test_two_line_title_leaves_extra_gap_above_instructor(discipline):
     # the title.
     label_rows = sorted({y for y in range(64) for x in range(64) if pixels[x, y] == label_color})
     assert label_rows, 'instructor label did not render'
-    title_rows = sorted({y for y in range(min(label_rows)) for x in range(64)
-                         if pixels[x, y] == title_color})
+    title_rows = sorted({y for y in range(min(label_rows)) for x in range(64) if pixels[x, y] == title_color})
     assert title_rows, 'title did not render'
     gap = min(label_rows) - max(title_rows)
     # Two-line titles get three blank rows before the instructor block.
     assert gap == 4, f'expected 3 blank rows between a 2-line title and instructor, got gap={gap}'
-    value_rows = sorted({y for y in range(min(label_rows), 54) for x in range(64)
-                         if pixels[x, y] == title_color})
+    value_rows = sorted({y for y in range(min(label_rows), 54) for x in range(64) if pixels[x, y] == title_color})
     assert value_rows[-1] < 55, 'instructor name collides with the HR/calories row'
 
 
@@ -225,9 +289,16 @@ def test_last_workout_screen_shows_instructor_in_intro_then_rotates_stats():
 
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
-    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
-               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22,
-               'hr_max': 165, 'instructor': 'Robin Arzon'}
+    summary = {
+        'discipline': 'Strength',
+        'title': 'Full Body Strength',
+        'duration_min': 20,
+        'calories': 200,
+        'hr_avg': 130,
+        'strive_score': 22,
+        'hr_max': 165,
+        'instructor': 'Robin Arzon',
+    }
     all_details = _stat_details(summary)
     stat_only_count = sum(1 for d in all_details if d['label'] != 'instructor')
     assert stat_only_count >= 2
@@ -262,8 +333,7 @@ def test_last_workout_screen_shows_instructor_in_intro_then_rotates_stats():
 def test_rotating_stat_position_below_discipline_title():
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
-    summary = {'discipline': 'Strength', 'title': 'Full Body', 'duration_min': 20,
-               'calories': 200, 'hr_avg': 130, 'strive_score': 22}
+    summary = {'discipline': 'Strength', 'title': 'Full Body', 'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
     screen = LastWorkoutScreen()
     screen.on_enter(matrix, summary)
     screen.update(5.0)  # stats phase, past the rise-in
@@ -278,8 +348,14 @@ def test_rotating_stat_position_below_discipline_title():
 def test_last_workout_screen_honors_custom_detail_interval():
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
-    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
-               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
+    summary = {
+        'discipline': 'Strength',
+        'title': 'Full Body Strength',
+        'duration_min': 20,
+        'calories': 200,
+        'hr_avg': 130,
+        'strive_score': 22,
+    }
     screen = LastWorkoutScreen(detail_interval=1.0)
     screen.on_enter(matrix, summary)
 
@@ -297,8 +373,14 @@ def test_last_workout_screen_honors_custom_detail_interval():
 def test_last_workout_screen_zero_detail_interval_does_not_crash():
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
-    summary = {'discipline': 'Strength', 'title': 'Full Body Strength',
-               'duration_min': 20, 'calories': 200, 'hr_avg': 130, 'strive_score': 22}
+    summary = {
+        'discipline': 'Strength',
+        'title': 'Full Body Strength',
+        'duration_min': 20,
+        'calories': 200,
+        'hr_avg': 130,
+        'strive_score': 22,
+    }
     screen = LastWorkoutScreen(detail_interval=0)
     screen.on_enter(matrix, summary)
     screen.update(0.1)
@@ -318,13 +400,17 @@ def test_rotation_places_pr_after_its_workout():
             {'workout_id': 'newest', 'discipline': 'Yoga', 'is_pr': True},
             {'workout_id': 'earlier', 'discipline': 'Strength', 'is_pr': False},
         ],
-        'totals': {}, 'status': 'ready',
+        'totals': {},
+        'status': 'ready',
     }
     manager = Mock()
     display = {'color': 'white'}
     run_display_loop(manager, dashboard, display, cycles=1)
     assert [call.args[0] for call in manager.show.call_args_list] == [
-        'last_workout', 'pr', 'last_workout', 'username',
+        'last_workout',
+        'pr',
+        'last_workout',
+        'username',
     ]
     dashboard.acknowledge_pr.assert_called_once_with('newest')
     pr_state = next(call.args[1] for call in manager.show.call_args_list if call.args[0] == 'pr')
@@ -340,9 +426,10 @@ def test_multi_user_loop_runs_complete_rotations_in_configured_order():
     active = {'dashboard': first}
     with patch('peloton_led.run_display_loop') as run:
         run_multi_user_loop(Mock(), profiles, {}, active, cycles=1)
-    assert [(call.args[1], call.args[3], call.kwargs['cycles'], call.kwargs['first_pass'])
-            for call in run.call_args_list] == [
-                (first, None, 1, 0), (second, 'Second Rider', 1, 0)]
+    assert [(call.args[1], call.args[3], call.kwargs['cycles'], call.kwargs['first_pass']) for call in run.call_args_list] == [
+        (first, None, 1, 0),
+        (second, 'Second Rider', 1, 0),
+    ]
     # A profile without its own display settings uses the shared ones.
     assert all(call.args[2] == {} for call in run.call_args_list)
     assert active['dashboard'] is second
@@ -357,37 +444,48 @@ def test_logo_plays_between_riders_and_cycles_but_not_before_the_first_rotation(
     profiles = [{'name': 'First', 'dashboard': first}, {'name': 'Second', 'dashboard': second}]
     order = []
     manager = Mock()
-    with patch('peloton_led.show_and_wait',
-               side_effect=lambda manager, name, state, duration, dashboard:
-                   order.append((name, duration, dashboard))), \
-         patch('peloton_led.run_display_loop',
-               side_effect=lambda manager, dashboard, *a, **k: order.append(('rotation', dashboard))):
+    with (
+        patch(
+            'peloton_led.show_and_wait',
+            side_effect=lambda manager, name, state, duration, dashboard: order.append((name, duration, dashboard)),
+        ),
+        patch('peloton_led.run_display_loop', side_effect=lambda manager, dashboard, *a, **k: order.append(('rotation', dashboard))),
+    ):
         run_multi_user_loop(manager, profiles, {'logo_duration': 3}, {}, cycles=2)
     # The startup logo has just played, so the first rider goes straight in; the padlock
     # on each later logo is the rider about to show.
-    assert order == [('rotation', first), ('logo', 3, second), ('rotation', second),
-                     ('logo', 3, first), ('rotation', first), ('logo', 3, second), ('rotation', second)]
+    assert order == [
+        ('rotation', first),
+        ('logo', 3, second),
+        ('rotation', second),
+        ('logo', 3, first),
+        ('rotation', first),
+        ('logo', 3, second),
+        ('rotation', second),
+    ]
 
 
 def test_single_rider_board_shows_the_logo_once_per_cycle_and_none_when_it_is_switched_off():
     rider = Mock()
-    for show, expected in ((True, ['rotation', 'logo', 'rotation', 'logo', 'rotation']),
-                           (False, ['rotation', 'rotation', 'rotation'])):
+    for show, expected in ((True, ['rotation', 'logo', 'rotation', 'logo', 'rotation']), (False, ['rotation', 'rotation', 'rotation'])):
         order = []
-        with patch('peloton_led.show_and_wait', side_effect=lambda manager, name, *a: order.append(name)), \
-             patch('peloton_led.run_display_loop', side_effect=lambda *a, **k: order.append('rotation')):  # noqa: B023  called within the iteration: the loop runs inside the with
-            run_multi_user_loop(Mock(), [{'dashboard': rider}], {'logo_duration': 2, 'show_logo': show}, {},
-                                cycles=3)
+        with (
+            patch('peloton_led.show_and_wait', side_effect=lambda manager, name, *a: order.append(name)),  # noqa: B023  called within the iteration: the loop runs inside the with
+            patch('peloton_led.run_display_loop', side_effect=lambda *a, **k: order.append('rotation')),  # noqa: B023  called within the iteration: the loop runs inside the with
+        ):
+            run_multi_user_loop(Mock(), [{'dashboard': rider}], {'logo_duration': 2, 'show_logo': show}, {}, cycles=3)
         assert order == expected
 
 
 def test_configured_profiles_isolates_relative_tokens_and_caches(tmp_path):
-    options = Mock(config=str(tmp_path / 'household.json'), cookies='legacy.txt',
-                   username=None, demo=False, demo_login_needed=False)
-    config = {'display': {}, 'users': [
-        {'name': 'One', 'token_path': 'one.token', 'cache_path': 'one-cache.json'},
-        {'name': 'Two', 'token_path': 'two.token'},
-    ]}
+    options = Mock(config=str(tmp_path / 'household.json'), cookies='legacy.txt', username=None, demo=False, demo_login_needed=False)
+    config = {
+        'display': {},
+        'users': [
+            {'name': 'One', 'token_path': 'one.token', 'cache_path': 'one-cache.json'},
+            {'name': 'Two', 'token_path': 'two.token'},
+        ],
+    }
     with patch('peloton_led.Dashboard') as dashboard:
         profiles = configured_profiles(config, options)
     assert [profile['name'] for profile in profiles] == ['One', 'Two']
@@ -397,8 +495,7 @@ def test_configured_profiles_isolates_relative_tokens_and_caches(tmp_path):
 
 
 def test_configured_profiles_derives_token_path_from_name(tmp_path):
-    options = Mock(config=str(tmp_path / 'household.json'), cookies='legacy.txt',
-                   username=None, demo=False, demo_login_needed=False)
+    options = Mock(config=str(tmp_path / 'household.json'), cookies='legacy.txt', username=None, demo=False, demo_login_needed=False)
     config = {'display': {}, 'users': [{'name': 'Joel'}, {'name': 'Jen'}]}
     with patch('peloton_led.Dashboard') as dashboard:
         configured_profiles(config, options)
@@ -408,12 +505,14 @@ def test_configured_profiles_derives_token_path_from_name(tmp_path):
 
 
 def test_configured_profiles_applies_per_user_goals_and_milestones(tmp_path):
-    options = Mock(config=str(tmp_path / 'household.json'), cookies='legacy.txt',
-                   username=None, demo=False, demo_login_needed=False)
-    config = {'display': {'weekly_goals': {'workouts': 0}, 'milestones': []}, 'users': [
-        {'name': 'Joel', 'weekly_goals': {'workouts': 5}, 'milestones': [100, 500]},
-        {'name': 'Jen'},
-    ]}
+    options = Mock(config=str(tmp_path / 'household.json'), cookies='legacy.txt', username=None, demo=False, demo_login_needed=False)
+    config = {
+        'display': {'weekly_goals': {'workouts': 0}, 'milestones': []},
+        'users': [
+            {'name': 'Joel', 'weekly_goals': {'workouts': 5}, 'milestones': [100, 500]},
+            {'name': 'Jen'},
+        ],
+    }
     with patch('peloton_led.Dashboard') as dashboard:
         configured_profiles(config, options)
     assert dashboard.call_args_list[0].args[1]['weekly_goals'] == {'workouts': 5}
@@ -440,8 +539,7 @@ def test_display_loop_alternates_the_streak_view_each_pass(tmp_path):
     manager = Mock(matrix=Mock(height=64))
     display = {'color': 'white', 'rotation': ['streaks'], 'streak_reminder_day': None}
     run_display_loop(manager, dashboard, display, cycles=3)
-    assert [call.args[1]['view'] for call in manager.show.call_args_list
-            if call.args[0] == 'streak'] == ['weekly', 'daily', 'weekly']
+    assert [call.args[1]['view'] for call in manager.show.call_args_list if call.args[0] == 'streak'] == ['weekly', 'daily', 'weekly']
 
 
 def test_64_row_rotation_keeps_total_separate_from_compact_lifetime_pages(tmp_path):
@@ -454,8 +552,7 @@ def test_64_row_rotation_keeps_total_separate_from_compact_lifetime_pages(tmp_pa
     names = [call.args[0] for call in manager.show.call_args_list]
     assert names.count('lifetime') == 2
     assert names.count('discipline') == 1
-    total_state = next(call.args[1] for call in manager.show.call_args_list
-                       if call.args[0] == 'discipline')
+    total_state = next(call.args[1] for call in manager.show.call_args_list if call.args[0] == 'discipline')
     assert total_state['discipline'] == 'Total Workouts'
 
 
@@ -463,10 +560,16 @@ def test_64_row_discipline_pages_share_requested_duration():
     dashboard = Mock(login_required=False)
     dashboard.pending_discipline_milestones.return_value = []
     dashboard.snapshot.return_value = {
-        'me': {'username': 'Rider'}, 'summaries': [], 'status': 'ready',
+        'me': {'username': 'Rider'},
+        'summaries': [],
+        'status': 'ready',
         'totals': {
-            'Total Workouts': 100, 'Cycling': 40, 'Strength': 30,
-            'Bike Bootcamp': 20, 'Yoga': 10, 'Meditation': 5,
+            'Total Workouts': 100,
+            'Cycling': 40,
+            'Strength': 30,
+            'Bike Bootcamp': 20,
+            'Yoga': 10,
+            'Meditation': 5,
         },
     }
     manager = Mock(matrix=Mock(height=64))
@@ -475,8 +578,7 @@ def test_64_row_discipline_pages_share_requested_duration():
     with patch('peloton_led.show_and_wait') as show:
         run_display_loop(manager, dashboard, display, cycles=1)
 
-    discipline_calls = [call for call in show.call_args_list
-                        if call.args[1] in ('discipline', 'lifetime')]
+    discipline_calls = [call for call in show.call_args_list if call.args[1] in ('discipline', 'lifetime')]
     assert len(discipline_calls) == 3
     assert {call.args[3] for call in discipline_calls} == {5.0}
 
@@ -485,12 +587,22 @@ def test_configured_rotation_order_and_disabled_sections():
     dashboard = Mock()
     dashboard.pending_discipline_milestones.return_value = []
     dashboard.should_celebrate_pr.return_value = False
-    snapshot = {'me': {'username': 'Rider'}, 'summaries': [{'workout_id': 'one'}],
-                'totals': {'Total Workouts': 10, 'Cycling': 10}, 'status': 'ready',
-                'weekly_progress': {'workouts': 2, 'minutes': 45, 'active_days': 2}}
-    display = {'rotation': ['goals', 'username'], 'weekly_goals': {'workouts': 3, 'active_days': 4},
-               'screen_durations': {'goals': 6}, 'last_workout_duration': 30,
-               'overview_duration': 4, 'duration': 4, 'color': 'white'}
+    snapshot = {
+        'me': {'username': 'Rider'},
+        'summaries': [{'workout_id': 'one'}],
+        'totals': {'Total Workouts': 10, 'Cycling': 10},
+        'status': 'ready',
+        'weekly_progress': {'workouts': 2, 'minutes': 45, 'active_days': 2},
+    }
+    display = {
+        'rotation': ['goals', 'username'],
+        'weekly_goals': {'workouts': 3, 'active_days': 4},
+        'screen_durations': {'goals': 6},
+        'last_workout_duration': 30,
+        'overview_duration': 4,
+        'duration': 4,
+        'color': 'white',
+    }
     pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
     assert [page[0] for page in pages] == ['goal', 'goal', 'username']
     assert pages[0][1]['current'] == 2
@@ -508,17 +620,37 @@ def test_last_workout_duration_stretches_to_fit_every_stat():
 
     dashboard.pending_discipline_milestones.return_value = []
     dashboard.should_celebrate_pr.return_value = False
-    summary = {'workout_id': 'one', 'discipline': 'Cycling', 'title': 'Cycling Class',
-               'duration_min': 20, 'total_output_kj': 200, 'strive_score': 22,
-               'avg_speed': 12, 'avg_speed_unit': 'mph', 'avg_cadence': 80,
-               'avg_resistance': 40, 'distance': 3.1, 'distance_unit': 'mi'}
+    summary = {
+        'workout_id': 'one',
+        'discipline': 'Cycling',
+        'title': 'Cycling Class',
+        'duration_min': 20,
+        'total_output_kj': 200,
+        'strive_score': 22,
+        'avg_speed': 12,
+        'avg_speed_unit': 'mph',
+        'avg_cadence': 80,
+        'avg_resistance': 40,
+        'distance': 3.1,
+        'distance_unit': 'mi',
+    }
     stat_count = len([d for d in _stat_details(summary) if d['label'] != 'instructor'])
     assert stat_count == 6  # sanity check that this fixture exercises every cycling stat
-    snapshot = {'me': {'username': 'Rider'}, 'summaries': [summary],
-                'totals': {'Total Workouts': 1}, 'status': 'ready', 'weekly_progress': {}}
-    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
-               'last_workout_detail_interval': 4, 'overview_duration': 4,
-               'duration': 4, 'color': 'white'}
+    snapshot = {
+        'me': {'username': 'Rider'},
+        'summaries': [summary],
+        'totals': {'Total Workouts': 1},
+        'status': 'ready',
+        'weekly_progress': {},
+    }
+    display = {
+        'rotation': ['latest_workouts'],
+        'last_workout_duration': 15,
+        'last_workout_detail_interval': 4,
+        'overview_duration': 4,
+        'duration': 4,
+        'color': 'white',
+    }
 
     pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
 
@@ -534,14 +666,30 @@ def test_last_workout_duration_shows_each_stat_once_without_repeats():
     dashboard = Mock()
     dashboard.pending_discipline_milestones.return_value = []
     dashboard.should_celebrate_pr.return_value = False
-    summary = {'workout_id': 'one', 'discipline': 'Strength', 'title': 'Full Body',
-               'duration_min': 20, 'strive_score': 11.3, 'hr_max': 142,
-               'instructor': 'Matty Maggiacomo'}
-    snapshot = {'me': {'username': 'Rider'}, 'summaries': [summary],
-                'totals': {'Total Workouts': 1}, 'status': 'ready', 'weekly_progress': {}}
-    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
-               'last_workout_detail_interval': 4, 'overview_duration': 4,
-               'duration': 4, 'color': 'white'}
+    summary = {
+        'workout_id': 'one',
+        'discipline': 'Strength',
+        'title': 'Full Body',
+        'duration_min': 20,
+        'strive_score': 11.3,
+        'hr_max': 142,
+        'instructor': 'Matty Maggiacomo',
+    }
+    snapshot = {
+        'me': {'username': 'Rider'},
+        'summaries': [summary],
+        'totals': {'Total Workouts': 1},
+        'status': 'ready',
+        'weekly_progress': {},
+    }
+    display = {
+        'rotation': ['latest_workouts'],
+        'last_workout_duration': 15,
+        'last_workout_detail_interval': 4,
+        'overview_duration': 4,
+        'duration': 4,
+        'color': 'white',
+    }
 
     pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
 
@@ -553,13 +701,22 @@ def test_last_workout_without_stats_shows_intro_for_one_interval():
     dashboard = Mock()
     dashboard.pending_discipline_milestones.return_value = []
     dashboard.should_celebrate_pr.return_value = False
-    summary = {'workout_id': 'one', 'discipline': 'Meditation', 'title': 'Calm',
-               'duration_min': 10}
-    snapshot = {'me': {'username': 'Rider'}, 'summaries': [summary],
-                'totals': {'Total Workouts': 1}, 'status': 'ready', 'weekly_progress': {}}
-    display = {'rotation': ['latest_workouts'], 'last_workout_duration': 15,
-               'last_workout_detail_interval': 4, 'overview_duration': 4,
-               'duration': 4, 'color': 'white'}
+    summary = {'workout_id': 'one', 'discipline': 'Meditation', 'title': 'Calm', 'duration_min': 10}
+    snapshot = {
+        'me': {'username': 'Rider'},
+        'summaries': [summary],
+        'totals': {'Total Workouts': 1},
+        'status': 'ready',
+        'weekly_progress': {},
+    }
+    display = {
+        'rotation': ['latest_workouts'],
+        'last_workout_duration': 15,
+        'last_workout_detail_interval': 4,
+        'overview_duration': 4,
+        'duration': 4,
+        'color': 'white',
+    }
 
     pages = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)
 
@@ -569,55 +726,82 @@ def test_last_workout_without_stats_shows_intro_for_one_interval():
 def test_username_profile_details_all_receive_display_time():
     dashboard = Mock()
     dashboard.pending_discipline_milestones.return_value = []
-    snapshot = {'me': {'username': 'Rider'}, 'summaries': [], 'status': 'ready',
-                'totals': {'Total Workouts': 100, 'Cycling': 60, 'Yoga': 40},
-                'weekly_progress': {'workouts': 3, 'minutes': 75}}
-    display = {'rotation': ['username'], 'screen_durations': {'username': 1},
-               'duration': 1, 'overview_duration': 1, 'last_workout_duration': 1,
-               'color': 'white'}
+    snapshot = {
+        'me': {'username': 'Rider'},
+        'summaries': [],
+        'status': 'ready',
+        'totals': {'Total Workouts': 100, 'Cycling': 60, 'Yoga': 40},
+        'weekly_progress': {'workouts': 3, 'minutes': 75},
+    }
+    display = {
+        'rotation': ['username'],
+        'screen_durations': {'username': 1},
+        'duration': 1,
+        'overview_duration': 1,
+        'last_workout_duration': 1,
+        'color': 'white',
+    }
     page = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)[0]
-    assert [detail['label'] for detail in page[1]['details']] == [
-        'TOTAL WORKOUTS', 'TOP DISCIPLINE']
+    assert [detail['label'] for detail in page[1]['details']] == ['TOTAL WORKOUTS', 'TOP DISCIPLINE']
     assert page[1]['details'][1]['value'] == 'Cycling / 60'
     assert {'lines': ['100'], 'font_key': 'big', 'color_key': 'gold'}.items() <= page[1]['details'][0].items()
     assert page[1]['details'][1]['lines'] == ['CYCLING', '60 WORKOUTS']
-    assert page[2] == pytest.approx(10.0)    # two highlights, 5 s each at least
+    assert page[2] == pytest.approx(10.0)  # two highlights, 5 s each at least
 
 
 def test_username_profile_includes_top_three_instructors_when_present():
     dashboard = Mock()
     dashboard.pending_discipline_milestones.return_value = []
-    snapshot = {'me': {'username': 'Rider'}, 'summaries': [], 'status': 'ready',
-                'totals': {'Total Workouts': 100, 'Cycling': 60},
-                'weekly_progress': {'workouts': 3, 'minutes': 75},
-                'instructor_counts': {'c': 10, 'r': 7, 'a': 4, 'd': 1, 'group-only': 12},
-                'instructor_names': {'c': 'Cody Rigsby', 'r': 'Robin Arzon', 'a': 'Ally Love',
-                                     'd': 'Denis Morton'}}
-    display = {'rotation': ['username'], 'screen_durations': {'username': 1},
-               'duration': 1, 'overview_duration': 1, 'last_workout_duration': 1,
-               'color': 'white'}
+    snapshot = {
+        'me': {'username': 'Rider'},
+        'summaries': [],
+        'status': 'ready',
+        'totals': {'Total Workouts': 100, 'Cycling': 60},
+        'weekly_progress': {'workouts': 3, 'minutes': 75},
+        'instructor_counts': {'c': 10, 'r': 7, 'a': 4, 'd': 1, 'group-only': 12},
+        'instructor_names': {'c': 'Cody Rigsby', 'r': 'Robin Arzon', 'a': 'Ally Love', 'd': 'Denis Morton'},
+    }
+    display = {
+        'rotation': ['username'],
+        'screen_durations': {'username': 1},
+        'duration': 1,
+        'overview_duration': 1,
+        'last_workout_duration': 1,
+        'color': 'white',
+    }
     page = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)[0]
     labels = [detail['label'] for detail in page[1]['details']]
-    assert labels == ['TOTAL WORKOUTS', 'TOP DISCIPLINE',
-                      'TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
+    assert labels == ['TOTAL WORKOUTS', 'TOP DISCIPLINE', 'TOP INSTRUCTOR', '2ND INSTRUCTOR', '3RD INSTRUCTOR']
     initialize_fonts(64)
     from display.display import get_text_width, loaded_fonts
-    assert all(get_text_width(loaded_fonts['stats'], label) <= 60
-               for label in labels[2:])
+
+    assert all(get_text_width(loaded_fonts['stats'], label) <= 60 for label in labels[2:])
     instructor_details = page[1]['details'][2:]
     assert [d['lines'] for d in instructor_details] == [
-        ['CODY RIGSBY', '10 CLASSES'], ['ROBIN ARZON', '7 CLASSES'], ['ALLY LOVE', '4 CLASSES']]
+        ['CODY RIGSBY', '10 CLASSES'],
+        ['ROBIN ARZON', '7 CLASSES'],
+        ['ALLY LOVE', '4 CLASSES'],
+    ]
 
 
 def test_username_profile_has_no_instructor_details_when_untallied():
     dashboard = Mock()
     dashboard.pending_discipline_milestones.return_value = []
-    snapshot = {'me': {'username': 'Rider'}, 'summaries': [], 'status': 'ready',
-                'totals': {'Total Workouts': 100, 'Cycling': 60},
-                'weekly_progress': {'workouts': 3, 'minutes': 75}}
-    display = {'rotation': ['username'], 'screen_durations': {'username': 1},
-               'duration': 1, 'overview_duration': 1, 'last_workout_duration': 1,
-               'color': 'white'}
+    snapshot = {
+        'me': {'username': 'Rider'},
+        'summaries': [],
+        'status': 'ready',
+        'totals': {'Total Workouts': 100, 'Cycling': 60},
+        'weekly_progress': {'workouts': 3, 'minutes': 75},
+    }
+    display = {
+        'rotation': ['username'],
+        'screen_durations': {'username': 1},
+        'duration': 1,
+        'overview_duration': 1,
+        'last_workout_duration': 1,
+        'color': 'white',
+    }
     page = build_rotation_pages(snapshot, dashboard, display, 'Rider', 64)[0]
     labels = [detail['label'] for detail in page[1]['details']]
     assert 'TOP INSTRUCTOR' not in labels
@@ -627,10 +811,13 @@ def test_username_detail_animation_changes_lower_panel_only():
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
     screen = UsernameScreen()
-    state = {'username': 'Rider', 'details': [
-        {'label': 'TOTAL WORKOUTS', 'value': '100'},
-        {'label': 'THIS WEEK', 'value': '3 WORKOUTS / 75 MIN'},
-    ]}
+    state = {
+        'username': 'Rider',
+        'details': [
+            {'label': 'TOTAL WORKOUTS', 'value': '100'},
+            {'label': 'THIS WEEK', 'value': '3 WORKOUTS / 75 MIN'},
+        ],
+    }
     screen.on_enter(matrix, state)
     screen.update(0.4)
     screen.render(matrix, state)
@@ -650,14 +837,15 @@ def test_long_username_uses_smaller_font_without_truncation(height):
     username = 'xxjclarksterxx'
     font = screen._username_font(username, matrix.width - 4)
     from display.display import get_text_width
+
     assert get_text_width(font, username) <= matrix.width - 4
     assert screen.render(matrix, {'username': username, 'details': []})
 
 
 def test_scheduled_brightness_handles_day_and_overnight_ranges():
     from datetime import datetime
-    display = {'brightness_schedule': {'day': 80, 'night': 15,
-               'day_start': '07:00', 'night_start': '22:00'}}
+
+    display = {'brightness_schedule': {'day': 80, 'night': 15, 'day_start': '07:00', 'night_start': '22:00'}}
     assert scheduled_brightness(display, datetime(2026, 1, 1, 12, 0)) == 80
     assert scheduled_brightness(display, datetime(2026, 1, 1, 23, 0)) == 15
     display['brightness_schedule']['day_start'] = '20:00'
@@ -670,26 +858,45 @@ def test_lifetime_icon_page_renders_real_pixels():
 
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
-    totals = {'Cycling': 1200, 'Bike Bootcamp': 34, 'Running': 204,
-              'Walking': 75, 'Rowing': 18, 'Strength': 300,
-              'Yoga': 90, 'Meditation': 50, 'Cardio': 40,
-              'Total Workouts': 2011}
+    totals = {
+        'Cycling': 1200,
+        'Bike Bootcamp': 34,
+        'Running': 204,
+        'Walking': 75,
+        'Rowing': 18,
+        'Strength': 300,
+        'Yoga': 90,
+        'Meditation': 50,
+        'Cardio': 40,
+        'Total Workouts': 2011,
+    }
     pages = lifetime_overview_pages(totals)
     assert len(pages) == 3
     assert all(item['label'] != 'Total Workouts' for page in pages for item in page)
     assert LifetimeOverviewScreen().render(matrix, {'items': pages[0], 'page': 1, 'pages': 2})
     assert matrix.image.getbbox() is not None
-    assert any(matrix.image.getpixel((x, y)) == (240, 70, 25)
-               for x in range(64) for y in range(64))
+    assert any(matrix.image.getpixel((x, y)) == (240, 70, 25) for x in range(64) for y in range(64))
 
 
 def test_supplied_svg_icons_render_as_distinct_native_pixel_masks():
     from display.ui.discipline_icons import DISCIPLINE_ICON_ROWS
     from display.ui.lifetime_overview import draw_icon
+
     matrix = ImageMatrix(height=64)
-    expected = {'cycling', 'bike_bootcamp', 'running', 'tread_bootcamp',
-                'walking', 'rowing', 'row_bootcamp', 'strength', 'cardio',
-                'yoga', 'meditation', 'stretching'}
+    expected = {
+        'cycling',
+        'bike_bootcamp',
+        'running',
+        'tread_bootcamp',
+        'walking',
+        'rowing',
+        'row_bootcamp',
+        'strength',
+        'cardio',
+        'yoga',
+        'meditation',
+        'stretching',
+    }
     assert expected <= DISCIPLINE_ICON_ROWS.keys()
     assert len({DISCIPLINE_ICON_ROWS[key] for key in expected}) == len(expected)
     for key in expected:
@@ -701,6 +908,7 @@ def test_supplied_svg_icons_render_as_distinct_native_pixel_masks():
 
 def test_dance_cardio_uses_the_cardio_svg_mask():
     from display.ui.lifetime_overview import draw_icon
+
     cardio = ImageMatrix(height=64)
     dance = ImageMatrix(height=64)
     draw_icon(cardio, 'cardio', 0, 0, (255, 65, 90))
@@ -711,6 +919,7 @@ def test_dance_cardio_uses_the_cardio_svg_mask():
 def test_every_discipline_figure_has_a_hollow_square_head():
     from display.ui.discipline_icons import DISCIPLINE_HEAD_SQUARES
     from display.ui.lifetime_overview import draw_icon
+
     color = (255, 255, 255)
     for key, (_, _, _, _, left, top, size) in DISCIPLINE_HEAD_SQUARES.items():
         matrix = ImageMatrix(height=64)
@@ -725,6 +934,7 @@ def test_every_discipline_figure_has_a_hollow_square_head():
 
 def test_directly_edited_pose_icons_keep_their_mask_head_shapes():
     from display.ui.discipline_icons import DISCIPLINE_HEAD_SQUARES
+
     assert 'yoga' not in DISCIPLINE_HEAD_SQUARES
     assert 'meditation' not in DISCIPLINE_HEAD_SQUARES
     assert 'stretching' not in DISCIPLINE_HEAD_SQUARES
@@ -732,6 +942,7 @@ def test_directly_edited_pose_icons_keep_their_mask_head_shapes():
 
 def test_row_bootcamp_custom_rail_connects_to_its_machine():
     from display.ui.lifetime_overview import draw_icon
+
     bootcamp = ImageMatrix(height=64)
     color = (0, 150, 255)
     draw_icon(bootcamp, 'row_bootcamp', 0, 0, color)
@@ -756,13 +967,14 @@ def test_bootcamp_tiles_keep_distinct_svg_icons():
     matrix = ImageMatrix(height=64)
     initialize_fonts(64)
     screen = LifetimeOverviewScreen()
-    state = {'items': [
-        {'label': 'Bike Bootcamp', 'icon': 'bike_bootcamp', 'count': 41},
-        {'label': 'Tread Bootcamp', 'icon': 'tread_bootcamp', 'count': 111},
-    ]}
+    state = {
+        'items': [
+            {'label': 'Bike Bootcamp', 'icon': 'bike_bootcamp', 'count': 41},
+            {'label': 'Tread Bootcamp', 'icon': 'tread_bootcamp', 'count': 111},
+        ]
+    }
     screen.render(matrix, state)
-    assert matrix.image.crop((3, 0, 29, 24)).tobytes() != \
-           matrix.image.crop((35, 0, 61, 24)).tobytes()
+    assert matrix.image.crop((3, 0, 29, 24)).tobytes() != matrix.image.crop((35, 0, 61, 24)).tobytes()
 
 
 def test_static_lifetime_page_is_still_composed_atomically():
@@ -776,6 +988,7 @@ class _HardwareOptions:
 
 def _options_with(monkeypatch, run_as):
     from utils.utils import args, led_matrix_options
+
     if run_as is None:
         monkeypatch.delenv('PELOTON_MATRIX_USER', raising=False)
     else:
@@ -799,14 +1012,19 @@ def test_matrix_keeps_its_privileges_without_an_account(monkeypatch, run_as):
     assert not hasattr(options, 'drop_priv_user')
 
 
-@pytest.mark.parametrize('run_as,euid,stops', [
-    ('peloton-led', 0, True),       # the driver couldn't drop: refuse to run as root
-    ('peloton-led', 1001, False),   # dropped
-    (None, 0, False),               # no drop asked for (sudo by hand)
-])
+@pytest.mark.parametrize(
+    'run_as,euid,stops',
+    [
+        ('peloton-led', 0, True),  # the driver couldn't drop: refuse to run as root
+        ('peloton-led', 1001, False),  # dropped
+        (None, 0, False),  # no drop asked for (sudo by hand)
+    ],
+)
 def test_app_refuses_to_stay_root_after_a_failed_drop(monkeypatch, run_as, euid, stops):
     import os
+
     from utils.utils import ensure_privileges_dropped
+
     if run_as is None:
         monkeypatch.delenv('PELOTON_MATRIX_USER', raising=False)
     else:
@@ -821,41 +1039,59 @@ def test_app_refuses_to_stay_root_after_a_failed_drop(monkeypatch, run_as, euid,
 
 def test_privileges_are_checked_right_after_the_matrix_is_created():
     from pathlib import Path
+
     text = (Path(__file__).resolve().parents[1] / 'peloton_led.py').read_text()
     create = text.index("matrix = ui.RGBMatrix(options=led_matrix_options(options, config['matrix']))")
     check = text.index('    ensure_privileges_dropped()\n')
     # Nothing sits between the two (main() calls _build_matrix before anything else that touches the board).
     assert text[create:check].count('\n') == 1
-    assert text.index('matrix = _build_matrix(options, config, ui)') < text.index(
-        'profiles = configured_profiles(config, options)')
+    assert text.index('matrix = _build_matrix(options, config, ui)') < text.index('profiles = configured_profiles(config, options)')
 
 
 def test_each_rider_rotation_uses_their_own_goals_milestones_and_journey(tmp_path):
     # The loop passed the shared display to every rider, so per-rider weekly goals never showed:
     # the shared section had none, and a 0 goal makes no goal page.
     from types import SimpleNamespace
-    options = SimpleNamespace(config=str(tmp_path / 'config.json'), demo=True, demo_login_needed=False,
-                              cookies='cookies.txt', username=None)
-    config = load_config_for_test({'users': [
-        {'name': 'Joel', 'weekly_goals': {'workouts': 5, 'minutes': 300}, 'milestones': [100, 250, 500]},
-        {'name': 'Jen', 'weekly_goals': {'workouts': 7, 'minutes': 0}},
-        {'name': 'Kid'}]}, tmp_path)
+
+    options = SimpleNamespace(
+        config=str(tmp_path / 'config.json'), demo=True, demo_login_needed=False, cookies='cookies.txt', username=None
+    )
+    config = load_config_for_test(
+        {
+            'users': [
+                {'name': 'Joel', 'weekly_goals': {'workouts': 5, 'minutes': 300}, 'milestones': [100, 250, 500]},
+                {'name': 'Jen', 'weekly_goals': {'workouts': 7, 'minutes': 0}},
+                {'name': 'Kid'},
+            ]
+        },
+        tmp_path,
+    )
     joel, jen, kid = configured_profiles(config, options)
     assert joel['display']['weekly_goals'] == {'workouts': 5, 'minutes': 300}
     assert kid['display']['weekly_goals'] == config['display']['weekly_goals']  # the shared default
     shown = {}
-    with patch('peloton_led.show_and_wait'), patch('peloton_led.run_display_loop',
-               side_effect=lambda manager, dashboard, display, *a, **k: shown.setdefault(dashboard, display)):
+    with (
+        patch('peloton_led.show_and_wait'),
+        patch(
+            'peloton_led.run_display_loop', side_effect=lambda manager, dashboard, display, *a, **k: shown.setdefault(dashboard, display)
+        ),
+    ):
         run_multi_user_loop(Mock(), [joel, jen, kid], config['display'], {}, cycles=1)
     assert shown[joel['dashboard']] is joel['display'] and shown[jen['dashboard']] is jen['display']
 
     def goals(profile):
-        dashboard = Mock(should_celebrate_pr=Mock(return_value=False), pending_milestones=Mock(return_value=[]),
-                         pending_discipline_milestones=Mock(return_value=[]))
+        dashboard = Mock(
+            should_celebrate_pr=Mock(return_value=False),
+            pending_milestones=Mock(return_value=[]),
+            pending_discipline_milestones=Mock(return_value=[]),
+        )
         snapshot = {'summaries': [], 'status': 'ready', 'totals': {}, 'weekly_progress': {'workouts': 2, 'minutes': 90}}
-        return [(state['current'], state['target'], state['unit'])
-                for name, state, _ in build_rotation_pages(snapshot, dashboard, profile['display'], 'Rider', 32)
-                if name == 'goal' and not state.get('milestone')]
+        return [
+            (state['current'], state['target'], state['unit'])
+            for name, state, _ in build_rotation_pages(snapshot, dashboard, profile['display'], 'Rider', 32)
+            if name == 'goal' and not state.get('milestone')
+        ]
+
     assert goals(joel) == [(2, 5, 'workouts'), (90, 300, 'minutes')]
     assert goals(jen) == [(2, 7, 'workouts')]  # a 0 goal shows no page
     assert goals(kid) == []
@@ -863,7 +1099,9 @@ def test_each_rider_rotation_uses_their_own_goals_milestones_and_journey(tmp_pat
 
 def load_config_for_test(config, tmp_path):
     import json
+
     from peloton.config import load_config
+
     path = tmp_path / 'config.json'
     path.write_text(json.dumps(config))
     return load_config(path)

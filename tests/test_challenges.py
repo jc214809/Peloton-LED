@@ -1,5 +1,6 @@
 """The challenges page (ROADMAP item 24): parsing Peloton's challenges, the hourly fetch, the cache, the rotation
 and the screen on both heights."""
+
 import json
 from unittest.mock import Mock
 
@@ -7,14 +8,33 @@ import pytest
 import requests
 
 from display.display import get_text_width, initialize_fonts, loaded_fonts
-from display.ui.challenge_screen import (GOLD, INTRO_SECONDS, RING_TRACK, SWEEP_SECONDS, TIER_COLORS, ChallengeScreen,
-                                         compact_number, counted_shown, fitted_title, ring_pixels, tier_color)
+from display.ui.challenge_screen import (
+    GOLD,
+    INTRO_SECONDS,
+    RING_TRACK,
+    SWEEP_SECONDS,
+    TIER_COLORS,
+    ChallengeScreen,
+    compact_number,
+    counted_shown,
+    fitted_title,
+    ring_pixels,
+    tier_color,
+)
 from peloton import dashboard as dashboard_module
 from peloton import dashboard_fetch
 from peloton.cache import load_snapshot, save_snapshot
-from peloton.feeds.challenges import (UNEARNED, format_number, parse_challenges, short_title, shown_challenges,
-                                slim_challenge, tier_progress, valid_challenge)
 from peloton.config import DEFAULTS
+from peloton.feeds.challenges import (
+    UNEARNED,
+    format_number,
+    parse_challenges,
+    short_title,
+    shown_challenges,
+    slim_challenge,
+    tier_progress,
+    valid_challenge,
+)
 from peloton_led import build_rotation_pages
 from scripts.render_demo import ImageMatrix
 from tests.test_dashboard import setup_dashboard
@@ -23,62 +43,112 @@ NOW = 1_794_000_000  # 2026-11-08
 LATER = NOW + 30 * 86400
 
 
-def entry(title='The Annual 2026', value=5503, shown='5,503', unit='min', tier=('5K', 5000.0),  # noqa: PLR0913
-          following=('6K', 6000.0), to_next='497', end=LATER, joined=True):
+def entry(  # noqa: PLR0913
+    title='The Annual 2026',
+    value=5503,
+    shown='5,503',
+    unit='min',
+    tier=('5K', 5000.0),
+    following=('6K', 6000.0),
+    to_next='497',
+    end=LATER,
+    joined=True,
+):
     """One entry of challenges/current, shaped like the real response (docs/PELOTON-API.md)."""
+
     def level(pair):
-        return None if pair is None else {'id': pair[0], 'title': pair[0], 'metric_value': pair[1],
-                                          'metric_display_unit': unit, 'has_reward': True}
-    return {'challenge_summary': {'id': 'c' + title[:6], 'title': title, 'start_time': NOW - 86400,
-                                  'end_time': end, 'fitness_disciplines': None},
-            'participants': {'total_count': 650000},
-            'progress': {'has_joined': joined, 'metric_value': value, 'metric_display_value': shown,
-                         'metric_display_unit': unit, 'metric_display_value_to_next_tier': to_next,
-                         'metric_display_unit_to_next_tier': unit,
-                         'current_tier': level(tier), 'next_tier': level(following)}}
+        return (
+            None
+            if pair is None
+            else {'id': pair[0], 'title': pair[0], 'metric_value': pair[1], 'metric_display_unit': unit, 'has_reward': True}
+        )
+
+    return {
+        'challenge_summary': {
+            'id': 'c' + title[:6],
+            'title': title,
+            'start_time': NOW - 86400,
+            'end_time': end,
+            'fitness_disciplines': None,
+        },
+        'participants': {'total_count': 650000},
+        'progress': {
+            'has_joined': joined,
+            'metric_value': value,
+            'metric_display_value': shown,
+            'metric_display_unit': unit,
+            'metric_display_value_to_next_tier': to_next,
+            'metric_display_unit_to_next_tier': unit,
+            'current_tier': level(tier),
+            'next_tier': level(following),
+        },
+    }
 
 
 def response(*entries):
     return {'challenges': list(entries), 'next': {}, 'previous': {}, 'user': {'id': 'u'}}
 
 
-TURKEY = entry('The Countdown to Turkey Burn Challenge', 0, '0', 'workouts', ('Unearned', 0.0), ('Gold', 18.0),
-               '18', end=NOW + 11 * 86400)
+TURKEY = entry('The Countdown to Turkey Burn Challenge', 0, '0', 'workouts', ('Unearned', 0.0), ('Gold', 18.0), '18', end=NOW + 11 * 86400)
 
 
-@pytest.mark.parametrize('month, short', [('January', 'JAN'), ('February', 'FEB'), ('March', 'MAR'),
-                                          ('April', 'APR'), ('May', 'MAY'), ('June', 'JUN'), ('July', 'JUL'),
-                                          ('August', 'AUG'), ('September', 'SEP'), ('October', 'OCT'),
-                                          ('November', 'NOV'), ('December', 'DEC')])
+@pytest.mark.parametrize(
+    'month, short',
+    [
+        ('January', 'JAN'),
+        ('February', 'FEB'),
+        ('March', 'MAR'),
+        ('April', 'APR'),
+        ('May', 'MAY'),
+        ('June', 'JUN'),
+        ('July', 'JUL'),
+        ('August', 'AUG'),
+        ('September', 'SEP'),
+        ('October', 'OCT'),
+        ('November', 'NOV'),
+        ('December', 'DEC'),
+    ],
+)
 def test_every_month_is_kept_abbreviated_and_the_year_dropped(month, short):
     assert short_title(f'{month} 2026 Rep Goal Challenge') == f'{short} REP GOAL'
     assert short_title(f'{month.upper()} 2027 Rep Goal Challenge') == f'{short} REP GOAL'
 
 
 # ---- parsing --------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize('title, short', [
-    ('The Annual 2026', 'ANNUAL 2026'),
-    ('The Countdown to Turkey Burn Challenge', 'TURKEY BURN'),
-    ('November 2026 Rep Goal Challenge', 'NOV REP GOAL'),
-    ('November 2026 Meditation Challenge', 'NOV MEDITATION'),
-    ('  October   2025 Rowing Challenge ', 'OCT ROWING'),
-    ('the Rowing Challenge: December 2026', 'DEC ROWING CHALLENGE:'),
-    ('Rep Goal November 2026 Challenge', 'NOV REP GOAL'),
-    ('NOVEMBER 2026 rep goal challenge', 'NOV REP GOAL'),
-    ('May 2027 Strength Challenge', 'MAY STRENGTH'),
-    ('May the Fourth Challenge', 'MAY THE FOURTH'),
-    ('Challenge Accepted', 'CHALLENGE ACCEPTED'),
-    (None, ''),
-])
+@pytest.mark.parametrize(
+    'title, short',
+    [
+        ('The Annual 2026', 'ANNUAL 2026'),
+        ('The Countdown to Turkey Burn Challenge', 'TURKEY BURN'),
+        ('November 2026 Rep Goal Challenge', 'NOV REP GOAL'),
+        ('November 2026 Meditation Challenge', 'NOV MEDITATION'),
+        ('  October   2025 Rowing Challenge ', 'OCT ROWING'),
+        ('the Rowing Challenge: December 2026', 'DEC ROWING CHALLENGE:'),
+        ('Rep Goal November 2026 Challenge', 'NOV REP GOAL'),
+        ('NOVEMBER 2026 rep goal challenge', 'NOV REP GOAL'),
+        ('May 2027 Strength Challenge', 'MAY STRENGTH'),
+        ('May the Fourth Challenge', 'MAY THE FOURTH'),
+        ('Challenge Accepted', 'CHALLENGE ACCEPTED'),
+        (None, ''),
+    ],
+)
 def test_short_titles_drop_the_and_the_year_and_challenge_but_keep_the_month(title, short):
     assert short_title(title) == short
 
 
 def test_a_challenge_keeps_what_the_page_draws():
     challenge = slim_challenge(entry())
-    assert challenge == {'id': 'cThe An', 'title': 'ANNUAL 2026', 'end_time': float(LATER), 'value': 5503.0,
-                         'shown': '5,503', 'unit': 'MIN', 'tier': {'title': '5K', 'value': 5000.0},
-                         'next': {'title': '6K', 'value': 6000.0}, 'to_next': '497'}
+    assert challenge == {
+        'id': 'cThe An',
+        'title': 'ANNUAL 2026',
+        'end_time': float(LATER),
+        'value': 5503.0,
+        'shown': '5,503',
+        'unit': 'MIN',
+        'tier': {'title': '5K', 'value': 5000.0},
+        'next': {'title': '6K', 'value': 6000.0},
+        'to_next': '497',
+    }
     assert valid_challenge(challenge) and tier_progress(challenge) == pytest.approx(0.503)
 
 
@@ -93,17 +163,28 @@ def test_peloton_quirks():
 
 
 def test_unformatted_or_odd_numbers_are_formatted_by_the_board():
-    challenge = slim_challenge(entry(value=12.5, shown='<b>12.5</b>', unit='miles', tier=('Unearned', 0),
-                                     following=('Bronze', 50), to_next=None))
+    challenge = slim_challenge(
+        entry(value=12.5, shown='<b>12.5</b>', unit='miles', tier=('Unearned', 0), following=('Bronze', 50), to_next=None)
+    )
     assert challenge['shown'] == '12.5' and challenge['to_next'] == '37.5' and challenge['unit'] == 'MILES'
     assert format_number(18000) == '18,000' and format_number(0.25) == '0.2'
     assert slim_challenge(entry(unit='laps'))['unit'] == 'LAPS'
 
 
-@pytest.mark.parametrize('broken', [
-    None, 'text', {}, {'challenge_summary': {'title': 'X'}}, {'progress': {'metric_value': 1}},
-    entry(value=None), entry(value=True), entry(value=float('nan')), entry(title='   '),
-])
+@pytest.mark.parametrize(
+    'broken',
+    [
+        None,
+        'text',
+        {},
+        {'challenge_summary': {'title': 'X'}},
+        {'progress': {'metric_value': 1}},
+        entry(value=None),
+        entry(value=True),
+        entry(value=float('nan')),
+        entry(title='   '),
+    ],
+)
 def test_entries_that_cannot_be_shown_are_dropped(broken):
     assert slim_challenge(broken) is None
 
@@ -123,8 +204,9 @@ def test_a_response_that_is_not_one_raises(payload):
 # ---- which to show ------------------------------------------------------------------------------------------
 def test_shown_challenges_need_progress_a_next_tier_and_time_left():
     annual = slim_challenge(entry())
-    soon = slim_challenge(entry('November 2026 Rep Goal Challenge', 1640, '1,640', 'reps', ('Bronze', 1500),
-                                ('Silver', 3000), '1,360', end=NOW + 3600))
+    soon = slim_challenge(
+        entry('November 2026 Rep Goal Challenge', 1640, '1,640', 'reps', ('Bronze', 1500), ('Silver', 3000), '1,360', end=NOW + 3600)
+    )
     top = slim_challenge(entry('Done', 20000, '20,000', following=None))
     ended = slim_challenge(entry('Ended', end=NOW - 1))
     endless = slim_challenge(entry('No End', end=None))
@@ -141,11 +223,22 @@ def test_tier_progress_is_clamped():
     assert tier_progress({**challenge, 'next': {'title': '5K', 'value': 5000.0}}) == 0.0
 
 
-@pytest.mark.parametrize('damage', [
-    {'title': ''}, {'title': 5}, {'shown': 5503}, {'unit': None}, {'value': 'x'}, {'value': True},
-    {'tier': None}, {'tier': {'title': '5K'}}, {'next': {'title': '', 'value': 1}}, {'to_next': None},
-    {'end_time': 'soon'},
-])
+@pytest.mark.parametrize(
+    'damage',
+    [
+        {'title': ''},
+        {'title': 5},
+        {'shown': 5503},
+        {'unit': None},
+        {'value': 'x'},
+        {'value': True},
+        {'tier': None},
+        {'tier': {'title': '5K'}},
+        {'next': {'title': '', 'value': 1}},
+        {'to_next': None},
+        {'end_time': 'soon'},
+    ],
+)
 def test_a_damaged_challenge_is_not_valid(damage):
     assert not valid_challenge({**slim_challenge(entry()), **damage})
 
@@ -153,12 +246,12 @@ def test_a_damaged_challenge_is_not_valid(damage):
 # ---- the API call and the hourly fetch ---------------------------------------------------------------------
 def test_the_client_asks_for_joined_challenges():
     from peloton.api import BASE, PelotonClient
+
     session = Mock()
     session.get.return_value.status_code = 200
     session.get.return_value.json.return_value = response(entry())
     assert PelotonClient(session).get_current_challenges('u1') == response(entry())
-    session.get.assert_called_once_with(f'{BASE}/api/user/u1/challenges/current', params={'has_joined': 'true'},
-                                        timeout=20)
+    session.get.assert_called_once_with(f'{BASE}/api/user/u1/challenges/current', params={'has_joined': 'true'}, timeout=20)
 
 
 def challenge_dashboard(tmp_path, monkeypatch, config=None):
@@ -184,10 +277,15 @@ def test_challenges_are_fetched_hourly_and_cached(tmp_path, monkeypatch):
     assert [c['shown'] for c in load_snapshot(dashboard.cache_path)['challenges']] == ['5,600']
 
 
-@pytest.mark.parametrize('failure', [
-    requests.HTTPError(response=Mock(status_code=400)), requests.ConnectionError('offline'),
-    ValueError('bad JSON'), None,
-])
+@pytest.mark.parametrize(
+    'failure',
+    [
+        requests.HTTPError(response=Mock(status_code=400)),
+        requests.ConnectionError('offline'),
+        ValueError('bad JSON'),
+        None,
+    ],
+)
 def test_a_failed_fetch_keeps_the_last_list_and_retries_sooner(tmp_path, monkeypatch, failure):
     dashboard, client, clock = challenge_dashboard(tmp_path, monkeypatch)
     dashboard.refresh()
@@ -226,6 +324,7 @@ def test_no_fetch_while_the_page_is_off(tmp_path, monkeypatch):
 
 def test_a_new_token_fetches_the_challenges_again(tmp_path, monkeypatch):
     import os
+
     dashboard, client, _ = challenge_dashboard(tmp_path, monkeypatch)
     dashboard.refresh()
     token = dashboard.token_path
@@ -256,19 +355,24 @@ def test_the_cache_keeps_challenges_and_drops_a_damaged_list(tmp_path):
 # ---- rotation ----------------------------------------------------------------------------------------------
 def test_one_page_per_shown_challenge(monkeypatch):
     import peloton_led
+
     monkeypatch.setattr(peloton_led.time, 'time', lambda: NOW)
     display = {**DEFAULTS, 'rotation': ['goals', 'challenges'], 'screen_durations': {'challenges': 7}}
-    snapshot = {'summaries': [], 'status': 'ready', 'totals': {},
-                'challenges': parse_challenges(response(entry(), TURKEY, entry('Gone', end=NOW - 5)))}
+    snapshot = {
+        'summaries': [],
+        'status': 'ready',
+        'totals': {},
+        'challenges': parse_challenges(response(entry(), TURKEY, entry('Gone', end=NOW - 5))),
+    }
     pages = build_rotation_pages(snapshot, None, display, 'Joel', 64)
-    assert [(name, state['title'], seconds) for name, state, seconds in pages] == [
-        ('challenge', 'ANNUAL 2026', 7)]
+    assert [(name, state['title'], seconds) for name, state, seconds in pages] == [('challenge', 'ANNUAL 2026', 7)]
     assert build_rotation_pages({**snapshot, 'challenges': 'junk'}, None, display, 'Joel', 64) == []
 
 
 def test_challenges_is_a_rotation_screen_on_by_default(tmp_path):
     from peloton.config import load_config
     from settings_page.form import SCREEN_NAMES
+
     assert 'challenges' in DEFAULTS['rotation'] and 'challenges' in SCREEN_NAMES
     path = tmp_path / 'config.json'
     path.write_text('{"display": {"rotation": ["challenges"], "screen_durations": {"challenges": 6}}}')
@@ -278,6 +382,7 @@ def test_challenges_is_a_rotation_screen_on_by_default(tmp_path):
 # ---- the screen --------------------------------------------------------------------------------------------
 class EdgeMatrix(ImageMatrix):
     """Counts lit pixels drawn off the panel (ImageMatrix drops them silently)."""
+
     def Clear(self):
         super().Clear()
         self.off_panel = 0
@@ -302,8 +407,12 @@ def draw(state, height, at=INTRO_SECONDS):
 
 def lit(matrix, color=None, rows=None):
     pixels = matrix.image.load()
-    return {(x, y) for x in range(matrix.width) for y in (rows or range(matrix.height))
-            if pixels[x, y] != (0, 0, 0) and (color is None or pixels[x, y] == color)}
+    return {
+        (x, y)
+        for x in range(matrix.width)
+        for y in (rows or range(matrix.height))
+        if pixels[x, y] != (0, 0, 0) and (color is None or pixels[x, y] == color)
+    }
 
 
 # The largest values a page can hold: 5- and 6-digit numbers, the widest tier names, the longest titles seen
@@ -312,17 +421,13 @@ LARGEST = [
     entry(),
     entry('November 2026 Rep Goal Challenge', 1640, '1,640', 'reps', ('Bronze', 1500), ('Silver', 3000), '1,360'),
     entry('The Annual 2026', 18000, '18,000', 'min', ('15K', 15000), ('18K', 18000), '10,000'),
-    entry('November 2026 Rowing Challenge', 123456, '123,456', 'meters', ('Gold', 100000), ('Platinum', 250000),
-          '126,544'),
+    entry('November 2026 Rowing Challenge', 123456, '123,456', 'meters', ('Gold', 100000), ('Platinum', 250000), '126,544'),
     entry('November 2026 Meditation Challenge', 11, '11', 'workouts', ('Unearned', 0), ('Bronze', 15), '4'),
-    entry('September 2026 Strength Rep Goal Challenge', 1640, '1,640', 'reps', ('Bronze', 1500), ('Silver', 3000),
-          '1,360'),
-    entry('September 2026 Supercalifragilisticexpialidocious Challenge', 12, '12', 'reps', ('Unearned', 0),
-          ('Bronze', 15), '3'),
+    entry('September 2026 Strength Rep Goal Challenge', 1640, '1,640', 'reps', ('Bronze', 1500), ('Silver', 3000), '1,360'),
+    entry('September 2026 Supercalifragilisticexpialidocious Challenge', 12, '12', 'reps', ('Unearned', 0), ('Bronze', 15), '3'),
     entry('November 2026 Cycling Challenge', 123.4, '123.4', 'miles', ('Silver', 100), ('Gold', 200), '76.6'),
     entry('The Countdown to Turkey Burn Challenge', 11, '11', 'workouts', ('Unearned', 0), ('Gold', 18), '7'),
-    entry('The Extraordinarily Long Holiday Countdown Spectacular Challenge', 3, '3', 'days', ('Unearned', 0),
-          ('Bronze', 10), '7'),
+    entry('The Extraordinarily Long Holiday Countdown Spectacular Challenge', 3, '3', 'days', ('Unearned', 0), ('Bronze', 10), '7'),
     entry('Supercalifragilisticexpialidocious', 250, '250', 'kilocalories', ('Unearned', 0), ('Bronze', 500), '250'),
 ]
 
@@ -331,8 +436,7 @@ LARGEST = [
 def test_64_rows_fit_the_largest_values_inside_the_ring(raw):
     state = slim_challenge(raw)
     matrix = draw(state, 64)
-    ring = {(x, y): (r, g, b) for x, y, r, g, b in ring_pixels(round(tier_progress(state), 3),
-                                                               tier_color(state['next']['title']))}
+    ring = {(x, y): (r, g, b) for x, y, r, g, b in ring_pixels(round(tier_progress(state), 3), tier_color(state['next']['title']))}
     pixels = matrix.image.load()
     assert all(pixels[x, y] == color for (x, y), color in ring.items()), 'text drawn over the ring'
     rows = [y for _, y in ring]
@@ -356,9 +460,14 @@ def test_32_rows_fit_the_largest_values(raw):
 
 
 @pytest.mark.parametrize('height', [64, 32])
-@pytest.mark.parametrize('title', ['September 2026 Strength Rep Goal Challenge',
-                                   'September 2026 Supercalifragilisticexpialidocious Challenge',
-                                   'November 2026 Rep Goal Challenge'])
+@pytest.mark.parametrize(
+    'title',
+    [
+        'September 2026 Strength Rep Goal Challenge',
+        'September 2026 Supercalifragilisticexpialidocious Challenge',
+        'November 2026 Rep Goal Challenge',
+    ],
+)
 def test_a_long_title_keeps_its_month_and_fits(title, height):
     state = slim_challenge(entry(title))
     initialize_fonts(height)
@@ -413,6 +522,7 @@ def test_the_ring_fills_clockwise_from_twelve_in_the_next_tiers_colour():
 def test_the_ring_number_drops_its_comma_then_shrinks():
     initialize_fonts(64)
     from display.ui.challenge_screen import ring_number
+
     assert ring_number('5,503') == (loaded_fonts['title_bold'], '5,503')
     assert ring_number('18,000') == (loaded_fonts['title_bold'], '18000')
     assert ring_number('123,456') == (loaded_fonts['titles'], '123456')
@@ -431,6 +541,7 @@ def test_render_challenges_draws_both_panel_sizes(tmp_path, capsys):
     from PIL import Image
 
     from scripts import render_challenges, render_logo
+
     out = tmp_path / 'challenges.png'
     render_challenges.main(['--out', str(out)])
     sheet = Image.open(out).convert('RGB')
@@ -453,6 +564,7 @@ def test_render_challenges_draws_both_panel_sizes(tmp_path, capsys):
 
 def test_render_challenges_stops_on_a_page_it_cannot_draw(monkeypatch):
     from scripts import render_challenges
+
     monkeypatch.setattr(render_challenges, 'PAGES', [{'title': 'X'}])
     with pytest.raises(RuntimeError, match='drew nothing'):
         render_challenges.panels(64)
@@ -460,6 +572,7 @@ def test_render_challenges_stops_on_a_page_it_cannot_draw(monkeypatch):
 
 def test_the_remaining_line_shortens_to_fit():
     from display.ui.challenge_screen import remaining_line
+
     initialize_fonts(64)
     font, state = loaded_fonts['stats'], slim_challenge(entry())
     assert remaining_line(state, font, 64) == '497 TO 6K'
@@ -472,12 +585,12 @@ FRAMES = [i * ChallengeScreen.frame_seconds for i in range(round((INTRO_SECONDS 
 INTRO_CASES = [
     slim_challenge(entry()),
     slim_challenge(entry('Supercalifragilisticexpialidocious', 1, '1', 'workouts', ('Unearned', 0), ('Bronze', 15), '14')),
-    slim_challenge(entry('November 2026 Cycling Challenge', 43.5, '43.5', 'miles', ('Unearned', 0), ('Bronze', 50),
-                         '6.5')),
+    slim_challenge(entry('November 2026 Cycling Challenge', 43.5, '43.5', 'miles', ('Unearned', 0), ('Bronze', 50), '6.5')),
     slim_challenge(LARGEST[2]),  # 18,000: drops its comma
     slim_challenge(LARGEST[3]),  # 123,456: smaller font
-    slim_challenge(entry('November 2026 Rowing Challenge', 12345678, '12,345,678', 'meters', ('Gold', 100000),
-                         ('Platinum', 250000000), '1')),  # 12346K
+    slim_challenge(
+        entry('November 2026 Rowing Challenge', 12345678, '12,345,678', 'meters', ('Gold', 100000), ('Platinum', 250000000), '1')
+    ),  # 12346K
     slim_challenge(TURKEY),  # Unearned, 0 of 18
 ]
 
@@ -536,6 +649,7 @@ def test_the_64_row_ring_only_grows_and_the_number_stays_inside_the_final_width(
 def ring_final(state, at=None):
     """(font, text) of the number at `at` seconds, or the settled one: what the screen draws inside the ring."""
     from display.ui.challenge_screen import ring_number, sweep
+
     font, final = ring_number(state['shown'])
     if at is None:
         return font, final
@@ -592,6 +706,7 @@ def test_the_32_row_bar_fills_from_the_left_in_step_with_the_number():
 
 def test_the_ring_flashes_once_when_the_sweep_lands_then_holds_still():
     from display.ui.challenge_screen import flash
+
     state = INTRO_CASES[0]
     settled = ink(draw(state, 64))
     strengths = [flash(t) for t in FRAMES]
@@ -628,13 +743,15 @@ def test_the_ring_is_centred_between_the_title_and_the_bottom_line():
 def reference_ring(fraction, color):
     """The ring as first written: every pixel sampled afresh. ring_pixels must match it exactly."""
     import math
+
     from display.ui.challenge_screen import RING_CENTRE, RING_RADIUS, RING_WIDTH, SUBSAMPLES
+
     cx, cy = RING_CENTRE
     outer, width = RING_RADIUS, RING_WIDTH
     inner, mid = outer - width, outer - width / 2
     end = math.tau * fraction
     caps = [(cx + mid * math.sin(a), cy - mid * math.cos(a)) for a in (0, end)] if fraction > 0 else []
-    total, pixels = SUBSAMPLES ** 2, []
+    total, pixels = SUBSAMPLES**2, []
     for y in range(int(cy - outer) - 1, int(cy + outer) + 2):
         for x in range(int(cx - outer) - 1, int(cx + outer) + 2):
             if not inner - 1 <= math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= outer + 1:
@@ -650,8 +767,7 @@ def reference_ring(fraction, color):
                     elif in_band:
                         track += 1
             if lit_n or track:
-                pixels.append((x, y) + tuple(min(255, round(color[k] * lit_n / total + RING_TRACK[k] * track / total))
-                                             for k in range(3)))
+                pixels.append((x, y) + tuple(min(255, round(color[k] * lit_n / total + RING_TRACK[k] * track / total)) for k in range(3)))
     return tuple(pixels)
 
 
@@ -664,6 +780,7 @@ def test_render_challenges_writes_the_intro_gifs(tmp_path):
     from PIL import Image
 
     from scripts import render_challenges
+
     render_challenges.write_gifs(str(tmp_path))
     for height in (64, 32):
         gif = Image.open(tmp_path / f'challenge-intro-{height}.gif')

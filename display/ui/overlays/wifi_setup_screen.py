@@ -1,10 +1,12 @@
 """The Wi-Fi setup screen, while comitup's setup hotspot is up (utils/wifi_setup.py): two pages
 in turn, the open hotspot to join, then where the settings page is on it."""
+
 import re
 
 from display.display import color_dict, draw_centered_text, get_text_width, loaded_fonts
 from driver import graphics
 from utils.wifi_setup import HOTSPOT_ADDRESS
+
 from ..screen import Screen
 
 # The settings server's port (settings_page/server.py PORT); not imported, to keep the display
@@ -40,8 +42,11 @@ class WifiSetupScreen(Screen):
         title_font = loaded_fonts.get('titles')
         small = loaded_fonts.get('info')
         if state.get('page'):
-            rows = [(title_font, color_dict['gold'], 'Settings'), (small, color_dict['white'], 'Browse to'),
-                    (small, WAIT_BLUE, SETTINGS_ADDRESS)]
+            rows = [
+                (title_font, color_dict['gold'], 'Settings'),
+                (small, color_dict['white'], 'Browse to'),
+                (small, WAIT_BLUE, SETTINGS_ADDRESS),
+            ]
         else:
             name = str(state.get('name') or '')
             rows = [(title_font, color_dict['gold'], 'Wi-Fi setup'), (small, color_dict['white'], 'Join')]

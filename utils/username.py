@@ -2,6 +2,7 @@
 
 This isolates the logic from peloton_led.py so it can be tested and reused.
 """
+
 import logging
 
 
@@ -13,15 +14,15 @@ def resolve_display_username(cmd_username: str | None, me: dict[str, object] | N
     3. The display config's "username" value
     4. A sensible default string "Peloton Member"
     """
-    logger = logging.getLogger("peloton-led")
+    logger = logging.getLogger('peloton-led')
 
     username = cmd_username
     if not username and me:
-        username = me.get("username") or me.get("id")
+        username = me.get('username') or me.get('id')
         if username:
-            logger.info("Using Peloton username %s from /api/me", username)
+            logger.info('Using Peloton username %s from /api/me', username)
 
     if not username:
-        username = display_config.get("username") or "Peloton Member"
+        username = display_config.get('username') or 'Peloton Member'
 
     return username

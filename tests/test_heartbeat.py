@@ -1,4 +1,5 @@
 """The display's heartbeat, which the updater's health check reads (self_update)."""
+
 import json
 import os
 
@@ -44,6 +45,7 @@ def test_reading_a_missing_or_bad_heartbeat_gives_none(tmp_path):
 
 def test_the_display_beats_after_each_screen(monkeypatch):
     import peloton_led
+
     beats = []
     monkeypatch.setattr(peloton_led.heartbeat, 'beat', lambda: beats.append(True))
     monkeypatch.setattr(peloton_led, 'shown_pin', lambda: None)

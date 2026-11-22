@@ -5,6 +5,7 @@ it only costs a re-download. Lifetime figures (instructor counts, journey
 miles, this week's progress) are recomputed from it, so a counting fix never
 needs new API calls. See docs/WORKOUT-LOG-PLAN.md.
 """
+
 import json
 import logging
 import os
@@ -12,8 +13,8 @@ from pathlib import Path
 
 from ..feeds.goals import weekly_progress
 from ..feeds.instructors import merge_instructor_counts
-from ..stats.journey import merge_distance_totals
 from ..selection import discipline_of
+from ..stats.journey import merge_distance_totals
 from ..timestamps import workout_timestamp
 
 logger = logging.getLogger('peloton-led.workout-log')
@@ -60,7 +61,7 @@ def trim(workout):
         members = instructor.get('individual_instructor_ids')
         group = sorted({m for m in members if _text(m)}) if isinstance(members, list) else []
     elif instructor_id:
-        name = (instructor.get('name') or instructor.get('display_name') or '')
+        name = instructor.get('name') or instructor.get('display_name') or ''
         if isinstance(name, str) and name.strip():
             names[instructor_id] = name.strip()
     zones = (workout.get('effort_zones') or {}) if isinstance(workout.get('effort_zones'), dict) else {}
@@ -97,17 +98,27 @@ def as_workout(identity, row, instructors):
         instructor.update(is_instructor_group=True, individual_instructor_ids=row['group_ids'])
     elif row.get('instructor_id') in instructors:
         instructor['name'] = instructors[row['instructor_id']]
-    return {'id': identity, 'start_time': row.get('start'), 'timezone': row.get('tz'),
-            'status': row.get('status'), 'fitness_discipline': row.get('discipline'),
-            'distance': row.get('distance'), 'total_work': row.get('total_work_j'),
-            'duration': row.get('class_length_s'), 'effort_points': row.get('effort_points'),
-            'is_3p_fit_feed_workout_excluded_from_streaks': row.get('counts_for_streaks') is False,
-            'ride': {'id': row.get('ride_id'), 'instructor': instructor}}
+    return {
+        'id': identity,
+        'start_time': row.get('start'),
+        'timezone': row.get('tz'),
+        'status': row.get('status'),
+        'fitness_discipline': row.get('discipline'),
+        'distance': row.get('distance'),
+        'total_work': row.get('total_work_j'),
+        'duration': row.get('class_length_s'),
+        'effort_points': row.get('effort_points'),
+        'is_3p_fit_feed_workout_excluded_from_streaks': row.get('counts_for_streaks') is False,
+        'ride': {'id': row.get('ride_id'), 'instructor': instructor},
+    }
 
 
 def _valid_row(row):
-    return (isinstance(row, dict) and (row.get('start') is None or _number(row['start']) is not None)
-            and (row.get('status') is None or isinstance(row['status'], str)))
+    return (
+        isinstance(row, dict)
+        and (row.get('start') is None or _number(row['start']) is not None)
+        and (row.get('status') is None or isinstance(row['status'], str))
+    )
 
 
 class WorkoutLog:
@@ -137,29 +148,43 @@ class WorkoutLog:
             return log
         workouts, instructors = payload.get('workouts'), payload.get('instructors')
         backfill, check = payload.get('backfill'), payload.get('check')
-        if (not isinstance(workouts, dict) or not all(_valid_row(r) for r in workouts.values())
-                or not isinstance(instructors, dict)
-                or not all(isinstance(v, str) for v in instructors.values())
-                or not isinstance(backfill, dict) or not isinstance(check, dict)
-                or not (payload.get('user_id') is None or isinstance(payload.get('user_id'), str))):
+        if (
+            not isinstance(workouts, dict)
+            or not all(_valid_row(r) for r in workouts.values())
+            or not isinstance(instructors, dict)
+            or not all(isinstance(v, str) for v in instructors.values())
+            or not isinstance(backfill, dict)
+            or not isinstance(check, dict)
+            or not (payload.get('user_id') is None or isinstance(payload.get('user_id'), str))
+        ):
             logger.warning('Workout log %s is damaged; rebuilding it', log.path)
             return log
         log.user_id = payload.get('user_id')
         log.workouts, log.instructors = workouts, instructors
-        log.backfill = {'complete': backfill.get('complete') is True,
-                        'next_page': backfill.get('next_page') if isinstance(backfill.get('next_page'), int) else 0,
-                        'finished_at': _number(backfill.get('finished_at'))}
+        log.backfill = {
+            'complete': backfill.get('complete') is True,
+            'next_page': backfill.get('next_page') if isinstance(backfill.get('next_page'), int) else 0,
+            'finished_at': _number(backfill.get('finished_at')),
+        }
         mismatches = check.get('mismatches')
-        log.check = {'mismatches': mismatches if isinstance(mismatches, int) and not isinstance(mismatches, bool) else 0,
-                     'last_rewalk': _number(check.get('last_rewalk'))}
+        log.check = {
+            'mismatches': mismatches if isinstance(mismatches, int) and not isinstance(mismatches, bool) else 0,
+            'last_rewalk': _number(check.get('last_rewalk')),
+        }
         return log
 
     def save(self):
         """Atomically write the log, owner-only, like the dashboard cache."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(f'.{self.path.name}.tmp')
-        payload = {'version': LOG_VERSION, 'user_id': self.user_id, 'backfill': self.backfill,
-                   'check': self.check, 'instructors': self.instructors, 'workouts': self.workouts}
+        payload = {
+            'version': LOG_VERSION,
+            'user_id': self.user_id,
+            'backfill': self.backfill,
+            'check': self.check,
+            'instructors': self.instructors,
+            'workouts': self.workouts,
+        }
         try:
             descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
@@ -232,8 +257,7 @@ class WorkoutLog:
 
     def as_workouts(self):
         """Every row as a history-shaped workout, newest first."""
-        rows = sorted(self.workouts.items(), key=lambda item: (item[1].get('start') or 0, item[0]),
-                      reverse=True)
+        rows = sorted(self.workouts.items(), key=lambda item: (item[1].get('start') or 0, item[0]), reverse=True)
         return [as_workout(identity, row, self.instructors) for identity, row in rows]
 
     def derived(self, journey=None, metric=False, tzname=None, now=None, member_since=None):
@@ -245,22 +269,34 @@ class WorkoutLog:
         fetch back to Monday while the log is still filling.
         """
         from .activity import anniversary, daily_minutes, event_stats, frame_stats, streak_week_workouts
+
         workouts = self.as_workouts()
-        result = {'weekly_progress': weekly_progress(workouts, tzname, now=now),
-                  'streak_week_workouts': streak_week_workouts(workouts, tzname, now=now)}
+        result = {
+            'weekly_progress': weekly_progress(workouts, tzname, now=now),
+            'streak_week_workouts': streak_week_workouts(workouts, tzname, now=now),
+        }
         if self.complete:
             counts, names = merge_instructor_counts({}, {}, workouts)
             since = (journey or {}).get('start_date')
-            result.update(instructor_counts=counts, instructor_names=names,
-                          distance_totals=merge_distance_totals({}, workouts, metric, since=since, tzname=tzname),
-                          activity_days=daily_minutes(workouts, tzname, now=now),
-                          time_frames=frame_stats(workouts, tzname, now=now),
-                          events=event_stats(workouts, tzname, now=now, member_since=member_since))
+            result.update(
+                instructor_counts=counts,
+                instructor_names=names,
+                distance_totals=merge_distance_totals({}, workouts, metric, since=since, tzname=tzname),
+                activity_days=daily_minutes(workouts, tzname, now=now),
+                time_frames=frame_stats(workouts, tzname, now=now),
+                events=event_stats(workouts, tzname, now=now, member_since=member_since),
+            )
         else:
             # The anniversary needs no history, so it's the one event a partial log can have.
             years = anniversary(member_since, tzname, now=now)
-            result.update(instructor_counts={}, instructor_names={}, distance_totals={}, activity_days={},
-                          time_frames={}, events={'anniversary': years} if years else {})
+            result.update(
+                instructor_counts={},
+                instructor_names={},
+                distance_totals={},
+                activity_days={},
+                time_frames={},
+                events={'anniversary': years} if years else {},
+            )
         return result
 
 

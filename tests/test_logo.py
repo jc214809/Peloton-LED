@@ -1,5 +1,6 @@
 """The board's logo: the startup screen, the settings page's icons and the docs images, all drawn
 from display/ui/logo_art.py."""
+
 import io
 import re
 

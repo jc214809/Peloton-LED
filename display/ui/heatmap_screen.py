@@ -1,9 +1,10 @@
 """Activity heatmap: one cell per day for the last 12 weeks, shaded by minutes."""
+
 from datetime import date, timedelta
 
+from display.display import get_text_width, loaded_fonts
 from driver import graphics
 
-from display.display import get_text_width, loaded_fonts
 from .screen import Screen
 
 EMPTY = (28, 28, 34)
@@ -12,8 +13,7 @@ EMPTY = (28, 28, 34)
 # (2026-11-07). The greens run from pale yellow-green for the shortest days to
 # deep green for the longest, shifting hue as well as brightness so neighbouring
 # levels stay apart on the panel; the darkest stays clear of EMPTY's grey.
-LEVELS = ((6, (210, 255, 120)), (21, (110, 220, 30)), (39, (20, 170, 40)), (60, (0, 120, 60)),
-          (None, (0, 70, 50)))
+LEVELS = ((6, (210, 255, 120)), (21, (110, 220, 30)), (39, (20, 170, 40)), (60, (0, 120, 60)), (None, (0, 70, 50)))
 _GREY = graphics.Color(145, 165, 190)
 
 

@@ -1,8 +1,10 @@
 """LastWorkoutScreen: the latest-workout page, composing the 64x64 and 64x32 layouts."""
+
 from typing import Any
 
 from display.display import loaded_fonts
 from utils import debug
+
 from ..screen import Screen
 from .fonts import PageFonts
 from .rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
@@ -44,17 +46,17 @@ class LastWorkoutScreen(Screen):
         if not summary:
             return False
 
-        title_font  = loaded_fonts.get("discipline")
-        titles_font = loaded_fonts.get("titles")
-        stat_font   = loaded_fonts.get("stats")
+        title_font = loaded_fonts.get('discipline')
+        titles_font = loaded_fonts.get('titles')
+        stat_font = loaded_fonts.get('stats')
 
         if not title_font or not stat_font:
-            debug.error("Fonts not loaded; call initialize_fonts() first")
+            debug.error('Fonts not loaded; call initialize_fonts() first')
             return False
 
-        text_font = loaded_fonts.get("info") or titles_font or stat_font  # fallback if titles not loaded
+        text_font = loaded_fonts.get('info') or titles_font or stat_font  # fallback if titles not loaded
         fonts = PageFonts(title_font, titles_font, text_font, stat_font)
 
-        discipline = (summary.get("discipline") or "Workout").strip()
+        discipline = (summary.get('discipline') or 'Workout').strip()
         layout = render_short if matrix.height < 64 else render_tall
         return layout(matrix, summary, discipline, fonts, self.elapsed, self.detail_interval)

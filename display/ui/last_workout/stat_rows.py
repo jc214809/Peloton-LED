@@ -1,6 +1,7 @@
 """The 'value label' stat, the heart-rate and calories bar, and the 64x32 centred lines."""
 
 from driver import graphics
+
 from .colors import _RED, _WHITE
 from .sprites import _HEART_H, _HEART_W, _TROPHY_H, _TROPHY_W, _draw_heart, _draw_trophy
 from .stats import _whole
@@ -24,32 +25,30 @@ def _draw_stat(matrix, font, x: int, y: int, color, text: str, max_px: int, righ
         lx = x + val_w + _GAP
         label_end_x = _draw_text(matrix, font, lx, y, color, label_trunc)
         if star:
-            font_h = getattr(font, "height", 6)
+            font_h = getattr(font, 'height', 6)
             star_top = y - font_h + (font_h - _TROPHY_H) // 2 + 1
             _draw_trophy(matrix, label_end_x + 1, star_top)
 
 
 def _draw_hr_calories(matrix, summary: dict, stat_font, bottom_y: int) -> None:
     """Bottom bar: ♥ average HR on the left, calories on the right."""
-    font_h = getattr(stat_font, "height", 8)
+    font_h = getattr(stat_font, 'height', 8)
     w = matrix.width
-    hr_val = summary.get("hr_avg")
+    hr_val = summary.get('hr_avg')
     if isinstance(hr_val, (int, float)):
         heart_top = bottom_y - font_h + (font_h - _HEART_H) // 2 + 1
         _draw_heart(matrix, 2, heart_top, _RED)
         graphics.DrawText(matrix, stat_font, 2 + _HEART_W + 1, bottom_y, _WHITE, str(_whole(hr_val)))
 
-    cal_val = summary.get("calories")
+    cal_val = summary.get('calories')
     if isinstance(cal_val, (int, float)):
         # Leave the bottom-right corner free for the login padlock.
         right = w - 1 - (8 if summary.get('login_required') else 0)
         mid = w // 2 + 1
-        _draw_stat(matrix, stat_font, right, bottom_y, _WHITE, f"{_whole(cal_val)} cal",
-                   max(0, right - mid), right_align=True)
+        _draw_stat(matrix, stat_font, right, bottom_y, _WHITE, f'{_whole(cal_val)} cal', max(0, right - mid), right_align=True)
 
 
-def _draw_short_lines(matrix, font, lines: list[str], top_y: int, summary: dict,
-                      clear_icons: bool = True) -> None:
+def _draw_short_lines(matrix, font, lines: list[str], top_y: int, summary: dict, clear_icons: bool = True) -> None:
     """Up to two centered 4x6 lines, 7px apart, for the 32-row layout.
 
     Lines may run the panel's full width (a workout title is wrapped to it). The second line

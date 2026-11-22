@@ -1,4 +1,5 @@
 """LogoScreen: the display.logo_path override for the startup logo."""
+
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -23,8 +24,8 @@ def test_logo_is_fitted_and_centered_on_the_background(tmp_path):
     assert screen.render(matrix) is True
     image = matrix.SetImage.call_args.args[0]
     assert image.size == (64, 64)
-    assert image.getpixel((32, 2)) == (0, 0, 50)      # letterbox
-    assert image.getpixel((32, 32))[0] > 150           # logo
+    assert image.getpixel((32, 2)) == (0, 0, 50)  # letterbox
+    assert image.getpixel((32, 32))[0] > 150  # logo
 
 
 def test_bundled_logo_fills_a_32_row_board():
