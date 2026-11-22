@@ -199,9 +199,11 @@ def _username_times(state, duration, detail_interval, height):
 
 
 def _pr_times(state, duration, detail_interval, height):
-    from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS
+    from display.ui.celebration_screen import INTRO_SECONDS
+    from display.ui.pr_celebration import pr_turns, turn_seconds
 
-    return [0.5, BURST_SECONDS + SETTLE_SECONDS + 0.5]
+    turns = max(1, len(pr_turns(state)))
+    return [0.3] + [INTRO_SECONDS + 0.5 + i * turn_seconds(detail_interval) for i in range(turns)]
 
 
 def _celebration_times(state, duration, detail_interval, height):

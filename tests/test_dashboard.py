@@ -526,6 +526,36 @@ def test_new_pr_gets_the_record_it_beat_and_survives_restart(tmp_path):
     assert restarted.snapshot()['personal_records']['cycling|30 min']['value_kj'] == 262.9
 
 
+def test_best_times_make_a_pr_workout_and_list_on_its_summary(tmp_path):
+    """Joel's first Vision Tread run (2026-11-22) broke his 1K and 1 mile times: those come from the
+    overview's Best Times group, held by the workout's ID, even without an output record."""
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    data = demo_data()
+    run = dict(data['workouts'][0], id='tread-run', is_total_work_personal_record=False)
+    client.history = [run]
+    times = {
+        'slug': 'running_metric_splits',
+        'records': [
+            {'name': 'DISTANCE_1K', 'slug': '1K', 'raw_value': 633.0, 'unit': 'time', 'workout_id': 'tread-run'},
+            {'name': 'DISTANCE_1_MILE', 'slug': '1 Mile', 'raw_value': 1005.0, 'unit': 'time', 'workout_id': 'tread-run'},
+            {'name': 'DISTANCE_5K', 'slug': '5K', 'raw_value': 2100.0, 'unit': 'time', 'workout_id': 'older-run'},
+        ],
+    }
+    client.get_overview.return_value = dict(data['overview'], personal_records=[times])
+    dashboard.refresh()
+    snap = dashboard.snapshot()
+    summary = snap['summaries'][0]
+    assert summary['best_times'] == [{'label': '1K', 'seconds': 633.0}, {'label': '1 MILE', 'seconds': 1005.0}]
+    assert summary['is_pr'] and not summary['is_output_pr']
+    # Times aren't output: nothing lands in the output records table.
+    assert snap['personal_records'] == {}
+    # Without Best Times the same workout is no PR.
+    client.get_overview.return_value = dict(data['overview'], personal_records=[])
+    dashboard.refresh()
+    assert dashboard.snapshot()['summaries'][0]['best_times'] == []
+    assert not dashboard.snapshot()['summaries'][0]['is_pr']
+
+
 def test_pr_set_before_first_capture_has_no_previous_best(tmp_path):
     dashboard, client, _ = setup_dashboard(tmp_path)
     data = demo_data()

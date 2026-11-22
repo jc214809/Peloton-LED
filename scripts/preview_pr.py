@@ -4,7 +4,8 @@
     python scripts/preview_pr.py --user Jen --png pr.png  # save a frame strip instead
 
 Pages back through workout history (newest first) until it finds a PR, so it
-costs 1 profile call + 1 call per 50 workouts searched + 1 performance call.
+costs 1 profile call + 1 overview call (the Best Times the workout holds) + 1 call per 50 workouts
+searched + 1 performance call.
 """
 
 import argparse
@@ -76,12 +77,14 @@ def save_frames(summary, destination):
     from PIL import Image
 
     from display.display import initialize_fonts
-    from display.ui.pr_celebration import PrCelebrationScreen
+    from display.ui.celebration_screen import INTRO_SECONDS
+    from display.ui.pr_celebration import PrCelebrationScreen, pr_turns, turn_seconds
     from scripts.render_demo import ImageMatrix
 
     initialize_fonts(64)
     tiles = []
-    for elapsed in (0.2, 0.8, 1.35, 2.5):
+    turns = range(max(1, len(pr_turns(summary))))
+    for elapsed in [0.3] + [INTRO_SECONDS + 0.5 + i * turn_seconds(0) for i in turns]:
         matrix = ImageMatrix(height=64)
         screen = PrCelebrationScreen()
         screen.on_enter(matrix, summary)
@@ -124,6 +127,7 @@ def main(argv=None):
     options = parse_options(argv)
     from peloton.api import PelotonClient, make_session
     from peloton.config import load_config, load_dotenv
+    from peloton.stats.records import best_times_for
     from peloton.stats.summaries import summarize_workout
 
     load_dotenv(ROOT / '.env')
@@ -148,6 +152,8 @@ def main(argv=None):
         if workout is None:
             raise SystemExit(f'No PR found for {name} in the last {pages * 50} workouts (try a larger --max-pages)')
         summary = summarize_workout(workout, client.get_perf_graph(workout['id']))
+        summary['best_times'] = best_times_for(workout['id'], client.get_overview(user_id))
+        summary['is_pr'] = summary['is_pr'] or bool(summary['best_times'])
     except Exception as exc:
         response = getattr(exc, 'response', None)
         if response is not None and response.status_code == 401:
@@ -158,7 +164,7 @@ def main(argv=None):
 
     if options.previous_best is not None:
         summary['previous_best_kj'] = options.previous_best
-    logger.info('%s: latest PR after %d history page(s), %d API calls total', name, pages, pages + 2)
+    logger.info('%s: latest PR after %d history page(s), %d API calls total', name, pages, pages + 3)
     logger.info(
         json.dumps(
             {
@@ -175,6 +181,7 @@ def main(argv=None):
                     'row_split_sec_per_500m',
                     'is_output_pr',
                     'is_splits_pr',
+                    'best_times',
                 )
             },
             indent=2,

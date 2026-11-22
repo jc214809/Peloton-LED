@@ -169,31 +169,27 @@ reached the stats phase, so the bar never showed. When there are no stats and
 the title fits on one line, the bar now shows in the intro (since 2026-11-11
 a one-line title shows it whether or not there are stats).
 
-### PR celebration (done, 2026-11-19)
-The burst, the "OUTPUT PR / 512 KJ / 45 MIN CLASS" card, splits PRs and
-plain "NEW PR" all fit in three lines. The card used to be plain text once the
-star shrank away; now (64x64 unchanged, compared byte for byte):
-- A 9 px gold star sits in each margin beside the headline (64x64's single
-  badge above it has no room). They're drawn only when the margin fits one.
-- Sparkles twinkle in the value line's side margins (when there are 6+ px)
-  and at the outer ends of the blank rows above the bottom line. Not between
-  the lines: those gaps are 4 rows, and a sparkle is 3, so it would touch text.
-  `test_32_row_sparkles_never_touch_text` checks the widest values.
-- The bottom line takes turns: `+14 KJ`, then `45 MIN CLASS`, then the
-  discipline (`CYCLING`, in its icon's colour from `discipline_color`, so it
-  doesn't read as a second white value; white for running and rowing, whose
-  icon green and blue match the gain and class length), skipping any it
-  doesn't have. It used to drop the class length when there was a gain, and
-  never named the discipline (Joel asked for it, 2026-11-19).
-- The turns split the settled card's time evenly (`compact_turn`: one
-  `last_workout_detail_interval` + `CARD_HOLD_SECONDS`, so 2 s each for three
-  by default) and the last holds to the end; the screen gets the interval
-  like `LastWorkoutScreen` does. The first version looped fixed 2 s turns from
-  the end of the burst, so the gain came back for the card's last 0.3 s and
-  flickered just before the page changed (seen on a board, 2026-11-19).
-- A plain `NEW PR` (no output or split value) fills its empty middle line with
-  the discipline in white, dropping to the info font when the discipline font is
-  too wide (`TREAD BOOTCAMP`, `OUTDOOR WALKING`).
+### PR celebration (redone, 2026-11-22)
+The star burst and its three-line card (2026-11-19: stars beside the headline,
+sparkles, a bottom line taking turns between gain, class length and discipline)
+were replaced by the milestone celebration's entrance and one turn per record
+the workout broke (output, a rowing split, each Tread Best Time). On 32 rows,
+from Joel's notes on real-data mock-ups of his first Vision Tread run:
+- The trophy is `TROPHY_MID`, 14 px: bigger than the milestone page's 10 px
+  one, the 64x64 one's shape. A 16 px version was tried and was a touch too
+  big; Joel asked for it back at 14 and centred on the 32 rows (rows 9-22).
+- 2 px of space left of the trophy and the same right of it; the text gets
+  columns 18-63. No stars beside the discipline (Joel: not needed).
+- Every line (discipline at 6, record at 13, value at 23 in 5x8, bottom line
+  at 30) is centred in those columns. A wider line stays centred and moves left
+  only as far as the panel's edge needs, over the trophy's columns: the
+  discipline sits above the trophy, so `TREAD BOOTCAMP` and `OUTDOOR WALKING`
+  can; `20 MIN CLASS` and `1 MILE BEST` clear its base and handles.
+- A wording that would come within a pixel of the trophy gives way to a
+  shorter one: `MARATHON BEST` to `MARATHON` (the top of the cup), `HALF
+  MARATHON` to `HALF`. `120 MIN CLASS` fits.
+- No turn dots: on the bottom row, under the bottom line, they read as
+  underscores. 64x64 keeps them.
 
 ### Lifetime disciplines use icon pages (done)
 64x64 shows the lifetime counts as pages of four icon tiles (2x2). 64x32
@@ -224,7 +220,8 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   there. (Rowing splits PRs are still marked in the intro only.)
 - The startup Peloton P is Peloton red (#DF1C2F) instead of white on both
   boards. A custom `display.logo_path` image is unaffected.
-- The PR celebration screen keeps its star burst.
+- The PR celebration screen kept its star burst (until 2026-11-22: now the
+  milestone page's confetti and rising trophy).
 
 ### Board logo (both boards, requested 2026-11-06)
 - The startup logo is now the red Peloton mark, PELOTON, a heart-rate zone
