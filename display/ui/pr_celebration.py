@@ -1,7 +1,7 @@
 # display/ui/pr_celebration.py
 
 import math
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 from driver import graphics
 from display.display import get_text_width, loaded_fonts
@@ -27,7 +27,7 @@ _COMPACT_SPARKLE_SPOTS = [(2, 22), (61, 22)]
 _COMPACT_BADGE_RADIUS = 4.5
 
 
-def _star_points(cx: float, cy: float, outer: float) -> List[Tuple[float, float]]:
+def _star_points(cx: float, cy: float, outer: float) -> list[tuple[float, float]]:
     inner = outer * 0.381966
     points = []
     for i in range(10):
@@ -37,7 +37,7 @@ def _star_points(cx: float, cy: float, outer: float) -> List[Tuple[float, float]
     return points
 
 
-def _fill_polygon(matrix, poly: List[Tuple[float, float]], color) -> None:
+def _fill_polygon(matrix, poly: list[tuple[float, float]], color) -> None:
     ys = [y for _, y in poly]
     for y in range(max(0, int(min(ys))), min(matrix.height, int(max(ys)) + 1)):
         yc = y + 0.5
@@ -78,7 +78,7 @@ def compact_turn(card_t: float, count: int, detail_interval: float) -> int:
     return min(int(max(0.0, card_t - SETTLE_SECONDS) / share), count - 1)
 
 
-def pr_card_lines(summary: dict) -> Optional[Tuple[str, str, Optional[str]]]:
+def pr_card_lines(summary: dict) -> tuple[str, str, str | None] | None:
     """(headline, value, gain) for a PR summary, or None if nothing to show.
 
     gain is only produced when a previous best is supplied, since Peloton's
@@ -122,7 +122,7 @@ class PrCelebrationScreen(Screen):
     def update(self, dt):
         self.elapsed += max(0, dt)
 
-    def render(self, matrix, state: Optional[Any] = None) -> bool:
+    def render(self, matrix, state: Any | None = None) -> bool:
         summary = state if isinstance(state, dict) else {}
         lines = pr_card_lines(summary)
         if lines is None:
@@ -179,7 +179,7 @@ class PrCelebrationScreen(Screen):
         return headline_font, value_font, info_font
 
     def _draw_compact_card(self, matrix, summary: dict, card_t: float, headline: str, value: str,
-                           gain: Optional[str]) -> None:
+                           gain: str | None) -> None:
         """32 rows: headline between two star badges, the value (or the discipline for a plain
         NEW PR), and a bottom line that takes turns between gain, class length and discipline."""
         headline_font, value_font, info_font = self._card_fonts()
@@ -204,7 +204,7 @@ class PrCelebrationScreen(Screen):
         self._draw_sparkles(matrix, card_t, spots)
 
     @staticmethod
-    def _compact_bottom_turns(summary: dict, gain: Optional[str], middle: str) -> List[Tuple[Any, str]]:
+    def _compact_bottom_turns(summary: dict, gain: str | None, middle: str) -> list[tuple[Any, str]]:
         """The bottom line's turns: gain, class length, discipline (unless the middle line has it)."""
         turns = [(_GREEN, gain)] if gain else []
         dur = summary.get("duration_min")
@@ -225,7 +225,7 @@ class PrCelebrationScreen(Screen):
         for cx in ((margin - 1) / 2, matrix.width - 1 - (margin - 1) / 2):
             _fill_polygon(matrix, _star_points(cx, cy, _COMPACT_BADGE_RADIUS), _GOLD)
 
-    def _draw_full_card(self, matrix, summary: dict, headline: str, value: str, gain: Optional[str]) -> None:
+    def _draw_full_card(self, matrix, summary: dict, headline: str, value: str, gain: str | None) -> None:
         headline_font, value_font, info_font = self._card_fonts()
         dur = summary.get("duration_min")
         _centered(matrix, headline_font, 29, _GOLD, headline)
@@ -239,7 +239,7 @@ class PrCelebrationScreen(Screen):
             _centered(matrix, info_font, 62 if gain else 56, _BLUE, f"{int(dur)} MIN CLASS")
 
     @staticmethod
-    def _draw_sparkles(matrix, card_t: float, spots: List[Tuple[int, int]]) -> None:
+    def _draw_sparkles(matrix, card_t: float, spots: list[tuple[int, int]]) -> None:
         """Twinkling sparkles around the card."""
         w, h = matrix.width, matrix.height
         for i, (x, y) in enumerate(spots):

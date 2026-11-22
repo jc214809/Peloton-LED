@@ -1,4 +1,5 @@
-"""Next milestone: 3 TO GO / TILL YOUR / 600TH / RIDE, or NEXT ONE / IS YOUR / 600TH / RIDE when one is left, with a progress bar (32 rows: 3 AWAY FROM / YOUR 600TH / RIDE, no bar).
+"""Next milestone: 3 TO GO / TILL YOUR / 600TH / RIDE, or NEXT ONE / IS YOUR / 600TH / RIDE when one is left,
+with a progress bar (32 rows: 3 AWAY FROM / YOUR 600TH / RIDE, no bar).
 
 One page per target within a few workouts, the total's or a discipline's.
 state: {'total': 597, 'target': 600, 'previous': 500, 'title': 'Cycling', 'discipline': 'cycling'};

@@ -1,5 +1,5 @@
 """scripts/list_facts.py: every name-page fact for a workout log, offline."""
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -8,7 +8,7 @@ from peloton.workouts.workout_log import WorkoutLog
 from scripts import list_facts
 from scripts.list_facts import demo_log, snapshot_for
 
-NOW = datetime(2026, 11, 8, 17, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 8, 17, 0, tzinfo=UTC)
 
 
 def _saved_demo_log(tmp_path, complete=True):

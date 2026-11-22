@@ -707,7 +707,7 @@ def test_seed_dir_install_hint_can_be_suppressed_for_seed_board(tmp_path, monkey
 
 
 # Refresh-chain age: learn how long Auth0 keeps a login's chain alive.
-from datetime import datetime as _datetime, timezone as _timezone  # noqa: E402  section import, deliberately mid-file
+from datetime import datetime as _datetime, UTC  # noqa: E402  section import, deliberately mid-file
 from scripts.refresh_cookies import describe_chain, load_refresh_chain  # noqa: E402  section import, deliberately mid-file
 
 
@@ -717,7 +717,7 @@ def test_new_refresh_token_starts_a_chain(tmp_path):
     assert chain['chain_start_exact'] is True
     assert chain['renewals'] == 0
     started = _datetime.fromisoformat(chain['chain_started_at'])
-    assert abs((_datetime.now(_timezone.utc) - started).total_seconds()) < 60
+    assert abs((_datetime.now(UTC) - started).total_seconds()) < 60
 
 
 def test_rotation_carries_the_chain_start_and_counts_renewals(tmp_path):
@@ -741,7 +741,7 @@ def test_untracked_file_falls_back_to_its_save_time_as_a_lower_bound(tmp_path):
     chain = load_refresh_chain(path)
     assert chain == {'chain_started_at': '2026-10-30T00:00:00+00:00',
                      'chain_start_exact': False, 'renewals': None}
-    now = _datetime(2026, 11, 1, tzinfo=_timezone.utc)
+    now = _datetime(2026, 11, 1, tzinfo=UTC)
     assert describe_chain(chain, now) == 'refresh chain at least 2.0 days old'
     assert describe_chain({**chain, 'renewals': 1}, now) == 'refresh chain at least 2.0 days old, 1+ renewals'
 
@@ -762,7 +762,7 @@ def test_missing_refresh_file_chain_is_unknown(tmp_path):
 
 def test_describe_chain_exact(tmp_path):
     chain = {'chain_started_at': '2026-10-01T00:00:00+00:00', 'chain_start_exact': True, 'renewals': 1}
-    assert describe_chain(chain, _datetime(2026, 10, 4, 12, tzinfo=_timezone.utc)) == \
+    assert describe_chain(chain, _datetime(2026, 10, 4, 12, tzinfo=UTC)) == \
         'refresh chain 3.5 days old, 1 renewal'
 
 

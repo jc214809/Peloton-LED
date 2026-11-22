@@ -1,5 +1,5 @@
 """Head-to-head weekly page for households with two or more riders."""
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from unittest.mock import Mock, patch
 
 import pytest
@@ -76,7 +76,7 @@ def render(height, riders, elapsed=0.5, weekday=None):
 
 
 def test_week_day_follows_the_weekly_goal_timezone():
-    now = datetime(2026, 11, 2, 3, tzinfo=timezone.utc)  # Monday in UTC, still Sunday in New York
+    now = datetime(2026, 11, 2, 3, tzinfo=UTC)  # Monday in UTC, still Sunday in New York
     assert week_day('UTC', now) == 0
     assert week_day('America/New_York', now) == 6
 

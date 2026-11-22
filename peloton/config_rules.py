@@ -3,7 +3,8 @@ small checks ("is a whole number from 1 to 3", "is HH:MM") that the rows share. 
 import math
 import re
 from datetime import date, datetime
-from typing import Callable, NamedTuple
+from typing import NamedTuple
+from collections.abc import Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 

@@ -8,7 +8,7 @@ One screen for any event worth a party. state:
 """
 import math
 import random
-from typing import Any, Optional
+from typing import Any
 
 from driver import graphics
 from display.display import get_text_width, loaded_fonts
@@ -69,7 +69,7 @@ def ordinal(number: int) -> str:
     return f'{number}{suffix}'
 
 
-def milestone_noun(discipline: Optional[str]) -> str:
+def milestone_noun(discipline: str | None) -> str:
     """What a milestone counts: WORKOUT for the total, RIDE/RUN/WALK/ROW, else CLASS."""
     if not discipline:
         return 'WORKOUT'
@@ -80,7 +80,7 @@ def milestone_noun(discipline: Optional[str]) -> str:
 _DISCIPLINE_NOUNS = {'cycling': 'RIDE', 'running': 'RUN', 'walking': 'WALK', 'rowing': 'ROW'}
 
 
-def discipline_noun(discipline: Optional[str], label: Optional[str] = None) -> str:
+def discipline_noun(discipline: str | None, label: str | None = None) -> str:
     """What one discipline's milestone counts: 600TH RIDE, 500TH STRENGTH, 25TH ROW BOOTCAMP.
     Unlike milestone_noun, a bootcamp keeps its own name: its count isn't the rides' or rows'."""
     slug = str(discipline or '').strip().lower().replace(' ', '_')
@@ -225,7 +225,7 @@ class CelebrationScreen(Screen):
     def update(self, dt):
         self.elapsed += max(0, dt)
 
-    def render(self, matrix, state: Optional[Any] = None) -> bool:
+    def render(self, matrix, state: Any | None = None) -> bool:
         state = state if isinstance(state, dict) else {}
         number = state.get('number') if number_text(state.get('number')) else None
         big = number if number is not None else str(state.get('headline') or 'CONGRATS').upper()

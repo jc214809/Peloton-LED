@@ -1,6 +1,5 @@
 """Text measuring, wrapping and drawing helpers shared by every part of the page."""
 import re
-from typing import List, Optional
 
 from driver import graphics
 from display.display import get_text_width
@@ -53,7 +52,7 @@ def _truncate(font, text: str, max_px: int) -> str:
     return text.rstrip()
 
 
-def _wrap_two_lines(font, text: str, max_px: int) -> List[str]:
+def _wrap_two_lines(font, text: str, max_px: int) -> list[str]:
     """Split text into at most two lines that each fit within max_px."""
     words = text.split()
     if not words:
@@ -93,7 +92,7 @@ def _draw_words(matrix, font, x: int, y: int, text: str, colour_of) -> None:
             x -= COLON_GAP_TRIM
 
 
-def _centred(matrix, font, y: int, rgb, text: str, left: int = 0, right: Optional[int] = None) -> None:
+def _centred(matrix, font, y: int, rgb, text: str, left: int = 0, right: int | None = None) -> None:
     """`text` centred between columns `left` and `right` (the panel's width by default)."""
     room = (matrix.width if right is None else right) - left
     _draw_words(matrix, font, left + max((room - _words_width(font, text)) // 2, 0), y, text, lambda _: rgb)

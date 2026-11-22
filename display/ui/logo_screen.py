@@ -1,6 +1,6 @@
 # python file: display/ui/logo_screen.py
 
-from typing import Optional, Any, Tuple
+from typing import Any
 import logging
 
 from PIL import Image, ImageOps
@@ -16,12 +16,12 @@ class LogoScreen(Screen):
     The image is scaled to fit the matrix and centered on bg_color. If it can't
     be loaded, the screen draws nothing rather than crashing the manager.
     """
-    def __init__(self, image_path: str, bg_color: Tuple[int, int, int] = (0, 0, 0)):
+    def __init__(self, image_path: str, bg_color: tuple[int, int, int] = (0, 0, 0)):
         self.image_path = image_path
         self.bg_color = bg_color
         self._pil_image = None
 
-    def on_enter(self, matrix, state: Optional[Any] = None) -> None:
+    def on_enter(self, matrix, state: Any | None = None) -> None:
         """Load and prepare the image for the matrix when the screen becomes active."""
         try:
             img = Image.open(self.image_path).convert("RGBA")
@@ -38,7 +38,7 @@ class LogoScreen(Screen):
         bg.paste(fitted.convert("RGB"), (x, y))
         self._pil_image = bg
 
-    def render(self, matrix, state: Optional[Any] = None) -> bool:
+    def render(self, matrix, state: Any | None = None) -> bool:
         """Render the prepared image to the matrix. Returns True on success."""
         if self._pil_image is None:
             return False

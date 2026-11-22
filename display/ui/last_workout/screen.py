@@ -1,5 +1,5 @@
 """LastWorkoutScreen: the latest-workout page, composing the 64x64 and 64x32 layouts."""
-from typing import Any, Optional
+from typing import Any
 
 from display.display import loaded_fonts
 from utils import debug
@@ -39,7 +39,7 @@ class LastWorkoutScreen(Screen):
     def update(self, dt):
         self.elapsed += max(0, dt)
 
-    def render(self, matrix, state: Optional[Any] = None) -> bool:
+    def render(self, matrix, state: Any | None = None) -> bool:
         summary = state or {}
         if not summary:
             return False

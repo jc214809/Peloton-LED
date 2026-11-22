@@ -3,15 +3,22 @@
 [tool.ruff]
 # Matches the boards' Python (3.11): see docs/CODE-HEALTH-PLAN.md.
 target-version = "py311"
+# E501 and `ruff format` both wrap at 140: at 120, 153 lines needed rewording by hand; at 140, 19.
+line-length = 140
 # Gitignored Python that exists only on a developer's machine; CI only sees tracked files.
 extend-exclude = ["training-data", "perf_graphs", "venv", ".venv"]
 
 [tool.ruff.lint]
 # Ratchet (docs/CODE-HEALTH-PLAN.md, "Decisions made"): the structural rules carry an inline
 # `# noqa` on today's offenders, and RUF100 fails on a stale one, so the baseline only shrinks.
-select = ["E", "F", "W", "B", "C901", "PLR0912", "PLR0913", "PLR0915", "RUF100"]
-# E501 (line length) and B905 (zip strict= changes behavior) are deliberately out of phase 1.
+# UP: pyupgrade for 3.11 (`list[...]`, `X | None`, `datetime.UTC`).
+select = ["E", "F", "W", "B", "UP", "C901", "PLR0912", "PLR0913", "PLR0915", "RUF100"]
+# E501 waits for ruff format; B905 (zip strict= changes behavior) stays out on purpose.
 ignore = ["E501", "B905"]
+
+[tool.ruff.format]
+# The codebase's own style; "double" would have rewritten twice as many lines.
+quote-style = "single"
 
 [tool.ruff.lint.mccabe]
 # Ruff's default, stated so it is visible (docs/CODE-HEALTH-PLAN.md).

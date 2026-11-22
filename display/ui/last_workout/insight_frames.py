@@ -1,5 +1,4 @@
 """The workout-compare frames: the 64x64 card and bars, the 64x32 bars and sentence pages."""
-from typing import List
 
 from display.display import get_text_width, loaded_fonts
 from .colors import _INSIGHT_DIM, _INSIGHT_GOLD, _INSIGHT_TEXT, _LABEL_GREY, _USUAL_BAR, _disc_rgb
@@ -34,7 +33,7 @@ def _reason_line(matrix, font, y: int, text: str, phase: float, hold: float) -> 
             matrix.SetPixel(x, row, 0, 0, 0)
 
 
-def _parts_line(matrix, font, y: int, parts: List[str], colour) -> None:
+def _parts_line(matrix, font, y: int, parts: list[str], colour) -> None:
     """The bars frame's bottom line drawn in parts from column 1, with an ARROW_PART between: the text before
     the arrow (the class rating) and the arrow in the insight's colour, the text after it soft white. The arrow
     sits on the text's rows (y-5 to y-1), centred between the inks (`_parts_layout`; Joel, 2026-11-12)."""

@@ -1,7 +1,7 @@
 # python file: display/ui/discipline_page.py
 
 from .screen import Screen
-from typing import Optional, Dict, Any
+from typing import Any
 
 from display.display import color_dict, get_text_width, loaded_fonts, wrap_text, draw_centered_text
 from utils import debug
@@ -16,7 +16,7 @@ class DisciplinePageScreen(Screen):
         self.number_font_key = number_font_key
         self.color_key = color_key
 
-    def render(self, matrix, state: Optional[Dict[str, Any]] = None):
+    def render(self, matrix, state: dict[str, Any] | None = None):
         """Render a discipline page.
 
         state can be a dict containing:

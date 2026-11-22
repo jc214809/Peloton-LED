@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any
+from collections.abc import Iterator
 
 import requests
 import logging
@@ -48,19 +49,19 @@ class PelotonClient:
     def close(self) -> None:
         self._session.close()
 
-    def get_me(self) -> Dict[str, Any]:
+    def get_me(self) -> dict[str, Any]:
         resp = self._get(f"{BASE}/api/me", timeout=15)
         resp.raise_for_status()
         return self._object(resp)
 
-    def get_workouts_page(self, user_id: str, limit: int, page: int = 0) -> Dict[str, Any]:
+    def get_workouts_page(self, user_id: str, limit: int, page: int = 0) -> dict[str, Any]:
         params = {"joins": "ride,ride.instructor", "limit": limit, "page": page}
         resp = self._get(f"{BASE}/api/user/{user_id}/workouts", params=params, timeout=20)
         resp.raise_for_status()
         return self._object(resp)
 
     @staticmethod
-    def page_rows(page: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def page_rows(page: dict[str, Any]) -> list[dict[str, Any]]:
         """The workouts on one history page; raises ValueError if malformed."""
         rows = page.get("data") or []
         if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
@@ -68,7 +69,7 @@ class PelotonClient:
         return rows
 
     @staticmethod
-    def is_last_page(page: Dict[str, Any], page_number: int, rows: List[Dict[str, Any]], page_size: int) -> bool:
+    def is_last_page(page: dict[str, Any], page_number: int, rows: list[dict[str, Any]], page_size: int) -> bool:
         if not rows or page.get("show_next") is False:
             return True
         count = page.get("page_count")
@@ -77,7 +78,7 @@ class PelotonClient:
         return len(rows) < page_size and page.get("show_next") is not True
 
     def iter_workout_pages(self, user_id: str, page_size: int, start_page: int = 0,
-                           max_pages: int = 500) -> Iterator[Tuple[int, List[Dict[str, Any]], Dict[str, Any]]]:
+                           max_pages: int = 500) -> Iterator[tuple[int, list[dict[str, Any]], dict[str, Any]]]:
         """Yield (page_number, rows, page) newest first, one page at a time.
 
         Callers keep only what they need from each page, so a full-history
@@ -100,7 +101,7 @@ class PelotonClient:
                 return
         logger.warning("Workout history walk stopped at the %d-page limit", max_pages)
 
-    def get_perf_graph(self, workout_id: str) -> Optional[Dict[str, Any]]:
+    def get_perf_graph(self, workout_id: str) -> dict[str, Any] | None:
         resp = self._get(f"{BASE}/api/workout/{workout_id}/performance_graph", params={"every_n": 5}, timeout=30)
         if resp.status_code == 404:
             return None
@@ -110,7 +111,7 @@ class PelotonClient:
         except Exception:
             return None
 
-    def get_ride_details(self, ride_id: str) -> Optional[Dict[str, Any]]:
+    def get_ride_details(self, ride_id: str) -> dict[str, Any] | None:
         resp = self._get(f"{BASE}/api/ride/{ride_id}/details", timeout=20)
         if resp.status_code == 404:
             return None
@@ -120,7 +121,7 @@ class PelotonClient:
         except Exception:
             return None
 
-    def get_workout_detail(self, workout_id: str) -> Optional[Dict[str, Any]]:
+    def get_workout_detail(self, workout_id: str) -> dict[str, Any] | None:
         resp = self._get(f"{BASE}/api/workout/{workout_id}", params={"joins": "ride,ride.instructor"},
                           timeout=20)
         if resp.status_code == 404:
@@ -131,14 +132,14 @@ class PelotonClient:
         except Exception:
             return None
 
-    def get_current_challenges(self, user_id: str) -> Dict[str, Any]:
+    def get_current_challenges(self, user_id: str) -> dict[str, Any]:
         """The running challenges the rider joined, each with their progress and tiers."""
         resp = self._get(f"{BASE}/api/user/{user_id}/challenges/current", params={"has_joined": "true"},
                          timeout=20)
         resp.raise_for_status()
         return self._object(resp)
 
-    def get_club_score(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_club_score(self, user_id: str) -> dict[str, Any] | None:
         """Club Peloton's level, points and tier for the rider; None when Peloton has no score (404: a free
         trial or cancelled membership). Not through `_get`: a 401 from this undocumented host must not mark
         the token as rejected when the main API just took it."""
@@ -148,13 +149,13 @@ class PelotonClient:
         resp.raise_for_status()
         return self._object(resp)
 
-    def get_reservations(self, user_id: str) -> Dict[str, Any]:
+    def get_reservations(self, user_id: str) -> dict[str, Any]:
         """The live and encore classes the rider booked: only their IDs (`peloton_id`), unsorted."""
         resp = self._get(f"{BASE}/api/user/{user_id}/reservations", timeout=20)
         resp.raise_for_status()
         return self._object(resp)
 
-    def get_scheduled_class(self, peloton_id: str) -> Optional[Dict[str, Any]]:
+    def get_scheduled_class(self, peloton_id: str) -> dict[str, Any] | None:
         """One scheduled class with its start, live/encore flags, class and instructor; None when it's gone."""
         resp = self._get(f"{BASE}/api/peloton/{peloton_id}", params={"joins": "ride,ride.instructor"},
                          timeout=20)
@@ -163,7 +164,7 @@ class PelotonClient:
         resp.raise_for_status()
         return self._object(resp)
 
-    def get_overview(self, user_id: str) -> Dict[str, Any]:
+    def get_overview(self, user_id: str) -> dict[str, Any]:
         resp = self._get(f"{BASE}/api/user/{user_id}/overview", timeout=20)
         resp.raise_for_status()
         return self._object(resp)

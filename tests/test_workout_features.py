@@ -1,5 +1,5 @@
 """Workout compare rows: build_row, bike plan and strength asks from hand-made raw responses."""
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -202,7 +202,7 @@ def test_strength_tracker_sets_and_weights():
 
 
 def test_timezone_falls_back_to_utc_and_real_zone_gives_local_date():
-    ts = int(datetime(2026, 11, 11, 0, 30, tzinfo=timezone.utc).timestamp())
+    ts = int(datetime(2026, 11, 11, 0, 30, tzinfo=UTC).timestamp())
     assert build_row(detail(start_time=ts, end_time=ts + 10, timezone='No/Such_Zone'))['date'] == '2026-11-11'
     assert build_row(detail(start_time=ts, end_time=ts + 10, timezone=None))['date'] == '2026-11-11'
     assert build_row(detail(start_time=ts, end_time=ts + 10, timezone='America/New_York'))['date'] == '2026-11-10'

@@ -1,7 +1,8 @@
 # python file: display/ui/manager.py
 
 import time
-from typing import Callable, Dict, Optional, Any
+from typing import Any
+from collections.abc import Callable
 from .screen import Screen
 from .overlays.login_indicator import draw_login_indicator
 from .overlays.stale_indicator import draw_stale_indicator
@@ -9,13 +10,13 @@ from .overlays.settings_pin import draw_if_pin_shown
 from utils import debug
 
 class ScreenManager:
-    def __init__(self, matrix, initial: Optional[Screen] = None,
-                 login_required: Optional[Callable[[], bool]] = None,
-                 stale_data: Optional[Callable[[], bool]] = None):
+    def __init__(self, matrix, initial: Screen | None = None,
+                 login_required: Callable[[], bool] | None = None,
+                 stale_data: Callable[[], bool] | None = None):
         self.matrix = matrix
-        self.current: Optional[Screen] = initial
-        self.current_name: Optional[str] = None
-        self.screens: Dict[str, Screen] = {}
+        self.current: Screen | None = initial
+        self.current_name: str | None = None
+        self.screens: dict[str, Screen] = {}
         self._frame_canvas = None
         self.last_tick = time.time()
         self.login_required = login_required or (lambda: False)
@@ -35,7 +36,7 @@ class ScreenManager:
     def register(self, name: str, screen: Screen):
         self.screens[name] = screen
 
-    def show(self, name: str, state: Optional[Any] = None):
+    def show(self, name: str, state: Any | None = None):
         if name not in self.screens:
             debug.error("Screen %s not registered", name)
             return
@@ -55,7 +56,7 @@ class ScreenManager:
         except Exception:
             debug.exception("Error during on_enter of %s", name)
 
-    def tick(self, state: Optional[Any] = None):
+    def tick(self, state: Any | None = None):
         now = time.time()
         dt = now - self.last_tick
         self.last_tick = now

@@ -6,7 +6,7 @@ Only what the page draws is kept, so the cache stays small and an odd response c
 Standard library only, so the cache can validate with it.
 """
 import math
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 # `badge_level` in /api/me, 0 to 10, and the names the score calls them (upper case).
 LEVELS = ('BRONZE I', 'BRONZE II', 'BRONZE III', 'SILVER I', 'SILVER II', 'SILVER III',
@@ -44,7 +44,7 @@ def _epoch(text):
     except ValueError:
         return None
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
+        moment = moment.replace(tzinfo=UTC)
     return moment.timestamp()
 
 

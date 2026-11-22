@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 import json
 import time
-from datetime import datetime
+from datetime import datetime, UTC
 from zoneinfo import ZoneInfo
 import stat
 import requests
@@ -335,10 +335,10 @@ def test_lru_performance_cache_is_bounded(tmp_path):
 
 
 def test_refresh_summarizes_every_workout_on_latest_active_day(tmp_path):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     dashboard, client, _ = setup_dashboard(tmp_path)
-    latest_day = datetime.now(timezone.utc) - timedelta(days=7)
+    latest_day = datetime.now(UTC) - timedelta(days=7)
     older_day = latest_day - timedelta(days=1)
     client.history = [
         {'id': 'older', 'status': 'COMPLETE', 'start_time': older_day.timestamp(),
@@ -531,10 +531,10 @@ def test_damaged_records_table_is_dropped_without_losing_cache(tmp_path):
 
 def test_a_workout_under_a_minute_is_not_a_latest_workout(tmp_path):
     # A 41-second "Just Walk" (a start tapped by accident) became the first latest-workout page.
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     dashboard, client, _ = setup_dashboard(tmp_path)
-    day = datetime.now(timezone.utc) - timedelta(days=7)
+    day = datetime.now(UTC) - timedelta(days=7)
     earlier = day - timedelta(days=1)
 
     def workout(identity, start, seconds):
@@ -575,9 +575,9 @@ def test_the_anniversary_comes_from_the_profile_in_the_derived_figures(tmp_path)
 # --- Workout compare on the board (display.workout_insights) ---
 
 def _insight_setup(tmp_path, config=None, discipline='cycling', status='COMPLETE', age_days=7):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
     dashboard, client, token = setup_dashboard(tmp_path, {'workout_insights': True} if config is None else config)
-    start = datetime.now(timezone.utc) - timedelta(days=age_days)
+    start = datetime.now(UTC) - timedelta(days=age_days)
     client.history = [{'id': 'w1', 'status': status, 'start_time': start.timestamp(),
                        'fitness_discipline': discipline}]
     client.get_perf_graph.return_value = {'duration': 1200}
@@ -661,7 +661,7 @@ def test_unfinished_or_other_discipline_workouts_get_none_and_no_calls(tmp_path)
 
 def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_then_stops(tmp_path, caplog):
     import logging
-    from datetime import datetime, timezone
+    from datetime import datetime
     caplog.set_level(logging.INFO, logger='peloton-led.dashboard')
     dashboard, client, _ = _insight_setup(tmp_path, age_days=0)  # just finished: still settling
     _seed_peers(dashboard, [110, 111, 112, 113, 114, 111])
@@ -683,7 +683,7 @@ def test_a_settling_workout_gets_insights_at_once_then_rebuilds_for_its_hour_the
         assert 'Workout w1 insights changed' in caplog.text
         assert dashboard.snapshot()['summaries'][0]['insights'][0]['code'] == 'output_up'
         # The hour is over: one last rebuild, then the row and its insights stay as they are.
-        client.history[0]['start_time'] = datetime.now(timezone.utc).timestamp() - 2 * 3600
+        client.history[0]['start_time'] = datetime.now(UTC).timestamp() - 2 * 3600
         dashboard.refresh()
         assert build.call_count == 4
         dashboard.refresh()

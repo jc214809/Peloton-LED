@@ -1,5 +1,4 @@
 """The chart slides: workout graph, heart-rate zone bar, muscle groups and the top lift."""
-from typing import List
 
 from driver import graphics
 from display.display import get_text_width
@@ -47,7 +46,7 @@ def _draw_graph(matrix, summary: dict, font, label_y: int, top: int, bottom: int
             matrix.SetPixel(x, bottom - bar, 255, 215, 0)
 
 
-def _draw_zones(matrix, seconds: List[float], font, big_font, label_y: int,  # noqa: PLR0913
+def _draw_zones(matrix, seconds: list[float], font, big_font, label_y: int,  # noqa: PLR0913
                 bar_top: int, bar_bottom: int, text_y: int) -> None:
     """Stacked zone bar across the panel, then the zone you spent longest in."""
     w = matrix.width
@@ -91,7 +90,7 @@ def _muscle_row_text(matrix, font, baseline: int, group: dict) -> None:
     _draw_text(matrix, font, w - 2 - pct_w, baseline, _WHITE, pct)
 
 
-def _draw_muscles(matrix, muscles: List[dict], font, label_y: int) -> None:
+def _draw_muscles(matrix, muscles: list[dict], font, label_y: int) -> None:
     """64 rows: a label, then each muscle's name and percent over a 2-px bar
     in its bucket colour, scaled to the top muscle."""
     w = matrix.width
@@ -108,7 +107,7 @@ def _draw_muscles(matrix, muscles: List[dict], font, label_y: int) -> None:
             matrix.SetPixel(x, baseline + 2, r, g, b)
 
 
-def _draw_muscle_rows(matrix, muscles: List[dict], font, top: int) -> None:
+def _draw_muscle_rows(matrix, muscles: list[dict], font, top: int) -> None:
     """32 rows: no room for a label, so each muscle is a 5-px half-brightness
     bar in its bucket colour, scaled to the top muscle, with the text over it."""
     w = matrix.width

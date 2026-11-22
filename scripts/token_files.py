@@ -8,7 +8,7 @@ import os
 import re
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 from peloton.config import default_token_path
@@ -29,7 +29,7 @@ def save_refresh_token(path: Path, refresh_token: str, client_id: str,
 
     `chain` carries the login's history forward through rotations (see
     load_refresh_chain); without it, this token starts a new chain."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     chain = chain or {'chain_started_at': now, 'chain_start_exact': True, 'renewals': 0}
     payload = json.dumps({'client_id': client_id, 'refresh_token': refresh_token,
                           'saved_at': now, **chain})
@@ -94,7 +94,7 @@ def _parse_time(value: str) -> datetime | None:
         parsed = datetime.fromisoformat(value)
     except (TypeError, ValueError):
         return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def describe_chain(chain: dict, now: datetime | None = None) -> str:
@@ -103,7 +103,7 @@ def describe_chain(chain: dict, now: datetime | None = None) -> str:
     if started is None:
         age = 'refresh chain age unknown'
     else:
-        days = max(0.0, ((now or datetime.now(timezone.utc)) - started).total_seconds() / 86400)
+        days = max(0.0, ((now or datetime.now(UTC)) - started).total_seconds() / 86400)
         age = f"refresh chain {'' if chain.get('chain_start_exact') else 'at least '}{days:.1f} days old"
     renewals = chain.get('renewals')
     if renewals is None:

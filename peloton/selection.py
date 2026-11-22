@@ -1,6 +1,6 @@
 """Consistent completed-workout selection and discipline matching."""
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from .timestamps import workout_timestamp, workout_date
 
 logger = logging.getLogger('peloton-led.selection')
@@ -69,7 +69,7 @@ def ordered_workouts(workouts, tzname=None):
     # Date-only entries participate in active-day groups but not latest-instant selection.
     return sorted(result, key=lambda w: (
         workout_date(w, tzname),
-        workout_timestamp(w, tzname) or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+        workout_timestamp(w, tzname) or datetime.min.replace(tzinfo=UTC)), reverse=True)
 
 
 def latest_workout(workouts, tzname=None):

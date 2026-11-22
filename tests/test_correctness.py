@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -16,7 +16,7 @@ from models.core import GeneralWorkout
 
 @pytest.mark.parametrize('value', [1773496800, 1773496800000, '1773496800', '2026-03-14T14:00:00Z', '2026-03-14T10:00:00-04:00'])
 def test_timestamp_formats(value):
-    assert parse_timestamp(value) == datetime(2026, 3, 14, 14, tzinfo=timezone.utc)
+    assert parse_timestamp(value) == datetime(2026, 3, 14, 14, tzinfo=UTC)
 
 
 @pytest.mark.parametrize('value', [None, '', 'bad', '2026-03-14', True, float('nan'), float('inf'), 1e99])
@@ -309,15 +309,15 @@ def test_numeric_overflow_metric_is_missing():
 
 
 def test_weekly_progress_uses_local_monday_and_completed_duration():
-    from datetime import datetime, timezone
+    from datetime import datetime
     from peloton.feeds.goals import weekly_progress
-    now = datetime(2026, 9, 16, 12, tzinfo=timezone.utc)  # Wednesday
+    now = datetime(2026, 9, 16, 12, tzinfo=UTC)  # Wednesday
     workouts = [
-        {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 14, 13, tzinfo=timezone.utc).timestamp(),
+        {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 14, 13, tzinfo=UTC).timestamp(),
          'ride': {'duration': 1800}, 'total_work': 250400},
-        {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 13, 13, tzinfo=timezone.utc).timestamp(),
+        {'status': 'COMPLETE', 'start_time': datetime(2026, 9, 13, 13, tzinfo=UTC).timestamp(),
          'ride': {'duration': 3600}},
-        {'status': 'IN_PROGRESS', 'start_time': datetime(2026, 9, 15, 13, tzinfo=timezone.utc).timestamp(),
+        {'status': 'IN_PROGRESS', 'start_time': datetime(2026, 9, 15, 13, tzinfo=UTC).timestamp(),
          'ride': {'duration': 1200}, 'total_work': 99000},
     ]
     # Output only counts completed workouts from this week.
@@ -326,10 +326,10 @@ def test_weekly_progress_uses_local_monday_and_completed_duration():
 
 
 def test_active_days_count_each_local_day_once():
-    from datetime import datetime, timezone
+    from datetime import datetime
     from peloton.feeds.goals import weekly_progress
-    now = datetime(2026, 9, 18, 12, tzinfo=timezone.utc)  # Friday
-    at = lambda *args: datetime(*args, tzinfo=timezone.utc).timestamp()  # noqa: E731  one-line test helper
+    now = datetime(2026, 9, 18, 12, tzinfo=UTC)  # Friday
+    at = lambda *args: datetime(*args, tzinfo=UTC).timestamp()  # noqa: E731  one-line test helper
     workouts = [
         {'status': 'COMPLETE', 'start_time': at(2026, 9, 14, 13)},  # Monday, twice: one active day
         {'status': 'COMPLETE', 'start_time': at(2026, 9, 14, 18)},

@@ -7,7 +7,7 @@ Only what the page draws is kept, so the cache stays small and an odd response c
 Standard library only, so the cache can validate with it.
 """
 import math
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from zoneinfo import ZoneInfo
 
 # Peloton's class disciplines under the board's names (peloton.workouts.workout_features.DISCIPLINE_ALIAS).
@@ -126,9 +126,9 @@ def instructor_lines(name):
 
 def _zone(name):
     try:
-        return ZoneInfo(name) if name else timezone.utc
+        return ZoneInfo(name) if name else UTC
     except (ValueError, KeyError):  # a bad name never stops the page: UTC
-        return timezone.utc
+        return UTC
 
 
 def clock_parts(moment):

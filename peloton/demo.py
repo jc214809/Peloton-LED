@@ -1,7 +1,7 @@
 """Synthetic API-shaped data for offline screen previews."""
 import math
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from .workouts.insight_lines import board_view
 
@@ -113,7 +113,7 @@ def demo_bookings(now):
 def demo_club_score(now):
     """GET members-score .../v2/user/{id}/score, cut to what the board reads: Gold III, 1,341 points from
     Champion, with a double-points boost running for another week."""
-    expires = datetime.fromtimestamp(now + 7 * 86400, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    expires = datetime.fromtimestamp(now + 7 * 86400, UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
     return {'badge_level_name': 'Gold III', 'total_earned_points': 13659,
             'boost': {'status': 'active', 'expires_at': expires, 'title': 'Double Club Peloton points'},
             'progress_bar': {'badge_level_name': 'Gold III', 'score': 13659, 'ignore_segments_on_profile': False,

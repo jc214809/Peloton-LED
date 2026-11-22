@@ -2,7 +2,8 @@
 them), the PIN page, and the notices after a save. Everything is inline (styles, icons, a few
 lines of script), since a phone on the Wi-Fi setup hotspot has no internet to fetch anything
 from. It works without JavaScript; the script adds dragging and moving screens in the rotation
-(a switched-off one drops to the bottom) and the "unsaved changes" state. No secret is ever put on it: logins and Pushover keys stay in auth.env.
+(a switched-off one drops to the bottom) and the "unsaved changes" state.
+No secret is ever put on it: logins and Pushover keys stay in auth.env.
 The Updates card (updates.py) checks for, starts and follows updates; its script checks once the
 page loads and follows a running update.
 

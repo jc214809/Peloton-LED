@@ -20,6 +20,7 @@ from settings_page.logins import (alert_state, credential_changes, read_auth_env
                                   token_mode, update_auth_env, when)
 from tests.test_settings_form import TWO_RIDERS
 from tests.test_settings_server import Board
+from datetime import UTC
 
 
 def jwt(expires):
@@ -184,8 +185,7 @@ def test_clearing_pushover_wins_over_typed_keys(tmp_path):
 
 
 def test_when():
-    from datetime import timezone
-    assert when(0, timezone.utc) == 'Thu Jan 1, 12:00 AM'
+    assert when(0, UTC) == 'Thu Jan 1, 12:00 AM'
     assert when('soon') == 'unknown'
 
 
@@ -514,7 +514,8 @@ def test_a_token_problem_says_what_it_means_and_keeps_its_capitals():
                           'chain': None, 'padlock': None, 'browser_attempt': None, 'email_set': True,
                           'password_set': True})
     html = _login_status(login, {'mode': 'browser'}, None)
-    assert '<span class="k">Token</span><span>The token file can&#x27;t be used (JWT payload has no usable exp claim)</span>' in html, 'JWT, not Jwt'
+    assert ('<span class="k">Token</span>'
+            '<span>The token file can&#x27;t be used (JWT payload has no usable exp claim)</span>') in html, 'JWT, not Jwt'
     assert html.startswith('<details class="rider-card" open>'), 'no working token: it opens by itself'
     missing = dataclasses.replace(login, token={'ok': False, 'reason': 'file does not exist'})
     assert '<span>No token on this board yet</span>' in _login_status(missing, {'mode': 'browser'}, None)

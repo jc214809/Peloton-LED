@@ -27,10 +27,10 @@ def pixels():
 
 
 def _hex(rgb):
-    return '#%02x%02x%02x' % rgb
+    return '#{:02x}{:02x}{:02x}'.format(*rgb)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def svg(rounded=False):
     """The icon as SVG, one rect per run of same-coloured pixels in a row. rounded: its own rounded
     background, for the browser tab (the page header rounds it with CSS)."""
@@ -57,7 +57,7 @@ def favicon_href():
     return 'data:image/svg+xml,' + quote(svg(rounded=True))
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def touch_icon_png():
     """The home-screen icon: a square PNG (the phone rounds its corners), each pixel 5x5."""
     from PIL import Image  # only this route needs Pillow

@@ -48,8 +48,8 @@ MIN_STREAK_WEEKS = 4
 MIN_COMPARE_WORKOUTS = 5
 MIN_COMPARE_CHANGE = 0.2
 MIN_COMPARE_DIFF = 3
-# Events (worded as sentences: LAST ROW / 52 DAYS AGO). A discipline is "since" or a "comeback" only with this many workouts behind it; "since" shows
-# after MIN_SINCE_DAYS without one (at most MAX_SINCE_FACTS of them); an instructor's last class
+# Events (worded as sentences: LAST ROW / 52 DAYS AGO). A discipline is "since" or a "comeback" only with this many workouts behind it;
+# "since" shows after MIN_SINCE_DAYS without one (at most MAX_SINCE_FACTS of them); an instructor's last class
 # after MIN_LAST_WITH_DAYS (their 5+ workouts, at most MAX_LAST_WITH_FACTS); a comeback is a workout in
 # the last EVENT_WINDOW_DAYS that follows a gap of MIN_COMEBACK_DAYS; a first is a discipline begun in
 # that window by a rider whose history goes back MIN_HISTORY_DAYS further.

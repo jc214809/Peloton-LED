@@ -1,5 +1,5 @@
 """Weekly goal and lifetime milestone calculations."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from zoneinfo import ZoneInfo
 
 from ..selection import is_completed
@@ -8,20 +8,20 @@ from ..timestamps import workout_timestamp
 
 def week_day(timezone_name=None, now=None):
     """Today's index in the weekly-goal week: 0 for Monday through 6 for Sunday."""
-    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
-    return (now or datetime.now(timezone.utc)).astimezone(zone).weekday()
+    zone = ZoneInfo(timezone_name) if timezone_name else UTC
+    return (now or datetime.now(UTC)).astimezone(zone).weekday()
 
 
 def local_date(timestamp, timezone_name=None):
     """The calendar date of a Unix timestamp in the display timezone."""
-    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
+    zone = ZoneInfo(timezone_name) if timezone_name else UTC
     return datetime.fromtimestamp(timestamp, zone).date()
 
 
 def week_start(timezone_name=None, now=None):
     """Monday 00:00 of the current week in the display timezone, and now."""
-    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
-    current = (now or datetime.now(timezone.utc)).astimezone(zone)
+    zone = ZoneInfo(timezone_name) if timezone_name else UTC
+    current = (now or datetime.now(UTC)).astimezone(zone)
     monday = (current - timedelta(days=current.weekday())).replace(
         hour=0, minute=0, second=0, microsecond=0)
     return monday, current
@@ -30,7 +30,7 @@ def week_start(timezone_name=None, now=None):
 def weekly_progress(workouts, timezone_name=None, now=None):
     """Return completed workouts, minutes, output (kJ) and active days (local dates with at least one
     completed workout) since local Monday."""
-    zone = ZoneInfo(timezone_name) if timezone_name else timezone.utc
+    zone = ZoneInfo(timezone_name) if timezone_name else UTC
     monday, current = week_start(timezone_name, now)
     count = 0
     seconds = 0

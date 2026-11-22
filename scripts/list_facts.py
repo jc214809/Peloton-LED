@@ -14,7 +14,7 @@ A log that isn't complete (its backfill unfinished) has no time-frame figures on
 import argparse
 import random
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -181,7 +181,7 @@ def main(argv=None):
     parser.add_argument('--passes', type=int, default=8, help='how many passes to show (default 8)')
     parser.add_argument('--assume-complete', action='store_true', help='treat an unfinished log as complete')
     options = parser.parse_args(argv)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if options.demo:
         log, assume = demo_log(now), True
     else:

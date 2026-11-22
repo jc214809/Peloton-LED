@@ -1,5 +1,4 @@
 """What the stats phase cycles through (the rotating details) and how long each one holds."""
-from typing import List
 
 from .insight_data import INSIGHT_KINDS, insight_views
 from .stats import _stat_details, _tracker_details, strength_tracker
@@ -10,7 +9,7 @@ from .stats import _stat_details, _tracker_details, strength_tracker
 MUSCLE_DISCIPLINES = {'strength'}
 
 
-def rotating_details(summary: dict, matrix_height: int = 64) -> List[dict]:
+def rotating_details(summary: dict, matrix_height: int = 64) -> list[dict]:
     """Details the stats phase cycles through, in order.
 
     64-row panels show the instructor in the intro, so only stats rotate.
@@ -68,12 +67,12 @@ def detail_hold_seconds(detail: dict, interval: float) -> float:
     return interval
 
 
-def stats_phase_seconds(details: List[dict], interval: float) -> float:
+def stats_phase_seconds(details: list[dict], interval: float) -> float:
     """Seconds for one pass through every rotating detail."""
     return sum(detail_hold_seconds(d, interval) for d in details)
 
 
-def detail_at(details: List[dict], interval: float, stats_elapsed: float):
+def detail_at(details: list[dict], interval: float, stats_elapsed: float):
     """(index, seconds into it) of the detail showing stats_elapsed seconds
     into the stats phase, wrapping after the last one."""
     remaining = max(0.0, stats_elapsed) % stats_phase_seconds(details, interval)

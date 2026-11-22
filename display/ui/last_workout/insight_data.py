@@ -1,5 +1,4 @@
 """Workout-compare insight data: the frame kinds and the checks that keep a damaged cache off the panel."""
-from typing import List
 
 
 # Workout compare frames (peloton/workouts/insight_lines.board_view), after the chart slides.
@@ -105,7 +104,7 @@ def _good_view(view) -> bool:
             and isinstance(pages, list) and 0 < len(pages) <= 2 and all(_strings(page, 3) for page in pages))
 
 
-def insight_views(summary: dict) -> List[dict]:
+def insight_views(summary: dict) -> list[dict]:
     """The workout's insight views (workout compare), at most MAX_INSIGHT_VIEWS, skipping damaged ones: the cache could
     hold anything. A version 2 `insight` (one dict) is never drawn."""
     views = summary.get('insights')

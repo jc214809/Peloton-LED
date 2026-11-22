@@ -1,5 +1,4 @@
 """The 64x64 layout of the page: discipline, the intro (duration, title, instructor) or one stat at a time."""
-from typing import List, Tuple
 
 from display.display import get_text_width
 from driver import graphics
@@ -18,7 +17,7 @@ _STAT_STEP = 6
 _LAST_ROW_Y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below.
 
 
-def _draw_discipline(matrix, discipline: str, fonts: PageFonts) -> Tuple[int, int]:
+def _draw_discipline(matrix, discipline: str, fonts: PageFonts) -> tuple[int, int]:
     """Line 1: the discipline, on screen for both intro and stats. Returns (block_y, line count)."""
     w = matrix.width
     disc_text = discipline.upper()
@@ -56,7 +55,7 @@ def _draw_duration(matrix, summary: dict, text_font, dur_y: int) -> None:
         _draw_text(matrix, text_font, dur_x + dur_val_w + 1, dur_y, _BLUE, dur_label)
 
 
-def _draw_title(matrix, summary: dict, text_font, dur_y: int) -> List[str]:
+def _draw_title(matrix, summary: dict, text_font, dur_y: int) -> list[str]:
     """Lines 3-4: the title below the duration with a visible gap. Returns the lines drawn."""
     w = matrix.width
     title_stripped = title_without_length(summary.get("title"))
@@ -137,7 +136,7 @@ def _draw_stat_value(matrix, summary: dict, detail: dict, label_y: int, offset: 
         _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)
 
 
-def _draw_stats(matrix, summary: dict, stat_details: List[dict], block_y: int, fonts: PageFonts,
+def _draw_stats(matrix, summary: dict, stat_details: list[dict], block_y: int, fonts: PageFonts,
                 elapsed: float, detail_interval: float) -> None:
     """Stats phase: the discipline title stays; everything below it (duration/workout-title/instructor)
     is replaced by one rotating stat at a time, using the space freed up below the title."""

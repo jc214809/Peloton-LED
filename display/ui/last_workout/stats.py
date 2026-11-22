@@ -1,5 +1,4 @@
 """The workout page's stat figures: number formats, the strength tracker and each discipline's stats."""
-from typing import List, Optional
 
 from driver import graphics
 from .colors import _WHITE
@@ -23,7 +22,7 @@ def _fmt_strive(strive) -> str:
     return f"{strive:.1f}"
 
 
-def _fmt_output(output) -> Optional[str]:
+def _fmt_output(output) -> str | None:
     """Total Output in kJ, or None when there is none: outdoor runs and walks
     carry a total_work of 0, which isn't an output to show."""
     return f"{_whole(output)} kj" if isinstance(output, (int, float)) and output > 0 else None
@@ -53,7 +52,7 @@ def _fmt_split(split_sec) -> str:
 TRACKER_TIER_COLORS = {'gold': (255, 200, 0), 'silver': (200, 205, 215), 'bronze': (205, 127, 50)}
 
 
-def _count(value) -> Optional[int]:
+def _count(value) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
 
 
@@ -80,7 +79,7 @@ def strength_tracker(summary: dict) -> dict:
             'tier': tracker.get('tier') if tracker.get('tier') in TRACKER_TIER_COLORS else None, 'top': top}
 
 
-def _tracker_details(summary: dict) -> List[dict]:
+def _tracker_details(summary: dict) -> list[dict]:
     """A tracked strength class's reps, volume (weight x reps) and share of movements on target."""
     tracker = strength_tracker(summary)
     details = []
@@ -110,13 +109,13 @@ def top_lift_text(top: dict, unit: str) -> str:
     return weight or f"{top['reps']} REPS"
 
 
-def _add(details: List[dict], label, value) -> None:
+def _add(details: list[dict], label, value) -> None:
     """Append a detail unless it has no value."""
     if value is not None:
         details.append({'label': label, 'value': value})
 
 
-def _cycling_details(summary: dict, details: List[dict]) -> None:
+def _cycling_details(summary: dict, details: list[dict]) -> None:
     output = summary.get("total_output_kj")
     strive = summary.get("strive_score")
     spd = summary.get("avg_speed")
@@ -133,7 +132,7 @@ def _cycling_details(summary: dict, details: List[dict]) -> None:
     _add(details, "distance", _fmt_distance(dist_val, dist_unit) if isinstance(dist_val, (int, float)) else None)
 
 
-def _tread_details(summary: dict, details: List[dict]) -> None:
+def _tread_details(summary: dict, details: list[dict]) -> None:
     dist_val = summary.get("distance")
     dist_unit = summary.get("distance_unit") or ""
     pace_val = summary.get("avg_pace")
@@ -151,7 +150,7 @@ def _tread_details(summary: dict, details: List[dict]) -> None:
         _add(details, "avg incline", f"{incline:.1f}%" if isinstance(incline, (int, float)) else None)
 
 
-def _rowing_details(summary: dict, details: List[dict]) -> None:
+def _rowing_details(summary: dict, details: list[dict]) -> None:
     dist_val = summary.get("distance")
     dist_unit = summary.get("distance_unit") or ""
     spm_val = summary.get("avg_stroke_rate")
@@ -164,7 +163,7 @@ def _rowing_details(summary: dict, details: List[dict]) -> None:
     _add(details, "split per 500m", _fmt_split(split_val) if split_val else None)
 
 
-def _other_details(summary: dict, details: List[dict]) -> None:
+def _other_details(summary: dict, details: list[dict]) -> None:
     strive = summary.get("strive_score")
     hr_max = summary.get("hr_max")
     distance = summary.get("distance")
@@ -177,7 +176,7 @@ def _other_details(summary: dict, details: List[dict]) -> None:
     _add(details, "avg output", f"{_whole(avg_output)}W" if isinstance(avg_output, (int, float)) else None)
 
 
-def _stat_details(summary: dict) -> List[dict]:
+def _stat_details(summary: dict) -> list[dict]:
     """Discipline-specific stat values with spelled-out labels, one detail per
     stat, for the rotating single-item display (e.g. "output", not "kj")."""
     disc = (summary.get("discipline") or "").strip().lower()

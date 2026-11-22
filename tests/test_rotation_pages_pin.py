@@ -8,7 +8,7 @@ import copy
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,7 +21,7 @@ from tests import pin_fixture
 from tests.pin_fixture import Table
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'rotation_pages_pin.json'
-NOW = datetime(2026, 11, 18, 15, 0, tzinfo=timezone.utc)  # a Wednesday
+NOW = datetime(2026, 11, 18, 15, 0, tzinfo=UTC)  # a Wednesday
 ALL = ['latest_workouts', 'username', 'streaks', 'versus', 'total_workouts', 'next_milestone', 'lifetime',
        'journey', 'heatmap', 'milestones', 'goals', 'challenges', 'next_class', 'club']
 RIVALS = [{'name': 'Joel', 'workouts': 3, 'minutes': 95, 'output_kj': 612},

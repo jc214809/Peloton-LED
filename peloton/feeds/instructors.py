@@ -7,7 +7,7 @@ A class taught by several instructors ("Jess & Selena") counts once for each
 of them; a member whose name hasn't been seen on a solo class yet is counted
 by ID and shows up once their name is known.
 """
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..selection import is_completed
@@ -68,9 +68,9 @@ def _members(row):
 
 def _date(stamp, zone_name):
     try:
-        zone = ZoneInfo(zone_name) if zone_name else timezone.utc
+        zone = ZoneInfo(zone_name) if zone_name else UTC
     except (ZoneInfoNotFoundError, ValueError, OSError):
-        zone = timezone.utc
+        zone = UTC
     return datetime.fromtimestamp(stamp, zone).date().isoformat()
 
 

@@ -4,7 +4,8 @@
   python scripts/render_next_class.py
 
 writes docs/screenshots/rotation/next_class.png: the next-class page for each case in PAGES, on a 64x64 panel
-(top row) and a 64x32 panel (bottom row), labelled like the README's other screenshots (the tag at full brightness). `--gifs FOLDER` (or `write_gifs(folder)`)
+(top row) and a 64x32 panel (bottom row), labelled like the README's other screenshots (the tag at full brightness).
+`--gifs FOLDER` (or `write_gifs(folder)`)
 writes next-class-pulse-64.gif and -32.gif instead: one cycle of the tag's pulse for a LIVE class 5 minutes out.
 """
 import argparse

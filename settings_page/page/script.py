@@ -69,7 +69,9 @@ screens.addEventListener('pointermove', e => {
   const others = onRows().filter(r => r !== dragged);
   const next = others.find(r => { const box = r.getBoundingClientRect(); return e.clientY < box.top + box.height / 2; });
   if (next) { if (dragged.nextElementSibling !== next) { next.before(dragged); changed(); } }
-  else if (others.length && others[others.length - 1].nextElementSibling !== dragged) { others[others.length - 1].after(dragged); changed(); }
+  else if (others.length && others[others.length - 1].nextElementSibling !== dragged) {
+    others[others.length - 1].after(dragged); changed();
+  }
 });
 const drop = () => {
   if (!dragged) return;

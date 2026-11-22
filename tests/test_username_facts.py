@@ -1,6 +1,6 @@
 """The name page's varied highlights: time frames over the workout log (peloton.workouts.activity), the facts
 each frame has enough data for, and which frame and fact each pass shows."""
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from unittest.mock import Mock
 from zoneinfo import ZoneInfo
 
@@ -21,7 +21,7 @@ from scripts.render_demo import ImageMatrix
 
 ZONE = 'America/New_York'
 # Sunday 2026-11-08, 12:00 New York time (the clocks went back on 1 November).
-NOW = datetime(2026, 11, 8, 17, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 8, 17, 0, tzinfo=UTC)
 NAMES = {'jess': 'Jess Sims', 'andy': 'Andy Speer', 'adrian': 'Adrian Williams', 'cody': 'Cody Rigsby',
          'robin': 'Robin Arzon'}
 
@@ -36,7 +36,7 @@ def _w(identity, when, discipline='strength', instructor='jess', minutes=20, sta
 
 def _local(year, month, day, hour=12):
     """A New York wall-clock time, as the UTC instant the log stores."""
-    return datetime(year, month, day, hour, tzinfo=ZoneInfo(ZONE)).astimezone(timezone.utc)
+    return datetime(year, month, day, hour, tzinfo=ZoneInfo(ZONE)).astimezone(UTC)
 
 
 # time frames
@@ -60,8 +60,8 @@ def test_frames_stay_on_local_midnight_across_the_clock_change():
     bounds = frame_bounds(ZONE, NOW)
     assert bounds['30d'][0].utcoffset() == timedelta(hours=-4)
     assert bounds['week'][0].utcoffset() == timedelta(hours=-5)
-    assert bounds['30d'][0].astimezone(timezone.utc).hour == 4
-    assert bounds['week'][0].astimezone(timezone.utc).hour == 5
+    assert bounds['30d'][0].astimezone(UTC).hour == 4
+    assert bounds['week'][0].astimezone(UTC).hour == 5
 
 
 def test_a_late_evening_workout_counts_on_the_local_day_not_the_utc_one():
@@ -75,7 +75,7 @@ def test_a_late_evening_workout_counts_on_the_local_day_not_the_utc_one():
 
 
 def test_the_new_year_has_a_new_year_frame_and_last_year_is_the_whole_old_year():
-    new_year = datetime(2027, 1, 1, 8, 0, tzinfo=timezone.utc)   # 03:00 on 1 January in New York
+    new_year = datetime(2027, 1, 1, 8, 0, tzinfo=UTC)   # 03:00 on 1 January in New York
     workouts = [_w('today', new_year - timedelta(hours=1)),
                 _w('new-years-eve', _local(2026, 12, 31, 20)),
                 _w('spring', _local(2026, 4, 1)),
@@ -207,7 +207,7 @@ def test_a_log_row_with_no_instructor_id_is_not_a_class_for_the_facts():
 
 def test_the_first_of_a_month_still_has_the_last_30_days():
     # The reason for rolling windows: on 1 November, October's workouts still count.
-    first_of_month = datetime(2026, 11, 1, 17, 0, tzinfo=timezone.utc)
+    first_of_month = datetime(2026, 11, 1, 17, 0, tzinfo=UTC)
     workouts = [_w(str(day), first_of_month - timedelta(days=day)) for day in range(1, 20)]
     assert frame_stats(workouts, ZONE, first_of_month)['30d']['workouts'] == 19
 
@@ -338,7 +338,7 @@ def test_the_year_is_compared_with_last_year_up_to_the_same_date_and_time():
 
 
 def test_a_leap_day_compares_with_the_28th():
-    leap = datetime(2028, 2, 29, 17, 0, tzinfo=timezone.utc)
+    leap = datetime(2028, 2, 29, 17, 0, tzinfo=UTC)
     workouts = [_w('a', _local(2027, 2, 28, 9)), _w('b', _local(2027, 3, 1))]
     assert frame_stats(workouts, ZONE, leap)['year']['before']['workouts'] == 1
 
@@ -979,7 +979,7 @@ def test_event_stats_are_dates_in_the_display_timezone():
 def test_event_stats_the_day_is_the_display_timezones():
     from peloton.workouts.activity import event_stats
     # 03:30 UTC on 9 November is still the 8th in New York: today's date, and the anniversary.
-    late = datetime(2026, 11, 9, 3, 30, tzinfo=timezone.utc)
+    late = datetime(2026, 11, 9, 3, 30, tzinfo=UTC)
     events = event_stats([_w('x', _local(2025, 11, 8, 22))], ZONE, late, MEMBER_SINCE)
     assert events['today'] == '2026-11-08' and events['anniversary'] == 6
     assert [row['years_ago'] for row in events['on_this_day']] == [1]

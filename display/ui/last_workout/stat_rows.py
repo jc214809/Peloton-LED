@@ -1,5 +1,4 @@
 """The 'value label' stat, the heart-rate and calories bar, and the 64x32 centred lines."""
-from typing import List
 
 from driver import graphics
 from .colors import _RED, _WHITE
@@ -49,7 +48,7 @@ def _draw_hr_calories(matrix, summary: dict, stat_font, bottom_y: int) -> None:
                    max(0, right - mid), right_align=True)
 
 
-def _draw_short_lines(matrix, font, lines: List[str], top_y: int, summary: dict,
+def _draw_short_lines(matrix, font, lines: list[str], top_y: int, summary: dict,
                       clear_icons: bool = True) -> None:
     """Up to two centered 4x6 lines, 7px apart, for the 32-row layout.
 

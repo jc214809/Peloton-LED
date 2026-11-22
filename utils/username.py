@@ -2,11 +2,10 @@
 
 This isolates the logic from peloton_led.py so it can be tested and reused.
 """
-from typing import Dict, Optional
 import logging
 
 
-def resolve_display_username(cmd_username: Optional[str], me: Optional[Dict[str, object]], display_config: Dict[str, object]) -> str:
+def resolve_display_username(cmd_username: str | None, me: dict[str, object] | None, display_config: dict[str, object]) -> str:
     """Return a display username chosen from, in order:
 
     1. The explicitly-provided command line username (cmd_username)

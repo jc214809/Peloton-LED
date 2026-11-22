@@ -11,7 +11,7 @@ import threading
 import time
 from collections import OrderedDict
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
@@ -319,7 +319,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         identity = workout.get('id')
         cached = self._cached_performance(identity)
         timestamp = workout_timestamp(workout, tz)
-        settling = timestamp is None or (datetime.now(timezone.utc) - timestamp).total_seconds() < 3600
+        settling = timestamp is None or (datetime.now(UTC) - timestamp).total_seconds() < 3600
         signature = (workout.get('total_work'), workout.get('status'),
                      workout.get('end_time'), workout.get('updated_at'))
         if identity and (cached is None or cached[0] != signature or settling or cached[1] is None):
@@ -376,7 +376,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
             delay = max(delay, float(retry))
         except ValueError:
             try:
-                delay = max(delay, (parsedate_to_datetime(retry) - datetime.now(timezone.utc)).total_seconds())
+                delay = max(delay, (parsedate_to_datetime(retry) - datetime.now(UTC)).total_seconds())
             except (ValueError, TypeError, OverflowError):
                 pass
         return delay

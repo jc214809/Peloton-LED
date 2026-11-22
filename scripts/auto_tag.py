@@ -6,8 +6,9 @@ CI passed.
     python3 scripts/auto_tag.py release SHA --notes FILE    # develop-beta merged into main
 
 beta tags vX.Y.(N+1)-beta: X.Y from the newest release, N the highest Beta for X.Y so far (after
-v0.2.0 the first is v0.2.1-beta; with no release yet, v0.0.N-beta). release tags vX.(Y+1).0 (v0.1.0 the first time) and writes its release notes to FILE: the
-pull requests since the last release with their "## Release notes" (self_update/release_notes.py). A commit that already has its tag keeps it (a rerun), and
+v0.2.0 the first is v0.2.1-beta; with no release yet, v0.0.N-beta). release tags vX.(Y+1).0 (v0.1.0 the first time)
+and writes its release notes to FILE: the pull requests since the last release with their "## Release notes"
+(self_update/release_notes.py). A commit that already has its tag keeps it (a rerun), and
 a tag someone else pushed first (two quick merges) is retried with the next number. Prints the tag.
 
 Runs in CI without the app's requirements: the standard library and self_update.board only.

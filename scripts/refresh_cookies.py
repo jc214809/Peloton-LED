@@ -32,7 +32,7 @@ import socket
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -199,7 +199,7 @@ def renew_with_refresh_token(token_path: Path) -> str:
     if isinstance(new_refresh, str) and new_refresh:
         chain['renewals'] = (chain['renewals'] or 0) + 1
         if chain['chain_started_at'] is None:
-            chain['chain_started_at'] = datetime.now(timezone.utc).isoformat()
+            chain['chain_started_at'] = datetime.now(UTC).isoformat()
         save_refresh_token(refresh_path, new_refresh, client_id, chain)
     access_token = data.get('access_token')
     if not isinstance(access_token, str) or not access_token:
@@ -288,7 +288,7 @@ def ensure_token(token_path: Path, config_path: Path, headless: bool = True,
 def _write_renewal_failed(marker: Path, reason: str) -> None:
     try:
         marker.write_text(json.dumps({'reason': reason,
-            'at': datetime.now(timezone.utc).isoformat()}), encoding='utf-8')
+            'at': datetime.now(UTC).isoformat()}), encoding='utf-8')
     except OSError as exc:
         print(f"Warning: could not write {marker}: {exc}", file=sys.stderr)
 
@@ -477,7 +477,7 @@ def _print_status(parsed: argparse.Namespace, token_path: Path) -> None:
         if not status['ok']:
             print(f"{name}: {status['path']} — {status['reason']}")
             continue
-        expires_at = datetime.fromtimestamp(status['expires_at'], tz=timezone.utc)
+        expires_at = datetime.fromtimestamp(status['expires_at'], tz=UTC)
         state = 'EXPIRED' if status['expired'] else 'valid'
         refresh_path = refresh_token_path(path)
         renewal = (f'refresh token saved ({describe_chain(load_refresh_chain(refresh_path))})'

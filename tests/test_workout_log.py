@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 import requests
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from zoneinfo import ZoneInfo
 
 from peloton.feeds.goals import weekly_progress
@@ -413,7 +413,7 @@ def test_this_week_is_complete_before_the_backfill_finishes(tmp_path, monkeypatc
     class FrozenDatetime(datetime):
         @classmethod
         def now(cls, tz=None):
-            return frozen.astimezone(tz or timezone.utc)
+            return frozen.astimezone(tz or UTC)
 
     monkeypatch.setattr(goals, 'datetime', FrozenDatetime)
     span = frozen - monday

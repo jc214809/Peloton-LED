@@ -1,5 +1,5 @@
 """PR B: the streak reminder and the activity heatmap, built from the workout log."""
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from unittest.mock import Mock
 
 import pytest
@@ -15,7 +15,7 @@ from scripts.render_demo import ImageMatrix
 
 ZONE = 'America/New_York'
 # Saturday 2026-10-31, 12:00 New York time.
-SATURDAY = datetime(2026, 10, 31, 16, 0, tzinfo=timezone.utc)
+SATURDAY = datetime(2026, 10, 31, 16, 0, tzinfo=UTC)
 
 
 def _w(identity, when, status='COMPLETE', minutes=20, synced=False):
@@ -38,8 +38,8 @@ def test_streak_week_counts_only_streak_eligible_completed_workouts_since_monday
 def test_daily_minutes_covers_twelve_monday_aligned_weeks_through_today():
     workouts = [_w('a', SATURDAY - timedelta(hours=3), minutes=30), _w('b', SATURDAY - timedelta(hours=2), minutes=15),
                 _w('c', SATURDAY - timedelta(days=1), minutes=45),
-                _w('first-day', datetime(2026, 8, 10, 16, tzinfo=timezone.utc)),      # Monday, 12 weeks back
-                _w('too-old', datetime(2026, 8, 9, 16, tzinfo=timezone.utc)),
+                _w('first-day', datetime(2026, 8, 10, 16, tzinfo=UTC)),      # Monday, 12 weeks back
+                _w('too-old', datetime(2026, 8, 9, 16, tzinfo=UTC)),
                 _w('unfinished', SATURDAY, status='IN_PROGRESS'),
                 {'id': 'undated', 'status': 'COMPLETE', 'ride': {'duration': 600}}]
     assert daily_minutes(workouts, ZONE, now=SATURDAY) == {

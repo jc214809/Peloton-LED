@@ -1,5 +1,5 @@
 """Streak screen (weekly and daily) and the streak data behind it."""
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from unittest.mock import Mock
 
 import pytest
@@ -146,7 +146,7 @@ def test_rotation_alternates_weekly_and_daily_across_passes(monkeypatch):
         ('streak', 'daily', '2026-10-28')]
     # Peloton's own start date wins over counting back.
     snapshot['streaks']['start_date_of_current_daily'] = int(
-        datetime(2026, 10, 27, 15, tzinfo=timezone.utc).timestamp())
+        datetime(2026, 10, 27, 15, tzinfo=UTC).timestamp())
     assert build_rotation_pages(snapshot, Mock(), {**display, 'timezone': 'America/New_York'},
                                 'R', 64)[0][1]['daily_start'] == '2026-10-27'
 
@@ -162,11 +162,11 @@ def test_daily_streak_start_counts_back_from_today_or_yesterday():
 def test_daily_streak_start_prefers_pelotons_date_on_the_display_calendar():
     today = date(2026, 11, 2)
     # 2024-12-01 03:00 UTC is still Nov 30 in New York.
-    stamp = int(datetime(2024, 12, 1, 3, tzinfo=timezone.utc).timestamp())
+    stamp = int(datetime(2024, 12, 1, 3, tzinfo=UTC).timestamp())
     assert daily_streak_start(703, today, {}, stamp, 'America/New_York') == date(2024, 11, 30)
     assert daily_streak_start(703, today, {}, stamp, 'UTC') == date(2024, 12, 1)
     # A start after today, or one that isn't a timestamp, falls back to counting back.
-    tomorrow = int(datetime(2026, 11, 3, 12, tzinfo=timezone.utc).timestamp())
+    tomorrow = int(datetime(2026, 11, 3, 12, tzinfo=UTC).timestamp())
     for bad in (tomorrow, 'soon', True, None):
         assert daily_streak_start(3, today, {}, bad, 'UTC') == date(2026, 10, 31)
 

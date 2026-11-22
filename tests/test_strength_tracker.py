@@ -1,6 +1,6 @@
 """Strength pages: what Peloton's movement tracker counted (reps, volume, targets, the top lift)."""
 import copy
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from unittest.mock import Mock
 
 import pytest
@@ -190,7 +190,7 @@ def test_a_long_or_short_movement_name_fits(height):
 
 def strength_setup(tmp_path, config=None, discipline='strength'):
     dashboard, client, token = setup_dashboard(tmp_path, config)
-    start = datetime.now(timezone.utc) - timedelta(days=2)
+    start = datetime.now(UTC) - timedelta(days=2)
     client.history = [{'id': 'w1', 'status': 'COMPLETE', 'start_time': start.timestamp(),
                        'fitness_discipline': discipline}]
     client.get_perf_graph.return_value = {'duration': 1200}

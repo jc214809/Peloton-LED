@@ -5,7 +5,8 @@ Updates card), and a lock so two updates never run at once.
 state.json: "phase" (below), "from" (the rollback point: "sha", "branch" (None when detached),
 "version", "channel", "requirements_changed", "config_saved", "display_running"), "to" (the
 update's "sha", "ref", "channel"), "reason" (why the last one rolled back) and "good" (the last
-KEEP_GOOD commits that passed their health check, newest first). A phase in UNFINISHED means an update stopped midway: a power cut, or a crash.
+KEEP_GOOD commits that passed their health check, newest first).
+A phase in UNFINISHED means an update stopped midway: a power cut, or a crash.
 """
 import fcntl
 import json

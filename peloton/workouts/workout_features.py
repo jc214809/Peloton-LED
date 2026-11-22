@@ -12,7 +12,7 @@ import collections
 import logging
 import math
 import statistics
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from zoneinfo import ZoneInfo
 
 log = logging.getLogger(__name__)
@@ -271,7 +271,7 @@ def _local_date(detail):
         local = datetime.fromtimestamp(detail['start_time'], ZoneInfo(tz))
     except Exception:  # unknown zone name: fall back rather than lose the row
         log.warning('workout %s: unknown timezone %r, using UTC', detail['id'], tz)
-        local = datetime.fromtimestamp(detail['start_time'], timezone.utc)
+        local = datetime.fromtimestamp(detail['start_time'], UTC)
     return local.strftime('%Y-%m-%d')
 
 
