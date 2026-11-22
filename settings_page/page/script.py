@@ -1,6 +1,17 @@
-"""The settings page's script: dragging rotation rows, the unsaved-changes state, the Updates card's checks."""
+"""The settings page's script: dragging rotation rows, the unsaved-changes state, the Updates card's checks, and the
+helper (form_fetch.js) that sends every POST form with fetch()."""
 
-SCRIPT = """
+from pathlib import Path
+
+FORM_FETCH = Path(__file__).with_name('form_fetch.js').read_text(encoding='utf-8')
+
+# The sign-in page has no other script. In a block, as on every page: see form_fetch.js.
+FORM_SCRIPT = '{\n' + FORM_FETCH + '}\n'
+
+SCRIPT = (
+    '{\n'
+    + FORM_FETCH
+    + """
 const form = document.getElementById('settings');
 const status = document.getElementById('save-status');
 const changed = () => {
@@ -98,7 +109,9 @@ document.addEventListener('click', e => {
   panel.querySelector('summary').focus();
 });
 // A renewal that's running: follow it, swapping in the status block until it's done.
+// A page the board answers with replaces this one (form_fetch.js): its old polls stop, and the new page starts its own.
 const followRenewal = () => setTimeout(async () => {
+  if (!form.isConnected) return;
   try {
     const reply = await fetch('/renew/status', {headers: {Accept: 'application/json'}});
     const now = await reply.json();
@@ -130,6 +143,7 @@ if (power) {
 const updateRunning = document.getElementById('update-running');
 if (updateRunning) {
   const follow = async () => {
+    if (!form.isConnected) return;
     try {
       const reply = await fetch('/update/status', {headers: {Accept: 'application/json'}});
       const now = await reply.json();
@@ -165,4 +179,6 @@ const spy = new IntersectionObserver(entries => entries.forEach(e => {
   if (e.isIntersecting) links.forEach(a => a.classList.toggle('on', a.hash === '#' + e.target.id));
 }), {rootMargin: '-80px 0px -65% 0px'});
 document.querySelectorAll('main .card[id]').forEach(s => spy.observe(s));
+}
 """
+)
