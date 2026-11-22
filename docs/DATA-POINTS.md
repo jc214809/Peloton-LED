@@ -40,8 +40,8 @@ score or a measurement.
 | Avg pace | — | ✅ shown | — | — |
 | Avg cadence | ✅ shown | — | — | — |
 | Avg resistance | ✅ shown | — | — | — |
-| Avg incline | — | ✅ shown (7 of 11: treadmill only) | — | — |
-| Elevation gain | — | ✅ shown (10 of 11) | — | — |
+| Avg incline | — | ✅ shown (7 of 11: treadmill only; not when 0.0%) | — | — |
+| Elevation gain | — | ✅ shown (10 of 11; not when 0) | — | — |
 | Split per 500 m | — | — | ✅ shown | — |
 | Stroke rate | — | — | ✅ shown | — |
 | Stroke count | — | — | ❌ not shown | — |
@@ -53,6 +53,8 @@ score or a measurement.
 | Muscle groups worked | ❌ not shown (11 of 13) | ❌ not shown (6 of 11) | ❌ not shown | ✅ shown on Strength only (47 of 54), when the class wasn't tracked |
 | Movement tracker: total reps, total volume, targets hit, top lift | — | — | — | ✅ shown on tracked Strength classes (workout detail, not the performance graph) |
 | Movement tracker: target streak, number of movements, form tips | — | — | — | ❌ not shown |
+| Running form: efficiency score, steps a minute, stride length | — | ✅ shown on Peloton Tread runs (score over the run on 64x64; score on a 0-100 meter on 64x32) | — | — |
+| Running form: bounce, vertical ratio, form tips | — | ❌ not shown | — | — |
 | Per-mile splits | ❌ not shown (11 of 13) | ❌ not shown (10 of 11) | — | — |
 | GPS route | — | ❌ not shown (3 of 11: outdoor only) | — | — |
 
@@ -108,7 +110,8 @@ max heart rate, which is why that one has its own row.
 
 What one workout's page cycles through, for a workout with full data (heart-rate
 monitor on; Tread for treadmill). Every page also keeps average heart rate and
-calories on its bottom row.
+calories on its bottom row. A flat workout (0 ft elevation gain, 0.0% incline) drops those
+screens, two fewer than the counts below.
 
 | Workout type | Stats | Screens on 64x64 | Screens on 64x32 | Seconds on 64x64 |
 |---|---|---|---|---|
@@ -121,7 +124,8 @@ calories on its bottom row.
 
 **Screens** = the intro (class length, title and, on 64x64, instructor) + one
 per stat + the output or heart-rate graph + the heart-rate zones bar, and on
-Strength the top lift (tracked) or else the top three muscle groups. 64x32 has no room for the instructor in the intro, so it
+Strength the top lift (tracked) or else the top three muscle groups, and on a Peloton Tread
+run its running form (one more screen, 5 s; walks and other treadmills have none). 64x32 has no room for the instructor in the intro, so it
 gets its own screen. A missing stat, graph, zones bar or muscle list drops its
 screen.
 
@@ -135,7 +139,7 @@ once per workout, and the rider's row store; with no insight (too few peers, not
 fetch) the frames are simply missing.
 
 **Seconds** use the default 4 seconds a screen (`last_workout_detail_interval`);
-the graph, zones, muscle and insight screens hold 1 second longer (an insight is 2 screens, 10 s, on
+the graph, zones, running-form, muscle and insight screens hold 1 second longer (an insight is 2 screens, 10 s, on
 64x64 and 2-3 screens, 10-15 s, on 64x32). 64x32 adds 4 seconds for the
 instructor screen.
 

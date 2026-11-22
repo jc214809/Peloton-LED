@@ -85,6 +85,28 @@ def strength_tracker(summary: dict) -> dict:
     }
 
 
+def _score(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 100
+
+
+def running_form(summary: dict) -> dict:
+    """The Tread's running-form figures (peloton.stats.summaries.running_form), checked, since the cache
+    can hold anything: {'score', 'spm', 'stride_m', 'series'}, or {} without a 0-100 score. spm and
+    stride_m are None when missing or malformed; series is [] unless it has two scored points."""
+    form = summary.get('running_form')
+    if not isinstance(form, dict) or not _score(form.get('score')):
+        return {}
+    spm, stride = form.get('spm'), form.get('stride_m')
+    series = form.get('series')
+    series = [round(v) if _score(v) else None for v in series] if isinstance(series, list) else []
+    return {
+        'score': round(form['score']),
+        'spm': round(spm) if isinstance(spm, (int, float)) and not isinstance(spm, bool) and 0 < spm < 1000 else None,
+        'stride_m': stride if isinstance(stride, (int, float)) and not isinstance(stride, bool) and 0 < stride < 10 else None,
+        'series': series if sum(v is not None for v in series) >= 2 else [],
+    }
+
+
 def _tracker_details(summary: dict) -> list[dict]:
     """A tracked strength class's reps, volume (weight x reps) and share of movements on target."""
     tracker = strength_tracker(summary)
@@ -154,9 +176,11 @@ def _tread_details(summary: dict, details: list[dict]) -> None:
     strive = summary.get('strive_score')
     _add(details, 'strive score', _fmt_strive(strive) if isinstance(strive, (int, float)) else None)
     _add(details, 'total output', _fmt_output(summary.get('total_output_kj')))
-    if elevation is not None or incline is not None:
-        _add(details, 'elevation gain', f'{elevation:g} {elevation_unit}' if isinstance(elevation, (int, float)) else None)
-        _add(details, 'avg incline', f'{incline:.1f}%' if isinstance(incline, (int, float)) else None)
+    # A flat workout's 0 ft and 0.0% are a screen each with nothing to say, so they go (Joel, 2026-11-22).
+    if isinstance(elevation, (int, float)) and elevation > 0:
+        _add(details, 'elevation gain', f'{elevation:g} {elevation_unit}')
+    if isinstance(incline, (int, float)) and f'{incline:.1f}' != '0.0':
+        _add(details, 'avg incline', f'{incline:.1f}%')
 
 
 def _rowing_details(summary: dict, details: list[dict]) -> None:

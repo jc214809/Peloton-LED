@@ -3,14 +3,14 @@
 from display.display import get_text_width
 from driver import graphics
 
-from .charts import _draw_graph, _draw_muscles, _draw_top_lift, _draw_zones
+from .charts import _draw_form_graph, _draw_form_meter, _draw_graph, _draw_muscles, _draw_top_lift, _draw_zones
 from .colors import _BLUE, _WHITE, _disc_color
 from .fonts import PageFonts
 from .insight_frames import draw_insight_slide
 from .rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, detail_at, rotating_details
 from .sprites import _TROPHY_H, _TROPHY_W, _draw_trophy
 from .stat_rows import _draw_hr_calories
-from .stats import _stat_details, _value_color
+from .stats import _stat_details, _value_color, running_form
 from .text import _draw_text, _text_width, _truncate, _wrap_two_lines, title_without_length
 
 _BOTTOM_Y = 61
@@ -132,6 +132,17 @@ def _draw_stat_value(matrix, summary: dict, detail: dict, label_y: int, offset: 
         _draw_trophy(matrix, min(star_x, w - _TROPHY_W), value_y + offset - _TROPHY_H)
 
 
+def _draw_running_form(matrix, summary: dict, block_y: int, fonts: PageFonts) -> None:
+    """The efficiency graph between the discipline and the heart-rate row, or the 64x32 meter when the
+    workout has no series to graph."""
+    form = running_form(summary)
+    label_y = block_y + 12
+    if form['series']:
+        _draw_form_graph(matrix, form, fonts.stat, label_y, label_y + 3, _LAST_ROW_Y - 9)
+    else:
+        _draw_form_meter(matrix, form, fonts.stat, fonts.title, label_y, label_y + 14)
+
+
 def _draw_stats(
     matrix, summary: dict, stat_details: list[dict], block_y: int, fonts: PageFonts, elapsed: float, detail_interval: float
 ) -> None:
@@ -152,6 +163,8 @@ def _draw_stats(
         _draw_zones(
             matrix, summary['hr_zone_seconds'], fonts.stat, fonts.titles or fonts.text, label_y, label_y + 5, label_y + 13, label_y + 24
         )
+    elif kind == 'running_form':
+        _draw_running_form(matrix, summary, block_y, fonts)
     elif kind == 'muscles':
         # Starts higher than the other slides: three rows need the room.
         _draw_muscles(matrix, summary['muscles'], fonts.text, block_y + 8)

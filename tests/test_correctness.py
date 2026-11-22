@@ -602,7 +602,8 @@ def _stat_values(summary):
         ),
         # A whole Strive Score still shows its decimal, like the app.
         ({'discipline': 'Strength', 'strive_score': 11.0, 'hr_max': 142.0}, {'strive score': '11.0', 'max heart rate': '142'}),
-        # Real tread walk: Peloton sends incline to one decimal, 0.0 included.
+        # Real tread walk: Peloton sends incline to one decimal, 0.0 included; a flat walk's 0 ft and
+        # 0.0% have no screens.
         (
             {
                 'discipline': 'Walking',
@@ -612,8 +613,16 @@ def _stat_values(summary):
                 'elevation_unit': 'ft',
                 'avg_incline': 0.0,
             },
-            {'distance': '1.04 mi', 'elevation gain': '0 ft', 'avg incline': '0.0%'},
+            {'distance': '1.04 mi'},
         ),
+        # Each goes on its own: Joel's Tread cool-down (35 ft at 1.7%), then a climb with no incline
+        # and an incline that rounds to 0.0%.
+        (
+            {'discipline': 'Walking', 'elevation': 35, 'elevation_unit': 'ft', 'avg_incline': 1.7},
+            {'elevation gain': '35 ft', 'avg incline': '1.7%'},
+        ),
+        ({'discipline': 'Running', 'elevation': 12.0, 'elevation_unit': 'ft', 'avg_incline': 0.04}, {'elevation gain': '12 ft'}),
+        ({'discipline': 'Running', 'elevation': 0, 'elevation_unit': 'ft', 'avg_incline': 0.5}, {'avg incline': '0.5%'}),
         # Real row: Peloton sends metres with centimetres (1906.47); the board shows whole metres with a comma.
         (
             {

@@ -158,3 +158,65 @@ def _draw_top_lift(matrix, summary: dict, label_font, name_font, small_name_font
     else:
         value_y = matrix.height - 2 if len(lines) > 1 else label_y + 17
     graphics.DrawText(matrix, font, max((w - get_text_width(font, value)) // 2, 2), value_y, graphics.Color(*_INSIGHT_GOLD), value)
+
+
+# Running form: the score's bars and meter in the Running green, on a dim track where the rider walked.
+_FORM_GREEN = (20, 200, 80)
+_FORM_TRACK = (35, 45, 60)
+FORM_LABEL = 'RUN EFFICIENCY'
+FORM_GRAPH_LABEL = 'EFFICIENCY'
+
+
+def _fill(matrix, x0: int, y0: int, x1: int, y1: int, color) -> None:
+    for x in range(x0, x1 + 1):
+        for y in range(y0, y1 + 1):
+            matrix.SetPixel(x, y, *color)
+
+
+def _draw_form_footer(matrix, form: dict, font, baseline: int) -> None:
+    """Steps a minute on the left, stride length on the right, each only when Peloton sent it."""
+    w = matrix.width
+    if form['spm']:
+        _draw_text(matrix, font, 2, baseline, _WHITE, f'{form["spm"]} SPM')
+    if form['stride_m']:
+        stride = f'{form["stride_m"]:.1f} M'
+        _draw_text(matrix, font, w - 2 - _text_width(font, stride), baseline, _WHITE, stride)
+
+
+def _draw_form_graph(matrix, form: dict, font, label_y: int, top: int, bottom: int) -> None:
+    """64 rows: the efficiency score over the workout, one column per moment, scaled from just under its
+    lowest point to show the shape; the walking stretches stay a dim baseline. Score top right, steps a
+    minute and stride under the bars."""
+    w = matrix.width
+    _draw_text(matrix, font, 2, label_y, graphics.Color(*_LABEL_GREY), FORM_GRAPH_LABEL)
+    score = str(form['score'])
+    _draw_text(matrix, font, w - 2 - _text_width(font, score), label_y, _WHITE, score)
+    series = form['series']
+    scored = [v for v in series if v is not None]
+    floor, ceiling = max(0, min(scored) - 10), max(scored)
+    height = bottom - top + 1
+    columns = w - 4
+    for col in range(columns):
+        value = series[col * len(series) // columns]
+        x = 2 + col
+        if value is None:
+            matrix.SetPixel(x, bottom, *_FORM_TRACK)
+            continue
+        bar = max(1, round((value - floor) / (ceiling - floor) * (height - 1))) if ceiling > floor else height
+        _fill(matrix, x, bottom - bar + 1, x, bottom, _FORM_GREEN)
+    _draw_form_footer(matrix, form, font, bottom + 7)
+
+
+def _draw_form_meter(matrix, form: dict, label_font, value_font, label_y: int, value_y: int) -> None:
+    """The score in big type with a 0-100 meter beside it, steps a minute and stride under them: the 64x32
+    slide (the whole panel under the discipline), and 64 rows when there's no series to graph."""
+    w = matrix.width
+    _centred(matrix, label_font, label_y, _LABEL_GREY, FORM_LABEL)
+    graphics.DrawText(matrix, value_font, 2, value_y, _WHITE, str(form['score']))
+    x0 = 2 + get_text_width(value_font, '100') + 3
+    # Four rows, level with the middle of the digits.
+    top = value_y - (getattr(value_font, 'baseline', 7) + 3) // 2
+    _fill(matrix, x0, top, w - 3, top + 3, _FORM_TRACK)
+    if form['score']:
+        _fill(matrix, x0, top, x0 + round((w - 3 - x0) * form['score'] / 100), top + 3, _FORM_GREEN)
+    _draw_form_footer(matrix, form, label_font, value_y + 7)

@@ -331,6 +331,15 @@ The bars were set on 2026-11-15 from the past year (cadence 12, resistance 20: t
 ### 31. Redraw the 64x32 contact sheets
 `docs/screenshots/64x32/` (`joel-rotation.png`, `jen-rotation.png`, `demo-rotation.png`; `docs/64x32-NOTES.md` points readers to them) was last drawn on 2026-10-18, before the challenges, next-class and Club Peloton pages and the workout insights, so it no longer shows the whole 32-row rotation. Redraw all three with `scripts/render_rotation.py --height 32` (the demo one with `--demo --insights`; Joel's and Jen's from their caches with `--config config.local.json`, never committing the caches), check every page against the 64x64 sheets, and fix anything that looks wrong as its own item. Found 2026-11-15 while redrawing the challenges screenshot. Depends on: nothing.
 
+### 34. Workout insight: running efficiency against your usual (Tread)
+Joel's words, 2026-11-22, as he said them:
+> I understand the efficiency insight and that it needs more data, so we should add that to the roadmap.
+
+The running-form slide (2026-11-22) shows a Tread run's efficiency score, steps a minute and stride on their own; this would say how the score compares with the rider's usual, like the other workout insights. Needs about five Tread runs per rider first (Joel's first was 2026-11-22; Jen hadn't used the Tread yet). The score is in the performance graph's `running_form_summary` (`docs/dev/DATA.md`, Running form), which the workout log doesn't keep yet: add it to the row (a `ROW_VERSION` bump) before the insight. Only runs scored on the Tread count; walks and the old Bluetooth treadmill have no score. Depends on: enough runs; the row field.
+
+### 35. Workout log: key `pace_plan` by level name (before any pace-plan insight)
+`workout_features` records how long a class planned at each pace level, keyed by Peloton's raw level number. The Peloton app's scale ran Recovery -1 to Max 3 (5 levels); the Vision Tread's runs Recovery 0 to Max 6 (7 levels), so the same number means different paces on old and new rows (3 is Max before 2026-11-22, Challenging after). Nothing reads `pace_plan` yet, so nothing is wrong on screen. Key it by the level's name instead, bump `ROW_VERSION` and rebuild the rows (`import_raw`) before anything compares classes by pace plan. `pace_fit` (Peloton's own percentages) is unaffected. Found 2026-11-22. Depends on: nothing; do it with the first feature that reads `pace_plan`.
+
 ## Joel, by hand
 
 ### 22. Touch up the discipline icons
