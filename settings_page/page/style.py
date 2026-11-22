@@ -98,7 +98,8 @@ input[type=text], input[type=email], input[type=password], input[type=number], i
   transition: border-color .15s, box-shadow .15s; }
 input::placeholder { color: var(--text-3); }
 select { appearance: none; padding-right: 34px; background-repeat: no-repeat; background-position: right 11px center;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b94a5' \
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' \
+width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b94a5' \
 stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
 input:hover, select:hover { border-color: var(--text-3); }
 input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

@@ -11,14 +11,16 @@ extend-exclude = ["training-data", "perf_graphs", "venv", ".venv"]
 [tool.ruff.lint]
 # Ratchet (docs/CODE-HEALTH-PLAN.md, "Decisions made"): the structural rules carry an inline
 # `# noqa` on today's offenders, and RUF100 fails on a stale one, so the baseline only shrinks.
-# UP: pyupgrade for 3.11 (`list[...]`, `X | None`, `datetime.UTC`).
-select = ["E", "F", "W", "B", "UP", "C901", "PLR0912", "PLR0913", "PLR0915", "RUF100"]
-# E501 waits for ruff format; B905 (zip strict= changes behavior) stays out on purpose.
-ignore = ["E501", "B905"]
+# I: import sorting. UP: pyupgrade for 3.11 (`list[...]`, `X | None`, `datetime.UTC`).
+select = ["E", "F", "W", "B", "I", "UP", "C901", "PLR0912", "PLR0913", "PLR0915", "RUF100"]
+# B905 (adding strict= to zip() changes behavior) stays out on purpose.
+ignore = ["B905"]
 
 [tool.ruff.format]
 # The codebase's own style; "double" would have rewritten twice as many lines.
 quote-style = "single"
+# Python files only: ruff 0.17 would also restyle the example code blocks in docs/*.md.
+exclude = ["*.md"]
 
 [tool.ruff.lint.mccabe]
 # Ruff's default, stated so it is visible (docs/CODE-HEALTH-PLAN.md).
