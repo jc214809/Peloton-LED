@@ -310,14 +310,14 @@ pt "$API/api/user/$PELOTON_USER/overview?version=1"
 }
 ```
 
-- **Best Times** (tested 2026-11-22): `personal_records` also has a group `{"name": "Best Times", "slug": "running_metric_splits"}`, the Tread's distance records. Each record's `value` is a display string and `raw_value` is seconds: `{"name": "DISTANCE_1K", "slug": "1K", "value": "10:33", "raw_value": 633.0, "unit": "time", "unit_slug": "time", "workout_id": "...", "workout_date": "2026-11-22T20:28:41Z"}`, then `DISTANCE_1_MILE` (slug `1 Mile`). Only distances you've run appear. The rowing times are not in `overview`; see [`personal_records`](#get-apiuseruser_idpersonal_records).
+- **Best Times** (tested 2026-11-22): `personal_records` also has a group `{"name": "Best Times", "slug": "running_metric_splits"}`, the Tread's distance records. Each record's `value` is a display string and `raw_value` is seconds: `{"name": "DISTANCE_1K", "slug": "1K", "value": "10:33", "raw_value": 633.0, "unit": "time", "unit_slug": "time", "workout_id": "...", "workout_date": "2026-11-22T20:28:41Z"}`, then `DISTANCE_1_MILE` (slug `1 Mile`). Only distances you've run appear. The rowing times are not in `overview`; see [`personal_records`](#get-apiuseruser_idpersonal_records), which the board reads instead.
 - **Only the current record.** Nothing here (or anywhere else tried) says what a new record replaced, so keep the old one yourself if you want the gain.
 
 ### `GET /api/user/{user_id}/personal_records`
 
 Just the `personal_records` list from `overview`, plus the rowing Best Times that `overview` leaves out. About 6 KB, against `overview`'s 136 KB.
 
-**Auth:** Token + Platform · **Source:** Tested (2026-11-22) · **Params:** none that change it (`discipline=running` returned the same list)
+**Auth:** Token + Platform · **Source:** Board (since 2026-11-22: the board's records and Best Times come from here, with `overview`'s list as the fallback) · **Params:** none that change it (`discipline=running` returned the same list)
 
 ```bash
 pt "$API/api/user/$PELOTON_USER/personal_records"

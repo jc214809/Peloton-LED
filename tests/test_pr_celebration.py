@@ -398,6 +398,32 @@ def test_best_times_are_not_output_records():
     assert previous_best_kj('run', merged) is None
 
 
+ROWING_TIMES_GROUP = {
+    'name': 'Best Rowing Times',
+    'slug': 'rowing_metric_splits',
+    'records': [{'name': 'DISTANCE_500M', 'slug': '500M', 'value': '1:41', 'raw_value': 101.0, 'unit': 'time', 'workout_id': 'row'}],
+}
+
+
+def test_rowing_best_times_are_best_times_too():
+    from peloton.stats.records import best_times_for, merge_personal_records, parse_personal_records
+
+    records = {'personal_records': [BEST_TIMES_GROUP, ROWING_TIMES_GROUP]}
+    assert parse_personal_records(records) == {}
+    assert best_times_for('row', records) == [{'label': '500M', 'seconds': 101.0}]
+    assert merge_personal_records({'rowing_metric_splits|DISTANCE_500M': {'value_kj': 0.1, 'workout_id': 'x'}}, {}) == {}
+    turns = pr_turns(
+        {
+            'is_pr': True,
+            'is_splits_pr': True,
+            'row_split_sec_per_500m': 128,
+            'duration_min': 20,
+            **{'best_times': [{'label': '500M', 'seconds': 101.0}]},
+        }
+    )
+    assert [(h[0], v) for h, v, _ in turns] == [('SPLITS PR', '2:08/500'), ('500M BEST', '1:41')]
+
+
 def test_best_times_for_a_workout_in_peloton_order():
     from peloton.stats.records import best_times_for
 

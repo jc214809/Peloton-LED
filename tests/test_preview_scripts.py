@@ -217,7 +217,7 @@ def pr_setup(tmp_path):
     client.get_me.return_value = {'id': 'user-1'}
     client.get_workouts_page.return_value = {'data': [pr], 'show_next': False}
     client.get_perf_graph.return_value = data['performance'][pr['id']]
-    client.get_overview.return_value = {}
+    client.get_personal_records.return_value = {}
     return SimpleNamespace(config=config, token=token, client=client, tmp=tmp_path)
 
 
@@ -239,7 +239,7 @@ def test_preview_saves_frames_and_reports_the_api_cost(pr_setup, caplog):
 
 def test_preview_shows_the_best_times_the_workout_holds(pr_setup, caplog):
     workout_id = pr_setup.client.get_workouts_page.return_value['data'][0]['id']
-    pr_setup.client.get_overview.return_value = {
+    pr_setup.client.get_personal_records.return_value = {
         'personal_records': [{'slug': 'running_metric_splits', 'records': [{'slug': '1K', 'raw_value': 633.0, 'workout_id': workout_id}]}]
     }
     out = pr_setup.tmp / 'pr.png'

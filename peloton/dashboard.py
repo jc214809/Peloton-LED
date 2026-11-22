@@ -271,11 +271,12 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         if not user_id:
             raise ValueError('Profile response has no user ID')
         overview = client.get_overview(user_id)
+        records = self._personal_records(client, user_id, overview)
         self._refresh_challenges(client, user_id)
         self._refresh_bookings(client, user_id)
         with self._lock:
             stored_records = self._data.get('personal_records', {})
-        personal_records = merge_personal_records(stored_records, parse_personal_records(overview))
+        personal_records = merge_personal_records(stored_records, parse_personal_records(records))
         tz = self.config.get('timezone') or me.get('timezone')
         with self._log_lock:
             if self._log.claim(user_id):
@@ -285,7 +286,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         # A workout under a minute (a start tapped by accident) isn't a latest workout,
         # and doesn't make its day the last active one on its own.
         active_day = last_active_day([w for w in workouts if not is_brief(w)], tz)
-        summaries = [self._summarize(client, workout, personal_records, tz, overview) for workout in active_day]
+        summaries = [self._summarize(client, workout, personal_records, tz, records) for workout in active_day]
         derived = self._merge_into_log(client, user_id, me, workouts, total, tz)
         with self._lock:
             generation = self._data['generation'] + 1
@@ -325,7 +326,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
             self._profile_checked_at = time.monotonic()
         return me
 
-    def _summarize(self, client, workout, personal_records, tz, overview=None):
+    def _summarize(self, client, workout, personal_records, tz, records=None):
         """One latest-day workout's summary, with its performance graph, strength detail, insights and the
         Best Times it holds (a Best Time makes it a PR workout even when its output wasn't one)."""
         identity = workout.get('id')
@@ -341,7 +342,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         detail = self._strength_detail(client, workout, signature)
         summary = summarize_workout(workout, perf, detail)
         summary['previous_best_kj'] = previous_best_kj(identity, personal_records)
-        summary['best_times'] = best_times_for(identity, overview)
+        summary['best_times'] = best_times_for(identity, records)
         if summary['best_times']:
             summary['is_pr'] = True
         if self.config.get('workout_insights'):

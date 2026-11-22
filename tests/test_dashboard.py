@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 from zoneinfo import ZoneInfo
 
+import pytest
 import requests
 
 from peloton.api import PelotonClient
@@ -32,6 +33,11 @@ def recent_fetches(client):
     return sum(1 for c in client.get_workouts_page.call_args_list if c.kwargs['limit'] == 20)
 
 
+def _records_in(overview):
+    records = overview.get('personal_records') if isinstance(overview, dict) else None
+    return records if isinstance(records, list) else []
+
+
 def setup_dashboard(tmp_path, config=None):
     token = tmp_path / 'token'
     token.write_text('synthetic-token')
@@ -39,6 +45,8 @@ def setup_dashboard(tmp_path, config=None):
     client = Mock()
     client.get_me.return_value = data['me']
     client.get_overview.return_value = data['overview']
+    # /personal_records answers with the records the test's overview holds (the board reads them from there).
+    client.get_personal_records.side_effect = lambda _uid: {'personal_records': _records_in(client.get_overview.return_value)}
     client.history = [data['workouts'][0]]
     client.get_perf_graph.return_value = data['performance']['demo-cycling']
     serve_history(client)
@@ -554,6 +562,64 @@ def test_best_times_make_a_pr_workout_and_list_on_its_summary(tmp_path):
     dashboard.refresh()
     assert dashboard.snapshot()['summaries'][0]['best_times'] == []
     assert not dashboard.snapshot()['summaries'][0]['is_pr']
+
+
+ROWING_TIMES = {
+    'slug': 'rowing_metric_splits',
+    'records': [
+        {'name': 'DISTANCE_500M', 'slug': '500M', 'raw_value': 101.0, 'unit': 'time', 'workout_id': 'row'},
+        {'name': 'DISTANCE_2K', 'slug': '2K', 'raw_value': 570.0, 'unit': 'time', 'workout_id': 'older-row'},
+    ],
+}
+
+
+def test_rowing_best_times_come_from_personal_records_not_the_overview(tmp_path):
+    """/overview leaves the Row's Best Times out (checked 2026-11-22); /personal_records has them."""
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    data = demo_data()
+    client.history = [dict(data['workouts'][0], id='row', is_total_work_personal_record=False)]
+    client.get_overview.return_value = dict(data['overview'], personal_records=[])
+    client.get_personal_records.side_effect = None
+    client.get_personal_records.return_value = {'personal_records': [ROWING_TIMES]}
+    dashboard.refresh()
+    summary = dashboard.snapshot()['summaries'][0]
+    assert summary['best_times'] == [{'label': '500M', 'seconds': 101.0}] and summary['is_pr']
+    client.get_personal_records.assert_called_with('demo')
+
+
+@pytest.mark.parametrize(
+    'failure',
+    [
+        requests.ConnectionError('offline'),
+        requests.HTTPError(response=Mock(status_code=500)),
+        ValueError('Expected a Peloton JSON object'),
+        {'personal_records': 'oops'},
+        {},
+    ],
+)
+def test_personal_records_failure_falls_back_to_the_overview(tmp_path, failure, caplog):
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    data = demo_data()
+    client.get_overview.return_value = _overview_with_record(data, 250400.0, 'old-ride')
+    if isinstance(failure, Exception):
+        client.get_personal_records.side_effect = failure
+    else:
+        client.get_personal_records.side_effect = None
+        client.get_personal_records.return_value = failure
+    dashboard.refresh()
+    snap = dashboard.snapshot()
+    assert snap['status'] == 'ready'
+    assert snap['personal_records']['cycling|30 min']['workout_id'] == 'old-ride'
+    assert "using the overview's" in caplog.text
+
+
+def test_personal_records_rejected_token_still_ends_the_refresh(tmp_path):
+    dashboard, client, _ = setup_dashboard(tmp_path)
+    client.get_personal_records.side_effect = requests.HTTPError(response=Mock(status_code=401))
+    with pytest.raises(requests.HTTPError):
+        dashboard._personal_records(client, 'demo', {})
+    client.get_personal_records.side_effect = requests.HTTPError(response=None)
+    assert dashboard._personal_records(client, 'demo', {'personal_records': []}) == {'personal_records': []}
 
 
 def test_pr_set_before_first_capture_has_no_previous_best(tmp_path):

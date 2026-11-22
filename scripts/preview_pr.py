@@ -4,7 +4,7 @@
     python scripts/preview_pr.py --user Jen --png pr.png  # save a frame strip instead
 
 Pages back through workout history (newest first) until it finds a PR, so it
-costs 1 profile call + 1 overview call (the Best Times the workout holds) + 1 call per 50 workouts
+costs 1 profile call + 1 personal-records call (the Best Times the workout holds) + 1 call per 50 workouts
 searched + 1 performance call.
 """
 
@@ -152,7 +152,7 @@ def main(argv=None):
         if workout is None:
             raise SystemExit(f'No PR found for {name} in the last {pages * 50} workouts (try a larger --max-pages)')
         summary = summarize_workout(workout, client.get_perf_graph(workout['id']))
-        summary['best_times'] = best_times_for(workout['id'], client.get_overview(user_id))
+        summary['best_times'] = best_times_for(workout['id'], client.get_personal_records(user_id))
         summary['is_pr'] = summary['is_pr'] or bool(summary['best_times'])
     except Exception as exc:
         response = getattr(exc, 'response', None)

@@ -57,12 +57,20 @@ def test_close_closes_the_session():
 # Bad responses
 
 
-@pytest.mark.parametrize('method,args', [('get_me', ()), ('get_overview', ('u',)), ('get_workouts_page', ('u', 50))])
+@pytest.mark.parametrize(
+    'method,args', [('get_me', ()), ('get_overview', ('u',)), ('get_personal_records', ('u',)), ('get_workouts_page', ('u', 50))]
+)
 @pytest.mark.parametrize('body', [[], 'text', 5])
 def test_non_object_json_is_rejected(method, args, body):
     client, _ = _client(body)
     with pytest.raises(ValueError, match='JSON object'):
         getattr(client, method)(*args)
+
+
+def test_personal_records_asks_for_the_riders_records():
+    client, session = _client({'personal_records': []})
+    assert client.get_personal_records('u1') == {'personal_records': []}
+    assert session.get.call_args.args[0] == 'https://api.onepeloton.com/api/user/u1/personal_records'
 
 
 def test_non_json_body_raises():
