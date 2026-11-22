@@ -231,6 +231,35 @@ def performance_graph(perf, points=GRAPH_POINTS):
     return {'metric': metric, 'unit': unit, 'values': values, 'zones': zones, 'peak': round(max(v for v in raw if v is not None))}
 
 
+def running_form(perf, points=GRAPH_POINTS):
+    """The Tread's running-form figures, or None when the workout has none (any other treadmill, a walk).
+
+    {'score', 'spm', 'stride_m', 'series'}: Peloton's 0-100 running efficiency score, the average step
+    rate, the average stride in metres (one decimal), and the score over the workout in at most `points`
+    buckets, None where the rider walked (Peloton scores only the running stretches). Only the score is
+    required; the series is [] when there aren't two scored buckets."""
+    form = perf.get('running_form_summary')
+    if not isinstance(form, dict):
+        return None
+    score = number(form.get('running_efficiency_score'))
+    if score is None or score > 100:
+        return None
+    spm = number(form.get('avg_rate_spm'))
+    stride_cm = number(form.get('avg_stride_length_cm'))
+    raw = [v if v is None or v <= 100 else None for v in _series(_metric(perf, 'running_efficiency_score'))]
+    count = min(points, len(raw))
+    series = []
+    for i in range(count):
+        bucket = [v for v in raw[i * len(raw) // count : (i + 1) * len(raw) // count] if v is not None]
+        series.append(round(sum(bucket) / len(bucket)) if bucket else None)
+    return {
+        'score': round(score),
+        'spm': round(spm) if spm else None,
+        'stride_m': round(stride_cm / 100, 1) if stride_cm else None,
+        'series': series if sum(v is not None for v in series) >= 2 else [],
+    }
+
+
 def _display_discipline(workout, ride=None):
     key = discipline_of(workout)
     return {'running_outdoor': 'Outdoor Run', 'walking_outdoor': 'Outdoor Walk'}.get(key, key.replace('_', ' ').title())
@@ -361,6 +390,7 @@ def summarize_workout(workout, perf=None, detail=None):
         'graph': performance_graph(perf),
         'hr_zone_seconds': heart_rate_zone_seconds(perf),
         'muscles': muscle_groups(perf),
+        'running_form': running_form(perf),
         'strength': strength_tracker(detail),
     }
     for key in (

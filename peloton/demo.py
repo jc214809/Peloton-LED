@@ -83,6 +83,18 @@ def demo_data():
             'metrics': metrics,
             'effort_zones': effort_zones,
         }
+    # A Tread run's running form: scored only on the running stretches, walks in between left empty.
+    performance['demo-running']['running_form_summary'] = {
+        'running_efficiency_score': 71,
+        'avg_rate_spm': 152.4,
+        'avg_stride_length_cm': 118.6,
+    }
+    performance['demo-running']['metrics'].append(
+        {
+            'slug': 'running_efficiency_score',
+            'values': [round(70 + 6 * math.sin(i / 4)) if i % 48 < 30 else None for i in range(240)],
+        }
+    )
     # Deliberately omit strength metrics to exercise missing-data rendering,
     # but keep muscle groups so the demo shows that slide.
     performance['demo-strength'] = {

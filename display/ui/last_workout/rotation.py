@@ -1,7 +1,7 @@
 """What the stats phase cycles through (the rotating details) and how long each one holds."""
 
 from .insight_data import INSIGHT_KINDS, insight_views
-from .stats import _stat_details, _tracker_details, strength_tracker
+from .stats import _stat_details, _tracker_details, running_form, strength_tracker
 
 # Disciplines whose workout page ends with the muscle-groups slide. Peloton sends
 # the data for most workouts; it's only shown where the page is light on stats.
@@ -14,7 +14,7 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> list[dict]:
     64-row panels show the instructor in the intro, so only stats rotate.
     32-row panels have no room for it there, so it leads the rotation.
     The workout graph and heart-rate zone bar close out the rotation when the
-    workout recorded them, then a tracked strength class's top lift, or else
+    workout recorded them, then the Tread's running form, then a tracked strength class's top lift, or else
     the top muscle groups for MUSCLE_DISCIPLINES.
     """
     details = _stat_details(summary)
@@ -28,6 +28,8 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> list[dict]:
     zones = summary.get('hr_zone_seconds')
     if isinstance(zones, list) and len(zones) == 5 and sum(zones) > 0:
         stats.append({'label': 'hr zones', 'value': '', 'kind': 'zones'})
+    if running_form(summary):
+        stats.append({'label': 'run efficiency', 'value': '', 'kind': 'running_form'})
     tracker = strength_tracker(summary)
     if tracker.get('top'):
         stats.append({'label': 'top lift', 'value': '', 'kind': 'top_lift'})
@@ -60,14 +62,14 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> list[dict]:
 LAST_WORKOUT_DETAIL_INTERVAL_SECONDS = 4.0
 
 
-# The graph, zone-bar and muscle frames hold this much longer than a stat:
+# The graph, zone-bar, running-form and muscle frames hold this much longer than a stat:
 # there's more to read than one number.
 GRAPH_FRAME_EXTRA_SECONDS = 1.0
 
 
 def detail_hold_seconds(detail: dict, interval: float) -> float:
     """Seconds one rotating detail stays up."""
-    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'muscles', 'top_lift') + INSIGHT_KINDS:
+    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'running_form', 'muscles', 'top_lift') + INSIGHT_KINDS:
         return interval + GRAPH_FRAME_EXTRA_SECONDS
     return interval
 

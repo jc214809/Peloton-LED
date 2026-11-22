@@ -3,14 +3,14 @@
 from display.display import get_text_width, loaded_fonts
 from driver import graphics
 
-from .charts import _draw_graph, _draw_muscle_rows, _draw_top_lift, _draw_zones
+from .charts import _draw_form_meter, _draw_graph, _draw_muscle_rows, _draw_top_lift, _draw_zones
 from .colors import _BLUE, _disc_color
 from .fonts import PageFonts
 from .insight_frames import draw_insight_slide
 from .rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, detail_at, rotating_details
 from .sprites import _TROPHY_H, _TROPHY_W, _draw_trophy
 from .stat_rows import _draw_hr_calories, _draw_short_lines
-from .stats import _value_color
+from .stats import _value_color, running_form
 from .text import _draw_text, _text_width, _truncate, _wrap_two_lines, title_without_length
 
 
@@ -105,6 +105,9 @@ def _draw_stat_frame(matrix, summary: dict, detail: dict, phase_seconds: float, 
         return False
     if kind == 'zones':
         _draw_zones(matrix, summary['hr_zone_seconds'], fonts.stat, fonts.text, 14, 17, 22, 30)
+        return False
+    if kind == 'running_form':
+        _draw_form_meter(matrix, running_form(summary), fonts.stat, fonts.title, 15, 24)
         return False
     if kind == 'muscles':
         # Three bars fill the space under the discipline; the bar stays.
