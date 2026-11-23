@@ -245,7 +245,7 @@ def _goal_pages(inputs):
 
 
 def _challenge_pages(inputs):
-    """Challenges: a page per running challenge with progress and a tier still to reach (the cache is
+    """Challenges: a page per running challenge with progress, toward its next tier or at the top one earned (the cache is
     validated)."""
     duration = inputs.seconds('challenges')
     return [('challenge', challenge, duration) for challenge in shown_challenges(inputs.snapshot.get('challenges'), time.time())]

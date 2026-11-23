@@ -34,19 +34,20 @@ def _page(title, value, shown, unit, tier, following, to_next):
         'shown': shown,
         'unit': unit,
         'tier': {'title': tier[0], 'value': float(tier[1])},
-        'next': {'title': following[0], 'value': float(following[1])},
+        'next': {'title': following[0], 'value': float(following[1])} if following else None,
         'to_next': to_next,
     }
 
 
 # Real titles and figures from 2026-11-14, titles shortened by short_title as on the board: a numbered tier,
-# named tiers from bronze to gold, and the widest bottom line.
+# named tiers from bronze to gold, the widest bottom line, and a top tier earned (2026-11-22).
 PAGES = [
     _page('The Annual 2026', 5503, '5,503', 'MIN', ('5K', 5000), ('6K', 6000), '497'),
     _page('The Countdown to Turkey Burn Challenge', 2, '2', 'CLASSES', ('UNEARNED', 0), ('GOLD', 18), '16'),
     _page('November 2026 Cycling Challenge', 43.5, '43.5', 'MILES', ('UNEARNED', 0), ('BRONZE', 50), '6.5'),
     _page('November 2026 Activity Challenge', 14, '14', 'DAYS', ('BRONZE', 10), ('SILVER', 15), '1'),
     _page('November 2026 Rep Goal Challenge', 1640, '1,640', 'REPS', ('BRONZE', 1500), ('SILVER', 3000), '1,360'),
+    _page('November 2026 Activity Challenge', 22, '22', 'DAYS', ('GOLD', 20), None, None),
 ]
 
 

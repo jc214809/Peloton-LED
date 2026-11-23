@@ -14,11 +14,19 @@ from display.ui.challenge_screen import (
     RING_TRACK,
     SWEEP_SECONDS,
     TIER_COLORS,
+    TWINKLE_CYCLE,
+    TWINKLE_STARS_32,
+    TWINKLE_STARS_64,
     ChallengeScreen,
     compact_number,
     counted_shown,
+    earned_line,
     fitted_title,
+    ring_color,
     ring_pixels,
+    star_pixels,
+    star_size,
+    stars_beside,
     tier_color,
 )
 from peloton import dashboard as dashboard_module
@@ -202,17 +210,19 @@ def test_a_response_that_is_not_one_raises(payload):
 
 
 # ---- which to show ------------------------------------------------------------------------------------------
-def test_shown_challenges_need_progress_a_next_tier_and_time_left():
+def test_shown_challenges_need_progress_a_tier_to_go_or_the_top_one_and_time_left():
     annual = slim_challenge(entry())
     soon = slim_challenge(
         entry('November 2026 Rep Goal Challenge', 1640, '1,640', 'reps', ('Bronze', 1500), ('Silver', 3000), '1,360', end=NOW + 3600)
     )
-    top = slim_challenge(entry('Done', 20000, '20,000', following=None))
+    top = slim_challenge(entry('November 2026 Activity Challenge', 22, '22', 'days', ('Gold', 20), None, end=NOW + 7200))
+    top_unearned = slim_challenge(entry('Odd', 3, '3', 'days', ('Unearned', 0), None))
     ended = slim_challenge(entry('Ended', end=NOW - 1))
     endless = slim_challenge(entry('No End', end=None))
     zero = slim_challenge(TURKEY)
-    shown = shown_challenges([annual, top, ended, zero, endless, soon, {'title': 'junk'}, None], NOW)
-    assert [c['title'] for c in shown] == ['NOV REP GOAL', 'ANNUAL 2026', 'NO END'], 'soonest ending first'
+    rounds_to_zero = slim_challenge(entry('Rounds To Zero', 0.04, '0.0', 'miles', ('Unearned', 0), ('Bronze', 10), '10.0'))
+    shown = shown_challenges([annual, top, top_unearned, ended, zero, rounds_to_zero, endless, soon, {'title': 'junk'}, None], NOW)
+    assert [c['title'] for c in shown] == ['NOV REP GOAL', 'NOV ACTIVITY', 'ANNUAL 2026', 'NO END'], 'soonest ending first'
     assert shown_challenges(None, NOW) == [] and shown_challenges({'a': 1}, NOW) == []
 
 
@@ -221,6 +231,7 @@ def test_tier_progress_is_clamped():
     assert tier_progress({**challenge, 'value': 7000.0}) == 1.0
     assert tier_progress({**challenge, 'value': 10.0}) == 0.0
     assert tier_progress({**challenge, 'next': {'title': '5K', 'value': 5000.0}}) == 0.0
+    assert tier_progress({**challenge, 'next': None}) == 1.0, 'the top tier is a full ring'
 
 
 @pytest.mark.parametrize(
@@ -429,6 +440,8 @@ LARGEST = [
     entry('The Countdown to Turkey Burn Challenge', 11, '11', 'workouts', ('Unearned', 0), ('Gold', 18), '7'),
     entry('The Extraordinarily Long Holiday Countdown Spectacular Challenge', 3, '3', 'days', ('Unearned', 0), ('Bronze', 10), '7'),
     entry('Supercalifragilisticexpialidocious', 250, '250', 'kilocalories', ('Unearned', 0), ('Bronze', 500), '250'),
+    entry('November 2026 Rowing Challenge', 123456, '123,456', 'meters', ('Platinum', 100000), None),
+    entry('The Annual 2026', 18500, '18,500', 'min', ('18K', 18000), None),
 ]
 
 
@@ -436,13 +449,13 @@ LARGEST = [
 def test_64_rows_fit_the_largest_values_inside_the_ring(raw):
     state = slim_challenge(raw)
     matrix = draw(state, 64)
-    ring = {(x, y): (r, g, b) for x, y, r, g, b in ring_pixels(round(tier_progress(state), 3), tier_color(state['next']['title']))}
+    ring = {(x, y): (r, g, b) for x, y, r, g, b in ring_pixels(round(tier_progress(state), 3), ring_color(state))}
     pixels = matrix.image.load()
     assert all(pixels[x, y] == color for (x, y), color in ring.items()), 'text drawn over the ring'
     rows = [y for _, y in ring]
     assert not lit(matrix, rows=range(0, min(rows))) - lit(matrix, GOLD), 'the title row is all title'
     assert lit(matrix, GOLD, range(0, 9)), 'a title'
-    assert lit(matrix, (255, 255, 255), range(max(rows) + 1, 64)), 'the line along the bottom'
+    assert lit(matrix, (255, 255, 255) if state['next'] else ring_color(state), range(max(rows) + 1, 64)), 'the line along the bottom'
     title = lit(matrix, GOLD, range(0, 9))
     assert get_text_width(loaded_fonts['titles'], state['title']) > 64 or min(x for x, _ in title) >= 1
 
@@ -530,7 +543,9 @@ def test_the_ring_number_drops_its_comma_then_shrinks():
     assert compact_number('abc') == 'abc' and compact_number('999') == '999'
 
 
-@pytest.mark.parametrize('state', [None, {}, {'title': 'X'}, {**slim_challenge(entry()), 'next': None}])
+@pytest.mark.parametrize(
+    'state', [None, {}, {'title': 'X'}, {**slim_challenge(entry()), 'tier': {'title': UNEARNED, 'value': 0.0}, 'next': None}]
+)
 def test_a_page_with_nothing_to_draw_says_so(state):
     initialize_fonts(64)
     assert ChallengeScreen().render(EdgeMatrix(height=64), state) is False
@@ -680,7 +695,7 @@ def test_the_biggest_values_count_up_inside_the_ring_and_the_bar(raw):
         for t in FRAMES:
             draw(state, height, t)  # nothing off the panel
     initialize_fonts(64)
-    ring = ring_pixels(round(tier_progress(state), 3), tier_color(state['next']['title']))
+    ring = ring_pixels(round(tier_progress(state), 3), ring_color(state))
     inside = {(x, y) for x, y, *_ in ring}
     for t in FRAMES:
         matrix = draw(state, 64, t)
@@ -716,6 +731,94 @@ def test_the_ring_flashes_once_when_the_sweep_lands_then_holds_still():
     assert flashing and all(ink(draw(state, 64, t)) != settled for t in flashing)
     assert all(ink(draw(state, 64, t)) == settled for t in FRAMES if t >= INTRO_SECONDS)
     assert ink(draw(state, 32, SWEEP_SECONDS)) == ink(draw(state, 32))  # no flash on the bar
+
+
+GOLD_ACTIVITY = slim_challenge(entry('November 2026 Activity Challenge', 22, '22', 'days', ('Gold', 20), None))
+
+
+@pytest.mark.parametrize('height', [64, 32])
+def test_a_top_tier_earned_is_a_full_ring_and_says_so_in_its_colour(height):
+    initialize_fonts(height)
+    matrix = draw(GOLD_ACTIVITY, height)
+    bottom = range(56, 64) if height == 64 else range(25, 32)
+    assert lit(matrix, GOLD, bottom), 'GOLD EARNED in gold'
+    assert not lit(matrix, (255, 255, 255), bottom), 'no "TO GO" line'
+    if height == 64:
+        full = {(x, y): (r, g, b) for x, y, r, g, b in ring_pixels(1.0, GOLD)}
+        pixels = matrix.image.load()
+        assert all(pixels[x, y] == color for (x, y), color in full.items())
+    else:
+        assert {x for x, _ in lit(matrix, GOLD, range(21, 24))} == set(range(3, 61)), 'the bar is full'
+    silver = {**GOLD_ACTIVITY, 'tier': {'title': 'SILVER', 'value': 20.0}}
+    assert lit(draw(silver, height), TIER_COLORS['SILVER'], bottom), "the earned tier's own colour"
+
+
+def test_the_earned_line_drops_earned_when_too_wide():
+    initialize_fonts(64)
+    stats = loaded_fonts['stats']
+    assert earned_line(GOLD_ACTIVITY, stats, 64) == 'GOLD EARNED'
+    assert earned_line({**GOLD_ACTIVITY, 'tier': {'title': 'SUPERCALIFRAGILISTIC', 'value': 1.0}}, stats, 64) == 'SUPERCALIFRAGILISTIC'
+
+
+def test_a_top_tier_earned_flashes_the_whole_ring():
+    initialize_fonts(64)
+    peak = draw(GOLD_ACTIVITY, 64, SWEEP_SECONDS + 0.1).image.load()
+    settled = draw(GOLD_ACTIVITY, 64).image.load()
+    brighter = [(x, y) for x, y, *_ in ring_pixels(1.0, GOLD) if sum(peak[x, y]) > sum(settled[x, y])]
+    assert {x < 32 for x, _ in brighter} == {True, False} and {y < 33 for _, y in brighter} == {True, False}, 'all round'
+
+
+TWINKLE_TIMES = [SWEEP_SECONDS + i * ChallengeScreen.frame_seconds for i in range(TWINKLE_CYCLE)]
+
+
+def test_stars_twinkle_in_turn_after_the_sweep_lands():
+    sizes = [[star_size(t, offset, 3) for t in TWINKLE_TIMES] for _, _, offset in TWINKLE_STARS_64]
+    assert all(max(each) == 3 and min(each) == 0 for each in sizes), 'each grows to 3 and rests'
+    assert len({tuple(each) for each in sizes}) == len(TWINKLE_STARS_64), 'each in its own turn'
+    assert all(star_size(t, offset, 3) == 0 for t in FRAMES if t < SWEEP_SECONDS for _, _, offset in TWINKLE_STARS_64)
+    assert max(star_size(t, 3, 2) for t in TWINKLE_TIMES) == 2, 'capped on 32 rows'
+    assert star_pixels(5, 5, 0, GOLD) == []
+    assert star_pixels(5, 5, 2, GOLD) == [
+        (5, 5, (255, 255, 255)),
+        *[(x, y, GOLD) for x, y in ((6, 5), (4, 5), (5, 6), (5, 4))],
+        *[(x, y, (127, 107, 0)) for x, y in ((7, 5), (3, 5), (5, 7), (5, 3))],
+    ]
+
+
+def test_the_64_row_stars_clear_the_ring_the_title_and_the_bottom_line():
+    initialize_fonts(64)
+    ring = {(x, y) for x, y, *_ in ring_pixels(1.0, GOLD)}
+    matrix = draw(GOLD_ACTIVITY, 64)
+    text = lit(matrix, rows=range(0, 9)) | lit(matrix, rows=range(56, 64))
+    for x, y, _ in TWINKLE_STARS_64:
+        star = {(px, py) for px, py, _ in star_pixels(x, y, 3, GOLD)}
+        assert all(0 <= px < 64 and 9 <= py < 57 for px, py in star)
+        assert not star & ring and not star & text, (x, y)
+
+
+@pytest.mark.parametrize('height', [64, 32])
+def test_a_top_tier_keeps_twinkling_and_a_tier_to_go_holds_still(height):
+    initialize_fonts(height)
+    later = [INTRO_SECONDS + i * ChallengeScreen.frame_seconds for i in range(TWINKLE_CYCLE)]
+    assert len({ink(draw(GOLD_ACTIVITY, height, t)) for t in later}) > 1
+    assert len({ink(draw(slim_challenge(entry()), height, t)) for t in later}) == 1
+
+
+def test_the_32_row_stars_sit_beside_the_number_never_on_it():
+    initialize_fonts(32)
+    large = loaded_fonts['bold']
+    assert stars_beside('22', large) == TWINKLE_STARS_32
+    assert stars_beside('123,456', large) == (), 'too close to a 6-digit number: none'
+    assert len(stars_beside('15,010', large)) == 2, 'the outer pair beside 5 digits'
+    for state in (GOLD_ACTIVITY, slim_challenge(entry('Five', 15010, '15,010', 'min', ('15K', 15000), None))):
+        number = lit(draw(state, 32, 0), (255, 255, 255), range(7, 19))
+        left, right = min(x for x, _ in number), max(x for x, _ in number)
+        for x, y, _ in stars_beside(state['shown'], large):
+            assert all(px < left - 2 or px > right + 2 for px, _, _ in star_pixels(x, y, 2, GOLD)), 'two columns clear'
+    for t in TWINKLE_TIMES:
+        matrix = draw(GOLD_ACTIVITY, 32, t)
+        assert not lit(matrix, rows=range(19, 21)), 'nothing between the number and the bar'
+        assert not lit(matrix, rows=range(0, 8)) - lit(matrix, GOLD, range(0, 8)), 'the title row is all title'
 
 
 def test_the_screen_replays_the_intro_each_time_it_is_shown():
