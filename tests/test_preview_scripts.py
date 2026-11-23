@@ -217,6 +217,7 @@ def pr_setup(tmp_path):
     client.get_me.return_value = {'id': 'user-1'}
     client.get_workouts_page.return_value = {'data': [pr], 'show_next': False}
     client.get_perf_graph.return_value = data['performance'][pr['id']]
+    client.get_personal_records.return_value = {}
     return SimpleNamespace(config=config, token=token, client=client, tmp=tmp_path)
 
 
@@ -229,10 +230,23 @@ def test_preview_saves_frames_and_reports_the_api_cost(pr_setup, caplog):
     out = pr_setup.tmp / 'pr.png'
     with caplog.at_level('INFO', logger='peloton-led.preview-pr'):
         _run_preview(pr_setup, '--png', str(out), '--previous-best', '250')
-    assert Image.open(out).size == (4 * 264 - 8, 256)
-    assert '3 API calls total' in caplog.text
+    # The trophy rising, then the one record's turn.
+    assert Image.open(out).size == (2 * 264 - 8, 256)
+    assert '4 API calls total' in caplog.text
     assert '"previous_best_kj": 250.0' in caplog.text
     pr_setup.client.close.assert_called_once()
+
+
+def test_preview_shows_the_best_times_the_workout_holds(pr_setup, caplog):
+    workout_id = pr_setup.client.get_workouts_page.return_value['data'][0]['id']
+    pr_setup.client.get_personal_records.return_value = {
+        'personal_records': [{'slug': 'running_metric_splits', 'records': [{'slug': '1K', 'raw_value': 633.0, 'workout_id': workout_id}]}]
+    }
+    out = pr_setup.tmp / 'pr.png'
+    with caplog.at_level('INFO', logger='peloton-led.preview-pr'):
+        _run_preview(pr_setup, '--png', str(out))
+    assert '"label": "1K"' in caplog.text
+    assert Image.open(out).size == (3 * 264 - 8, 256)  # rising, output, 1K
 
 
 def test_preview_plays_in_the_emulator_without_png(pr_setup):
@@ -332,7 +346,9 @@ def test_frame_times_pinned_for_every_page_kind():
     assert frame_times('anything else', {}, 8, 4) == [0.5]
     assert frame_times('username', {}, 8, 4) == [0.6]
     assert frame_times('username', {'detail_seconds': 2, 'details': [1, 2]}, 8, 4) == [0.6, 2.6]
-    assert frame_times('pr', {}, 8, 4) == [0.5, 2.0]
+    assert frame_times('pr', {}, 8, 4) == [0.3, 1.3]
+    run = {'is_pr': True, 'is_output_pr': True, 'total_output_kj': 180, 'best_times': [{'label': '1K', 'seconds': 633}]}
+    assert frame_times('pr', run, 8, 4) == [0.3, 1.3, 7.3]
 
 
 def test_the_next_pass_celebration_is_shown_when_it_differs(tmp_path, capsys):

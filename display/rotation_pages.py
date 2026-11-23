@@ -11,9 +11,7 @@ from typing import Any, NamedTuple
 
 from display.ui.celebration_screen import discipline_noun, milestone_noun
 from display.ui.last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, rotating_details, stats_phase_seconds
-from display.ui.pr_celebration import BURST_SECONDS as PR_BURST_SECONDS
-from display.ui.pr_celebration import CARD_HOLD_SECONDS as PR_CARD_HOLD_SECONDS
-from display.ui.pr_celebration import SETTLE_SECONDS as PR_SETTLE_SECONDS
+from display.ui.pr_celebration import pr_page_seconds
 from display.ui.streak_screen import streak_views
 from peloton.feeds.booked_classes import next_booking
 from peloton.feeds.challenges import shown_challenges
@@ -78,9 +76,8 @@ def _latest_workout_pages(inputs):
         page_duration = detail_interval + stats_phase_seconds(rotating_details(summary, inputs.matrix_height), detail_interval)
         pages.append(('last_workout', summary, page_duration))
         if inputs.dashboard.should_celebrate_pr(summary):
-            # Burst + settle animation, then the card holds one interval plus a little more.
-            pr_duration = PR_BURST_SECONDS + PR_SETTLE_SECONDS + detail_interval + PR_CARD_HOLD_SECONDS
-            pages.append(('pr', summary, pr_duration))
+            # The trophy's entrance, then a turn per record broken: one interval plus a little more each.
+            pages.append(('pr', summary, pr_page_seconds(summary, detail_interval)))
     return pages
 
 

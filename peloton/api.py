@@ -164,6 +164,13 @@ class PelotonClient:
         resp.raise_for_status()
         return self._object(resp)
 
+    def get_personal_records(self, user_id: str) -> dict[str, Any]:
+        """The rider's current records: output per discipline and class length, and Best Times on the Tread and the
+        Row (6 KB; /overview carries the same list without the rowing times)."""
+        resp = self._get(f'{BASE}/api/user/{user_id}/personal_records', timeout=20)
+        resp.raise_for_status()
+        return self._object(resp)
+
     def get_overview(self, user_id: str) -> dict[str, Any]:
         resp = self._get(f'{BASE}/api/user/{user_id}/overview', timeout=20)
         resp.raise_for_status()

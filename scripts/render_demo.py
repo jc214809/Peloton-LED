@@ -10,11 +10,12 @@ import unittest  # noqa: F401  side effect: selects the emulator graphics
 from PIL import Image, ImageDraw
 
 from display.display import initialize_fonts
+from display.ui.celebration_screen import INTRO_SECONDS
 from display.ui.discipline_page import DisciplinePageScreen
 from display.ui.last_workout.screen import LastWorkoutScreen
 from display.ui.lifetime_overview import LifetimeOverviewScreen
 from display.ui.manager import ScreenManager
-from display.ui.pr_celebration import BURST_SECONDS, SETTLE_SECONDS, PrCelebrationScreen
+from display.ui.pr_celebration import PrCelebrationScreen
 from display.ui.username import UsernameScreen
 from peloton.demo import demo_data
 from peloton.stats.summaries import summarize_workout
@@ -60,7 +61,7 @@ def render_contact_sheet(destination):
         for label, screen, state in samples:
             manager = ScreenManager(matrix, initial=screen, login_required=lambda: label == 'Login needed')  # noqa: B023  called within the iteration: the manager is used and dropped each pass
             if label == 'PR':
-                screen.update(BURST_SECONDS + SETTLE_SECONDS + 0.5)  # show the card, not the burst
+                screen.update(INTRO_SECONDS + 0.5)  # show the card, not the trophy rising
             manager.tick(state)
             tile = Image.new('RGB', (272, 294), '#202020')
             tile.paste(matrix.image.resize((256, height * 4), Image.Resampling.NEAREST), (8, 26))

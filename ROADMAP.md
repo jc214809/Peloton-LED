@@ -18,6 +18,7 @@ Planned work. Each item is one branch and one PR into `develop-beta`; delete it 
 30 Weekly goals from Peloton's Activity Goals ── independent; targets only (Peloton's week turns at UTC midnight)
 31 Redraw the 64x32 contact sheets ── independent
 32 Judge the bike on output against the class plan ── after the missed-callout rule; reshapes 25-27 and the CADENCE/RESISTANCE LOW flags
+36 Personal Bests page ── after the PR card's Best Times (#156)
 ```
 
 Suggested order: 1, then the remaining items. Item 1 adds frames to a screen that shares its page time across frames (`peloton/screen_times.py`), so more stats mean a longer minimum page. Icon touch-ups (22) whenever Joel has time.
@@ -339,6 +340,12 @@ The running-form slide (2026-11-22) shows a Tread run's efficiency score, steps 
 
 ### 35. Workout log: key `pace_plan` by level name (before any pace-plan insight)
 `workout_features` records how long a class planned at each pace level, keyed by Peloton's raw level number. The Peloton app's scale ran Recovery -1 to Max 3 (5 levels); the Vision Tread's runs Recovery 0 to Max 6 (7 levels), so the same number means different paces on old and new rows (3 is Max before 2026-11-22, Challenging after). Nothing reads `pace_plan` yet, so nothing is wrong on screen. Key it by the level's name instead, bump `ROW_VERSION` and rebuild the rows (`import_raw`) before anything compares classes by pace plan. `pace_fit` (Peloton's own percentages) is unaffected. Found 2026-11-22. Depends on: nothing; do it with the first feature that reads `pace_plan`.
+
+### 36. Personal Bests page
+Joel's words, 2026-11-22, as he said them:
+> Also, can we look into other PRs, like mile? Today I had 3 different personal bests. Maybe they're not PRs, but we should maybe create a section for personal bests.
+
+The first half is built: the PR card now lists every record a workout broke, the Tread's and the Row's Best Times included (#156, 2026-11-22). This is the second half, a rotation page of the rider's bests. Mocked with real data the same day (`pb-page.png`, not in the repo): P1 Best Times only (the Tread distances with the date each was set; up to 6 on 64x64, 4 on 64x32, so more take turns), P2 one page per discipline of its output record by class length (up to 7 pages for Joel), P3 the newest bests across everything (compact, but labels like `ROW BC 30` read badly). Recommended P1; Joel hasn't picked. Data: the board reads `/api/user/{id}/personal_records` every refresh (since 2026-11-22, #156), which has both Best Times groups (`running_metric_splits`, `rowing_metric_splits`: `peloton/stats/records.py` `is_best_times_group`), and saves every record, Best Times included (`seconds`, `label`, the `previous` one), in the snapshot's `personal_records`: the page can read that table, no new persisted key. Size it for the longest labels (`HALF MARATHON`, `MARATHON 4:59:59`) on both heights. Depends on: nothing.
 
 ## Joel, by hand
 

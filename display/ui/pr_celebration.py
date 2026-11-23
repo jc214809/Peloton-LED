@@ -1,120 +1,187 @@
 # display/ui/pr_celebration.py
+"""The PR card: confetti and a rising trophy, as on the milestone celebration, then every record the
+workout broke, one per turn: its output, a rowing split, each Tread Best Time (1K, 1 Mile, ...).
 
-import math
+64x64: the discipline on top in its colour, the trophy under it, then the record, its value and the
+class length (or `BEST TIME`), with a dot per turn on the bottom row. 64x32: the discipline across the
+top, a 14 px trophy centred on the rows with 2 px either side, and each line centred in the columns to
+its right; a line too wide for them moves left only as far as the panel needs, and a wording that would
+then touch the trophy gives way to a shorter one (`MARATHON BEST` to `MARATHON`). Joel, 2026-11-22.
+"""
+
 from typing import Any
 
 from display.display import get_text_width, loaded_fonts
 from driver import graphics
 from peloton.selection import normalize_discipline
 
+from .celebration_screen import INTRO_SECONDS, RISE_SECONDS, TROPHY, TROPHY_MID, draw_confetti, draw_trophy
 from .last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
 from .last_workout.stats import _fmt_split, _whole
 from .lifetime_overview import discipline_color
 from .screen import Screen
 
-_GOLD = graphics.Color(255, 215, 0)
-_WHITE = graphics.Color(255, 255, 255)
-_GREEN = graphics.Color(40, 220, 90)
-_BLUE = graphics.Color(0, 120, 255)
+_GOLD = (255, 215, 0)
+_WHITE = (255, 255, 255)
+_GREEN = (40, 220, 90)
+_BLUE = (0, 120, 255)
+_DOT_OFF = (70, 70, 90)
+_GREY = (150, 150, 170)
 
-BURST_SECONDS = 1.2
-SETTLE_SECONDS = 0.3
-# Extra time the finished card holds on top of one detail interval: a PR is a big moment (Joel, 2026-11-09).
+# Extra time each record's turn holds on top of one detail interval: a PR is a big moment (Joel, 2026-11-09).
 CARD_HOLD_SECONDS = 2.0
-# Kept in the top band beside the star badge so they never land on text.
-_SPARKLE_SPOTS = [(5, 5), (58, 6), (13, 13), (50, 13), (3, 16), (60, 15)]
-# 32 rows: the outer ends of the blank rows above the bottom line; the value row's margins are added per card.
-_COMPACT_SPARKLE_SPOTS = [(2, 22), (61, 22)]
-_COMPACT_BADGE_RADIUS = 4.5
+
+# 64 rows: the trophy's column and resting top row; the lines' baselines.
+_TALL_TROPHY_LEFT, _TALL_TROPHY_TOP = (64 - len(TROPHY[0])) // 2, 12
+_TALL_NAME, _TALL_HEAD, _TALL_VALUE, _TALL_SUB, _TALL_DOTS = 9, 37, 51, 59, 62
+# 32 rows: the trophy 2 px in from the left, centred on the 32 rows; the text gets the columns 2 px past it.
+_PAD = 2
+_SHORT_TROPHY_LEFT = _PAD
+_SHORT_TROPHY_TOP = (32 - len(TROPHY_MID)) // 2
+_SHORT_TEXT_LEFT = _PAD + len(TROPHY_MID[0]) + _PAD
+_SHORT_NAME, _SHORT_HEAD, _SHORT_VALUE, _SHORT_SUB = 6, 13, 23, 30
+# Shorter names for a Best Time label whose headline can't fit any other way (Peloton's later distances are guesses).
+_SHORT_LABELS = {'HALF MARATHON': 'HALF'}
 
 
-def _star_points(cx: float, cy: float, outer: float) -> list[tuple[float, float]]:
-    inner = outer * 0.381966
-    points = []
-    for i in range(10):
-        angle = -math.pi / 2 + i * math.pi / 5
-        r = outer if i % 2 == 0 else inner
-        points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
-    return points
+def _number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def _fill_polygon(matrix, poly: list[tuple[float, float]], color) -> None:
-    ys = [y for _, y in poly]
-    for y in range(max(0, int(min(ys))), min(matrix.height, int(max(ys)) + 1)):
-        yc = y + 0.5
-        xs = []
-        for i, (x1, y1) in enumerate(poly):
-            x2, y2 = poly[(i + 1) % len(poly)]
-            if (y1 <= yc < y2) or (y2 <= yc < y1):
-                xs.append(x1 + (yc - y1) * (x2 - x1) / (y2 - y1))
-        xs.sort()
-        for a, b in zip(xs[::2], xs[1::2]):
-            for x in range(max(0, round(a)), min(matrix.width, round(b) + 1)):
-                matrix.SetPixel(x, y, color.red, color.green, color.blue)
+def fmt_time(seconds) -> str:
+    """A Best Time as the app shows it: M:SS, or H:MM:SS from an hour."""
+    total = int(seconds + 0.5)
+    hours, rest = divmod(total, 3600)
+    return f'{hours}:{rest // 60:02d}:{rest % 60:02d}' if hours else f'{rest // 60}:{rest % 60:02d}'
 
 
-def _centered(matrix, font, y: int, color, text: str) -> None:
-    x = max((matrix.width - get_text_width(font, text)) // 2, 1)
-    graphics.DrawText(matrix, font, x, y, color, text)
+def best_times(summary: dict) -> list[tuple[str, float, float | None]]:
+    """The summary's Best Times as (label, seconds, the time it beat or None), skipping anything damaged: the cache
+    can hold anything. A previous time that isn't a slower, whole positive number is dropped, keeping the time."""
+    bests = summary.get('best_times')
+    out = []
+    for b in bests if isinstance(bests, list) else []:
+        if not (isinstance(b, dict) and isinstance(b.get('label'), str) and b['label'].strip()):
+            continue
+        if not (_number(b.get('seconds')) and b['seconds'] > 0):
+            continue
+        previous = b.get('previous_seconds')
+        slower = _number(previous) and int(previous + 0.5) > int(b['seconds'] + 0.5)
+        out.append((b['label'].strip().upper(), b['seconds'], previous if slower else None))
+    return out
 
 
-def _label_color(discipline: str):
-    """The discipline's icon colour, so it reads as a label rather than a second value; white when
-    that's too close to the gain's green or the class length's blue (running, rowing) to tell apart."""
-    rgb = discipline_color(normalize_discipline(discipline))
-    for other in (_GREEN, _BLUE):
-        if abs(rgb[0] - other.red) + abs(rgb[1] - other.green) + abs(rgb[2] - other.blue) < 100:
-            return _WHITE
-    return graphics.Color(*rgb)
+def _time_subs(seconds: float, previous: float | None) -> list[tuple[tuple, list[str]]]:
+    """A Best Time's bottom line: how much faster (green), then the time it beat (grey); `BEST TIME` with no saved
+    previous one (Joel's pick from real-screen mock-ups, 2026-11-22)."""
+    if previous is None:
+        return [(_BLUE, ['BEST TIME'])]
+    faster = fmt_time(int(previous + 0.5) - int(seconds + 0.5))
+    return [(_GREEN, [f'{faster} FASTER', f'-{faster}']), (_GREY, [f'WAS {fmt_time(previous)}'])]
 
 
-def compact_turn(card_t: float, count: int, detail_interval: float) -> int:
-    """Which of `count` bottom-line turns shows card_t seconds after the burst (32 rows).
+def pr_turns(summary: dict) -> list[tuple[list[str], str, list[tuple[tuple, list[str]]]]]:
+    """Every record the workout broke, as (headline wordings, value, bottom lines), output first.
 
-    The settled card is up for one detail interval plus CARD_HOLD_SECONDS (as build_rotation_pages
-    times the page); the turns share that evenly and the last one holds to the end, so none comes
-    back for a flicker as the page ends.
+    Wordings run longest first, for the 32-row card to fall back on. The bottom lines share a turn:
+    the output's gain (when the app knew the old record) then its class length; a Best Time's `0:32 FASTER`
+    then `WAS 10:33` (`_time_subs`).
     """
-    share = (detail_interval + CARD_HOLD_SECONDS) / count
-    return min(int(max(0.0, card_t - SETTLE_SECONDS) / share), count - 1)
-
-
-def pr_card_lines(summary: dict) -> tuple[str, str, str | None] | None:
-    """(headline, value, gain) for a PR summary, or None if nothing to show.
-
-    gain is only produced when a previous best is supplied, since Peloton's
-    workout payload flags a PR without saying what the old record was.
-    """
-    if summary.get('is_output_pr') and isinstance(summary.get('total_output_kj'), (int, float)):
+    dur = summary.get('duration_min')
+    length = [(_BLUE, [f'{int(dur)} MIN CLASS', f'{int(dur)} MIN'])] if _number(dur) and dur > 0 else []
+    turns = []
+    if summary.get('is_output_pr') and _number(summary.get('total_output_kj')):
         precise = summary.get('total_work_kj')
-        value = precise if isinstance(precise, (int, float)) else summary['total_output_kj']
+        value = precise if _number(precise) else summary['total_output_kj']
         previous = summary.get('previous_best_kj')
-        gain = None
-        if isinstance(previous, (int, float)) and value > previous:
+        subs = list(length)
+        if _number(previous) and value > previous:
             diff = value - previous
             # Small PRs are common; don't let "+0.8" round away to "+0".
-            gain = f'+{diff:.1f} KJ' if diff < 1 else f'+{_whole(diff)} KJ'
+            subs.insert(0, (_GREEN, [f'+{diff:.1f} KJ' if diff < 1 else f'+{_whole(diff):,} KJ']))
         # The app's Total Output, not the precise work: they can round differently.
-        return 'OUTPUT PR', f'{_whole(summary["total_output_kj"])} KJ', gain
-    if summary.get('is_splits_pr') and summary.get('row_split_sec_per_500m'):
-        return 'SPLITS PR', f'{_fmt_split(summary["row_split_sec_per_500m"])}/500', None
-    if summary.get('is_pr'):
-        return 'NEW PR', '', None
-    return None
+        turns.append((['OUTPUT PR'], f'{_whole(summary["total_output_kj"]):,} KJ', subs))
+    if summary.get('is_splits_pr') and _number(summary.get('row_split_sec_per_500m')):
+        turns.append((['SPLITS PR'], f'{_fmt_split(summary["row_split_sec_per_500m"])}/500', length))
+    for label, seconds, previous in best_times(summary):
+        wordings = [f'{label} BEST', label] + ([_SHORT_LABELS[label]] if label in _SHORT_LABELS else [])
+        turns.append((wordings, fmt_time(seconds), _time_subs(seconds, previous)))
+    if not turns and summary.get('is_pr'):
+        turns.append((['NEW PR'], '', length))
+    return turns
+
+
+def turn_seconds(detail_interval: float) -> float:
+    return (detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS) + CARD_HOLD_SECONDS
+
+
+def pr_page_seconds(summary: dict, detail_interval: float) -> float:
+    """The card's page: the trophy's entrance, then one turn per record (at least one)."""
+    return INTRO_SECONDS + max(1, len(pr_turns(summary))) * turn_seconds(detail_interval)
+
+
+def _share(t: float, count: int, span: float) -> int:
+    """Which of `count` equal shares of `span` seconds t falls in; the last holds past the end."""
+    return min(int(max(0.0, t) / (span / count)), count - 1) if count else 0
+
+
+def _draw(matrix, font, x: int, y: int, color, text: str) -> None:
+    graphics.DrawText(matrix, font, x, y, graphics.Color(*color), text)
+
+
+def _trophy_cells(rows, left: int, top: int) -> set[tuple[int, int]]:
+    return {(left + x, top + y) for y, row in enumerate(rows) for x, cell in enumerate(row) if cell == '#'}
+
+
+_SHORT_TROPHY = _trophy_cells(TROPHY_MID, _SHORT_TROPHY_LEFT, _SHORT_TROPHY_TOP)
+
+
+def short_line_x(font, text: str) -> int:
+    """32 rows: x for a line centred in the columns right of the trophy, moved left only as far as the
+    panel's right edge needs."""
+    lit = get_text_width(font, text) - 1  # the advance ends in a blank column
+    centred = _SHORT_TEXT_LEFT + (64 - _SHORT_TEXT_LEFT - lit) // 2
+    return max(0, min(centred, 64 - lit))
+
+
+def clears_trophy(font, text: str, x: int, baseline: int) -> bool:
+    """True when the line's box, with a pixel all round, misses every trophy pixel on 32 rows."""
+    top = baseline - font.baseline
+    rows = range(top - 1, top + font.height + 1)
+    cols = range(x - 1, x + get_text_width(font, text))
+    return not any((c, r) in _SHORT_TROPHY for r in rows for c in cols)
+
+
+def short_wording(font, wordings: list[str], baseline: int) -> tuple[str, int]:
+    """The first wording that clears the trophy where it lands, else the last one; with its x."""
+    for text in wordings:
+        x = short_line_x(font, text)
+        if clears_trophy(font, text, x, baseline):
+            return text, x
+    return wordings[-1], short_line_x(font, wordings[-1])
+
+
+def _discipline(summary: dict) -> tuple[str, tuple]:
+    name = summary.get('discipline')
+    if not isinstance(name, str) or not name.strip():
+        return '', _WHITE
+    return name.strip().upper(), discipline_color(normalize_discipline(name))
 
 
 class PrCelebrationScreen(Screen):
-    """Star burst, then a card with the PR type, new value, and class length.
+    """Confetti and a rising trophy, then one turn per record the workout broke.
 
     state is a workout summary from peloton.stats.summaries.summarize_workout().
     """
 
     animated = True
     atomic_frames = True
+    # 20 fps, as on the milestone celebration: slower makes the confetti jump instead of fall.
+    frame_seconds = 0.05
 
     def __init__(self, detail_interval: float = LAST_WORKOUT_DETAIL_INTERVAL_SECONDS):
         self.elapsed = 0.0
-        # The page's own interval (build_rotation_pages sizes the card with it), so 32-row turns fit the card.
+        # The page's own interval (build_rotation_pages sizes the page with it), so the turns fit the page.
         self.detail_interval = detail_interval or LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
 
     def on_enter(self, matrix, state=None):
@@ -125,125 +192,73 @@ class PrCelebrationScreen(Screen):
 
     def render(self, matrix, state: Any | None = None) -> bool:
         summary = state if isinstance(state, dict) else {}
-        lines = pr_card_lines(summary)
-        if lines is None:
+        turns = pr_turns(summary)
+        if not turns:
             return False
-        if self.elapsed < BURST_SECONDS:
-            self._draw_burst(matrix)
-            return True
-        card_t = self.elapsed - BURST_SECONDS
-        settle = min(1.0, card_t / SETTLE_SECONDS)
-        self._draw_settling_star(matrix, settle)
-        if settle < 1:
-            return True
-        if matrix.height < 64:
-            self._draw_compact_card(matrix, summary, card_t, *lines)
+        short = matrix.height < 64
+        draw_confetti(matrix, self.elapsed)
+        rise = 1 - (1 - min(1.0, self.elapsed / RISE_SECONDS)) ** 3
+        if short:
+            top = round(matrix.height - (matrix.height - _SHORT_TROPHY_TOP) * rise)
+            draw_trophy(matrix, TROPHY_MID, _SHORT_TROPHY_LEFT, top, self.elapsed)
         else:
-            self._draw_full_card(matrix, summary, *lines)
-            self._draw_sparkles(matrix, card_t, _SPARKLE_SPOTS)
+            top = round(matrix.height - (matrix.height - _TALL_TROPHY_TOP) * rise)
+            draw_trophy(matrix, TROPHY, _TALL_TROPHY_LEFT, top, self.elapsed)
+        if self.elapsed < INTRO_SECONDS:
+            return True
+        span = turn_seconds(self.detail_interval)
+        index = _share(self.elapsed - INTRO_SECONDS, len(turns), span * len(turns))
+        headlines, value, subs = turns[index]
+        sub = subs[_share(self.elapsed - INTRO_SECONDS - index * span, len(subs), span)] if subs else None
+        name = _discipline(summary)
+        if short:
+            self._draw_short(matrix, name, headlines, value, sub)
+        else:
+            self._draw_tall(matrix, name, headlines, value, sub, index, len(turns))
         return True
 
-    def _draw_burst(self, matrix) -> None:
-        w, h = matrix.width, matrix.height
-        t = self.elapsed / BURST_SECONDS
-        # Ease-out growth, with rays shooting out behind the star.
-        grow = 1 - (1 - t) ** 3
-        outer = 3 + grow * (min(w, h) * 0.42)
-        cx, cy = (w - 1) / 2, (h - 1) / 2
-        ray = outer + 2 + t * 10
-        for i in range(8):
-            angle = i * math.pi / 4 + math.pi / 8
-            for step in range(3):
-                r = ray + step * 2
-                x, y = round(cx + r * math.cos(angle)), round(cy + r * math.sin(angle))
-                if 0 <= x < w and 0 <= y < h:
-                    matrix.SetPixel(x, y, 255, 240 - step * 60, 120 - step * 40)
-        _fill_polygon(matrix, _star_points(cx, cy, outer), _GOLD)
+    @staticmethod
+    def _centred(matrix, font, y: int, color, text: str) -> None:
+        _draw(matrix, font, max((matrix.width - get_text_width(font, text)) // 2, 0), y, color, text)
 
     @staticmethod
-    def _draw_settling_star(matrix, settle: float) -> None:
-        """The star shrinks into a badge at the top as the card appears; on
-        32-row panels there's no room for the badge, so it shrinks away."""
-        w, h = matrix.width, matrix.height
-        compact = h < 64
-        start = min(w, h) * 0.42
-        outer = start - settle * (start if compact else start - 8)
-        star_cy = (h - 1) / 2 - (0 if compact else settle * ((h - 1) / 2 - 10))
-        if outer >= 1:
-            _fill_polygon(matrix, _star_points((w - 1) / 2, star_cy, outer), _GOLD)
+    def _fitting(text: str, *fonts):
+        """The first font the text fits the panel in (2 px spare), else the last."""
+        return next((f for f in fonts if get_text_width(f, text) <= 62), fonts[-1])
 
-    @staticmethod
-    def _card_fonts():
-        headline_font = loaded_fonts.get('titles') or loaded_fonts.get('stats')
-        value_font = loaded_fonts.get('discipline') or headline_font
-        info_font = loaded_fonts.get('info') or headline_font
-        return headline_font, value_font, info_font
-
-    def _draw_compact_card(self, matrix, summary: dict, card_t: float, headline: str, value: str, gain: str | None) -> None:
-        """32 rows: headline between two star badges, the value (or the discipline for a plain
-        NEW PR), and a bottom line that takes turns between gain, class length and discipline."""
-        headline_font, value_font, info_font = self._card_fonts()
-        _centered(matrix, headline_font, 8, _GOLD, headline)
-        self._draw_badges(matrix, get_text_width(headline_font, headline))
-        middle = value
-        if not middle and isinstance(summary.get('discipline'), str):
-            middle = summary['discipline'].upper()
-        value_width = 0
-        if middle:
-            if get_text_width(value_font, middle) > matrix.width - 2:
-                value_font = info_font
-            value_width = get_text_width(value_font, middle)
-            _centered(matrix, value_font, 20, _WHITE, middle)
-        turns = self._compact_bottom_turns(summary, gain, middle)
-        if turns:
-            _centered(matrix, info_font, 30, *turns[compact_turn(card_t, len(turns), self.detail_interval)])
-        margin = (matrix.width - value_width) // 2
-        spots = list(_COMPACT_SPARKLE_SPOTS)
-        if margin >= 6:
-            spots += [(margin // 2, 15), (matrix.width - 1 - margin // 2, 18)]
-        self._draw_sparkles(matrix, card_t, spots)
-
-    @staticmethod
-    def _compact_bottom_turns(summary: dict, gain: str | None, middle: str) -> list[tuple[Any, str]]:
-        """The bottom line's turns: gain, class length, discipline (unless the middle line has it)."""
-        turns = [(_GREEN, gain)] if gain else []
-        dur = summary.get('duration_min')
-        if isinstance(dur, (int, float)):
-            turns.append((_BLUE, f'{int(dur)} MIN CLASS'))
-        discipline = summary.get('discipline')
-        if isinstance(discipline, str) and discipline.strip() and discipline.upper() != middle:
-            turns.append((_label_color(discipline), discipline.upper()))
-        return turns
-
-    @staticmethod
-    def _draw_badges(matrix, headline_width: int) -> None:
-        """A small gold star in each margin beside the headline, where there's room."""
-        margin = (matrix.width - headline_width) // 2
-        if margin < 2 * _COMPACT_BADGE_RADIUS + 2:
-            return
-        cy = 4.5
-        for cx in ((margin - 1) / 2, matrix.width - 1 - (margin - 1) / 2):
-            _fill_polygon(matrix, _star_points(cx, cy, _COMPACT_BADGE_RADIUS), _GOLD)
-
-    def _draw_full_card(self, matrix, summary: dict, headline: str, value: str, gain: str | None) -> None:
-        headline_font, value_font, info_font = self._card_fonts()
-        dur = summary.get('duration_min')
-        _centered(matrix, headline_font, 29, _GOLD, headline)
+    def _draw_tall(self, matrix, name, headlines, value, sub, index: int, count: int) -> None:
+        titles, info, big = loaded_fonts['titles'], loaded_fonts['info'], loaded_fonts['discipline']
+        text, color = name
+        if text:
+            self._centred(matrix, self._fitting(text, titles, info), _TALL_NAME, color, text)
+        # The full wording in the title font, then the label alone, then the smaller font.
+        options = [(h, titles) for h in headlines[:2]] + [(h, info) for h in headlines]
+        headline, font = next(((h, f) for h, f in options if get_text_width(f, h) <= 62), options[-1])
+        self._centred(matrix, font, _TALL_HEAD, _GOLD, headline)
         if value:
-            if get_text_width(value_font, value) > matrix.width - 2:
-                value_font = headline_font
-            _centered(matrix, value_font, 44, _WHITE, value)
-        if gain:
-            _centered(matrix, info_font, 54, _GREEN, gain)
-        if isinstance(dur, (int, float)):
-            _centered(matrix, info_font, 62 if gain else 56, _BLUE, f'{int(dur)} MIN CLASS')
+            self._centred(matrix, self._fitting(value, big, titles), _TALL_VALUE, _WHITE, value)
+        if sub:
+            color, wordings = sub
+            line = next((w for w in wordings if get_text_width(info, w) <= 62), wordings[-1])
+            self._centred(matrix, info, _TALL_SUB, color, line)
+        if count > 1:
+            # A dot per record, the current one gold, centred on the bottom row.
+            left = (matrix.width - (count * 4 - 2)) // 2
+            for i in range(count):
+                for dx in (0, 1):
+                    matrix.SetPixel(left + i * 4 + dx, _TALL_DOTS, *(_GOLD if i == index else _DOT_OFF))
 
-    @staticmethod
-    def _draw_sparkles(matrix, card_t: float, spots: list[tuple[int, int]]) -> None:
-        """Twinkling sparkles around the card."""
-        w, h = matrix.width, matrix.height
-        for i, (x, y) in enumerate(spots):
-            if int(card_t * 4 + i) % 3 == 0 and x < w and y < h:
-                matrix.SetPixel(x, y, 255, 255, 200)
-                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                    matrix.SetPixel(x + dx, y + dy, 150, 130, 40)
+    def _draw_short(self, matrix, name, headlines, value, sub) -> None:
+        info, big = loaded_fonts['info'], loaded_fonts['discipline']
+        text, color = name
+        if text:
+            _draw(matrix, info, short_line_x(info, text), _SHORT_NAME, color, text)
+        headline, x = short_wording(info, headlines, _SHORT_HEAD)
+        _draw(matrix, info, x, _SHORT_HEAD, _GOLD, headline)
+        if value:
+            font = self._fitting(value, big, info)
+            _draw(matrix, font, short_line_x(font, value), _SHORT_VALUE, _WHITE, value)
+        if sub:
+            color, wordings = sub
+            line, x = short_wording(info, wordings, _SHORT_SUB)
+            _draw(matrix, info, x, _SHORT_SUB, color, line)

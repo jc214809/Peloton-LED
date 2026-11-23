@@ -1,5 +1,5 @@
-"""What a refresh asks Peloton for besides the overview: recent workouts, per-workout detail, and the
-optional pages' data (challenges, booked classes, Club Peloton).
+"""What a refresh asks Peloton for besides the overview: personal records, recent workouts, per-workout detail,
+and the optional pages' data (challenges, booked classes, Club Peloton).
 
 `FetchMixin` is mixed into `Dashboard` (peloton/dashboard.py): these methods share its state (the caches
 and the "last asked" clocks) and publish through its `_publish`, so they stay methods rather than functions.
@@ -85,6 +85,24 @@ class FetchMixin:
     def _shows_challenges(self):
         rotation = self.config.get('rotation', DEFAULTS['rotation'])
         return isinstance(rotation, list) and 'challenges' in rotation
+
+    def _personal_records(self, client, user_id, overview):
+        """The rider's records from /personal_records, which has the rowing Best Times /overview leaves out; on a
+        failure, the overview's own list instead, so a refresh never fails over it. A 401 still ends the refresh."""
+        try:
+            records = client.get_personal_records(user_id)
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 401:
+                raise
+            logger.warning("Personal records fetch failed (%s); using the overview's", type(exc).__name__)
+            return overview
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning("Personal records fetch failed (%s); using the overview's", type(exc).__name__)
+            return overview
+        if not isinstance(records, dict) or not isinstance(records.get('personal_records'), list):
+            logger.warning("Personal records response had no list; using the overview's")
+            return overview
+        return records
 
     def _refresh_challenges(self, client, user_id):
         """Fetch the joined challenges when due (hourly; sooner after a failure) and publish them. Only when the

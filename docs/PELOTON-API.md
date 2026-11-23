@@ -310,6 +310,38 @@ pt "$API/api/user/$PELOTON_USER/overview?version=1"
 }
 ```
 
+- **Best Times** (tested 2026-11-22): `personal_records` also has a group `{"name": "Best Times", "slug": "running_metric_splits"}`, the Tread's distance records. Each record's `value` is a display string and `raw_value` is seconds: `{"name": "DISTANCE_1K", "slug": "1K", "value": "10:33", "raw_value": 633.0, "unit": "time", "unit_slug": "time", "workout_id": "...", "workout_date": "2026-11-22T20:28:41Z"}`, then `DISTANCE_1_MILE` (slug `1 Mile`). Only distances you've run appear. The rowing times are not in `overview`; see [`personal_records`](#get-apiuseruser_idpersonal_records), which the board reads instead.
+- **Only the current record.** Nothing here (or anywhere else tried) says what a new record replaced, so keep the old one yourself if you want the gain.
+
+### `GET /api/user/{user_id}/personal_records`
+
+Just the `personal_records` list from `overview`, plus the rowing Best Times that `overview` leaves out. About 6 KB, against `overview`'s 136 KB.
+
+**Auth:** Token + Platform · **Source:** Board (since 2026-11-22: the board's records and Best Times come from here, with `overview`'s list as the fallback) · **Params:** none that change it (`discipline=running` returned the same list)
+
+```bash
+pt "$API/api/user/$PELOTON_USER/personal_records"
+```
+
+```json
+{
+  "personal_records": [
+    {"name": "Running", "slug": "running", "first_workout_date": "2026-11-22T15:28:40", "reset_date": null,
+     "records": [{"name": "20 min", "slug": "1200", "value": 180, "raw_value": 180334.6, "unit": "kj",
+                  "unit_slug": "kj", "workout_id": "aaaa1111bbbb2222cccc3333dddd4444", "workout_date": "2026-11-22T15:28:40"}]},
+    {"name": "Best Times", "slug": "running_metric_splits", "reset_date": null,
+     "records": [{"name": "DISTANCE_1K", "slug": "1K", "value": "10:33", "raw_value": 633.0, "unit": "time",
+                  "unit_slug": "time", "workout_id": "aaaa1111bbbb2222cccc3333dddd4444", "workout_date": "2026-11-22T20:28:41Z"}]},
+    {"name": "Best Rowing Times", "slug": "rowing_metric_splits", "reset_date": null,
+     "records": [{"name": "DISTANCE_500M", "slug": "500M", "value": "1:41", "raw_value": 101.0, "unit": "time",
+                  "unit_slug": "time", "workout_id": "aaaa1111bbbb2222cccc3333dddd5555", "workout_date": "2026-01-05T23:25:47Z"}]}
+  ]
+}
+```
+
+- Rowing Best Times seen: `DISTANCE_500M`, `DISTANCE_1K`, `DISTANCE_2K`, `DISTANCE_5K` (slugs `500M`, `1K`, `2K`, `5K`). Running ones past 1 mile weren't seen yet; by the same pattern expect `DISTANCE_5K` with slug `5K`.
+- A length or distance with no record has `value` and `raw_value` `-1` and no `workout_id`.
+
 ### `GET /api/user/{user_id}/calendar`
 
 The days you worked out, grouped by month.
@@ -614,6 +646,29 @@ pt "$API/api/workout/aaaa1111bbbb2222cccc3333dddd4444?joins=ride,ride.instructor
   }
 }
 ```
+
+### `GET /api/workout/{workout_id}/achievements`
+
+The badges one workout earned, with each badge's template. The workout detail's `achievement_templates` has the same templates without the wrapper.
+
+**Auth:** Token · **Source:** Tested (2026-11-22)
+
+```bash
+pt "$API/api/workout/aaaa1111bbbb2222cccc3333dddd4444/achievements"
+```
+
+```json
+{
+  "data": [
+    {"id": "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1", "workout_id": "aaaa1111bbbb2222cccc3333dddd4444",
+     "template": {"name": "1K", "slug": "best_running_distance_1k",
+                  "description": "Awarded for breaking your 1K personal record on the Tread."}}
+  ],
+  "count": 1, "total": 1, "page": 0, "page_count": 1, "show_next": false
+}
+```
+
+Record badges seen: `best_output`, `best_running_distance_1k`, `best_running_distance_1_mile`. They say a record was broken, not by how much. Your own badge list (`/api/user/{id}/achievements`) has milestones, streaks, challenges and form tiers, but not these.
 
 ### `GET /api/workout/{workout_id}/performance_graph`
 
