@@ -4,6 +4,7 @@ from html import escape
 
 from settings_page import logo
 from settings_page.page.icons import icon
+from settings_page.page.script import FORM_SCRIPT
 from settings_page.page.style import STYLE
 from settings_page.page.widgets import _attr, _notice, _post
 
@@ -167,4 +168,4 @@ def pin_page(shown_s=None, wrong=False, board=None, phone=False, sent=None, sign
         'autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" required autofocus aria-label="PIN">'
         '<button type="submit" class="primary block">Sign in</button></form></div></div>' + '</div></div>'
     )
-    return document('Sign in · Board settings', body)
+    return document('Sign in · Board settings', body, FORM_SCRIPT)
