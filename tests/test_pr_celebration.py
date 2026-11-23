@@ -36,8 +36,8 @@ LARGEST = [
         'is_pr': True,
         'discipline': 'Bike Bootcamp',
         'best_times': [
-            {'label': 'MARATHON', 'seconds': 17999},
-            {'label': 'HALF MARATHON', 'seconds': 7999},
+            {'label': 'MARATHON', 'seconds': 17999, 'previous_seconds': 21729},  # 1:02:10 FASTER, WAS 6:02:09
+            {'label': 'HALF MARATHON', 'seconds': 7999, 'previous_seconds': 8000},
             {'label': '10K', 'seconds': 3895},
             {'label': '1 MILE', 'seconds': 1005},
         ],
@@ -99,6 +99,31 @@ def test_output_turn_shows_the_gain_then_the_class_length():
     assert gain({'total_output_kj': 189.0, 'total_work_kj': 188.5, 'previous_best_kj': 181.9}) == ('+7 KJ', '189 KJ')
     assert gain({'total_output_kj': 2105, 'previous_best_kj': 980}) == ('+1,125 KJ', '2,105 KJ')
     assert gain({'total_output_kj': 412}) == (None, '412 KJ')
+
+
+def test_a_beaten_time_says_how_much_faster_then_what_it_was():
+    GREY = (150, 150, 170)
+    run = {**TREAD_RUN, 'best_times': [{'label': '1K', 'seconds': 601.0, 'previous_seconds': 633.0}]}
+    assert pr_turns(run)[1] == (['1K BEST', '1K'], '10:01', [(GREEN, ['0:32 FASTER', '-0:32']), (GREY, ['WAS 10:33'])])
+    hour = {'is_pr': True, 'best_times': [{'label': 'MARATHON', 'seconds': 17999, 'previous_seconds': 21729}]}
+    assert pr_turns(hour)[0][2] == [(GREEN, ['1:02:10 FASTER', '-1:02:10']), (GREY, ['WAS 6:02:09'])]
+
+
+@pytest.mark.parametrize('previous', [601.0, 601.4, 590.0, True, '633', None, -1])
+def test_no_slower_saved_time_keeps_best_time(previous):
+    """Equal to the second (Peloton's times are whole seconds), faster, or damaged in the cache: just BEST TIME."""
+    run = {'is_pr': True, 'best_times': [{'label': '1K', 'seconds': 601.0, 'previous_seconds': previous}]}
+    assert pr_turns(run)[0][2] == [(BLUE, ['BEST TIME'])]
+
+
+@pytest.mark.parametrize('height', [64, 32])
+def test_faster_shows_green_then_the_old_time_grey(height, monkeypatch):
+    GREY = (150, 150, 170)
+    run = {'is_pr': True, 'discipline': 'Running', 'best_times': [{'label': '1K', 'seconds': 601.0, 'previous_seconds': 633.0}]}
+    early = _render(run, _turn(0, into=0.5), height, confetti=False, monkeypatch=monkeypatch)
+    late = _render(run, _turn(0, into=3.5), height, confetti=False, monkeypatch=monkeypatch)
+    assert _points(early, GREEN, height) and not _points(early, GREY, height)
+    assert _points(late, GREY, height) and not _points(late, GREEN, height)
 
 
 def test_damaged_best_times_are_skipped():
@@ -383,12 +408,15 @@ BEST_TIMES_GROUP = {
 }
 
 
-def test_best_times_are_not_output_records():
-    """Regression: 633 s (10:33) was stored as a 0.6 kJ output record, so a later 1K record would have
-    shown a gain against it."""
+def test_best_times_are_saved_in_seconds_and_never_read_as_output():
+    """Regression: 633 s (10:33) was stored as a 0.6 kJ output record, so a later 1K record would have shown a
+    gain against it. Now a Best Time is saved in seconds, and the output gain never reads one."""
     from peloton.stats.records import merge_personal_records, parse_personal_records, previous_best_kj
 
-    assert parse_personal_records({'personal_records': [BEST_TIMES_GROUP]}) == {}
+    assert parse_personal_records({'personal_records': [BEST_TIMES_GROUP]}) == {
+        'running_metric_splits|DISTANCE_1K': {'seconds': 633.0, 'label': '1K', 'workout_id': 'run', 'workout_date': 'd'},
+        'running_metric_splits|DISTANCE_1_MILE': {'seconds': 1005.0, 'label': '1 MILE', 'workout_id': 'run', 'workout_date': None},
+    }
     stale = {
         'running_metric_splits|DISTANCE_1K': {'value_kj': 0.6, 'workout_id': 'old', 'workout_date': 'd'},
         'running|20 min': {'value_kj': 180.3, 'workout_id': 'run', 'workout_date': 'd'},
@@ -396,6 +424,12 @@ def test_best_times_are_not_output_records():
     merged = merge_personal_records(stale, {})
     assert list(merged) == ['running|20 min']
     assert previous_best_kj('run', merged) is None
+    # A workout holding a time and an output record: the output gain skips the time, whichever comes first.
+    both = {
+        'running_metric_splits|DISTANCE_1K': {'seconds': 600.0, 'workout_id': 'run', 'previous': {'seconds': 633.0}},
+        'running|20 min': {'value_kj': 190.0, 'workout_id': 'run', 'previous': {'value_kj': 180.3}},
+    }
+    assert previous_best_kj('run', both) == 180.3
 
 
 ROWING_TIMES_GROUP = {
@@ -409,7 +443,7 @@ def test_rowing_best_times_are_best_times_too():
     from peloton.stats.records import best_times_for, merge_personal_records, parse_personal_records
 
     records = {'personal_records': [BEST_TIMES_GROUP, ROWING_TIMES_GROUP]}
-    assert parse_personal_records(records) == {}
+    assert parse_personal_records(records)['rowing_metric_splits|DISTANCE_500M']['seconds'] == 101.0
     assert best_times_for('row', records) == [{'label': '500M', 'seconds': 101.0}]
     assert merge_personal_records({'rowing_metric_splits|DISTANCE_500M': {'value_kj': 0.1, 'workout_id': 'x'}}, {}) == {}
     turns = pr_turns(
@@ -422,6 +456,28 @@ def test_rowing_best_times_are_best_times_too():
         }
     )
     assert [(h[0], v) for h, v, _ in turns] == [('SPLITS PR', '2:08/500'), ('500M BEST', '1:41')]
+
+
+def test_best_times_carry_the_saved_time_they_beat():
+    from peloton.stats.records import best_times_for, merge_personal_records, parse_personal_records
+
+    def times(holder, k1, mile):
+        rows = [
+            {'name': 'DISTANCE_1K', 'slug': '1K', 'raw_value': k1, 'workout_id': holder},
+            {'name': 'DISTANCE_1_MILE', 'slug': '1 Mile', 'raw_value': mile, 'workout_id': 'today' if holder == 'next' else holder},
+        ]
+        return {'personal_records': [{'slug': 'running_metric_splits', 'records': rows}]}
+
+    today, after = times('today', 633.0, 1005.0), times('next', 601.0, 1005.0)
+    table = merge_personal_records(merge_personal_records({}, parse_personal_records(today)), parse_personal_records(after))
+    assert table['running_metric_splits|DISTANCE_1K']['previous'] == {'seconds': 633.0, 'workout_id': 'today', 'workout_date': None}
+    assert best_times_for('next', after, table) == [{'label': '1K', 'seconds': 601.0, 'previous_seconds': 633.0}]
+    assert best_times_for('next', after) == [{'label': '1K', 'seconds': 601.0}]  # no saved table: no gain
+    # A first record on a distance, or a table whose holder differs: no gain.
+    assert best_times_for('today', after, table) == [{'label': '1 MILE', 'seconds': 1005.0}]
+    assert best_times_for(
+        'next', after, {'running_metric_splits|DISTANCE_1K': {'workout_id': 'other', 'previous': {'seconds': 633.0}}}
+    ) == [{'label': '1K', 'seconds': 601.0}]
 
 
 def test_best_times_for_a_workout_in_peloton_order():

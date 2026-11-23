@@ -342,7 +342,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         detail = self._strength_detail(client, workout, signature)
         summary = summarize_workout(workout, perf, detail)
         summary['previous_best_kj'] = previous_best_kj(identity, personal_records)
-        summary['best_times'] = best_times_for(identity, records)
+        summary['best_times'] = best_times_for(identity, records, personal_records)
         if summary['best_times']:
             summary['is_pr'] = True
         if self.config.get('workout_insights'):

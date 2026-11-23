@@ -555,8 +555,14 @@ def test_best_times_make_a_pr_workout_and_list_on_its_summary(tmp_path):
     summary = snap['summaries'][0]
     assert summary['best_times'] == [{'label': '1K', 'seconds': 633.0}, {'label': '1 MILE', 'seconds': 1005.0}]
     assert summary['is_pr'] and not summary['is_output_pr']
-    # Times aren't output: nothing lands in the output records table.
-    assert snap['personal_records'] == {}
+    # Saved in seconds for the next record's gain, never as output.
+    assert snap['personal_records']['running_metric_splits|DISTANCE_1K'] == {
+        'seconds': 633.0,
+        'label': '1K',
+        'workout_id': 'tread-run',
+        'workout_date': None,
+    }
+    assert not any('value_kj' in entry for entry in snap['personal_records'].values())
     # Without Best Times the same workout is no PR.
     client.get_overview.return_value = dict(data['overview'], personal_records=[])
     dashboard.refresh()
@@ -620,6 +626,29 @@ def test_personal_records_rejected_token_still_ends_the_refresh(tmp_path):
         dashboard._personal_records(client, 'demo', {})
     client.get_personal_records.side_effect = requests.HTTPError(response=None)
     assert dashboard._personal_records(client, 'demo', {'personal_records': []}) == {'personal_records': []}
+
+
+def test_a_beaten_best_time_carries_the_saved_one_and_survives_restart(tmp_path):
+    dashboard, client, token = setup_dashboard(tmp_path, {'cache_path': str(tmp_path / 'cache.json')})
+    data = demo_data()
+
+    def overview(holder, seconds):
+        record = {'name': 'DISTANCE_1K', 'slug': '1K', 'raw_value': seconds, 'unit': 'time', 'workout_id': holder}
+        return dict(data['overview'], personal_records=[{'slug': 'running_metric_splits', 'records': [record]}])
+
+    client.history = [dict(data['workouts'][0], id='today', is_total_work_personal_record=False)]
+    client.get_overview.return_value = overview('today', 633.0)
+    dashboard.refresh()
+    assert dashboard.snapshot()['summaries'][0]['best_times'] == [{'label': '1K', 'seconds': 633.0}]
+    client.history = [dict(data['workouts'][0], id='next', is_total_work_personal_record=False)]
+    client.get_overview.return_value = overview('next', 601.0)
+    dashboard.refresh()
+    assert dashboard.snapshot()['summaries'][0]['best_times'] == [{'label': '1K', 'seconds': 601.0, 'previous_seconds': 633.0}]
+    offline = Mock()
+    offline.get_me.side_effect = requests.ConnectionError('offline')
+    restarted = Dashboard(token, {'cache_path': str(tmp_path / 'cache.json')}, client_factory=lambda _: offline)
+    assert restarted.snapshot()['summaries'][0]['best_times'][0]['previous_seconds'] == 633.0
+    assert restarted.snapshot()['personal_records']['running_metric_splits|DISTANCE_1K']['previous']['seconds'] == 633.0
 
 
 def test_pr_set_before_first_capture_has_no_previous_best(tmp_path):

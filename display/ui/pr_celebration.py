@@ -26,6 +26,7 @@ _WHITE = (255, 255, 255)
 _GREEN = (40, 220, 90)
 _BLUE = (0, 120, 255)
 _DOT_OFF = (70, 70, 90)
+_GREY = (150, 150, 170)
 
 # Extra time each record's turn holds on top of one detail interval: a PR is a big moment (Joel, 2026-11-09).
 CARD_HOLD_SECONDS = 2.0
@@ -54,21 +55,37 @@ def fmt_time(seconds) -> str:
     return f'{hours}:{rest // 60:02d}:{rest % 60:02d}' if hours else f'{rest // 60}:{rest % 60:02d}'
 
 
-def best_times(summary: dict) -> list[tuple[str, float]]:
-    """The summary's Best Times as (label, seconds), skipping anything damaged: the cache can hold anything."""
+def best_times(summary: dict) -> list[tuple[str, float, float | None]]:
+    """The summary's Best Times as (label, seconds, the time it beat or None), skipping anything damaged: the cache
+    can hold anything. A previous time that isn't a slower, whole positive number is dropped, keeping the time."""
     bests = summary.get('best_times')
-    return [
-        (b['label'].strip().upper(), b['seconds'])
-        for b in (bests if isinstance(bests, list) else [])
-        if isinstance(b, dict) and isinstance(b.get('label'), str) and b['label'].strip() and _number(b.get('seconds')) and b['seconds'] > 0
-    ]
+    out = []
+    for b in bests if isinstance(bests, list) else []:
+        if not (isinstance(b, dict) and isinstance(b.get('label'), str) and b['label'].strip()):
+            continue
+        if not (_number(b.get('seconds')) and b['seconds'] > 0):
+            continue
+        previous = b.get('previous_seconds')
+        slower = _number(previous) and int(previous + 0.5) > int(b['seconds'] + 0.5)
+        out.append((b['label'].strip().upper(), b['seconds'], previous if slower else None))
+    return out
+
+
+def _time_subs(seconds: float, previous: float | None) -> list[tuple[tuple, list[str]]]:
+    """A Best Time's bottom line: how much faster (green), then the time it beat (grey); `BEST TIME` with no saved
+    previous one (Joel's pick from real-screen mock-ups, 2026-11-22)."""
+    if previous is None:
+        return [(_BLUE, ['BEST TIME'])]
+    faster = fmt_time(int(previous + 0.5) - int(seconds + 0.5))
+    return [(_GREEN, [f'{faster} FASTER', f'-{faster}']), (_GREY, [f'WAS {fmt_time(previous)}'])]
 
 
 def pr_turns(summary: dict) -> list[tuple[list[str], str, list[tuple[tuple, list[str]]]]]:
     """Every record the workout broke, as (headline wordings, value, bottom lines), output first.
 
     Wordings run longest first, for the 32-row card to fall back on. The bottom lines share a turn:
-    the output's gain (when the app knew the old record) then its class length.
+    the output's gain (when the app knew the old record) then its class length; a Best Time's `0:32 FASTER`
+    then `WAS 10:33` (`_time_subs`).
     """
     dur = summary.get('duration_min')
     length = [(_BLUE, [f'{int(dur)} MIN CLASS', f'{int(dur)} MIN'])] if _number(dur) and dur > 0 else []
@@ -86,9 +103,9 @@ def pr_turns(summary: dict) -> list[tuple[list[str], str, list[tuple[tuple, list
         turns.append((['OUTPUT PR'], f'{_whole(summary["total_output_kj"]):,} KJ', subs))
     if summary.get('is_splits_pr') and _number(summary.get('row_split_sec_per_500m')):
         turns.append((['SPLITS PR'], f'{_fmt_split(summary["row_split_sec_per_500m"])}/500', length))
-    for label, seconds in best_times(summary):
+    for label, seconds, previous in best_times(summary):
         wordings = [f'{label} BEST', label] + ([_SHORT_LABELS[label]] if label in _SHORT_LABELS else [])
-        turns.append((wordings, fmt_time(seconds), [(_BLUE, ['BEST TIME'])]))
+        turns.append((wordings, fmt_time(seconds), _time_subs(seconds, previous)))
     if not turns and summary.get('is_pr'):
         turns.append((['NEW PR'], '', length))
     return turns
