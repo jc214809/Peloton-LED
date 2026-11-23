@@ -3,12 +3,16 @@
 64 rows ("C1", Joel's pick on 2026-11-14): the title in gold, a smooth ring from the current tier to the next
 one in the next tier's colour, the number and unit inside it, and `497 TO 6K` along the bottom.
 32 rows ("A"): the title, the number, a bar from tier to tier, then the current tier and `497 TO 6K`.
+At its top tier (Activity at Gold) the ring or bar is full in that tier's colour, `GOLD EARNED` runs along the
+bottom in it, the intro's flash lights the whole ring, not just its end, and from then on small stars in that
+colour twinkle in turn round the ring (64 rows) or beside the number (32 rows) for as long as the page is up.
 State: one record from peloton.feeds.challenges (validated again here: the cache can hold anything).
 
 Each time the page is shown it plays a short intro, like the journey page's (20 fps, settled by INTRO_SECONDS):
 the title, unit and bottom line are there from the first frame; the ring (64 rows) or the bar (32 rows) fills
 from empty to the real figure with an ease-out while the number counts up with it, and on 64 rows the ring's
-leading end then flashes once. After that the page holds still, and that settled frame is the page.
+leading end then flashes once. After that the page holds still (but for a top tier's stars), and that settled
+frame is the page.
 """
 
 import math
@@ -17,7 +21,7 @@ from functools import lru_cache
 
 from display.display import get_text_width, loaded_fonts
 from driver import graphics
-from peloton.feeds.challenges import MONTH_ABBREVIATIONS, UNEARNED, tier_progress, valid_challenge
+from peloton.feeds.challenges import MONTH_ABBREVIATIONS, UNEARNED, complete, tier_progress, valid_challenge
 
 from .journey_screen import ease_out
 from .screen import Screen
@@ -43,6 +47,13 @@ SWEEP_FRAMES = round(SWEEP_SECONDS / FRAME_SECONDS)
 FLASH_FRAMES = round((INTRO_SECONDS - SWEEP_SECONDS) / FRAME_SECONDS)
 FLASH_PEAK = 0.7  # at most this much of the way to white
 FLASH_RADIUS = 4.5  # pixels from the ring's end that brighten
+# A top tier's stars (Joel's pick 2026-11-22, "twinkle"): (x, y, frame offset) of each one's centre, clear of
+# the ring, title, bottom line (64 rows) and bar (32 rows) at their largest. Each grows to its largest arm and
+# back over TWINKLE_SIZES, then rests until its cycle comes round again, the offsets taking them in turn.
+TWINKLE_STARS_64 = ((6, 14, 0), (57, 15, 7), (6, 25, 5), (58, 29, 11), (4, 44, 12), (59, 47, 3), (10, 52, 9), (53, 53, 15))
+TWINKLE_STARS_32 = ((4, 10, 0), (59, 11, 9), (9, 15, 4), (54, 15, 13))
+TWINKLE_SIZES = (0, 1, 2, 3, 2, 1)
+TWINKLE_CYCLE = 18  # frames
 # The number inside the ring: the widest advance that clears the ring's inside at its rows.
 RING_NUMBER_WIDTH = 33
 # The unit under it, in the 4 px `stats` font: the ring's inside is 31 px wide at its row.
@@ -51,6 +62,17 @@ RING_UNIT_WIDTH = 31
 
 def tier_color(title):
     return TIER_COLORS.get(str(title or '').strip().upper(), GOLD)
+
+
+def ring_color(challenge):
+    """The next tier's colour; the earned one's at the top tier."""
+    return tier_color((challenge['next'] or challenge['tier'])['title'])
+
+
+def earned_line(challenge, font, width):
+    """`GOLD EARNED` at the top tier; just `GOLD` when that is too wide."""
+    line = f'{challenge["tier"]["title"]} EARNED'
+    return line if get_text_width(font, line) <= width else challenge['tier']['title']
 
 
 def tier_label(tier):
@@ -139,19 +161,46 @@ def flash(elapsed):
     return FLASH_PEAK * math.sin(math.pi * (frame + 0.5) / FLASH_FRAMES)
 
 
-def flashed(pixels, fraction, strength):
-    """`pixels` with those near the arc's end blended toward white by `strength` (less with distance)."""
+def flashed(pixels, fraction, strength, whole=False):
+    """`pixels` with those near the arc's end blended toward white by `strength` (less with distance); every lit
+    one evenly when `whole` (a top tier earned)."""
     if strength <= 0 or fraction <= 0:
         return pixels
     ex, ey = ring_end(fraction)
     track = RING_TRACK
     out = []
     for x, y, r, g, b in pixels:
-        weight = strength * (1 - math.hypot(x + 0.5 - ex, y + 0.5 - ey) / FLASH_RADIUS)
+        weight = strength if whole else strength * (1 - math.hypot(x + 0.5 - ex, y + 0.5 - ey) / FLASH_RADIUS)
         if weight > 0 and (r, g, b) != track:
             r, g, b = (round(c + (255 - c) * weight) for c in (r, g, b))
         out.append((x, y, r, g, b))
     return out
+
+
+def star_size(elapsed, offset, largest):
+    """How long one star's arms are now: 0 until the sweep lands, then growing, shrinking and resting in turn."""
+    frame = intro_frame(elapsed) - SWEEP_FRAMES
+    if frame < 0:
+        return 0
+    phase = (frame + offset) % TWINKLE_CYCLE
+    return min(largest, TWINKLE_SIZES[phase]) if phase < len(TWINKLE_SIZES) else 0
+
+
+def star_pixels(x, y, size, color):
+    """A crisp + star: a white centre, arms in `color`, their tips at half brightness."""
+    if size <= 0:
+        return []
+    pixels = [(x, y, WHITE)]
+    for d in range(1, size + 1):
+        arm = color if d < size else tuple(c // 2 for c in color)
+        pixels += [(x + d, y, arm), (x - d, y, arm), (x, y + d, arm), (x, y - d, arm)]
+    return pixels
+
+
+def _twinkle(matrix, stars, elapsed, color, largest):
+    for x, y, offset in stars:
+        for px, py, c in star_pixels(x, y, star_size(elapsed, offset, largest), color):
+            matrix.SetPixel(px, py, *c)
 
 
 def counted_shown(shown, grown):
@@ -227,6 +276,14 @@ def remaining_line(challenge, font, width):
     return to_next
 
 
+def stars_beside(number, font):
+    """The 32-row stars that clear the number (largest arm 2, two columns' gap): none beside 123,456."""
+    width = get_text_width(font, number)
+    left = max((64 - width + 1) // 2, 0)
+    right = left + width - 1
+    return tuple(star for star in TWINKLE_STARS_32 if star[0] + 4 < left or star[0] - 4 > right)
+
+
 class ChallengeScreen(Screen):
     animated = True
     atomic_frames = True
@@ -243,7 +300,7 @@ class ChallengeScreen(Screen):
         self.elapsed += max(0, dt)
 
     def render(self, matrix, state=None):
-        if not valid_challenge(state) or state.get('next') is None:
+        if not valid_challenge(state) or (state.get('next') is None and not complete(state)):
             return False
         if matrix.height < 64:
             return self._render_short(matrix, state)
@@ -253,8 +310,9 @@ class ChallengeScreen(Screen):
         fraction = round(tier_progress(state), 3)
         grown = sweep(self.elapsed)
         shown_fraction = round(fraction * grown, 3)
-        pixels = ring_pixels(shown_fraction, tier_color(state['next']['title']))
-        for x, y, r, g, b in flashed(pixels, fraction, flash(self.elapsed)):
+        done = complete(state)
+        pixels = ring_pixels(shown_fraction, ring_color(state))
+        for x, y, r, g, b in flashed(pixels, fraction, flash(self.elapsed), whole=done):
             matrix.SetPixel(x, y, r, g, b)
         cx = RING_CENTRE[0]
         font, final = ring_number(state['shown'])
@@ -266,7 +324,11 @@ class ChallengeScreen(Screen):
         while unit and get_text_width(fonts['stats'], unit) > RING_UNIT_WIDTH:
             unit = unit[:-1]
         _centre_at(matrix, fonts['stats'], cx, 43, GREY, unit)
-        _centre(matrix, fonts['stats'], 63, WHITE, remaining_line(state, fonts['stats'], matrix.width))
+        if done:
+            _centre(matrix, fonts['stats'], 63, ring_color(state), earned_line(state, fonts['stats'], matrix.width))
+            _twinkle(matrix, TWINKLE_STARS_64, self.elapsed, ring_color(state), 3)
+        else:
+            _centre(matrix, fonts['stats'], 63, WHITE, remaining_line(state, fonts['stats'], matrix.width))
         return True
 
     def _render_short(self, matrix, state):
@@ -277,13 +339,18 @@ class ChallengeScreen(Screen):
         compact = get_text_width(large, state['shown']) > 62
         number = counted_shown(state['shown'], grown)
         _centre(matrix, large, 18, WHITE, compact_number(number) if compact else number)
+        final = compact_number(state['shown']) if compact else state['shown']
         left, right, top = 3, 60, 21
-        bar = tier_color(state['next']['title'])
+        bar = ring_color(state)
         filled = round((right - left + 1) * tier_progress(state) * grown)
         for x in range(left, right + 1):
             color = bar if x < left + filled else BAR_TRACK
             for y in range(top, top + 3):
                 matrix.SetPixel(x, y, *color)
+        if complete(state):
+            _centre(matrix, small, 31, bar, earned_line(state, small, 60))
+            _twinkle(matrix, stars_beside(final, large), self.elapsed, bar, 2)
+            return True
         line = remaining_line(state, small, 60)
         tier = tier_label(state['tier'])
         if get_text_width(small, tier) + get_text_width(small, line) + 4 <= 60:

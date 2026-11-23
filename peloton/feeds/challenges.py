@@ -141,22 +141,39 @@ def valid_challenge(challenge):
     )
 
 
+def _has_progress(challenge):
+    """Above 0, and so is the number the page draws."""
+    shown = challenge['shown'].replace(',', '')
+    return challenge['value'] > 0 and (not _NUMBER.match(shown) or float(shown) > 0)
+
+
+def complete(challenge):
+    """At its top tier: no tier left to reach, and one earned (Activity at Gold)."""
+    return challenge['next'] is None and challenge['tier']['title'] != UNEARNED
+
+
 def shown_challenges(challenges, now):
-    """The challenges with a page, soonest-ending first: still running, with some progress and a tier to go
-    for. A challenge at its top tier has no next tier, and one at 0 (say, one counting only its own series'
-    classes) would only show an empty ring."""
+    """The challenges with a page, soonest-ending first: still running, with some progress, and a tier to go
+    for or the top one earned (the page celebrates it). One at 0 (say, one counting only its own series'
+    classes) would only show an empty ring; so would one whose number Peloton rounds to 0 (0.04 miles is
+    '0.0')."""
     if not isinstance(challenges, list):
         return []
     shown = [
         c
         for c in challenges
-        if valid_challenge(c) and c['next'] is not None and c['value'] > 0 and (c['end_time'] is None or c['end_time'] > now)
+        if valid_challenge(c)
+        and (c['next'] is not None or complete(c))
+        and _has_progress(c)
+        and (c['end_time'] is None or c['end_time'] > now)
     ]
     return sorted(shown, key=lambda c: c['end_time'] if c['end_time'] is not None else math.inf)
 
 
 def tier_progress(challenge):
-    """How far from the current tier to the next one, 0 to 1."""
+    """How far from the current tier to the next one, 0 to 1; 1 at the top tier."""
+    if challenge['next'] is None:
+        return 1.0
     low, high = challenge['tier']['value'], challenge['next']['value']
     if high <= low:
         return 0.0

@@ -42,8 +42,7 @@ SCREENS = (
     (
         'challenges',
         'Challenges',
-        'Each Peloton challenge you joined: how far to its next tier. Only running challenges with some '
-        'progress and a tier still to reach.',
+        'Each Peloton challenge you joined: how far to its next tier, or the top tier earned. Only running challenges with some progress.',
     ),
     (
         'next_class',
