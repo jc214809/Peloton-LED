@@ -10,7 +10,7 @@ from .insight_frames import draw_insight_slide
 from .rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, detail_at, rotating_details
 from .sprites import _TROPHY_H, _TROPHY_W, _draw_trophy
 from .stat_rows import _draw_hr_calories, _draw_short_lines
-from .stats import _value_color, running_form
+from .stats import _value_color, page_heading, running_form
 from .text import _draw_text, _text_width, _truncate, _wrap_two_lines, title_without_length
 
 
@@ -31,10 +31,10 @@ def _whole_panel_frame(matrix, summary: dict, discipline: str, fonts: PageFonts,
     return False
 
 
-def _draw_discipline(matrix, discipline: str, fonts: PageFonts) -> None:
-    """Discipline: fixed at the top for both phases."""
+def _draw_discipline(matrix, discipline: str, fonts: PageFonts, heading: str | None = None) -> None:
+    """Discipline (or `heading` in its colour): fixed at the top for both phases."""
     w = matrix.width
-    disc_text = discipline.upper()
+    disc_text = (heading or discipline).upper()
     disc_font = fonts.title
     if get_text_width(disc_font, disc_text) > w - 2:
         disc_font = fonts.text
@@ -128,7 +128,7 @@ def render_short(matrix, summary: dict, discipline: str, fonts: PageFonts, elaps
     """
     if _whole_panel_frame(matrix, summary, discipline, fonts, elapsed, detail_interval):
         return True
-    _draw_discipline(matrix, discipline, fonts)
+    _draw_discipline(matrix, discipline, fonts, page_heading(summary, discipline))
     if elapsed < detail_interval:
         _draw_intro(matrix, summary, fonts)
         return True

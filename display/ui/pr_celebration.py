@@ -17,7 +17,7 @@ from peloton.selection import normalize_discipline
 
 from .celebration_screen import INTRO_SECONDS, RISE_SECONDS, TROPHY, TROPHY_MID, draw_confetti, draw_trophy
 from .last_workout.rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS
-from .last_workout.stats import _fmt_split, _whole
+from .last_workout.stats import _fmt_split, _whole, page_heading
 from .lifetime_overview import discipline_color
 from .screen import Screen
 
@@ -88,7 +88,11 @@ def pr_turns(summary: dict) -> list[tuple[list[str], str, list[tuple[tuple, list
     then `WAS 10:33` (`_time_subs`).
     """
     dur = summary.get('duration_min')
-    length = [(_BLUE, [f'{int(dur)} MIN CLASS', f'{int(dur)} MIN'])] if _number(dur) and dur > 0 else []
+    length = []
+    if _number(dur) and dur > 0:
+        # A Lanebreak isn't a class: just its length.
+        wordings = [f'{int(dur)} MIN CLASS', f'{int(dur)} MIN']
+        length = [(_BLUE, wordings[1:] if summary.get('lanebreak') is True else wordings)]
     turns = []
     if summary.get('is_output_pr') and _number(summary.get('total_output_kj')):
         precise = summary.get('total_work_kj')
@@ -165,7 +169,7 @@ def _discipline(summary: dict) -> tuple[str, tuple]:
     name = summary.get('discipline')
     if not isinstance(name, str) or not name.strip():
         return '', _WHITE
-    return name.strip().upper(), discipline_color(normalize_discipline(name))
+    return page_heading(summary, name.strip()).upper(), discipline_color(normalize_discipline(name))
 
 
 class PrCelebrationScreen(Screen):

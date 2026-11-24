@@ -50,8 +50,8 @@ score or a measurement.
 | Calories | ✅ shown | ✅ shown | ✅ shown | ✅ shown (50 of 54) |
 | Heart-rate zones | ✅ shown (12 of 13) | ✅ shown | ✅ shown | ✅ shown (49 of 54) |
 | Output / heart-rate graph | ✅ shown | ✅ shown | ✅ shown | ✅ shown |
-| Muscle groups worked | ❌ not shown (11 of 13) | ❌ not shown (6 of 11) | ❌ not shown | ✅ shown on Strength only (47 of 54), when the class wasn't tracked |
-| Movement tracker: total reps, total volume, targets hit, top lift | — | — | — | ✅ shown on tracked Strength classes (workout detail, not the performance graph) |
+| Muscle groups worked | ❌ not shown (11 of 13) | ❌ not shown (6 of 11) | ❌ not shown | ✅ shown on Strength and Tread Bootcamp only (47 of 54 Strength), when the class wasn't tracked |
+| Movement tracker: total reps, total volume, targets hit, top lift | — | — | — | ✅ shown on tracked Strength classes and Tread Bootcamps (workout detail, not the performance graph; the Vision Tread counts a bootcamp's floor blocks, after the Tread's total output) |
 | Movement tracker: target streak, number of movements, form tips | — | — | — | ❌ not shown |
 | Running form: efficiency score, steps a minute, stride length | — | ✅ shown on Peloton Tread runs (score over the run on 64x64; score on a 0-100 meter on 64x32) | — | — |
 | Running form: bounce, vertical ratio, form tips | — | ❌ not shown | — | — |
@@ -93,7 +93,9 @@ Stats Peloton sends that the board doesn't show, and why:
 - **Muscle groups** except on Strength: Strength pages have the fewest stats,
   so they got the screen first (2026-11-07). Adding another discipline is one
   entry in `MUSCLE_DISCIPLINES`. A tracked Strength class shows its top lift
-  instead (2026-11-13), to keep the page from running long.
+  instead (2026-11-13), to keep the page from running long. Tread Bootcamp
+  joined on 2026-11-23 (Joel's first Vision Tread bootcamp): the tracker's
+  figures and top lift when Peloton counted the floor blocks, else the muscles.
 - **Movement tracker extras** on Strength: the target streak overlaps targets
   hit; Peloton's form tip runs 24 characters on average and up to 53, too long
   for a page. Both are in `movement_tracker_data` if wanted later.
@@ -124,7 +126,7 @@ screens, two fewer than the counts below.
 
 **Screens** = the intro (class length, title and, on 64x64, instructor) + one
 per stat + the output or heart-rate graph + the heart-rate zones bar, and on
-Strength the top lift (tracked) or else the top three muscle groups, and on a Peloton Tread
+Strength and Tread Bootcamp the top lift (tracked) or else the top three muscle groups, and on a Peloton Tread
 run its running form (one more screen, 5 s; walks and other treadmills have none). 64x32 has no room for the instructor in the intro, so it
 gets its own screen. A missing stat, graph, zones bar or muscle list drops its
 screen.

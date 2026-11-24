@@ -10,7 +10,7 @@ from .insight_frames import draw_insight_slide
 from .rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, detail_at, rotating_details
 from .sprites import _TROPHY_H, _TROPHY_W, _draw_trophy
 from .stat_rows import _draw_hr_calories
-from .stats import _stat_details, _value_color, running_form
+from .stats import _stat_details, _value_color, page_heading, running_form
 from .text import _draw_text, _text_width, _truncate, _wrap_two_lines, title_without_length
 
 _BOTTOM_Y = 61
@@ -18,10 +18,11 @@ _STAT_STEP = 6
 _LAST_ROW_Y = _BOTTOM_Y - _STAT_STEP  # Leave room for the HR/cal row below.
 
 
-def _draw_discipline(matrix, discipline: str, fonts: PageFonts) -> tuple[int, int]:
-    """Line 1: the discipline, on screen for both intro and stats. Returns (block_y, line count)."""
+def _draw_discipline(matrix, discipline: str, fonts: PageFonts, heading: str | None = None) -> tuple[int, int]:
+    """Line 1: the discipline (or `heading` in its colour), on screen for both intro and stats.
+    Returns (block_y, line count)."""
     w = matrix.width
-    disc_text = discipline.upper()
+    disc_text = (heading or discipline).upper()
     disc_font = fonts.title
     # Bike Bootcamp is clearer as two 5x8 lines than one tiny 4x6 line.
     # Starting the two-line header higher recovers the added vertical
@@ -187,7 +188,7 @@ def render_tall(matrix, summary: dict, discipline: str, fonts: PageFonts, elapse
     if not in_intro and draw_insight_slide(matrix, summary, discipline, elapsed, detail_interval):
         return True
 
-    block_y, disc_line_count = _draw_discipline(matrix, discipline, fonts)
+    block_y, disc_line_count = _draw_discipline(matrix, discipline, fonts, page_heading(summary, discipline))
     if in_intro:
         intro_without_hr = _draw_intro(matrix, summary, instructor_detail, block_y, disc_line_count, fonts, elapsed)
     elif stat_details:

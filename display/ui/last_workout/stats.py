@@ -107,8 +107,22 @@ def running_form(summary: dict) -> dict:
     }
 
 
+def page_heading(summary: dict, discipline: str) -> str:
+    """The page's top line: a Lanebreak, whose title is only its track (`15 min Pop Punk`), says which game it was
+    (`Bike Lanebreak` for cycling, `Tread Lanebreak` for walking or running, as Bike / Tread Bootcamp do; Joel,
+    2026-11-24); anything else, the discipline. The colour stays the discipline's."""
+    if summary.get('lanebreak') is not True:
+        return discipline
+    disc = discipline.strip().lower()
+    if 'cycling' in disc:
+        return 'Bike Lanebreak'
+    if 'walking' in disc or 'running' in disc:
+        return 'Tread Lanebreak'
+    return 'Lanebreak'
+
+
 def _tracker_details(summary: dict) -> list[dict]:
-    """A tracked strength class's reps, volume (weight x reps) and share of movements on target."""
+    """A tracked strength class's or Tread Bootcamp's reps, volume (weight x reps) and share of movements on target."""
     tracker = strength_tracker(summary)
     details = []
     if tracker.get('reps'):
@@ -176,6 +190,8 @@ def _tread_details(summary: dict, details: list[dict]) -> None:
     strive = summary.get('strive_score')
     _add(details, 'strive score', _fmt_strive(strive) if isinstance(strive, (int, float)) else None)
     _add(details, 'total output', _fmt_output(summary.get('total_output_kj')))
+    # A Tread Bootcamp the movement tracker counted (Vision Tread): its floor blocks' reps, volume and targets.
+    details.extend(_tracker_details(summary))
     # A flat workout's 0 ft and 0.0% are a screen each with nothing to say, so they go (Joel, 2026-11-22).
     if isinstance(elevation, (int, float)) and elevation > 0:
         _add(details, 'elevation gain', f'{elevation:g} {elevation_unit}')

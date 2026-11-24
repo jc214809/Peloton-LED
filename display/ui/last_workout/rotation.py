@@ -4,8 +4,9 @@ from .insight_data import INSIGHT_KINDS, insight_views
 from .stats import _stat_details, _tracker_details, running_form, strength_tracker
 
 # Disciplines whose workout page ends with the muscle-groups slide. Peloton sends
-# the data for most workouts; it's only shown where the page is light on stats.
-MUSCLE_DISCIPLINES = {'strength'}
+# the data for most workouts; it's only shown where the page is light on stats, and
+# never beside the movement tracker's figures (Joel, 2026-11-23: Tread Bootcamp too).
+MUSCLE_DISCIPLINES = {'strength', 'tread bootcamp'}
 
 
 def rotating_details(summary: dict, matrix_height: int = 64) -> list[dict]:
