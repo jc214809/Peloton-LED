@@ -1,7 +1,7 @@
 """What the stats phase cycles through (the rotating details) and how long each one holds."""
 
 from .insight_data import INSIGHT_KINDS, insight_views
-from .stats import _stat_details, _tracker_details, running_form, strength_tracker
+from .stats import _stat_details, _tracker_details, difficulty_detail, lanebreak_details, lanebreak_stats, running_form, strength_tracker
 
 # Disciplines whose workout page ends with the muscle-groups slide. Peloton sends
 # the data for most workouts; it's only shown where the page is light on stats, and
@@ -22,6 +22,7 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> list[dict]:
     stats = [d for d in details if d['label'] != 'instructor']
     if matrix_height < 64:
         stats = [d for d in details if d['label'] == 'instructor'] + stats
+    stats = _lanebreak_lead(summary, matrix_height) + stats
     graph = summary.get('graph')
     if isinstance(graph, dict) and graph.get('values'):
         label = 'output' if graph.get('metric') == 'output' else 'heart rate'
@@ -58,19 +59,37 @@ def rotating_details(summary: dict, matrix_height: int = 64) -> list[dict]:
     return stats
 
 
+def _lanebreak_lead(summary: dict, matrix_height: int) -> list[dict]:
+    """A Lanebreak's own frames, first after the intro: (64x32: the difficulty,) score, beats hit, leaderboard
+    place and time in each lane. 64x64 shows the difficulty in the intro, where a class's instructor goes."""
+    stats = lanebreak_stats(summary)
+    if not stats:
+        return []
+    lead = [difficulty_detail(summary)] if matrix_height < 64 else []
+    lead += lanebreak_details(summary)
+    if stats['place']:
+        lead.append({'label': 'leaderboard', 'value': '', 'kind': 'lanebreak_place'})
+    if stats['lanes']:
+        lead.append({'label': 'lanes', 'value': '', 'kind': 'lanes'})
+    return lead
+
+
 # Default seconds each intro/stat holds for; overridable via the
 # `last_workout_detail_interval` display config key.
 LAST_WORKOUT_DETAIL_INTERVAL_SECONDS = 4.0
 
 
-# The graph, zone-bar, running-form and muscle frames hold this much longer than a stat:
+# The graph, zone-bar, running-form, muscle, lanes and leaderboard frames hold this much longer than a stat:
 # there's more to read than one number.
 GRAPH_FRAME_EXTRA_SECONDS = 1.0
 
 
 def detail_hold_seconds(detail: dict, interval: float) -> float:
     """Seconds one rotating detail stays up."""
-    if interval > 0 and detail.get('kind') in ('graph', 'zones', 'running_form', 'muscles', 'top_lift') + INSIGHT_KINDS:
+    if (
+        interval > 0
+        and detail.get('kind') in ('graph', 'zones', 'running_form', 'muscles', 'top_lift', 'lanes', 'lanebreak_place') + INSIGHT_KINDS
+    ):
         return interval + GRAPH_FRAME_EXTRA_SECONDS
     return interval
 

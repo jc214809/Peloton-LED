@@ -14,6 +14,28 @@ logger = logging.getLogger('peloton-led.api')
 BASE = 'https://api.onepeloton.com'
 # Club Peloton's level and points: an undocumented host Peloton's web app calls (docs/PELOTON-API.md).
 MEMBERS_SCORE = 'https://members-score.onepeloton.com'
+# Peloton's GraphQL gateway: Lanebreak ("Odyssey") lives here (docs/PELOTON-API.md). Values go in as variables.
+GRAPHQL = 'https://gql-graphql-gateway.prod.k8s.onepeloton.com/graphql'
+LANEBREAK_RUN_QUERY = (
+    'query LanebreakRun($id: ID!) { odysseyWorkout(id: $id) { __typename '
+    '... on OdysseyWorkoutSuccessResponse { workout { score difficulty completionPercent } } } }'
+)
+LANEBREAK_TRACKS_QUERY = 'query LanebreakTracks { levels { ... on LevelListSuccessResponse { levels { id title duration volume } } } }'
+LANEBREAK_PLACE_QUERY = (
+    'query LanebreakPlace($request: LeaderboardRequestInput!) { odysseyLeaderboard(leaderboardRequest: $request) { '
+    '... on OdysseyLeaderboardListSuccessResponse { leaderboard { count extraWorkoutEntry { rank workoutId } } } } }'
+)
+LANEBREAK_MINE_QUERY = (
+    'query LanebreakMine($request: UserLeaderboardRequestInput!) { odysseyUserLeaderboard(userLeaderboardRequest: $request) { '
+    '... on OdysseyLeaderboardListSuccessResponse { leaderboard { count leaderboard { workoutId } } } } }'
+)
+# The rider's newest runs on a track looked at when checking that a run is on it (newest first, so a new run leads).
+LANEBREAK_MINE_SIZE = 50
+LANEBREAK_LANES_QUERY = (
+    'query LanebreakLanes { odysseyConfiguration { __typename '
+    '... on OdysseyTreadConfiguration { difficultyConfigs { slug laneConfigs { index minIncline maxIncline } } } '
+    '... on OdysseyBikeConfiguration { difficultyConfigs { slug laneConfigs { index minResistance maxResistance } } } } }'
+)
 
 
 def load_token(path: Path) -> str:
@@ -149,6 +171,42 @@ class PelotonClient:
             return None
         resp.raise_for_status()
         return self._object(resp)
+
+    def _graphql(self, query: str, variables: dict | None = None, platform: str | None = None) -> dict[str, Any]:
+        """One GraphQL request. `platform` overrides the `peloton-platform` header, which picks the machine for
+        Lanebreak. Not through `_get`: a 401 from the gateway must not mark the main API's token as rejected.
+        Raises ValueError when the answer is GraphQL errors with no data."""
+        headers = {'peloton-platform': platform} if platform else {}
+        resp = self._session.post(GRAPHQL, json={'query': query, 'variables': variables or {}}, headers=headers, timeout=20)
+        resp.raise_for_status()
+        body = self._object(resp)
+        if body.get('data') is None:
+            errors = body.get('errors')
+            message = errors[0].get('message') if isinstance(errors, list) and errors and isinstance(errors[0], dict) else None
+            raise ValueError(f'GraphQL error: {str(message or "no data")[:120]}')
+        return body
+
+    def get_lanebreak_run(self, workout_id: str) -> dict[str, Any]:
+        """A Lanebreak's score, difficulty and share of beats hit (~230 bytes)."""
+        return self._graphql(LANEBREAK_RUN_QUERY, {'id': workout_id})
+
+    def get_lanebreak_tracks(self, platform: str) -> dict[str, Any]:
+        """Every Lanebreak track on one machine: ID, title, length and volume only (Tread ~28 KB, bike ~44 KB)."""
+        return self._graphql(LANEBREAK_TRACKS_QUERY, platform=platform)
+
+    def get_lanebreak_place(self, track_id: str, difficulty: str, workout_id: str, platform: str) -> dict[str, Any]:
+        """A run's place among its track's runs at its difficulty (`extraWorkoutEntry`, ~300 bytes)."""
+        request = {'levelId': track_id, 'difficulty': difficulty, 'from': 0, 'size': 0, 'extraWorkoutId': workout_id}
+        return self._graphql(LANEBREAK_PLACE_QUERY, {'request': request}, platform)
+
+    def get_lanebreak_mine(self, track_id: str, platform: str) -> dict[str, Any]:
+        """The rider's own runs on one track, newest first (workout IDs only, ~100-600 bytes)."""
+        request = {'levelId': track_id, 'from': 0, 'size': LANEBREAK_MINE_SIZE, 'sortBy': 'Date'}
+        return self._graphql(LANEBREAK_MINE_QUERY, {'request': request}, platform)
+
+    def get_lanebreak_lanes(self, platform: str) -> dict[str, Any]:
+        """One machine's Lanebreak lanes: each difficulty's six incline or resistance bands (~1.5 KB)."""
+        return self._graphql(LANEBREAK_LANES_QUERY, platform=platform)
 
     def get_reservations(self, user_id: str) -> dict[str, Any]:
         """The live and encore classes the rider booked: only their IDs (`peloton_id`), unsorted."""

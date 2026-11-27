@@ -53,6 +53,7 @@ score or a measurement.
 | Muscle groups worked | ❌ not shown (11 of 13) | ❌ not shown (6 of 11) | ❌ not shown | ✅ shown on Strength and Tread Bootcamp only (47 of 54 Strength), when the class wasn't tracked |
 | Movement tracker: total reps, total volume, targets hit, top lift | — | — | — | ✅ shown on tracked Strength classes and Tread Bootcamps (workout detail, not the performance graph; the Vision Tread counts a bootcamp's floor blocks, after the Tread's total output) |
 | Movement tracker: target streak, number of movements, form tips | — | — | — | ❌ not shown |
+| Lanebreak: score, difficulty, beats hit, leaderboard place, time in each lane (GraphQL gateway, not the performance graph) | ✅ shown on Lanebreak rides | ✅ shown on Lanebreak walks and runs | — | — |
 | Running form: efficiency score, steps a minute, stride length | — | ✅ shown on Peloton Tread runs (score over the run on 64x64; score on a 0-100 meter on 64x32) | — | — |
 | Running form: bounce, vertical ratio, form tips | — | ❌ not shown | — | — |
 | Per-mile splits | ❌ not shown (11 of 13) | ❌ not shown (10 of 11) | — | — |

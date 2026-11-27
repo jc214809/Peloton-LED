@@ -3,14 +3,14 @@
 from display.display import get_text_width
 from driver import graphics
 
-from .charts import _draw_form_graph, _draw_form_meter, _draw_graph, _draw_muscles, _draw_top_lift, _draw_zones
+from .charts import _draw_form_graph, _draw_form_meter, _draw_graph, _draw_lanes, _draw_muscles, _draw_place, _draw_top_lift, _draw_zones
 from .colors import _BLUE, _WHITE, _disc_color
 from .fonts import PageFonts
 from .insight_frames import draw_insight_slide
 from .rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, detail_at, rotating_details
 from .sprites import _TROPHY_H, _TROPHY_W, _draw_trophy
 from .stat_rows import _draw_hr_calories
-from .stats import _stat_details, _value_color, page_heading, running_form
+from .stats import _stat_details, _value_color, difficulty_detail, lanebreak_stats, page_heading, running_form
 from .text import _draw_text, _text_width, _truncate, _wrap_two_lines, title_without_length
 
 _BOTTOM_Y = 61
@@ -68,7 +68,8 @@ def _draw_title(matrix, summary: dict, text_font, dur_y: int) -> list[str]:
 
 
 def _draw_instructor(matrix, instructor_detail: dict, header_bottom: int, title_line_count: int, fonts: PageFonts, elapsed: float) -> bool:
-    """The instructor, underneath the title. Returns True when the heart-rate row has to go (intro_without_hr)."""
+    """The instructor (or a Lanebreak's difficulty), underneath the title, under its caption (the detail's label).
+    Returns True when the heart-rate row has to go (intro_without_hr)."""
     w = matrix.width
     intro_without_hr = False
     offset = max(0, round(3 * (1 - min(1, elapsed / 0.3))))
@@ -92,7 +93,7 @@ def _draw_instructor(matrix, instructor_detail: dict, header_bottom: int, title_
         y = max(y, header_bottom + 8)
         intro_without_hr = y + 8 + 7 > _BOTTOM_Y - 8
     if show_label:
-        label_text = _truncate(fonts.stat, 'INSTRUCTOR', w - 4)
+        label_text = _truncate(fonts.stat, str(instructor_detail['label']).upper(), w - 4)
         lx = max((w - _text_width(fonts.stat, label_text)) // 2, 2)
         _draw_text(matrix, fonts.stat, lx, y + offset, graphics.Color(145, 165, 190), label_text)
         y += 8
@@ -166,6 +167,16 @@ def _draw_stats(
         )
     elif kind == 'running_form':
         _draw_running_form(matrix, summary, block_y, fonts)
+    elif kind == 'lanes':
+        _draw_lanes(
+            matrix,
+            lanebreak_stats(summary)['lanes'],
+            (fonts.stat, fonts.titles or fonts.text),
+            (label_y, label_y + 5, label_y + 13, label_y + 24),
+        )
+    elif kind == 'lanebreak_place':
+        top = block_y + 12
+        _draw_place(matrix, summary, (fonts.stat, fonts.text), (top, top + 14, top + 22, top + 29))
     elif kind == 'muscles':
         # Starts higher than the other slides: three rows need the room.
         _draw_muscles(matrix, summary['muscles'], fonts.text, block_y + 8)
@@ -182,7 +193,7 @@ def render_tall(matrix, summary: dict, discipline: str, fonts: PageFonts, elapse
     w = matrix.width
     all_details = _stat_details(summary)
     stat_details = rotating_details(summary, matrix.height)
-    instructor_detail = next((d for d in all_details if d['label'] == 'instructor'), None)
+    instructor_detail = next((d for d in all_details if d['label'] == 'instructor'), None) or difficulty_detail(summary)
     in_intro = elapsed < detail_interval
     intro_without_hr = False  # set below when the instructor block needs the heart-rate row's rows
     if not in_intro and draw_insight_slide(matrix, summary, discipline, elapsed, detail_interval):
