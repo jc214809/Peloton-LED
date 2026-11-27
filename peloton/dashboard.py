@@ -4,7 +4,8 @@
 snapshot, and runs one refresh at a time. The work it orchestrates lives in sibling modules, mixed in so that
 every method still shares one `self` (and so the same locks): `dashboard_fetch` (what a refresh asks Peloton
 for), `dashboard_insight` (workout insight views), `dashboard_history` (the workout log and its history walks),
-`dashboard_celebrations` (PRs and milestones); `dashboard_state` builds the snapshot's starting points.
+`dashboard_celebrations` (PRs and milestones), `dashboard_lanebreak` (a Lanebreak's score, place and lanes);
+`dashboard_state` builds the snapshot's starting points.
 """
 
 import logging
@@ -25,6 +26,7 @@ from .dashboard_celebrations import CelebrationMixin
 from .dashboard_fetch import CHALLENGES_REFRESH_SECONDS, CLUB_REFRESH_SECONDS, FetchMixin
 from .dashboard_history import HistoryMixin
 from .dashboard_insight import InsightMixin
+from .dashboard_lanebreak import LanebreakMixin
 from .dashboard_state import demo_values, initial_data, prepare_cached, slim_profile
 from .schedule import scheduled_refresh_interval
 from .selection import is_brief, last_active_day
@@ -43,7 +45,7 @@ RENEWAL_MARKER_CHECK_SECONDS = 30
 PROFILE_REFRESH_SECONDS = 24 * 3600
 
 
-class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
+class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin, LanebreakMixin):
     def __init__(self, token_path, config, demo=False, demo_login_needed=False, client_factory=None):
         self.token_path = Path(token_path)
         self.config = config
@@ -55,6 +57,7 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         self._init_paths()
         self._init_log_state()
         self._init_insight_state()
+        self._init_lanebreak_state()
         self._init_page_state()
         self._data = initial_data()
         self.demo = demo
@@ -343,6 +346,10 @@ class Dashboard(FetchMixin, InsightMixin, HistoryMixin, CelebrationMixin):
         summary = summarize_workout(workout, perf, detail)
         summary['previous_best_kj'] = previous_best_kj(identity, personal_records)
         summary['best_times'] = best_times_for(identity, records, personal_records)
+        if summary.get('lanebreak'):
+            stats = self._lanebreak_stats(client, workout, perf, signature)
+            if stats:
+                summary['lanebreak_stats'] = stats
         if summary['best_times']:
             summary['is_pr'] = True
         if self.config.get('workout_insights'):

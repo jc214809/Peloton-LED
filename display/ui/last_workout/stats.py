@@ -107,8 +107,80 @@ def running_form(summary: dict) -> dict:
     }
 
 
+def page_heading(summary: dict, discipline: str) -> str:
+    """The page's top line: a Lanebreak, whose title is only its track (`15 min Pop Punk`), says which game it was
+    (`Bike Lanebreak` for cycling, `Tread Lanebreak` for walking or running, as Bike / Tread Bootcamp do; Joel,
+    2026-11-24); anything else, the discipline. The colour stays the discipline's."""
+    if summary.get('lanebreak') is not True:
+        return discipline
+    disc = discipline.strip().lower()
+    if 'cycling' in disc:
+        return 'Bike Lanebreak'
+    if 'walking' in disc or 'running' in disc:
+        return 'Tread Lanebreak'
+    return 'Lanebreak'
+
+
+def _difficulty(value) -> str | None:
+    """A Lanebreak difficulty as Peloton sends it (WALKING, INTERMEDIATE): letters and underscores, at most 16."""
+    return value if isinstance(value, str) and 2 <= len(value) <= 16 and value.replace('_', '').isalpha() and value.isupper() else None
+
+
+def lanebreak_stats(summary: dict) -> dict:
+    """The summary's `lanebreak_stats` (peloton.dashboard_lanebreak), checked, since the cache can hold anything:
+    {'score', 'difficulty', 'completion', 'place', 'lanes'}, each None when missing or malformed; {} unless the
+    summary is a Lanebreak with a readable score and difficulty."""
+    stats = summary.get('lanebreak_stats')
+    if summary.get('lanebreak') is not True or not isinstance(stats, dict):
+        return {}
+    score, difficulty = stats.get('score'), _difficulty(stats.get('difficulty'))
+    if not (isinstance(score, int) and not isinstance(score, bool) and score >= 0 and difficulty):
+        return {}
+    completion = stats.get('completion')
+    if not (isinstance(completion, (int, float)) and not isinstance(completion, bool) and 0 <= completion <= 1):
+        completion = None
+    place = stats.get('place')
+    if isinstance(place, dict):
+        rank, of = place.get('place'), place.get('of')
+        ok = all(isinstance(v, int) and not isinstance(v, bool) for v in (rank, of)) and 1 <= rank <= of
+        place = {'place': rank, 'of': of} if ok else None
+    else:
+        place = None
+    lanes = stats.get('lanes')
+    lanes_ok = isinstance(lanes, list) and len(lanes) == 6 and all(isinstance(n, int) and not isinstance(n, bool) and n >= 0 for n in lanes)
+    return {
+        'score': score,
+        'difficulty': difficulty,
+        'completion': completion,
+        'place': place,
+        'lanes': lanes if lanes_ok and sum(lanes) else None,
+    }
+
+
+def fmt_beats(completion) -> str:
+    """Share of beats hit to one decimal, rounded down so 99.97% never reads as a perfect 100.0%."""
+    return f'{int(completion * 1000) / 10:.1f}%'
+
+
+def lanebreak_details(summary: dict) -> list[dict]:
+    """A Lanebreak's score and beats hit, the first stats after its intro."""
+    stats = lanebreak_stats(summary)
+    if not stats:
+        return []
+    details = [{'label': 'lanebreak score', 'value': f'{stats["score"]:,}'}]
+    if stats['completion'] is not None:
+        details.append({'label': 'beats hit', 'value': fmt_beats(stats['completion'])})
+    return details
+
+
+def difficulty_detail(summary: dict) -> dict | None:
+    """The Lanebreak's difficulty, where a class's instructor goes (64x64 intro, 64x32 first frame)."""
+    stats = lanebreak_stats(summary)
+    return {'label': 'difficulty', 'value': stats['difficulty']} if stats else None
+
+
 def _tracker_details(summary: dict) -> list[dict]:
-    """A tracked strength class's reps, volume (weight x reps) and share of movements on target."""
+    """A tracked strength class's or Tread Bootcamp's reps, volume (weight x reps) and share of movements on target."""
     tracker = strength_tracker(summary)
     details = []
     if tracker.get('reps'):
@@ -176,6 +248,8 @@ def _tread_details(summary: dict, details: list[dict]) -> None:
     strive = summary.get('strive_score')
     _add(details, 'strive score', _fmt_strive(strive) if isinstance(strive, (int, float)) else None)
     _add(details, 'total output', _fmt_output(summary.get('total_output_kj')))
+    # A Tread Bootcamp the movement tracker counted (Vision Tread): its floor blocks' reps, volume and targets.
+    details.extend(_tracker_details(summary))
     # A flat workout's 0 ft and 0.0% are a screen each with nothing to say, so they go (Joel, 2026-11-22).
     if isinstance(elevation, (int, float)) and elevation > 0:
         _add(details, 'elevation gain', f'{elevation:g} {elevation_unit}')

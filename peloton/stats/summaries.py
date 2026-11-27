@@ -350,9 +350,19 @@ def _instructor_name(ride):
     return (instructor.get('name') or instructor.get('display_name') or '') if instructor.get('id') else ''
 
 
+def is_lanebreak(workout) -> bool:
+    """A Lanebreak (the bike's or the Tread's game): Peloton names the workout `Lanebreak Ride` / `Lanebreak Walk`,
+    titles it after the track (`15 min Pop Punk`), and gives it a placeholder instructor `LANEBREAK` with no ID."""
+    name = workout.get('name')
+    if isinstance(name, str) and name.strip().lower().startswith('lanebreak'):
+        return True
+    instructor = (workout.get('ride') or {}).get('instructor') or {}
+    return not instructor.get('id') and str(instructor.get('name') or '').strip().lower() == 'lanebreak'
+
+
 def summarize_workout(workout, perf=None, detail=None):
     """The workout page's figures. `detail` is the workout detail (GET /api/workout/<id>), fetched
-    only for strength classes, for what the movement tracker counted."""
+    only for strength classes and Tread Bootcamps, for what the movement tracker counted."""
     perf = perf or {}
     ride = workout.get('ride') or {}
     discipline = _display_discipline(workout)
@@ -407,4 +417,7 @@ def summarize_workout(workout, perf=None, detail=None):
     ):
         result[key] = metrics.get(key)
         result[key + '_unit'] = metrics.get(key + '__unit')
+    if is_lanebreak(workout):
+        # Only when true, so every other summary (and the cache's bytes) stays as it was.
+        result['lanebreak'] = True
     return result

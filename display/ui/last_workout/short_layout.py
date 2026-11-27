@@ -3,14 +3,14 @@
 from display.display import get_text_width, loaded_fonts
 from driver import graphics
 
-from .charts import _draw_form_meter, _draw_graph, _draw_muscle_rows, _draw_top_lift, _draw_zones
+from .charts import _draw_form_meter, _draw_graph, _draw_lanes, _draw_muscle_rows, _draw_place, _draw_top_lift, _draw_zones
 from .colors import _BLUE, _disc_color
 from .fonts import PageFonts
 from .insight_frames import draw_insight_slide
 from .rotation import LAST_WORKOUT_DETAIL_INTERVAL_SECONDS, detail_at, rotating_details
 from .sprites import _TROPHY_H, _TROPHY_W, _draw_trophy
 from .stat_rows import _draw_hr_calories, _draw_short_lines
-from .stats import _value_color, running_form
+from .stats import _value_color, lanebreak_stats, page_heading, running_form
 from .text import _draw_text, _text_width, _truncate, _wrap_two_lines, title_without_length
 
 
@@ -31,10 +31,10 @@ def _whole_panel_frame(matrix, summary: dict, discipline: str, fonts: PageFonts,
     return False
 
 
-def _draw_discipline(matrix, discipline: str, fonts: PageFonts) -> None:
-    """Discipline: fixed at the top for both phases."""
+def _draw_discipline(matrix, discipline: str, fonts: PageFonts, heading: str | None = None) -> None:
+    """Discipline (or `heading` in its colour): fixed at the top for both phases."""
     w = matrix.width
-    disc_text = discipline.upper()
+    disc_text = (heading or discipline).upper()
     disc_font = fonts.title
     if get_text_width(disc_font, disc_text) > w - 2:
         disc_font = fonts.text
@@ -109,6 +109,13 @@ def _draw_stat_frame(matrix, summary: dict, detail: dict, phase_seconds: float, 
     if kind == 'running_form':
         _draw_form_meter(matrix, running_form(summary), fonts.stat, fonts.title, 15, 24)
         return False
+    if kind == 'lanes':
+        _draw_lanes(matrix, lanebreak_stats(summary)['lanes'], (fonts.stat, fonts.text), (14, 17, 22, 30))
+        return False
+    if kind == 'lanebreak_place':
+        # No room for the difficulty: 64x32 gives it its own frame.
+        _draw_place(matrix, summary, (fonts.stat, fonts.text), (15, 24, 31, None))
+        return False
     if kind == 'muscles':
         # Three bars fill the space under the discipline; the bar stays.
         _draw_muscle_rows(matrix, summary['muscles'], fonts.text, 8)
@@ -128,7 +135,7 @@ def render_short(matrix, summary: dict, discipline: str, fonts: PageFonts, elaps
     """
     if _whole_panel_frame(matrix, summary, discipline, fonts, elapsed, detail_interval):
         return True
-    _draw_discipline(matrix, discipline, fonts)
+    _draw_discipline(matrix, discipline, fonts, page_heading(summary, discipline))
     if elapsed < detail_interval:
         _draw_intro(matrix, summary, fonts)
         return True

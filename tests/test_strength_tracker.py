@@ -143,6 +143,85 @@ def test_an_untracked_class_keeps_the_muscles_slide(height):
     assert not {'total reps', 'total volume', 'targets hit', 'top lift'} & set(labels)
 
 
+MUSCLES = [{'name': 'Glutes', 'percent': 16, 'bucket': 3}, {'name': 'Hamstrings', 'percent': 16, 'bucket': 3}]
+
+
+def tread_bootcamp(figures):
+    """A Vision Tread bootcamp's page: the Tread's stats, plus the tracker when Peloton counted the floor blocks."""
+    return {
+        'discipline': 'Tread Bootcamp',
+        'title': '30 min Bootcamp',
+        'instructor': 'Joslyn Thompson Rule',
+        'duration_min': 30,
+        'distance': 0.9581,
+        'distance_unit': 'mi',
+        'avg_pace': 17.73,
+        'avg_pace_unit': 'min/mi',
+        'strive_score': 36.6,
+        'total_output_kj': 155.0,
+        'elevation': 69.0,
+        'elevation_unit': 'ft',
+        'avg_incline': 1.6,
+        'hr_avg': 143,
+        'calories': 603,
+        'hr_zone_seconds': [77, 394, 1038, 289, 0],
+        'muscles': MUSCLES,
+        'strength': figures,
+    }
+
+
+TRACKED = {
+    'reps': 135,
+    'volume': 6795,
+    'unit': 'lb',
+    'targets_pct': 86,
+    'tier': None,
+    'top': {'name': 'Dumbbell Sumo Deadlift', 'reps': 24, 'weight': 35.0},
+}
+
+
+@pytest.mark.parametrize('height', [32, 64])
+def test_a_tracked_tread_bootcamp_shows_the_tracker_and_no_muscles(height):
+    details = rotating_details(tread_bootcamp(TRACKED), height)
+    labels = [d['label'] for d in details if d['label'] != 'instructor']
+    # The tracker's three figures come after the Tread's output; the top lift replaces the muscles slide.
+    assert labels == [
+        'distance',
+        'avg pace',
+        'strive score',
+        'total output',
+        'total reps',
+        'total volume',
+        'targets hit',
+        'elevation gain',
+        'avg incline',
+        'hr zones',
+        'top lift',
+    ]
+    values = {d['label']: d['value'] for d in details}
+    assert values['total volume'] == '6,795 lb' and values['targets hit'] == '86%'
+
+
+@pytest.mark.parametrize('height', [32, 64])
+def test_an_untracked_tread_bootcamp_closes_with_the_muscles_slide(height):
+    labels = [d['label'] for d in rotating_details(tread_bootcamp(None), height)]
+    assert labels[-1] == 'muscles worked'
+    assert not {'total reps', 'total volume', 'targets hit', 'top lift'} & set(labels)
+
+
+@pytest.mark.parametrize('discipline', ['Bike Bootcamp', 'Row Bootcamp', 'Running', 'Walking'])
+def test_other_tread_and_bootcamp_pages_get_no_muscles_slide(discipline):
+    summary = tread_bootcamp(None) | {'discipline': discipline}
+    assert 'muscles worked' not in [d['label'] for d in rotating_details(summary, 64)]
+
+
+@pytest.mark.parametrize('height', [32, 64])
+def test_a_tread_bootcamps_top_lift_fits_the_panel(height):
+    image = frame(tread_bootcamp(TRACKED), height, 'top lift')
+    lit = [(x, y) for y in range(height) for x in range(64) if image.getpixel((x, y)) != (0, 0, 0)]
+    assert lit and min(x for x, _ in lit) >= 1 and max(x for x, _ in lit) <= 62 and max(y for _, y in lit) < height
+
+
 @pytest.mark.parametrize(
     'bad',
     [
@@ -246,6 +325,22 @@ def test_a_strength_class_is_fetched_once_and_its_tracker_shown(tmp_path):
     dashboard.refresh()
     assert dashboard.snapshot()['summaries'][0]['strength']['reps'] == 195
     client.get_workout_detail.assert_called_once_with('w1')
+
+
+def test_a_tread_bootcamp_is_fetched_too_and_its_tracker_shown(tmp_path):
+    # The Vision Tread counts a Tread Bootcamp's floor blocks (Joel's first, 2026-11-23: 135 reps, 6,795 lb).
+    dashboard, client, _ = strength_setup(tmp_path, discipline='circuit')
+    dashboard.refresh()
+    assert dashboard.snapshot()['summaries'][0]['strength']['reps'] == 195
+    client.get_workout_detail.assert_called_once_with('w1')
+
+
+@pytest.mark.parametrize('discipline', ['bike_bootcamp', 'caesar_bootcamp'])
+def test_bike_and_row_bootcamps_make_no_detail_call(tmp_path, discipline):
+    # Never tracked in either rider's history, so they cost no call.
+    dashboard, client, _ = strength_setup(tmp_path, discipline=discipline)
+    dashboard.refresh()
+    client.get_workout_detail.assert_not_called()
 
 
 def test_other_disciplines_make_no_detail_call(tmp_path):

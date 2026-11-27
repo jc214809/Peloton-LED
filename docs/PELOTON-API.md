@@ -1288,6 +1288,109 @@ pt -X POST https://gql-graphql-gateway.prod.k8s.onepeloton.com/graphql \
 
 The exact query text lives in `graphql.postman_collection.json` in the Postman repo. Copy it from there, not from the sketch above.
 
+### Lanebreak ("Odyssey"): `odysseyWorkout`
+
+Lanebreak's results are served by the same gateway under Peloton's internal name for it, Odyssey. A Lanebreak's score and difficulty come from here; the REST API has neither (tested 2026-11-24).
+
+**Auth:** Token + Platform · **Source:** Board (since 2026-11-24: `odysseyWorkout`, the slim `levels` list, `odysseyLeaderboard` with `extraWorkoutId` and `odysseyConfiguration`, as GraphQL variables, in `peloton/api.py`); the rest Tested (2026-11-24, Joel's Lanebreaks: one on the Tread, 29 on the bike since 2022)
+
+```bash
+pt -X POST https://gql-graphql-gateway.prod.k8s.onepeloton.com/graphql \
+  -d '{"query": "{ odysseyWorkout(id: \"aaaa1111bbbb2222cccc3333dddd4444\") { __typename ... on OdysseyWorkoutSuccessResponse { workout { id score difficulty startTime } } } }"}'
+```
+
+```json
+{"data": {"odysseyWorkout": {"__typename": "OdysseyWorkoutSuccessResponse",
+  "workout": {"id": "aaaa1111bbbb2222cccc3333dddd4444", "score": 57240, "difficulty": "WALKING",
+              "startTime": "2026-11-24T00:41:42Z"}}}}
+```
+
+- **`id` is the ordinary workout ID** from `/api/user/{id}/workouts`.
+- **`OdysseyWorkout`**: `id`, `score`, `difficulty`, `startTime`, `completionPercent` (0-1, the share of the track's beats you hit; 0.986 on the run above), and one share (0-1) per kind of moment: `beatCompletionPercent`, `streamCompletionPercent`, `breakerCompletionPercent` (bike), `hillCompletionPercent` and `blastCompletionPercent` (Tread). A kind the track's machine doesn't have is `null` (Tread Pop Punk: beat 0.981, hill 1.0, blast 1.0; the bike's streams and breakers null). Found 2026-11-25 by guessing names in batches against Apollo's "Did you mean" hints; about 300 other guesses (rank, track, level, streak, calories, lanes) don't exist.
+- **Not a Lanebreak:** `__typename` is `OdysseyItemNotFoundError` (a Tread Bootcamp). One 2024 bike Lanebreak answered `INTERNAL_SERVER_ERROR` from `odysseyWorkout`, though the same run is listed in its track's `bestRuns`.
+- **Without the bearer token every Odyssey query answers `Forbidden`**, which looks like a permission wall but only means not signed in.
+- **Introspection is off** (`400`, "GraphQL introspection is not allowed by Apollo Server"); every name here comes from Apollo's "Did you mean" hints.
+
+#### Tracks: `levels` and `level(id: ID!)`
+
+`levels` (no arguments) lists every track with your own best runs on each. **The `peloton-platform` header picks the catalog:** `web` (and any other value tried) gives the bike's 411 tracks, difficulties `BEGINNER` `INTERMEDIATE` `ADVANCED` `EXPERT` `EXTREME`; `home_tread` gives the Tread's 261, `WALKING` `BEGINNER` `INTERMEDIATE` `ADVANCED` `EXPERT`. A Tread run appears only in the Tread catalog. One request returns the whole catalog (about 140 KB). `level(id:)` returns `LevelQueryResponse` (a union with `LevelSuccessResponse { level }`), about 700 bytes for one track. **Nothing maps a workout to its track:** `levels` takes no arguments, `level` and `odysseyWorkout` take only `id`, `OdysseyWorkout` has no track field, and the REST workout has none either; the other top-level query, `odysseyLevelBrowseFilters`, is the menu's track filters.
+
+```bash
+pt -X POST -H "peloton-platform: home_tread" https://gql-graphql-gateway.prod.k8s.onepeloton.com/graphql \
+  -d '{"query": "{ levels { ... on LevelListSuccessResponse { levels { id title duration playlistId volume difficultyDetails { slug } bestRuns { total updatedAt bestRunsByScore { id score difficulty completionPercent startTime } } } } } }"}'
+```
+
+```json
+{"id": "3d15474e-8dda-442d-9f15-74a0155358d9", "title": "</b>Pop Punk</b>", "duration": 903,
+ "playlistId": "c24d016b50e44a598102e86758ea5a44", "volume": null,
+ "difficultyDetails": [{"slug": "WALKING"}, {"slug": "BEGINNER"}, {"slug": "INTERMEDIATE"}, {"slug": "ADVANCED"}, {"slug": "EXPERT"}],
+ "bestRuns": {"total": 1, "updatedAt": "2026-11-24T00:56:50Z",
+   "bestRunsByScore": [{"id": "aaaa1111bbbb2222cccc3333dddd4444", "score": 57240, "difficulty": "WALKING",
+                        "completionPercent": 0.9860279, "startTime": "2026-11-24T00:41:42Z"}]}}
+```
+
+- **`bestRuns` is yours:** `total` runs on the track, `bestRunsByScore` your best run at each difficulty you've played (one per difficulty, not every run), and `bestRunsByCompletionPercentage` the same by completion.
+- **`title` carries HTML** (`<b>Pop Punk</b>`, even a broken `</b>Pop Punk</b>`): strip the tags. `volume` numbers a series (`Red Hot Chili Peppers` volume 2). The bike and Tread versions of a song share `playlistId` but are separate tracks with separate scores.
+- **A workout has no track ID.** Match a workout to its track through `bestRunsByScore[].id` (only a best run is listed), or by title and length.
+
+#### Leaderboards: `odysseyLeaderboard`, `odysseyUserLeaderboard`, `odysseyFriendsLeaderboard`
+
+All three take `leaderboardRequest: LeaderboardRequestInput!` (`odysseyUserLeaderboard` takes `userLeaderboardRequest` instead or as well, which also has `userId`): `levelId: ID!`, `from: Int!` (0-based offset), `size: Int!`, and optional `difficulty` (an enum, unquoted: `WALKING`), `extraWorkoutId`, `sortBy`, `startTime` (the last two not tried). Send the platform header that matches the track's catalog. The answer is `OdysseyLeaderboardListSuccessResponse { leaderboard: OdysseyLeaderboard { count startRank canFetchNextPage leaderboard: [LeaderboardEntry] } }`, where `LeaderboardEntry` is `rank` (0-based) `score` `difficulty` `completionPercent` `startTime` `workoutId` and `workoutDetails { userId username location avatar startDate startTime workoutId }`.
+
+- **`odysseyLeaderboard`**: every rider's runs, best score first. Without `difficulty` it showed the default (`INTERMEDIATE`) runs; Tread Pop Punk had 6,488 runs, 1,630 of them on `WALKING`. **Only the top 1,000 can be read**: `from` 1,000 or more returns an empty list (`count` still says the total), and one request with `size: 1000` returns all 1,000 (49 KB with `workoutId` only).
+- **Your place in one request: `extraWorkoutId`.** Pass your workout ID and ask for `extraWorkoutEntry` on `OdysseyLeaderboard` (same fields as a `LeaderboardEntry`); `size: 0` skips the list. About 300 bytes, and it works past the top 1,000:
+
+```bash
+pt -X POST -H "peloton-platform: home_tread" https://gql-graphql-gateway.prod.k8s.onepeloton.com/graphql \
+  -d '{"query": "{ odysseyLeaderboard(leaderboardRequest: { levelId: \"3d15474e-8dda-442d-9f15-74a0155358d9\", difficulty: WALKING, from: 0, size: 0, extraWorkoutId: \"aaaa1111bbbb2222cccc3333dddd4444\" }) { ... on OdysseyLeaderboardListSuccessResponse { leaderboard { count extraWorkoutEntry { rank score difficulty completionPercent startTime workoutId } } } } }"}'
+```
+
+```json
+{"leaderboard": {"count": 1630, "extraWorkoutEntry": {"rank": 728, "score": 57240, "difficulty": "WALKING",
+  "completionPercent": 0.9860279, "startTime": "2026-11-24T00:41:42Z", "workoutId": "aaaa1111bbbb2222cccc3333dddd4444"}}}
+```
+
+  `rank` is 0-based (728 is 729th of 1,630); Joel's bike Pop Punk run was 1,943 of 13,879 at `ADVANCED`. Without `difficulty`, the run is ranked among every difficulty on the track (Tread Pop Punk: 3,809 of 6,489), and the entry still carries the run's own `score`, `difficulty` and `completionPercent`, so this one request can stand in for `odysseyWorkout`. **The `levelId` must be the run's own track, and nothing checks it:** the gateway ranks the run's score on whatever track it's given. Another real track answers a plausible place (Tread Pop Punk's run sent with the Tread "Pop" track: 2,583rd of 10,541); a made-up ID (or a workout or playlist ID) answers `count: 1`, `rank: 0`; an empty one answers `INTERNAL_SERVER_ERROR`. `odysseyUserLeaderboard` on the same `levelId` settles it: it lists the run's `workoutId` only on the run's own track (`count: 0` on another). The track's ID comes only from `levels` (checked 2026-11-25: no track field on `OdysseyWorkout` among about 340 names tried; `levels` takes no arguments; `LeaderboardRequestInput` is `levelId` (required), `difficulty`, `from`, `size`, `extraWorkoutId`, `sortBy`, `startTime`, and `UserLeaderboardRequestInput` adds `userId`; `bestRuns` on each track lists only your one best run by score and by completion, so 9 of Joel's 31 runs appear nowhere; `workoutPostClassDetails(workoutId, isWorkoutFromStack)` has only `workoutMetricsType` and generic metrics and answered `INTERNAL_SERVER_ERROR` for every workout tried).
+- **`odysseyUserLeaderboard`**: only your own runs on the track, best first, with `count` your number of runs (5 on the bike Pop Punk); with `difficulty`, only that difficulty's.
+- **`odysseyFriendsLeaderboard`**: the same shape for people you follow (not tried with data).
+
+#### Lanes: `odysseyConfiguration`
+
+No arguments; the `peloton-platform` header picks the machine (`home_tread` or `home_bike`; `web` answers `OdysseyItemNotFoundError`). Each difficulty has six lanes (`index` 0-5), each a band of the machine's setting:
+
+```bash
+pt -X POST -H "peloton-platform: home_tread" https://gql-graphql-gateway.prod.k8s.onepeloton.com/graphql \
+  -d '{"query": "{ odysseyConfiguration { ... on OdysseyTreadConfiguration { difficultyConfigs { slug laneConfigs { index minIncline maxIncline } } } ... on OdysseyBikeConfiguration { difficultyConfigs { slug laneConfigs { index minResistance maxResistance } } } } }"}'
+```
+
+```json
+{"odysseyConfiguration": {"__typename": "OdysseyTreadConfiguration", "difficultyConfigs": [
+  {"slug": "WALKING", "laneConfigs": [{"index": 0, "minIncline": 0, "maxIncline": 0},
+                                      {"index": 1, "minIncline": 0.5, "maxIncline": 1}]}]}}
+```
+
+- **Tread** (`OdysseyTreadConfiguration`): `minIncline` / `maxIncline` in %; `WALKING` runs 0, 0.5-1, 1.5-2 ... 4.5-5.
+- **Bike** (`OdysseyBikeConfiguration`): `minResistance` / `maxResistance` in %; `BEGINNER` runs 15-21, 21-28 ... 49-56.
+- With the performance graph's incline or resistance series, this says which lane you rode in each moment.
+- **`difficultyConfigs { displayName }`**: the app's name for each difficulty: `WALKING` Walking, `BEGINNER` Light, `INTERMEDIATE` Moderate, `ADVANCED` Hard, `EXPERT` Challenging, `EXTREME` Extreme. The top-level `odysseyDifficultyMetadata { slug displayName }` lists all six for both machines.
+- **`scoringConfig { starThresholds { starsEarned completionPercent } }`**: a run's stars from its `completionPercent`, the same on both machines: 0.85 earns 3, 0.65 2.5, 0.5 2, 0.35 1.5, 0.2 1, below that 0.
+
+#### Every field found (sweep, 2026-11-25)
+
+Found by guessing names in batches of about 70 against Apollo's "Did you mean" hints and its "must have a selection of subfields" errors, which also name each field's type (about 370 requests over every Odyssey type). A field with a name unlike any guess can still be hidden.
+
+- **Top-level queries** (besides the ones above): `odysseyDifficultyMetadata`, `streamablePlaylist(playlistId: String!)`, `gameConfiguration(key: String!)`, `gameSettings(input: GameSettingsQueryInput!)`; and, not Lanebreak, `user`, `session`, `tag`, `searchTag`, `occasions`, `filterPrograms`, `gymBookmarks`, `inviteDetails`, `getEventDetails`, `userProgramAchievements`, `workoutProgramAchievements`.
+- **`Level`** (a track): `id`, `title`, `duration`, `durationCategory` (900 for a 903-second track: the menu's length bucket), `volume`, `playlistId`, `explicit`, `featuredArtists` (`"Simple Plan • All Time Low • Paramore"`), `availability` (`"Available"`), `bookmarked`, `assets { detailImageUrl thumbnailImageUrl }` (S3 PNGs), `theme { colorThemeId }` (`metal`, `rock`), `bestRuns`, `difficultyDetails`.
+- **`BestRuns`**: `total`, `updatedAt`, `starsEarned` (your best on the track, 0-3 in halves), `bestRunsByScore`, `bestRunsByCompletionPercentage` (each an `OdysseyWorkout`).
+- **`OdysseyLevelDifficultyDetail`**: `slug`, `odysseyLevelTargetMetricsData { targetMetrics { segmentType offsets { start end } metrics { name lower upper } } paceIntensities { value displayName paceLevels { slug slowPace fastPace } } }`. The track's targets at that difficulty, like a class's target metrics: Tread Pop Punk has 40 `RUNNING` segments of `SPEED` (mph) and `INCLINE` (%), the bike's 36 `CYCLING` segments of `CADENCE` and `RESISTANCE`; offsets are seconds into the track. `paceIntensities` was empty on both. About 32 KB for one Tread track with all five difficulties.
+- **More found 2026-11-26** with Peloton's own REST field names (468, camelCased) as the guesses, about 180 requests: `OdysseyLevelTargetMetricsData.totalExpectedOutput { expectedLowerOutput expectedUpperOutput }`, the output range the level expects at that difficulty, apparently in kJ (Tread Pop Punk `WALKING` 83-163, Joel's run 110; bike Pop Punk `ADVANCED` 60-132, his run 117); `OdysseyTreadDifficultyConfiguration.intensities { key minSpeed maxSpeed }`, each difficulty's speed band (mph) per pace intensity `key` 10-70 (`WALKING` 10: 1-3.5 ... 70: 3.5-6; the bike's difficulties have none); `Level.musicProvider`, a `PlaylistMusicProvider { isFeatured playlist }` (the playlist is the `StreamablePlaylist` below). Nothing new on `OdysseyWorkout`, `BestRuns`, the leaderboard types or the lanes.
+- **Found 2026-11-26 from the Tread's own screens** (photos of the browse, filter and level pages showed a genre, a workout type and a song list that no field gave): `Level.filterOptionIds`, the IDs of the level's browse-filter options, named by `odysseyLevelBrowseFilters` (Tread Pop Punk: `bsDWzirGJx` Genre **Rock**, `CFzH1SPwbt` Workout Type **Music**); and `StreamablePlaylist.playbackSongs { index cueOffset streamOffset song { id title explicitRating liked startTimeOffset cueTimeOffset artists { id name } genres { name } album { id name image { location } } } }`, the level's songs in order, each starting `startTimeOffset` seconds in (a song's length is the gap to the next; Pop Punk: "Addicted (Radio Remix)" Simple Plan 0, "Are You There?" All Time Low 226, "T.M.I" Meet Me @ The Altar 410, "Whoa" We The Kings 546, "Still into You" Paramore 701). The filters: `browseFilters { info { ... on OdysseyAccordionLevelFilterInfo { id title } } options { ... on OdysseyBasicLevelFilterOption { title value } ... } }`; Genre options (Alternative, Broadway, Classic Rock, Country, Electronic, Hip Hop, Holiday, Indie, Latin, Pop, R&B, Rock, World) and Workout Type options (Cool Down, Endurance, Featured Artist, Hills, Intervals, Music, Theme, Warm Up) carry those IDs as `value`; Length, Played and Stars carry plain values (`900`, `played`, `three_stars`). A title's `<b>` marks the bold part the Tread shows ("**WARM UP** 2000S"). `assets` also has `unityBundleUrl`, a link to a Unity bundle on the same S3 bucket, set on only 2 of the bike's 411 levels and none of the Tread's 261 (not downloaded); no field gives a level's beat map. `odysseyFriendsLeaderboard` lists you and the people you follow (Joel's bike Pop Punk: his own 5 runs). Lanebreak earns no REST achievements or challenges (none mention it in Joel's).
+- **`LeaderboardEntry`** (list rows and `extraWorkoutEntry`): `rank`, `score`, `difficulty`, `completionPercent`, `startTime`, `workoutId`, `workoutDetails { userId username avatar location startDate startTime workoutId }`.
+- **`LeaderboardRequestInput`**: `levelId`, `difficulty`, `from`, `size`, `extraWorkoutId`, `sortBy`, `startTime`. **`startTime`** (an RFC 3339 `DateTime` string, e.g. `"2026-11-20T00:00:00Z"`) keeps only the runs that started since then: Tread Pop Punk at `WALKING` with Joel's run is 729th of 1,630 all time, 6th of 21 since Nov 1, 1st of 7 since Nov 20. The `extraWorkoutId` run is always ranked in, even when it started before `startTime` (a window after the run answers `count: 1`, `rank: 0`), so `count` includes it. **`sortBy`** is the enum `OdysseyLeaderboardSortBy`, written in mixed case: `Score` (the default order) and `Date` (newest first; `extraWorkoutEntry.rank` then counts runs newer than it); no other value found (checked 2026-11-26).
+- **Not Lanebreak data:** `gameConfiguration(key: String!)` and `gameSettings(input: { key: String! })` are Odyssey's (a wrong key answers `OdysseyBadRequestError { message: "Invalid game configuration key" }`), but no key tried works (`odyssey`, `lanebreak`, machine names, `scoring`, `stars`, `lanes` and others). The top-level `user` (your own profile) has `id`, `username`, `location`, `isProfilePrivate`, `followStatus`, `assets`, `userTags`, `followingList`, `scheduledClasses`, and nothing about Lanebreak. `freestyleMetadata` (only `musicProviders`, the music for Just Ride and the like) answers `500`. `odysseyLevelBrowseFilters` is the level menu's filters (`browseFilters { info options }`, `filters` of accordion, toggle and grid kinds). No field takes an argument beyond the ones listed here (`levels`, `bestRuns`, `bestRunsByScore` and `difficultyDetails` take none; checked with about 700 names).
+- **`streamablePlaylist(playlistId)`**: `id`, `name` (empty), `streamId`, `topArtists { id name }` (five artists), `artImage` and `previewArtImage` (`null`), `stream { location }` (a signed link to the track's audio).
+- **How to tell a Lanebreak in the REST data:** `name` `Lanebreak Ride` / `Lanebreak Walk`, `workout_type` `freestyle`, ride ID all zeros, placeholder instructor `LANEBREAK` with no ID. The ride is the same six-field stub (`id`, `title`, `duration`, `scheduled_start_time`, `is_archived`, `instructor`) every non-class workout gets (Just Ride, Just Walk, free Cardio, Just Row), where a class has 63 fields and a `peloton_id`; a Lanebreak's `peloton_id` is `null`, its `service_id` is `0` on every run (Just Ride and Just Row `1`, watch and outdoor workouts `8`: a source, not a track) and `total_music_audio_play_seconds` is set (as on a scenic ride). No field anywhere names the level (checked 2026-11-25 over 400 workouts of every kind, and on 2026-11-26 over Joel's last 1,000, keeping the 275 done on Peloton hardware, `platform` `home_bike` or `home_tread`: all 27 Lanebreaks there have the six-field ride, and the fields that differ from run to run are only the workout's own figures and times; `joins` such as `ride.playlist` or `level` answer `400`). Its list row, detail, performance graph and achievements have no score; `/api/workout/{id}/summary`, `/api/v2/workout/{id}` and the zero ride's `details` return `404`, and the web app's own workout page shows no score.
+
 ---
 
 ## Gotchas

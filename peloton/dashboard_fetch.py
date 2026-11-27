@@ -25,6 +25,10 @@ logger = logging.getLogger('peloton-led.dashboard')
 MAX_RECENT_PAGES = 10
 # A workout whose detail could not be had (404, not COMPLETE yet) is not asked for again this long.
 INSIGHT_RETRY_SECONDS = 3600
+# Workouts whose detail can carry Peloton's movement tracker: strength classes and Tread Bootcamps (`circuit`; the
+# Vision Tread counts the floor blocks' reps, first seen 2026-11-23). No bike or row bootcamp in either rider's
+# history has ever been tracked, so they aren't asked.
+TRACKED_DISCIPLINES = frozenset({'strength', 'circuit'})
 # Challenge progress moves a class at a time, so hourly is plenty: 24 calls a day per rider. A failed
 # fetch keeps the last list and tries again sooner.
 CHALLENGES_REFRESH_SECONDS = 3600
@@ -53,12 +57,17 @@ class FetchMixin:
         return cached
 
     def _strength_detail(self, client, workout, signature):
-        """A finished strength class's workout detail (for the movement tracker's reps and weights), or None.
+        """A finished strength class's or Tread Bootcamp's workout detail (for the movement tracker's reps and
+        weights), or None.
 
         Fetched once per class and kept while its signature holds; the workout insights reuse it rather
         than fetching it again. A failed or bad fetch retries after INSIGHT_RETRY_SECONDS. Only a 401 escapes."""
         identity = workout.get('id')
-        if not identity or workout.get('status') != 'COMPLETE' or str(workout.get('fitness_discipline') or '').lower() != 'strength':
+        if (
+            not identity
+            or workout.get('status') != 'COMPLETE'
+            or str(workout.get('fitness_discipline') or '').lower() not in TRACKED_DISCIPLINES
+        ):
             return None
         cached = self._details.get(identity)
         if cached and cached[0] == signature and (cached[1] is not None or time.monotonic() - cached[2] < INSIGHT_RETRY_SECONDS):

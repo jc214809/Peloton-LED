@@ -244,7 +244,7 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
   row -1 and was cut off (reported 2026-11-03). It now spans rows 0-6.
 
 ### Muscle groups slide (both boards, requested 2026-11-07)
-- A new last slide on Strength workout pages when Peloton sends muscle groups
+- A new last slide on Strength (and, since 2026-11-23, Tread Bootcamp) workout pages when Peloton sends muscle groups
   (other disciplines: add them to `MUSCLE_DISCIPLINES`): the
   top three, most worked first, coloured by Peloton's bucket (1 yellow,
   2 orange, 3 red), bars scaled to the top muscle. Holds 1 s longer, like the
@@ -277,7 +277,17 @@ text pages, revert the `lifetime_overview_pages(... page_size=...)` change in
 ### Strength tracker (both boards, 2026-11-13)
 - `TOTAL REPS`, `TOTAL VOLUME` and `TARGETS HIT` are ordinary stat frames on both boards
   (`TARGETS HIT` in the tier colour). The `TOP LIFT` slide replaces the muscles slide on a
-  tracked class and holds 1 s longer, like it.
+  tracked class and holds 1 s longer, like it. A tracked Tread Bootcamp (2026-11-23) shows the same three frames after
+  its total output and the same `TOP LIFT` slide; the layouts are unchanged.
+- A Lanebreak's difficulty: 64x64 shows it in the intro under a `DIFFICULTY` caption, where a class's instructor
+  goes; 64x32 has no room there, so it is the first frame (`DIFFICULTY` / `WALKING`), as the instructor is.
+- `LEADERBOARD` slide: 64x64 label 12 rows under the header, `#729` in the countdown font (titles when wider than
+  60 px), `OF 1,630` and the difficulty under it, the heart-rate row kept; 64x32 drops the difficulty (its own
+  frame) and the heart-rate row, label at 15, place at 24, `OF` at 31. `LANES` uses the zone bar's rows on both.
+  Checked with the largest values (`#53,637 OF 53,637`, `309,193`, `INTERMEDIATE`) by `tests/test_lanebreak.py`.
+- A Lanebreak's page and PR card say `BIKE LANEBREAK` or `TREAD LANEBREAK` where the discipline goes
+  (`stats.page_heading`, in the discipline's colour; Joel, 2026-11-24: say which machine). `TREAD LANEBREAK` is 15
+  characters, 60 px in the 4x6 font like `OUTDOOR WALKING`: one line on both heights, 2 px clear each side.
 - 64x64: discipline title kept; `TOP LIFT` (tom-thumb, grey) 10 rows under it, the movement in
   5x8 on up to two lines 9 apart (4x6 when 5x8 would cut it), then reps x weight in gold in
   6x13 (5x8 when too wide), 22 rows under the label for one line, 31 for two; heart-rate row kept.

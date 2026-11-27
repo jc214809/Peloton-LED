@@ -1,10 +1,11 @@
-"""The chart slides: workout graph, heart-rate zone bar, muscle groups and the top lift."""
+"""The chart slides: workout graph, heart-rate zone bar, muscle groups, the top lift, and a Lanebreak's lanes and
+leaderboard place."""
 
-from display.display import get_text_width
+from display.display import get_text_width, loaded_fonts
 from driver import graphics
 
-from .colors import _INSIGHT_GOLD, _LABEL_GREY, _PEAK_WHITE, _WHITE, HR_ZONE_COLORS, _disc_color
-from .stats import strength_tracker, top_lift_text
+from .colors import _INSIGHT_GOLD, _LABEL_GREY, _PEAK_WHITE, _WHITE, HR_ZONE_COLORS, LANE_COLORS, _disc_color
+from .stats import lanebreak_stats, strength_tracker, top_lift_text
 from .text import _centred, _draw_text, _text_width, _truncate, _wrap_two_lines
 
 
@@ -57,30 +58,62 @@ def _draw_zones(  # noqa: PLR0913
     text_y: int,
 ) -> None:
     """Stacked zone bar across the panel, then the zone you spent longest in."""
+    _draw_share_bar(matrix, seconds, HR_ZONE_COLORS, ('HR ZONES', 'ZONE'), (font, big_font), (label_y, bar_top, bar_bottom, text_y))
+
+
+def _draw_lanes(matrix, samples: list[int], fonts, rows) -> None:
+    """A Lanebreak's time in each lane, as the zone bar is drawn: `LANES`, the bar, then the busiest lane."""
+    _draw_share_bar(matrix, samples, LANE_COLORS, ('LANES', 'LANE'), fonts, rows)
+
+
+def _draw_share_bar(matrix, amounts, colors, words, fonts, rows) -> None:
+    """A label, a bar split in proportion to `amounts` across the panel, and the biggest part (`ZONE 3 58%`).
+    words = (label, part noun); fonts = (label font, part font); rows = (label, bar top, bar bottom, part line)."""
     w = matrix.width
-    label = 'HR ZONES'
+    label, noun = words
+    font, big_font = fonts
+    label_y, bar_top, bar_bottom, text_y = rows
     _draw_text(matrix, font, max((w - _text_width(font, label)) // 2, 2), label_y, graphics.Color(*_LABEL_GREY), label)
-    total = sum(seconds)
+    total = sum(amounts)
     span = w - 4
+    parts = len(amounts)
     # Largest-remainder rounding so the segments fill the bar exactly.
-    exact = [s / total * span for s in seconds]
+    exact = [s / total * span for s in amounts]
     widths = [int(e) for e in exact]
-    for i in sorted(range(5), key=lambda i: exact[i] - widths[i], reverse=True)[: span - sum(widths)]:
+    for i in sorted(range(parts), key=lambda i: exact[i] - widths[i], reverse=True)[: span - sum(widths)]:
         widths[i] += 1
     x = 2
-    for zone, width in enumerate(widths):
-        r, g, b = HR_ZONE_COLORS[zone]
+    for part, width in enumerate(widths):
+        r, g, b = colors[part]
         for dx in range(width):
             for y in range(bar_top, bar_bottom + 1):
                 matrix.SetPixel(x + dx, y, r, g, b)
         x += width
-    top_zone = max(range(5), key=lambda i: seconds[i])
-    name = f'ZONE {top_zone + 1}'
-    pct = f' {round(seconds[top_zone] / total * 100)}%'
+    top = max(range(parts), key=lambda i: amounts[i])
+    name = f'{noun} {top + 1}'
+    pct = f' {round(amounts[top] / total * 100)}%'
     total_w = get_text_width(big_font, name) + get_text_width(big_font, pct)
     tx = max((w - total_w) // 2, 2)
-    graphics.DrawText(matrix, big_font, tx, text_y, graphics.Color(*HR_ZONE_COLORS[top_zone]), name)
+    graphics.DrawText(matrix, big_font, tx, text_y, graphics.Color(*colors[top]), name)
     graphics.DrawText(matrix, big_font, tx + get_text_width(big_font, name), text_y, _WHITE, pct)
+
+
+def _draw_place(matrix, summary: dict, fonts, rows) -> None:
+    """A Lanebreak's leaderboard place: `LEADERBOARD`, `#729` in gold, `OF 1,630`, and (64x64) the difficulty
+    the board is for. fonts = (label font, line font); rows = (label, place, of, difficulty or None)."""
+    stats = lanebreak_stats(summary)
+    small, info = fonts
+    label_y, place_y, of_y, difficulty_y = rows
+    w = matrix.width
+    place = f'#{stats["place"]["place"]:,}'
+    big = next(
+        (f for f in (loaded_fonts.get('countdown'), loaded_fonts.get('titles'), info) if f and get_text_width(f, place) <= w - 4), info
+    )
+    _centred(matrix, small, label_y, _LABEL_GREY, 'LEADERBOARD')
+    _centred(matrix, big, place_y, _INSIGHT_GOLD, place)
+    _centred(matrix, info, of_y, _PEAK_WHITE, f'OF {stats["place"]["of"]:,}')
+    if difficulty_y is not None:
+        _centred(matrix, small, difficulty_y, _LABEL_GREY, _truncate(small, stats['difficulty'], w - 4))
 
 
 # Peloton's muscle-group intensity buckets: 1 some (yellow), 2 more (orange), 3 most (red).

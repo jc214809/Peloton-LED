@@ -56,6 +56,10 @@ HR_ZONE_COLORS = list(ZONE_COLORS)
 _LABEL_GREY = (145, 165, 190)
 
 
+# Lanebreak's six lanes, lane 1 (lowest incline or resistance) first: cool to hot, like the zones.
+LANE_COLORS = [(0, 150, 255), (0, 210, 200), (90, 220, 60), (255, 210, 0), (255, 130, 0), (255, 50, 110)]
+
+
 _PEAK_WHITE = (255, 255, 255)
 
 
